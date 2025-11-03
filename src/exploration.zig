@@ -4,6 +4,7 @@ const movel = @import("move.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
+const e_square = chess.e_square;
 const assert = std.debug.assert;
 
 const e_simpleScore = enum(i64) { CheckMate = 9999, StaleMate = 0 };
@@ -246,7 +247,6 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, depth: u8) !moveDeci
         decision = try depthBotMoveExploration(p_state, depth - 1);
 
         decision.invertScore();
-
         _ = try p_state.undoMove();
 
         if (!final_decision.move.isValid() or final_decision.scoring < decision.scoring) {
@@ -254,13 +254,12 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, depth: u8) !moveDeci
             final_decision.scoring = decision.scoring;
         }
     }
-    if (!decision.move.isValid()) {
-        if (p_state.isLegal(turn)) {
-            decision.scoring = -@intFromEnum(e_simpleScore.CheckMate) * color_mask;
+    if (!final_decision.move.isValid()) {
+        if (!p_state.isLegal(turn)) {
+            final_decision.scoring = -@intFromEnum(e_simpleScore.CheckMate) * color_mask;
         } else {
-            decision.scoring = @intFromEnum(e_simpleScore.StaleMate);
+            final_decision.scoring = @intFromEnum(e_simpleScore.StaleMate);
         }
     }
-
     return final_decision;
 }

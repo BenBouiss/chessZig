@@ -62,6 +62,8 @@ const CAPTURE_MASK: i8 = 4;
 
 const INVALID_POSITION: i8 = -1;
 
+const debug_err = error{earlyReturn};
+
 pub fn stringToLERF(sq: *[2]u8) e_square {
     if ((sq[0] < 'a') or (sq[0] > 'h')) {
         return .invalid;
@@ -287,8 +289,8 @@ pub fn getBoardFromFen(fen: []const u8) Board_state {
     var tmp_enum: e_piece = e_piece.nEmptySquare;
     var letter_int: u8 = 0;
     while (offset < fen.len) : (offset += 1) {
+        letter = fen[@intCast(offset)];
         if (!post_init) {
-            letter = fen[@intCast(offset)];
             if (letter == '/') {
                 board_offset -= 16;
                 continue;
@@ -315,10 +317,8 @@ pub fn getBoardFromFen(fen: []const u8) Board_state {
                 continue;
             }
             if (letter == 'w') {
-                std.debug.print("(Fen) Found white to move first\n", .{});
                 ret.turn = e_color.WHITE;
             } else {
-                std.debug.print("(Fen) Found black to move first\n", .{});
                 ret.turn = e_color.BLACK;
             }
         }
@@ -637,8 +637,8 @@ pub const Board_state = struct {
         const pieceF = p_self.get_piece(move.getFrom());
         const colorF = getColorFromPiece(pieceF);
         if (p_self.pieceBB[@intFromEnum(pieceF)] & fromBB == 0) {
-            std.debug.print("[DEBUG] From makeMove: strange move found where piece not found but move formed? Move: {s} {}\n", .{ move.getStr(), pieceF });
-            @panic("");
+            std.debug.print("[DEBUG] From makeMove: strange move found where piece not found but move formed? Move: {s} {} turn: {}\n", .{ move.getStr(), pieceF, p_self.turn });
+            return debug_err.earlyReturn;
             //return false;
         }
         try p_self.move_history.append(get_global_alloc(), move.copy());
@@ -726,21 +726,21 @@ pub const Board_state = struct {
         if (!((self.castleMoveCounter[@intFromEnum(turn)][0] == INVALID_POSITION) and (self.castleMoveCounter[@intFromEnum(turn)][1] == INVALID_POSITION))) {
             return false;
         }
-        var sq: e_square = .a1;
+        var sq: e_square = .h1;
         if (turn == .BLACK) {
-            sq = .a8;
+            sq = .h8;
         }
-        return ((rankAttacks(self.occupiedBB, sq) & self.getKingBB(turn)) != 0);
+        return ((rankAttacks(self.occupiedBB, sq) & self.getKingBB(turn) & (self.pieceBB[@intFromEnum(getRookPiece(turn))])) != 0);
     }
     pub fn canQueenSideCastle(self: Board_state, turn: e_color) bool {
         if (!((self.castleMoveCounter[@intFromEnum(turn)][2] == INVALID_POSITION) and (self.castleMoveCounter[@intFromEnum(turn)][1] == INVALID_POSITION))) {
             return false;
         }
-        var sq: e_square = .h1;
+        var sq: e_square = .a1;
         if (turn == .BLACK) {
-            sq = .h8;
+            sq = .a8;
         }
-        return ((rankAttacks(self.occupiedBB, sq) & self.getKingBB(turn)) != 0);
+        return ((rankAttacks(self.occupiedBB, sq) & self.getKingBB(turn) & (self.pieceBB[@intFromEnum(getRookPiece(turn))])) != 0);
     }
     pub fn getKingSq(self: Board_state, color: e_color) i8 {
         return bitscan(self.getKingBB(color));
@@ -1900,6 +1900,20 @@ pub fn _default_scenarios() void {
     print_boardstate(&board_promo);
     askContinue();
 }
+
+pub fn _mate_scenario() void {
+    const fen = "k7/6r1/8/7P/7K/7P/6q1/8 b";
+    var board_mate = getBoardFromFen(fen);
+    print_boardstate(&board_mate);
+    askContinue();
+    board_mate.setPlayerType(.BLACK, .DepthBot);
+    board_mate.setPlayerSearchDepth(.BLACK, 2);
+    board_mate.setPlayerType(.WHITE, .Human);
+    match_routine(&board_mate);
+
+    askContinue();
+}
+
 pub fn test_scenarios() void {
     // testing promotion scenario
     //const str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
@@ -1907,7 +1921,8 @@ pub fn test_scenarios() void {
     //utils.clear();
     //_promo_scenario();
     //utils.clear();
-    _castle_scenario();
+    //_castle_scenario();
+    _mate_scenario();
     return;
 }
 

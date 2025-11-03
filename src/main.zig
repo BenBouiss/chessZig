@@ -10,7 +10,7 @@ fn test_main_game() !void {
     game_state.setPlayerType(chess.e_color.WHITE, exploration.e_playerType.SimpleBot);
 
     game_state.setPlayerType(chess.e_color.BLACK, exploration.e_playerType.DepthBot);
-    game_state.setPlayerSearchDepth(chess.e_color.BLACK, 3);
+    game_state.setPlayerSearchDepth(chess.e_color.BLACK, 4);
 
     chess.match_routine(&game_state);
 }
