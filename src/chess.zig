@@ -515,7 +515,12 @@ pub const Board_state = struct {
     pub fn setPlayerType(p_self: *Board_state, color: e_color, player_type: exploration.e_playerType) void {
         p_self.players[@intFromEnum(color)].setType(player_type);
     }
-
+    pub fn printHistory(self: Board_state) void {
+        for (self.move_history.items) |move| {
+            std.debug.print("{s} ", .{move.getStr()});
+        }
+        std.debug.print("\n", .{});
+    }
     pub fn setPlayerSearchDepth(p_self: *Board_state, color: e_color, depth: u8) void {
         p_self.players[@intFromEnum(color)].setDepth(depth);
     }
@@ -701,7 +706,13 @@ pub const Board_state = struct {
         try p_self.move_history.append(get_global_alloc(), move);
         return true;
     }
-
+    pub fn getLastMove(self: Board_state) IMove {
+        const n = self.move_history.items.len;
+        if (n == 0) {
+            return .{};
+        }
+        return self.move_history.items[n - 1].copy();
+    }
     pub fn isFull(self: Board_state) bool {
         // also occupiedBB == UNIVERSE
         return ((self.pieceBB[@intFromEnum(e_color.WHITE)] | self.pieceBB[@intFromEnum(e_color.BLACK)]) == UNIVERSE);

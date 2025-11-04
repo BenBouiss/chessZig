@@ -56,6 +56,10 @@ pub const IMove = struct {
     pub inline fn isQueenSideCastle(self: IMove) bool {
         return (self.getFlag() == @intFromEnum(e_moveFlags.QUEENCASTLE));
     }
+    pub inline fn isEnpassant(self: IMove) bool {
+        return (self.getFlag() == @intFromEnum(e_moveFlags.ENPASSANT));
+    }
+
     pub inline fn isValid(self: IMove) bool {
         return (self.m_move != 0);
     }
