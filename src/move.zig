@@ -1,7 +1,9 @@
 const std = @import("std");
 const chess = @import("chess.zig");
+const squarel = @import("square.zig");
+
 const e_piece = chess.e_piece;
-const e_square = chess.e_square;
+const e_square = squarel.e_square;
 
 const e_moveFlags = chess.e_moveFlags;
 

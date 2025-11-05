@@ -164,7 +164,14 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
         return;
     }
     var moves: moveContainer = try chess.moveGeneration(p_state);
-    const fmoves = try chess.filterMoveLegal(p_state, &moves);
+    //const fmoves = try chess.filterMoveLegal(p_state, &moves);
+    const fmoves = try chess.filterMoveLegalFast(p_state, &moves);
+    //if (fmoves.len != ffmoves.len) {
+    //    fmoves.print();
+    //    ffmoves.print();
+    //    chess.print_boardstate(p_state);
+    //    chess.askContinue();
+    //}
     for (0..fmoves.len) |i| {
         _ = try p_state.makeMove(fmoves.moves[i]);
         try explorationNDepth(p_state, depth - 1, p_res);

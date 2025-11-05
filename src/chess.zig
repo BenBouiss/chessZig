@@ -4,10 +4,13 @@ const chess = @import("chess.zig");
 const utils = @import("utils.zig");
 const exploration = @import("exploration.zig");
 const movel = @import("move.zig");
+const squarel = @import("square.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const e_matchFlag = exploration.e_matchFlag;
+const e_square = squarel.e_square;
+const squareInfo = squarel.squareInfo;
 
 const NUMBER_PLAYER: u8 = 2;
 const ROW_SIZE: u8 = 8;
@@ -15,9 +18,9 @@ const COL_SIZE: u8 = 8;
 const N_SQUARES: u8 = ROW_SIZE * COL_SIZE;
 pub const MAX_POSSIBLE_MOVE: u8 = 218;
 
-const EMPTY: u64 = 0;
-const ONE: u64 = 1;
-const UNIVERSE: u64 = std.math.maxInt(u64);
+pub const EMPTY: u64 = 0;
+pub const ONE: u64 = 1;
+pub const UNIVERSE: u64 = std.math.maxInt(u64);
 //const UNIVERSE: u64 = -1;
 
 // see calc or src/utils.py
@@ -55,8 +58,6 @@ const arr_piece_str = [_]u8{ '_', '1', 'P', 'B', 'N', 'R', 'Q', 'K', '2', 'p', '
 //const e_piece_str = enum(u8) { nWhitePawn = "P", nBlackPawn = "p", nWhiteBishop = "B", nWhiteKnight = "N", nWhiteKing = "K", nWhiteRook = "R", BlackBisho = "b", nBlackRook = "r", nWhiteQueen = "Q", n_BlackKnight = "n", nBlackQueen = "q", nBlackKing = "k" };
 
 pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
-
-pub const e_square = enum(u8) { a1 = 0, b1, c1, d1, e1, f1, g1, h1, a2, b2, c2, d2, e2, f2, g2, h2, a3, b3, c3, d3, e3, f3, g3, h3, a4, b4, c4, d4, e4, f4, g4, h4, a5, b5, c5, d5, e5, f5, g5, h5, a6, b6, c6, d6, e6, f6, g6, h6, a7, b7, c7, d7, e7, f7, g7, h7, a8, b8, c8, d8, e8, f8, g8, h8, invalid };
 
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 const CAPTURE_MASK: i8 = 4;
@@ -377,25 +378,39 @@ pub fn filterMoveLegal(p_state: *Board_state, move_list: *moveContainer) !moveCo
     return ret;
 }
 
-pub fn filterMoveLegalFast(p_state: *Board_state, move_list: *std.ArrayList(IMove)) !std.ArrayList(IMove) {
-    var ret: std.ArrayList(IMove) = try std.ArrayList(IMove).initCapacity(get_global_alloc(), move_list.items.len);
+pub fn filterMoveLegalFast(p_state: *Board_state, move_list: *moveContainer) !moveContainer {
+    var ret: moveContainer = .{};
     const turn: e_color = p_state.turn;
-    var status: bool = true;
-    const attackedSquare: u64 = getAllAttackMask(p_state, &p_state.attackMask, invertColor(turn));
-    var _att = undefined;
-    for (move_list.items) |move| {
-        _att = attackedSquare;
-        status = try p_state.makeMove(move);
-        if (!status) {
-            std.debug.print("From filterMoveLegal: invalid status found: \n", .{});
-            print_board(p_state);
+    var diagPieceBB: u64 = 0;
+    var linePieceBB: u64 = 0;
+    const cached = getCachedAttackingPiece(p_state, turn);
+    const all_attack = getAllAttackMask(p_state, &p_state.attackMask, invertColor(turn));
+    const kingSqInfo = squareInfo.init(@enumFromInt(p_state.getKingSq(turn)));
+    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(getAllAttackMaskFromKing(p_state, turn));
+    //if (checks.isCheck()) {
+    //    checks.print();
+    //}
+    linePieceBB = cached[0];
+    diagPieceBB = cached[1];
+    for (0..move_list.len) |i| {
+        if (p_state.isLegalFast(all_attack, move_list.moves[i], &kingSqInfo, &checks, diagPieceBB, linePieceBB)) {
+            _ = ret.append(move_list.moves[i]);
         }
-        if (p_state.isLegal(turn)) {
-            try ret.append(get_global_alloc(), move.copy());
-        }
-        _ = try p_state.undoMove();
     }
 
+    return ret;
+}
+
+pub fn getCachedAttackingPiece(p_state: *Board_state, turn: e_color) [2]u64 {
+    // [linePieceBB, diagPieceBB];
+    var ret = [_]u64{ EMPTY, EMPTY };
+    if (turn == e_color.WHITE) {
+        ret[0] = (p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+        ret[1] = (p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+    } else {
+        ret[0] = (p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
+        ret[1] = (p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
+    }
     return ret;
 }
 
@@ -766,6 +781,16 @@ pub const Board_state = struct {
     }
 
     pub fn isLegal(p_self: *Board_state, turn: e_color) bool {
+        // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
+        const king_attacks = getAllAttackMaskFromKing(p_self, turn);
+        //const lastM = p_self.getLastMove();
+        //const stopping = (lastM.getFrom() == @intFromEnum(e_square.d2) and lastM.getTo() == @intFromEnum(e_square.c3));
+        //if (stopping) {
+        //    print_bitboard(king_attacks);
+        //}
+        return king_attacks == 0;
+    }
+    pub fn _isLegal(p_self: *Board_state, turn: e_color) bool {
         const all_attack = getAllAttackMask(p_self, &p_self.attackMask, invertColor(turn));
         const king_bb = p_self.getKingBB(turn);
         if (king_bb == 0) {
@@ -774,26 +799,32 @@ pub const Board_state = struct {
         return (king_bb & all_attack) == 0;
     }
 
-    pub fn isLegalFast(p_self: *Board_state, all_attack: u64, move: IMove, kingSq: e_square) bool {
-        //const all_attack = getAllAttackMask(p_self, &p_self.attackMask, invertColor(turn));
-        const from: e_square = @enumFromInt(move.getFrom());
-        _ = from;
+    pub fn isLegalFast(p_self: *Board_state, all_attack: u64, move: IMove, p_kingSq: *const squareInfo, p_checks: *const squarel.checkContainer, diagPieceBB: u64, linePieceBB: u64) bool {
+        const kingBB = (ONE << @intCast(@intFromEnum(p_kingSq.sq)));
+        const isAttacked: bool = (kingBB & all_attack) != 0;
         const to: e_square = @enumFromInt(move.getTo());
-        if (getSqFile(to) < getSqFile(kingSq)) {
-            all_attack ^= antiDiagAttacks(EMPTY, to);
-        } else {
-            all_attack ^= diagonalAttacks(EMPTY, to);
+        const from: e_square = @enumFromInt(move.getFrom());
+        if (from != p_kingSq.sq) {
+            if (p_checks.isDoubleCheck()) {
+                return false;
+            }
+            const pinnedBB = isPiecePinned(p_self.occupiedBB, from, kingBB, diagPieceBB, linePieceBB);
+            if (pinnedBB != EMPTY) {
+                const capturedPinned = (bitscan(pinnedBB) == @intFromEnum(to));
+                return ((pinnedBB == isPiecePinned(p_self.occupiedBB ^ (ONE << @intCast(@intFromEnum(from))), to, kingBB, diagPieceBB, linePieceBB)) or capturedPinned);
+            }
+
+            if (!isAttacked) {
+                return true;
+            }
+            //blocking or capturing as non king
+            return ((isPiecePinned(p_self.occupiedBB, to, kingBB, diagPieceBB, linePieceBB) != EMPTY) or (p_checks.squares[0].sq == to));
         }
 
-        if (getSqRank(to) < getSqRank(kingSq)) {
-            all_attack ^= fileAttacks(EMPTY, to);
-        } else {
-            all_attack ^= diagonalAttacks(EMPTY, to);
-        }
-
-        const king_bb = (ONE << @intFromEnum(kingSq));
-        _ = p_self;
-        return (king_bb & all_attack) == 0;
+        const toKingBB = (ONE << @intCast(@intFromEnum(to)));
+        const isNotPinned = !(isPiecePinned(p_self.occupiedBB, from, toKingBB, diagPieceBB, linePieceBB) != EMPTY);
+        const isToSecure = ((all_attack & toKingBB) == 0);
+        return (isNotPinned and isToSecure);
     }
 
     pub fn isStaleThreeFold(self: Board_state) bool {
@@ -1036,15 +1067,14 @@ pub fn initRayAttacks() void {
     // https://www.chessprogramming.org/On_an_empty_Board formulas used
     var nort: u64 = (0x0101010101010100);
     var sout: u64 = (0x0080808080808080);
-    const one: u64 = 1;
     var _sq: u6 = 0;
     for (0..N_SQUARES) |sq| {
         _sq = @intCast(sq);
         rayAttacks[sq][@intFromEnum(e_direction.NORTH)] = nort;
         rayAttacks[63 - sq][@intFromEnum(e_direction.SOUTH)] = sout;
         // optionnal can be computed on the fly
-        rayAttacks[sq][@intFromEnum(e_direction.WEST)] = (one << _sq) - (one << (_sq & 56));
-        rayAttacks[sq][@intFromEnum(e_direction.EAST)] = 2 * ((one << (_sq | 7)) - (one << _sq));
+        rayAttacks[sq][@intFromEnum(e_direction.WEST)] = (ONE << _sq) - (ONE << (_sq & 56));
+        rayAttacks[sq][@intFromEnum(e_direction.EAST)] = 2 * ((ONE << (_sq | 7)) - (ONE << _sq));
         nort <<= 1;
         sout >>= 1;
     }
@@ -1181,6 +1211,16 @@ pub inline fn getSqFile(sq: e_square) u8 {
     return @intFromEnum(sq) % ROW_SIZE;
 }
 
+pub inline fn getSqDiag(sq: e_square) i8 {
+    const _sq: i8 = @intCast(@intFromEnum(sq));
+    return (_sq & 7) - (_sq << 3);
+}
+
+pub inline fn getSqAntiDiag(sq: e_square) i8 {
+    const _sq: i8 = @intCast(@intFromEnum(sq));
+    return 7 - (_sq & 7) - (_sq << 3);
+}
+
 pub fn isMoveInBB(bb: u64, move: Move) u64 {
     return bb & ((ONE << move.to));
 }
@@ -1202,7 +1242,6 @@ pub fn _AllAttackPawnMask(bb_piece: u64, p_attack_mask: *Attack_masks, turn: e_c
 
 pub fn _AllAttackKnightMask(bb_piece: u64) u64 {
     return knightAttacks(bb_piece);
-
     //    var ret: u64 = EMPTY;
     //    var sq: i8 = 0;
     //    var _bb_piece = bb_piece;
@@ -1304,6 +1343,26 @@ pub fn getAllAttackMask(p_board: *Board_state, p_attack_masks: *Attack_masks, tu
     ret |= _AllAttackQueenMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteQueen)], p_board.occupiedBB);
     ret |= _AllAttackKingMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteKing)], p_attack_masks);
 
+    return ret;
+}
+
+pub fn getAllAttackMaskFromKing(p_board: *Board_state, turn: e_color) u64 {
+    var ret: u64 = EMPTY;
+
+    const kingbb = p_board.getKingBB(turn);
+    if (turn == e_color.WHITE) {
+        ret |= _AllAttackKnightMask(kingbb) & p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)];
+        ret |= _AllAttackBishopMask(kingbb, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+        ret |= _AllAttackRookMask(kingbb, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+
+        ret |= _AllAttackPawnMask(kingbb, &p_board.attackMask, e_color.WHITE) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)]);
+    } else {
+        ret |= _AllAttackKnightMask(kingbb) & p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)];
+        ret |= _AllAttackBishopMask(kingbb, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
+        ret |= _AllAttackRookMask(kingbb, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
+
+        ret |= _AllAttackPawnMask(kingbb, &p_board.attackMask, e_color.BLACK) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
+    }
     return ret;
 }
 
@@ -1622,6 +1681,29 @@ pub fn moveGeneration(p_board: *Board_state) !moveContainer {
     }
     //_ = p_board.c_occupiedBB;
     return ret;
+}
+
+pub fn isPiecePinned(occBB: u64, sq: e_square, kingBB: u64, diagPieceBB: u64, linePieceBB: u64) u64 {
+    const diagatts = [_]u64{ antiDiagAttacks(occBB, sq), diagonalAttacks(occBB, sq) };
+
+    const lineatts = [_]u64{ fileAttacks(occBB, sq), rankAttacks(occBB, sq) };
+
+    if ((((diagatts[0] & diagPieceBB) != 0) and ((diagatts[0] & kingBB) != 0))) {
+        return (diagatts[0] & diagPieceBB);
+    }
+
+    if (((diagatts[1] & diagPieceBB) != 0) and ((diagatts[1] & kingBB) != 0)) {
+        return (diagatts[1] & diagPieceBB);
+    }
+
+    if (((lineatts[0] & linePieceBB) != 0) and ((lineatts[0] & kingBB) != 0)) {
+        return (lineatts[0] & linePieceBB);
+    }
+
+    if (((lineatts[1] & linePieceBB) != 0) and ((lineatts[1] & kingBB) != 0)) {
+        return (lineatts[1] & linePieceBB);
+    }
+    return EMPTY;
 }
 
 pub fn print_ray_attacks(sq: u8) void {
