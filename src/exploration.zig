@@ -1,6 +1,7 @@
 const std = @import("std");
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
+const benchmark = @import("benchmark.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
@@ -8,6 +9,7 @@ const e_square = chess.e_square;
 const assert = std.debug.assert;
 
 const e_simpleScore = enum(i64) { CheckMate = 9999, StaleMate = 0 };
+pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate };
 
 const simplePawnScore: i64 = 10;
 const simpleBishopScore: i64 = 40;
@@ -58,13 +60,13 @@ pub const moveDecision = struct {
     }
 };
 
-pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !bool {
+pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !e_matchFlag {
     var moveD: moveDecision = undefined;
     const _turn = p_state.turn_count;
     switch (player.type) {
         .Invalid => {
             std.debug.print("Found invalid player at turn: {d} \n", .{p_state.turn_count});
-            return true;
+            return .Error;
         },
         .Human => {
             moveD = try humanMoveBot(p_state);
@@ -83,11 +85,13 @@ pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !bool {
 
     assert(_turn == p_state.turn_count);
     if (!moveD.move.isValid()) {
-        std.debug.print("[DEBUG] handlePlayer: No moves were considered or found stalemate or checkmate (?) \n", .{});
-        return false;
+        if (p_state.isLegal(p_state.turn)) {
+            return .StaleMate;
+        }
+        return .CheckMate;
     }
     _ = try p_state.makeMove(moveD.move);
-    return true;
+    return .Continue;
 }
 
 pub fn getEvaluation(p_state: *chess.Board_state) i64 {
@@ -154,71 +158,19 @@ pub fn simpleMoveBot(p_state: *chess.Board_state) !moveDecision {
     return decision;
 }
 
-pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchmarkResult) !void {
+pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult) !void {
     if (depth == 0) {
         p_res.addNode(p_state.getLastMove());
         return;
     }
     var moves: moveContainer = try chess.moveGeneration(p_state);
     const fmoves = try chess.filterMoveLegal(p_state, &moves);
-
     for (0..fmoves.len) |i| {
         _ = try p_state.makeMove(fmoves.moves[i]);
         try explorationNDepth(p_state, depth - 1, p_res);
         _ = try p_state.undoMove();
     }
     return;
-}
-
-pub const benchmarkResult = struct {
-    n_nodes: i64 = 0,
-    n_captures: i64 = 0,
-    n_enpassants: i64 = 0,
-    n_castles: i64 = 0,
-    n_promotions: i64 = 0,
-
-    pub fn reset(p_self: *benchmarkResult) void {
-        p_self.n_nodes = 0;
-        p_self.n_captures = 0;
-        p_self.n_enpassants = 0;
-        p_self.n_castles = 0;
-        p_self.n_promotions = 0;
-    }
-    pub fn addNode(p_self: *benchmarkResult, move: IMove) void {
-        p_self.n_nodes += 1;
-        if (move.isCapture()) {
-            p_self.n_captures += 1;
-        }
-        if (move.isEnpassant()) {
-            p_self.n_enpassants += 1;
-        }
-        if (move.isKingSideCastle() or move.isQueenSideCastle()) {
-            p_self.n_castles += 1;
-        }
-        if (move.isPromotion()) {
-            p_self.n_promotions += 1;
-        }
-    }
-    pub fn printInfo(self: benchmarkResult) void {
-        std.debug.print("\n|Nodes|Capture|Enpassant|castling|promotions|\n", .{});
-
-        std.debug.print("|=====|=======|=========|========|==========|\n", .{});
-        std.debug.print("|{d}|{d}|{d}|{d}|{d}|\n", .{ self.n_nodes, self.n_captures, self.n_enpassants, self.n_castles, self.n_promotions });
-    }
-};
-
-pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8) void {
-    var bench_res: benchmarkResult = .{};
-    var _start: i64 = 0;
-    var _end: i64 = 0;
-    for (1..(n_max + 1)) |depth| {
-        bench_res.reset();
-        _start = std.time.milliTimestamp();
-        explorationNDepth(p_state, @intCast(depth), &bench_res) catch unreachable;
-        _end = std.time.milliTimestamp();
-        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, bench_res.n_nodes, @divFloor((bench_res.n_nodes), (_end - _start + 1)) * 1000 });
-        bench_res.printInfo();
-    }
 }
 
 pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {

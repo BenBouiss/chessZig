@@ -7,6 +7,7 @@ const movel = @import("move.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
+const e_matchFlag = exploration.e_matchFlag;
 
 const NUMBER_PLAYER: u8 = 2;
 const ROW_SIZE: u8 = 8;
@@ -766,7 +767,6 @@ pub const Board_state = struct {
 
     pub fn isLegal(p_self: *Board_state, turn: e_color) bool {
         const all_attack = getAllAttackMask(p_self, &p_self.attackMask, invertColor(turn));
-        //print_bitboard(all_attack);
         const king_bb = p_self.getKingBB(turn);
         if (king_bb == 0) {
             return false;
@@ -1162,7 +1162,7 @@ pub fn diagonalAttacks(bb: u64, sq: e_square) u64 {
 }
 
 pub fn antiDiagAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.NORTHEAST, sq) | getAttackRay(bb, e_direction.SOUTHEAST, sq); // ^ +
+    return getAttackRay(bb, e_direction.NORTHWEST, sq) | getAttackRay(bb, e_direction.SOUTHEAST, sq); // ^ +
 }
 
 pub fn fileAttacks(bb: u64, sq: e_square) u64 {
@@ -1352,7 +1352,7 @@ pub fn _PieceMovePawnMask(p_board: *Board_state, bb_piece: u64, p_attack_mask: *
             flags |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
         }
 
-        moves = _moveBitBoardtoIMove(p_board, curr_pos, (genShift(ONE, sq + (8 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE) | flags);
+        moves = _moveBitBoardtoIMove(p_board, curr_pos, (genShift(curr_pos, (8 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE) | flags);
 
         _ = ret.extend(&moves);
 
@@ -1360,8 +1360,10 @@ pub fn _PieceMovePawnMask(p_board: *Board_state, bb_piece: u64, p_attack_mask: *
         _ = ret.extend(&moves);
 
         if ((sq > 7 and sq < 16 and piece == e_piece.nWhitePawn) or (sq > 47 and sq < 56 and piece == e_piece.nBlackPawn)) {
-            moves = _moveBitBoardtoIMove(p_board, curr_pos, (genShift(ONE, sq + (16 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.DOUBLEPAWN));
-            _ = ret.extend(&moves);
+            if ((genShift(curr_pos, 8 * c_modif) & p_board.occupiedBB) == 0) {
+                moves = _moveBitBoardtoIMove(p_board, curr_pos, (genShift(ONE, sq + (16 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.DOUBLEPAWN));
+                _ = ret.extend(&moves);
+            }
         }
 
         // still need logic for enpassant moves
@@ -1477,6 +1479,7 @@ pub fn _PieceMoveQueenMask(p_board: *Board_state, bb_piece: u64) moveContainer {
 
         _ = ret.extend(&moveBitBoardToIMove(p_board, (ONE << @intCast(sq)), att_mask, @intFromEnum(e_moveFlags.QUIETMOVE)));
     }
+
     return ret;
 }
 
@@ -1834,7 +1837,7 @@ pub fn askContinue() void {
 
 pub fn match_routine(p_state: *Board_state) void {
     var curr_player: exploration.Player = undefined;
-    var status: bool = true;
+    var status: e_matchFlag = undefined;
     while (true) {
         print_boardstate(p_state);
         curr_player = p_state.players[@intFromEnum(p_state.turn)];
@@ -1843,10 +1846,13 @@ pub fn match_routine(p_state: *Board_state) void {
             print_board(p_state);
             return;
         };
-
-        if (!status) {
-            askContinue();
-            break;
+        switch (status) {
+            .CheckMate, .StaleMate, .Error => {
+                std.debug.print("[DEBUG] match_routine: match is over flag: {} \n", .{status});
+                askContinue();
+                break;
+            },
+            .Continue => {},
         }
         utils.clear();
     }
