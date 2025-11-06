@@ -68,7 +68,7 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8) void {
         std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, bench_res.n_nodes, @divFloor((bench_res.n_nodes), (_end - _start + 1)) * 1000 });
         bench_res.printInfo();
         if (bench_res.n_nodes != ExpectedBenchmarkResults[depth]) {
-            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} ({d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], bench_res.n_nodes, ExpectedBenchmarkResults[depth] - bench_res.n_nodes });
+            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], bench_res.n_nodes, ExpectedBenchmarkResults[depth] - bench_res.n_nodes });
         }
         //        std.debug.assert(bench_res.n_nodes == ExpectedBenchmarkResults[depth]);
     }

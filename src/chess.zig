@@ -460,7 +460,6 @@ pub fn undoCastlingRookStatus(p_state: *Board_state, sq: u8) void {
         target = 2;
     }
     if (p_state.castleMoveCounter[@intFromEnum(p_state.turn)][target] < (p_state.turn_count)) {
-        //std.debug.print("[DEBUG] undoCastlingRookStatus: Not clearing the status found {d} at turn: {d}\n", .{ p_state.castleMoveCounter[@intFromEnum(p_state.turn)][target], p_state.turn_count });
         return;
     }
     p_state.castleMoveCounter[@intFromEnum(p_state.turn)][target] = INVALID_POSITION;
@@ -471,6 +470,52 @@ pub fn undoCastlingKingStatus(p_state: *Board_state) void {
         return;
     }
     p_state.castleMoveCounter[@intFromEnum(p_state.turn)][1] = INVALID_POSITION;
+}
+
+pub fn refreshEnPassantSide(p_state: *Board_state, turn: e_color) void {
+    p_state.enPassantBB[@intFromEnum(turn)] = EMPTY;
+}
+pub fn placeEnPassantPawn(p_state: *Board_state, turn: e_color, sqFile: u8) void {
+    if (turn == .WHITE) {
+        p_state.enPassantBB[0] = (ONE << (@intCast(sqFile + 16)));
+    } else {
+        p_state.enPassantBB[1] = (ONE << (@intCast(sqFile + 40)));
+    }
+}
+
+pub fn enPassantCaptureLocationFromMove(toBB: u64, turn: e_color) u64 {
+    if (turn == .WHITE) {
+        return toBB >> 8;
+    }
+    return toBB << 8;
+}
+
+pub fn updateEnPassantStatus(p_state: *Board_state, sq: e_square) void {
+    const sq_file = getSqFile(sq);
+    if (p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] != INVALID_POSITION) {
+        @panic("[PANIC] updataEnPassantStatus: Trying to set the en passant status of a already double moved pawn\n");
+    }
+    refreshEnPassantSide(p_state, p_state.turn);
+    p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] = @intCast(p_state.turn_count);
+    p_state.enPassantPreviousTurn[@intFromEnum(p_state.turn)] = @intCast(p_state.turn_count);
+    placeEnPassantPawn(p_state, p_state.turn, sq_file);
+}
+pub fn undoEnPassantStatus(p_state: *Board_state) void {
+    if (p_state.enPassantPreviousTurn[@intFromEnum(p_state.turn)] < p_state.turn_count) {
+        // no en double moves have been done before or prev move is too far away
+        return;
+    }
+    var newPrev: i8 = INVALID_POSITION;
+    refreshEnPassantSide(p_state, p_state.turn);
+    for (0..8) |i| {
+        const curr_turn_counter = p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][i];
+        if (curr_turn_counter == p_state.turn_count) {
+            p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][i] = INVALID_POSITION;
+        } else {
+            newPrev = utils.max(newPrev, curr_turn_counter);
+        }
+    }
+    p_state.enPassantPreviousTurn[@intFromEnum(p_state.turn)] = newPrev;
 }
 pub inline fn convertColorToColorPiece(color: e_color) e_piece {
     return arr_color_conv[@intFromEnum(color)];
@@ -485,13 +530,17 @@ pub fn getEmptyBoardState() Board_state {
 pub const Board_state = struct {
     players: [NUMBER_PLAYER]exploration.Player = std.mem.zeroes([NUMBER_PLAYER]exploration.Player),
     pieceBB: [N_PIECES]u64 = std.mem.zeroes([N_PIECES]u64),
+
     enPassantBB: [NUMBER_PLAYER]u64,
-    castlingBB: [NUMBER_PLAYER]u64,
+    enPassantTurnCounter: [NUMBER_PLAYER][8]i8,
+    enPassantPreviousTurn: [NUMBER_PLAYER]i8,
+
     c_occupiedBB: [NUMBER_PLAYER]u64,
     occupiedBB: u64 = 0,
     turn: e_color,
     turn_count: u64 = 0,
 
+    castlingBB: [NUMBER_PLAYER]u64,
     castleMoveCounter: [NUMBER_PLAYER][3]i8,
     // 3 index: (queenSide, king, kingSide) store
     // the turn when the piece has 'first' moved
@@ -503,11 +552,19 @@ pub const Board_state = struct {
     seed: u64 = 42,
     pub fn init_board(p_self: *Board_state) !void {
         @memset(&p_self.pieceBB, 0);
-        @memset(&p_self.enPassantBB, 0);
         @memset(&p_self.castlingBB, 0);
         @memset(&p_self.c_occupiedBB, 0);
+
         @memset(&p_self.castleMoveCounter[0], INVALID_POSITION);
         @memset(&p_self.castleMoveCounter[1], INVALID_POSITION);
+
+        @memset(&p_self.enPassantBB, 0);
+        @memset(&p_self.enPassantTurnCounter[0], INVALID_POSITION);
+        @memset(&p_self.enPassantTurnCounter[1], INVALID_POSITION);
+
+        p_self.enPassantPreviousTurn[0] = INVALID_POSITION;
+        p_self.enPassantPreviousTurn[1] = INVALID_POSITION;
+
         p_self.pieceBB[@intFromEnum(e_piece.nEmptySquare)] = UNIVERSE;
         p_self.turn = e_color.WHITE;
         p_self.turn_count = 0;
@@ -602,6 +659,8 @@ pub const Board_state = struct {
             return false;
         }
         p_self.undo_turn();
+        undoEnPassantStatus(p_self);
+
         var pieceCastle: e_piece = undefined;
         const poped_move: IMove = p_self.move_history.pop().?;
         const toBB: u64 = ONE << @intCast((poped_move.getTo()));
@@ -641,12 +700,20 @@ pub const Board_state = struct {
         }
 
         if (poped_move.isCapture()) {
-            p_self.pieceBB[@intFromEnum(poped_move.c_piece)] |= toBB;
-            p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] |= toBB;
-            p_self.occupiedBB |= fromBB;
+            if (poped_move.isEnpassant()) {
+                const _toBB = enPassantCaptureLocationFromMove(toBB, p_self.turn);
+                p_self.pieceBB[@intFromEnum(poped_move.c_piece)] |= _toBB;
+                p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] |= _toBB;
+                p_self.occupiedBB ^= (moveBB | _toBB);
+            } else {
+                p_self.pieceBB[@intFromEnum(poped_move.c_piece)] |= toBB;
+                p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] |= toBB;
+                p_self.occupiedBB |= fromBB;
+            }
         } else {
             p_self.occupiedBB ^= moveBB;
         }
+
         return true;
     }
 
@@ -654,13 +721,14 @@ pub const Board_state = struct {
         var pieceCastle: e_piece = undefined;
         const toBB: u64 = ONE << @intCast(move.getTo());
         const fromBB: u64 = ONE << @intCast(move.getFrom());
+
         var moveBB = toBB | fromBB;
         const pieceF = p_self.get_piece(move.getFrom());
         const colorF = getColorFromPiece(pieceF);
         if (p_self.pieceBB[@intFromEnum(pieceF)] & fromBB == 0) {
             std.debug.print("[DEBUG] From makeMove: strange move found where piece not found but move formed? Move: {s} {} turn: {}\n", .{ move.getStr(), pieceF, p_self.turn });
+            print_boardstate(p_self);
             return debug_err.earlyReturn;
-            //return false;
         }
         try p_self.move_history.append(get_global_alloc(), move.copy());
 
@@ -685,17 +753,27 @@ pub const Board_state = struct {
         }
 
         if (move.isCapture()) {
-            p_self.pieceBB[@intFromEnum(move.c_piece)] ^= toBB;
-            p_self.occupiedBB ^= fromBB;
-            p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] ^= toBB;
+            if (move.isEnpassant()) {
+                const _toBB = enPassantCaptureLocationFromMove(toBB, p_self.turn);
+                p_self.pieceBB[@intFromEnum(move.c_piece)] ^= _toBB;
+                p_self.occupiedBB ^= (moveBB | _toBB);
+                p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] ^= _toBB;
+            } else {
+                refreshEnPassantSide(p_self, p_self.turn);
+                p_self.pieceBB[@intFromEnum(move.c_piece)] ^= toBB;
+                p_self.occupiedBB ^= fromBB;
+                p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] ^= toBB;
+            }
         } else {
             p_self.occupiedBB ^= moveBB;
         }
         if (move.isPromotion()) {
             const prom_piece: e_piece = flagPromotionToPiece(move.getFlag(), p_self.turn);
-            //std.debug.print("[DEBUG] From makeMove: Making a promoting move to {}\n", .{prom_piece});
             p_self.pieceBB[@intFromEnum(pieceF)] ^= toBB;
             p_self.pieceBB[@intFromEnum(prom_piece)] ^= toBB;
+        }
+        if (move.isDoublePush()) {
+            updateEnPassantStatus(p_self, @enumFromInt(move.getTo()));
         }
         p_self.next_turn();
         return true;
@@ -1420,13 +1498,15 @@ pub fn _PieceMovePawnMask(p_board: *Board_state, bb_piece: u64, p_attack_mask: *
 
         if ((sq > 7 and sq < 16 and piece == e_piece.nWhitePawn) or (sq > 47 and sq < 56 and piece == e_piece.nBlackPawn)) {
             if ((genShift(curr_pos, 8 * c_modif) & p_board.occupiedBB) == 0) {
-                moves = _moveBitBoardtoIMove(p_board, curr_pos, (genShift(ONE, sq + (16 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.DOUBLEPAWN));
+                moves = _moveBitBoardtoIMove(p_board, curr_pos, (genShift(curr_pos, (16 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.DOUBLEPAWN));
                 _ = ret.extend(&moves);
             }
         }
 
         // still need logic for enpassant moves
-
+        //(genShift(curr_pos, (8 * c_modif))) & (~p_board.occupiedBB)
+        moves = moveBitBoardToIMove(p_board, curr_pos, (p_attack_mask.SimplePawnAttack[@intFromEnum(turn)][@intCast(sq)] & p_board.enPassantBB[@intFromEnum(op_color)]), flags | @intFromEnum(e_moveFlags.ENPASSANT));
+        _ = ret.extend(&moves);
         _bb_piece ^= curr_pos;
     }
     return ret;
@@ -1583,14 +1663,21 @@ pub fn moveBitBoardToIMove(p_board: *Board_state, piece_bb: u64, attack_bb: u64,
     var lsb: i8 = 0;
     var _curr_move: IMove = undefined;
     var c_piece: e_piece = undefined;
-
+    var enpass_capture_pawn: e_piece = e_piece.nBlackPawn;
+    if ((p_board.c_occupiedBB[@intFromEnum(e_color.BLACK)] & piece_bb) != 0) {
+        enpass_capture_pawn = e_piece.nWhitePawn;
+    }
     while (_bb != 0) {
         lsb = bitscan(_bb);
         if (lsb == INVALID_POSITION) {
             break;
         }
         curr_pos = (ONE << @intCast(lsb));
-        if (curr_pos & p_board.occupiedBB != 0) {
+        if (flags == @intFromEnum(e_moveFlags.ENPASSANT)) {
+            _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags | @intFromEnum(e_moveFlags.CAPTURE));
+            c_piece = enpass_capture_pawn;
+            _curr_move.setCapture(c_piece);
+        } else if (curr_pos & p_board.occupiedBB != 0) {
             _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags | @intFromEnum(e_moveFlags.CAPTURE));
             c_piece = p_board.get_piece(@intCast(lsb));
             _curr_move.setCapture(c_piece);
@@ -1600,34 +1687,6 @@ pub fn moveBitBoardToIMove(p_board: *Board_state, piece_bb: u64, attack_bb: u64,
 
         _ = ret.append(_curr_move);
         _bb ^= curr_pos;
-    }
-    return ret;
-}
-pub fn moveBitBoardToMove(p_board: *Board_state, piece_bb: u64, attack_bb: u64, piece: e_piece, turn: e_color) !std.ArrayList(Move) {
-    var ret: std.ArrayList(Move) = try std.ArrayList(Move).initCapacity(get_global_alloc(), 10);
-    const sq: i8 = bitscan(piece_bb);
-    var _bb = attack_bb;
-    var lsb: i8 = 0;
-    var _curr_move: Move = undefined;
-    var c_piece: e_piece = undefined;
-    while (_bb != 0) {
-        lsb = bitscan(_bb);
-        if (lsb == INVALID_POSITION) {
-            break;
-        }
-        c_piece = p_board.get_piece(@intCast(lsb));
-        _curr_move = .{
-            .piece = piece,
-            .color = turn,
-            .from = @enumFromInt(sq),
-            .to = @enumFromInt(lsb),
-            .cpiece = c_piece,
-            .ccolor = getColorFromPiece(c_piece),
-            .promotion = e_piece.nEmptySquare,
-            .turn = @intCast(p_board.turn_count),
-        };
-        try ret.append(get_global_alloc(), _curr_move);
-        _bb ^= (ONE << @intCast(lsb));
     }
     return ret;
 }
