@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) void {
     // of this build script using `b.option()`. All defined flags (including
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
+    // using the example from https://github.com/tealsnow/zig-tracy
 
     // doesnt work still get cache error thingy on WSL
     //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -89,6 +90,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+
     const raylib_dep = b.dependency("raylib_zig", .{
         .target = target,
         .optimize = optimize,

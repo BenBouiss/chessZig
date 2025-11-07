@@ -1,4 +1,6 @@
 *zig-out
 *.zig-cache
+cmd
+
 
 *pycache*

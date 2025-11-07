@@ -5,11 +5,11 @@ pub const e_square = enum(u8) { a1 = 0, b1, c1, d1, e1, f1, g1, h1, a2, b2, c2, 
 pub const MAX_CHECKS: u8 = 2;
 
 pub const squareInfo = struct {
-    sq: e_square,
-    file: u8,
-    rank: u8,
-    diagonal: i8,
-    antidiagonal: i8,
+    sq: e_square = e_square.a1,
+    file: u8 = 0,
+    rank: u8 = 0,
+    diagonal: i8 = 0,
+    antidiagonal: i8 = 0,
     pub fn init(sq: e_square) squareInfo {
         return .{ .sq = sq, .file = chess.getSqFile(sq), .rank = chess.getSqRank(sq), .diagonal = chess.getSqDiag(sq), .antidiagonal = chess.getSqAntiDiag(sq) };
     }
@@ -19,10 +19,13 @@ pub const squareInfo = struct {
     pub fn print(self: squareInfo) void {
         std.debug.print("{} ", .{self.sq});
     }
+    pub fn getBB(self: squareInfo) u64 {
+        return chess.ONE << @intCast(@intFromEnum(self.sq));
+    }
 };
 
 pub const checkContainer = struct {
-    squares: [MAX_CHECKS]squareInfo = undefined,
+    squares: [MAX_CHECKS]squareInfo = std.mem.zeroes([MAX_CHECKS]squareInfo),
     len: usize = 0,
 
     pub fn addCheckSquare(p_self: *checkContainer, sq: squareInfo) bool {

@@ -5,7 +5,7 @@ const squarel = @import("square.zig");
 const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
 
-const e_moveFlags = chess.e_moveFlags;
+pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 
 pub fn build_move(from: u8, to: u8, flag: u8) IMove {
     var m_move: u16 = (flag & 0xF);
@@ -28,12 +28,18 @@ pub const IMove = struct {
     pub fn equal(self: IMove, other: IMove) bool {
         return ((self.m_move == other.m_move) and (self.c_piece == other.c_piece));
     }
+
+    pub fn softEqual(self: IMove, other: IMove) bool {
+        return (self.getFrom() == other.getFrom()) and (self.getTo() == other.getTo());
+    }
+
     pub fn isIn(self: IMove, move_arr: moveContainer) bool {
         for (move_arr.moves) |move| {
-            if (self.equal(move)) {
+            if (self.softEqual(move)) {
                 return true;
             }
         }
+        //std.debug.print("[DEBUG] isIn: move: {s} is not in the set\n", .{self.getStr()});
         return false;
     }
     pub inline fn getFrom(self: IMove) u8 {
@@ -57,6 +63,9 @@ pub const IMove = struct {
     }
     pub inline fn isQueenSideCastle(self: IMove) bool {
         return (self.getFlag() == @intFromEnum(e_moveFlags.QUEENCASTLE));
+    }
+    pub fn isCastle(self: IMove) bool {
+        return self.isKingSideCastle() or self.isQueenSideCastle();
     }
     pub inline fn isEnpassant(self: IMove) bool {
         return (self.getFlag() == @intFromEnum(e_moveFlags.ENPASSANT));
@@ -101,7 +110,7 @@ pub const moveContainer = struct {
         if (p_self.len == chess.MAX_POSSIBLE_MOVE) {
             return false;
         }
-        p_self.moves[p_self.len] = move.copy();
+        p_self.moves[p_self.len] = move;
         p_self.len += 1;
         return true;
     }
@@ -111,10 +120,32 @@ pub const moveContainer = struct {
             return false;
         }
         for (0..p_other.len) |i| {
-            p_self.moves[p_self.len + i] = p_other.moves[i].copy();
+            p_self.moves[p_self.len + i] = p_other.moves[i];
         }
         p_self.len += p_other.len;
         return true;
+    }
+
+    pub fn printDifference(self: moveContainer, other: moveContainer) void {
+        std.debug.print("[DEBUG] printDifference: Size of container (1): {d}, size of container (2): {d}\n", .{ self.len, other.len });
+        var biggerContainer = self;
+        var smallerContainer = other;
+        if (other.len > self.len) {
+            biggerContainer = other;
+            smallerContainer = self;
+            std.debug.print("Printing the values found in container (2) not found in countainer (1): \n", .{});
+        } else {
+            std.debug.print("Printing the values found in container (1) not found in countainer (2): \n", .{});
+        }
+        for (0..biggerContainer.len) |i| {
+            const move = biggerContainer.moves[i];
+            if (!move.isIn(smallerContainer)) {
+                std.debug.print("{s} ", .{move.getStr()});
+            }
+        }
+
+        std.debug.print("\n", .{});
+        smallerContainer.print();
     }
 
     pub fn shuffle(p_self: *moveContainer, rand: std.Random) void {
