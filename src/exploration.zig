@@ -2,7 +2,8 @@ const std = @import("std");
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const benchmark = @import("benchmark.zig");
-
+const moveGenl = @import("move_generation.zig");
+const heuristicl = @import("heuristic.zig");
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const e_square = chess.e_square;
@@ -10,14 +11,6 @@ const assert = std.debug.assert;
 
 const e_simpleScore = enum(i64) { CheckMate = 9999, StaleMate = 0 };
 pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate };
-
-const simplePawnScore: i64 = 10;
-const simpleBishopScore: i64 = 40;
-const simpleKnightScore: i64 = 40;
-const simpleRookScore: i64 = 60;
-const simpleQueenScore: i64 = 120;
-const simpleCheckMateScore: i64 = 9999;
-const simpleStalemateScore: i64 = 0;
 
 const e_botType = enum(u8) { Random, Simple };
 
@@ -95,24 +88,7 @@ pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !e_matchFlag {
 }
 
 pub fn getEvaluation(p_state: *chess.Board_state) i64 {
-    return simpleHeuristic(p_state);
-}
-
-pub fn simpleHeuristic(p_state: *chess.Board_state) i64 {
-    var score: i64 = 0;
-    score += p_state.getPieceCount(.nWhitePawn) * simplePawnScore;
-    score += p_state.getPieceCount(.nWhiteBishop) * simpleBishopScore;
-    score += p_state.getPieceCount(.nWhiteKnight) * simpleKnightScore;
-    score += p_state.getPieceCount(.nWhiteRook) * simpleRookScore;
-    score += p_state.getPieceCount(.nWhiteQueen) * simpleQueenScore;
-
-    score -= p_state.getPieceCount(.nBlackPawn) * simplePawnScore;
-    score -= p_state.getPieceCount(.nBlackBishop) * simpleBishopScore;
-    score -= p_state.getPieceCount(.nBlackKnight) * simpleKnightScore;
-    score -= p_state.getPieceCount(.nBlackRook) * simpleRookScore;
-    score -= p_state.getPieceCount(.nBlackQueen) * simpleQueenScore;
-
-    return score;
+    return heuristicl.simpleHeuristic(p_state);
 }
 
 pub fn getScoreMaskFromTurn(color: chess.e_color) i8 {
@@ -123,7 +99,7 @@ pub fn getScoreMaskFromTurn(color: chess.e_color) i8 {
 }
 
 pub fn simpleBotMoveExploration(p_state: *chess.Board_state) !moveDecision {
-    var moves: moveContainer = try chess.moveGeneration(p_state);
+    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
     moves.shuffle(p_state.randInt);
 
     var decision: moveDecision = .{};
@@ -136,7 +112,7 @@ pub fn simpleBotMoveExploration(p_state: *chess.Board_state) !moveDecision {
             _ = try p_state.undoMove();
             continue;
         }
-        curr_score = simpleHeuristic(p_state);
+        curr_score = getEvaluation(p_state);
         _ = try p_state.undoMove();
         if (!decision.move.isValid() or
             (curr_score * color_mask > decision.scoring * color_mask))
@@ -147,7 +123,7 @@ pub fn simpleBotMoveExploration(p_state: *chess.Board_state) !moveDecision {
     }
 
     if (!decision.move.isValid()) {
-        decision.scoring = simpleCheckMateScore * color_mask;
+        decision.scoring = heuristicl.simpleCheckMateScore * color_mask;
     }
     return decision;
 }
@@ -163,12 +139,11 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
         p_res.addNode(p_state.getLastMove());
         return;
     }
-    var moves: moveContainer = try chess.moveGeneration(p_state);
-    //const fmoves = try chess.filterMoveLegal(p_state, &moves);
-    const fmoves = try chess.filterMoveLegalFast(p_state, &moves);
+    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    //const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
+    const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
     //if (fmoves.len != ffmoves.len) {
-    //    fmoves.print();
-    //    ffmoves.print();
+    //    fmoves.printDifference(ffmoves);
     //    chess.print_boardstate(p_state);
     //    chess.askContinue();
     //}
@@ -181,8 +156,8 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
 }
 
 pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
-    var moves: moveContainer = try chess.moveGeneration(p_state);
-    const fmoves = try chess.filterMoveLegal(p_state, &moves);
+    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
 
     if (fmoves.len == 0) {
         return .{};
@@ -196,8 +171,8 @@ pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
 
 pub fn humanMoveBot(p_state: *chess.Board_state) !moveDecision {
     std.debug.print("[DEBUG] humanMoveBot: \n", .{});
-    var moves: moveContainer = try chess.moveGeneration(p_state);
-    const fmoves = try chess.filterMoveLegal(p_state, &moves);
+    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
     var userMove: IMove = undefined;
 
     while (true) {
@@ -221,9 +196,9 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, depth: u8) !moveDeci
     const color_mask: i8 = getScoreMaskFromTurn(p_state.turn);
 
     if (depth <= 0) {
-        return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * simpleHeuristic(p_state) };
+        return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * heuristicl.simpleHeuristic(p_state) };
     }
-    var all_moves: moveContainer = try chess.moveGeneration(p_state);
+    var all_moves: moveContainer = try moveGenl.moveGeneration(p_state);
     all_moves.shuffle(p_state.randInt);
 
     var final_decision: moveDecision = .{};
