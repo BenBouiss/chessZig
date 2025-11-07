@@ -6,6 +6,7 @@ const exploration = @import("exploration.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const moveGenl = @import("move_generation.zig");
+const heuristicl = @import("heuristic.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
@@ -477,7 +478,7 @@ pub fn getEmptyBoardState() Board_state {
 }
 
 pub const Board_state = struct {
-    players: [NUMBER_PLAYER]exploration.Player = std.mem.zeroes([NUMBER_PLAYER]exploration.Player),
+    players: [NUMBER_PLAYER]exploration.Player, // = std.mem.zeroes([NUMBER_PLAYER]exploration.Player),
     pieceBB: [N_PIECES]u64 = std.mem.zeroes([N_PIECES]u64),
 
     enPassantBB: [NUMBER_PLAYER]u64,
@@ -500,6 +501,7 @@ pub const Board_state = struct {
     randInt: std.Random,
     seed: u64 = 42,
     pub fn init_board(p_self: *Board_state) !void {
+        chess.initRayAttacks();
         @memset(&p_self.pieceBB, 0);
         @memset(&p_self.castlingBB, 0);
         @memset(&p_self.c_occupiedBB, 0);
@@ -537,14 +539,20 @@ pub const Board_state = struct {
     pub fn setPlayerType(p_self: *Board_state, color: e_color, player_type: exploration.e_playerType) void {
         p_self.players[@intFromEnum(color)].setType(player_type);
     }
+    pub fn setPlayerSearchDepth(p_self: *Board_state, color: e_color, depth: u8) void {
+        p_self.players[@intFromEnum(color)].setSearchDepth(depth);
+    }
+    pub fn setPlayerSearcType(p_self: *Board_state, color: e_color, search_type: exploration.e_searchType) void {
+        p_self.players[@intFromEnum(color)].setSearchType(search_type);
+    }
+    pub fn setPlayerHeuristicType(p_self: *Board_state, color: e_color, heuristic_type: heuristicl.e_heuristicType) void {
+        p_self.players[@intFromEnum(color)].setHeuristicType(heuristic_type);
+    }
     pub fn printHistory(self: Board_state) void {
         for (self.move_history.items) |move| {
             std.debug.print("{s} ", .{move.getStr()});
         }
         std.debug.print("\n", .{});
-    }
-    pub fn setPlayerSearchDepth(p_self: *Board_state, color: e_color, depth: u8) void {
-        p_self.players[@intFromEnum(color)].setDepth(depth);
     }
 
     pub fn get_piece(p_self: *Board_state, sq: u8) e_piece {
@@ -949,7 +957,7 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
 
     print_board(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.items.len });
-    std.debug.print("Current evaluation: {d} \n", .{exploration.getEvaluation(p_board_state)});
+    std.debug.print("Current evaluation: {d} \n", .{heuristicl.simpleHeuristic(p_board_state)});
 
     const valid_w = p_board_state.isLegal(e_color.WHITE);
     const valid_b = p_board_state.isLegal(e_color.BLACK);
@@ -966,11 +974,11 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
         p_board_state.move_history.items[p_board_state.move_history.items.len - 1].print();
         std.debug.print("\n", .{});
     }
-    std.debug.print("Move history: ", .{});
-    for (p_board_state.move_history.items) |move| {
-        std.debug.print("{s} ", .{move.getStr()});
-    }
-    std.debug.print("\n", .{});
+    //std.debug.print("Move history: ", .{});
+    //for (p_board_state.move_history.items) |move| {
+    //    std.debug.print("{s} ", .{move.getStr()});
+    //}
+    //std.debug.print("\n", .{});
 
     std.debug.print("Castling status array: \n", .{});
     std.debug.print("{any}\n", .{p_board_state.castleMoveCounter});
