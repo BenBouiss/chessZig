@@ -322,7 +322,10 @@ pub fn execPerft(p_shellState: *ShellState, userBuffer: []const u8) bool {
     const depth = std.fmt.parseInt(u8, indiv_args.items[1], 10) catch {
         return false;
     };
-    benchmarkl.nodeExplorationBenchmark(&p_shellState.chessBoardState, depth);
+    const nThread = std.fmt.parseInt(u8, indiv_args.items[2], 10) catch {
+        return false;
+    };
+    benchmarkl.nodeExplorationBenchmark(&p_shellState.chessBoardState, depth, nThread);
     return true;
 }
 

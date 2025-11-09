@@ -5,6 +5,7 @@ const benchmark = @import("benchmark.zig");
 const moveGenl = @import("move_generation.zig");
 const squarel = @import("square.zig");
 const heuristicl = @import("heuristic.zig");
+const utilsl = @import("utils.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
@@ -17,6 +18,9 @@ pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate };
 
 pub const e_playerType = enum(u8) { Invalid = 0, Human, Bot };
 pub const e_searchType = enum(u8) { Random, Simple, DepthBot };
+
+var GPA = std.heap.GeneralPurposeAllocator(.{}){};
+const GLOBAL_ALLOC = GPA.allocator();
 
 pub fn freePlayer(p_player: *Player) void {
     if (p_player.isInitialized) {
@@ -181,6 +185,57 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
         _ = try p_state.undoMove();
     }
     return;
+}
+
+pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, p_res: *benchmark.benchmarkResult) !void {
+    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
+    var fmoves_arr = try fmoves.convertToArrayList(GLOBAL_ALLOC);
+    defer fmoves_arr.deinit(GLOBAL_ALLOC);
+    var _nThread: usize = @intCast(nThread);
+    if (_nThread == 0) {
+        _nThread = try std.Thread.getCpuCount();
+    }
+    _nThread = utilsl.min(usize, fmoves.len, nThread);
+
+    var threadedMoves = try utilsl.cutArrayListEvenly(IMove, GLOBAL_ALLOC, fmoves_arr, _nThread);
+    defer {
+        for (threadedMoves.items) |*cell| {
+            cell.deinit(GLOBAL_ALLOC);
+        }
+        threadedMoves.deinit(GLOBAL_ALLOC);
+    }
+
+    var arr_benchmarks = try p_res.duplicateNTimes(GLOBAL_ALLOC, _nThread);
+    defer arr_benchmarks.free(GLOBAL_ALLOC);
+
+    var arr_state = try p_state.duplicateNTimes(GLOBAL_ALLOC, _nThread);
+    defer arr_state.free(GLOBAL_ALLOC);
+
+    var threads: []std.Thread = try GLOBAL_ALLOC.alloc(std.Thread, _nThread);
+    defer GLOBAL_ALLOC.free(threads);
+
+    for (0.._nThread) |thread_id| {
+        threads[thread_id] = try std.Thread.spawn(.{}, perftWorkerJob, .{
+            &arr_state.array[thread_id],
+            depth,
+            &arr_benchmarks.array[thread_id],
+            &threadedMoves.items[thread_id],
+        });
+    }
+    for (0..nThread) |thread_id| {
+        threads[thread_id].join();
+    }
+    p_res.* = arr_benchmarks.combine();
+    return;
+}
+
+pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult, p_startingMoves: *std.ArrayList(IMove)) void {
+    for (0..p_startingMoves.items.len) |i| {
+        _ = try p_state.makeMove(p_startingMoves.items[i]);
+        try explorationNDepth(p_state, depth - 1, p_res);
+        _ = try p_state.undoMove();
+    }
 }
 
 pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {

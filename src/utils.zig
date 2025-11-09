@@ -17,6 +17,31 @@ pub fn max(x: i8, y: i8) i8 {
     }
     return x;
 }
+pub fn min(comptime T: type, x: T, y: T) T {
+    if (x < y) {
+        return x;
+    }
+    return y;
+}
+
+pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.ArrayList(T), size: usize) !std.ArrayList(std.ArrayList(T)) {
+    const sizeEach: usize = arr.items.len / size;
+    var ret: std.ArrayList(std.ArrayList(T)) = .{};
+    try ret.append(alloc, .{});
+    var cell: usize = 0;
+    var count: usize = 0;
+    const last_cell = sizeEach * size;
+    for (0..arr.items.len) |i| {
+        if ((count == sizeEach) and (i != last_cell)) {
+            count = 0;
+            cell += 1;
+            try ret.append(alloc, .{});
+        }
+        try ret.items[cell].append(alloc, arr.items[i]);
+        count += 1;
+    }
+    return ret;
+}
 
 pub fn equal(comptime T: type, a: []const T, b: []const T) bool {
     if (a.len != b.len) {

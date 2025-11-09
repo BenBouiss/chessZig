@@ -7,6 +7,9 @@ const e_square = squarel.e_square;
 
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 
+var GPA = std.heap.GeneralPurposeAllocator(.{}){};
+const GLOBAL_ALLOC = GPA.allocator();
+
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     var m_move: u16 = (flag & 0xF);
     m_move <<= 6;
@@ -183,6 +186,13 @@ pub const moveContainer = struct {
             i += 1;
         }
         std.debug.print("\n", .{});
+    }
+    pub fn convertToArrayList(self: moveContainer, alloc: std.mem.Allocator) !std.ArrayList(IMove) {
+        var ret = try std.ArrayList(IMove).initCapacity(alloc, self.len);
+        for (0..self.len) |i| {
+            try ret.append(GLOBAL_ALLOC, self.moves[i].copy());
+        }
+        return ret;
     }
 };
 

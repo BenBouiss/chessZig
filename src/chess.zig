@@ -123,9 +123,9 @@ pub fn _genShift(x: u64, s: i8) u64 {
     return ret;
 }
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const alloc = gpa.allocator();
+const _alloc = gpa.allocator();
 pub inline fn get_global_alloc() std.mem.Allocator {
-    return alloc;
+    return _alloc;
 }
 
 pub fn genShift(x: u64, s: i8) u64 {
@@ -472,6 +472,15 @@ pub inline fn convertColorToColorPiece(color: e_color) e_piece {
     return arr_color_conv[@intFromEnum(color)];
 }
 
+pub const Board_stateContainer = struct {
+    array: []Board_state,
+    len: usize,
+
+    pub fn free(p_self: *Board_stateContainer, alloc: std.mem.Allocator) void {
+        alloc.free(p_self.array);
+    }
+};
+
 pub fn getEmptyBoardState() Board_state {
     var ret: Board_state = undefined;
     _ = ret.init_board() catch void;
@@ -526,6 +535,14 @@ pub const Board_state = struct {
         p_self.rngIntGenerator = std.Random.DefaultPrng.init(p_self.seed);
         p_self.randInt = p_self.rngIntGenerator.random();
     }
+    pub fn duplicateNTimes(self: Board_state, alloc: std.mem.Allocator, n: usize) !Board_stateContainer {
+        var ret: []Board_state = try alloc.alloc(Board_state, n);
+        for (0..n) |i| {
+            ret[i] = self;
+        }
+        return .{ .array = ret, .len = ret.len };
+    }
+
     pub fn free_board(p_self: *Board_state) void {
         for (0..p_self.players.len) |i| {
             exploration.freePlayer(&p_self.players[i]);

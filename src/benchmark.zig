@@ -39,6 +39,41 @@ pub const benchmarkResult = struct {
         std.debug.print("|=====|=======|=========|========|==========|\n", .{});
         std.debug.print("|{d}|{d}|{d}|{d}|{d}|\n", .{ self.n_nodes, self.n_captures, self.n_enpassants, self.n_castles, self.n_promotions });
     }
+    pub fn copy(self: benchmarkResult) benchmarkResult {
+        return .{
+            .n_nodes = self.n_nodes,
+            .n_captures = self.n_captures,
+            .n_enpassants = self.n_enpassants,
+            .n_castles = self.n_castles,
+            .n_promotions = self.n_promotions,
+        };
+    }
+    pub fn duplicateNTimes(self: benchmarkResult, alloc: std.mem.Allocator, n: usize) !benchmarkResultsContainer {
+        var ret: []benchmarkResult = try alloc.alloc(benchmarkResult, n);
+        for (0..n) |i| {
+            ret[i] = self.copy();
+        }
+        return .{ .array = ret, .len = ret.len };
+    }
+};
+
+const benchmarkResultsContainer = struct {
+    array: []benchmarkResult,
+    len: usize,
+    pub fn combine(self: benchmarkResultsContainer) benchmarkResult {
+        var ret: benchmarkResult = .{};
+        for (self.array) |bench| {
+            ret.n_nodes += bench.n_nodes;
+            ret.n_captures += bench.n_captures;
+            ret.n_enpassants += bench.n_enpassants;
+            ret.n_castles += bench.n_castles;
+            ret.n_promotions += bench.n_promotions;
+        }
+        return ret;
+    }
+    pub fn free(p_self: *benchmarkResultsContainer, alloc: std.mem.Allocator) void {
+        alloc.free(p_self.array);
+    }
 };
 
 const ExpectedBenchmarkResults = [_]i64{
@@ -56,14 +91,14 @@ const ExpectedBenchmarkResults = [_]i64{
     2097651003696806,
 };
 // source: https://github.com/Timmoth/grandchesstree
-pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8) void {
+pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread: u8) void {
     var bench_res: benchmarkResult = .{};
     var _start: i64 = 0;
     var _end: i64 = 0;
     for (1..(n_max + 1)) |depth| {
         bench_res.reset();
         _start = std.time.milliTimestamp();
-        exploration.explorationNDepth(p_state, @intCast(depth), &bench_res) catch unreachable;
+        exploration.explorationNDepthThreadStart(p_state, @intCast(depth), nThread, &bench_res) catch unreachable;
         _end = std.time.milliTimestamp();
         std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, bench_res.n_nodes, @divFloor((bench_res.n_nodes), (_end - _start + 1)) * 1000 });
         bench_res.printInfo();
@@ -77,7 +112,7 @@ pub fn test_benchmark() void {
     chess.initRayAttacks();
     var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
     game_state.setSeed(42);
-    nodeExplorationBenchmark(&game_state, 8);
+    nodeExplorationBenchmark(&game_state, 8, 1);
 }
 
 pub fn main() !void {
