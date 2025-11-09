@@ -15,8 +15,6 @@ const assert = std.debug.assert;
 const e_simpleScore = enum(i64) { CheckMate = 9999, StaleMate = 0 };
 pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate };
 
-const e_botType = enum(u8) { Random, Simple };
-
 pub const e_playerType = enum(u8) { Invalid = 0, Human, Bot };
 pub const e_searchType = enum(u8) { Random, Simple, DepthBot };
 
@@ -188,7 +186,9 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
 pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
     var moves: moveContainer = try moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
-
+    if (fmoves.len == 0) {
+        return .{};
+    }
     const move_idx = fmoves.sample(p_state.randInt);
     std.debug.print("[DEBUG] handleBotTurn: Move index sampled {d} / {d}\n", .{ move_idx, fmoves.len });
     fmoves.moves[move_idx].print();
@@ -223,7 +223,7 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
 
     if (depth <= 0) {
         //return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * heuristicl.simpleHeuristic(p_state) };
-        return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * getEvaluation(p_state, p_player) };
+        return .{ .move = p_state.move_history.moves[p_state.move_history.len - 1].copy(), .scoring = color_mask * getEvaluation(p_state, p_player) };
     }
     var all_moves: moveContainer = try moveGenl.moveGeneration(p_state);
     all_moves.shuffle(p_state.randInt);

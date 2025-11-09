@@ -7,22 +7,27 @@ const e_square = squarel.e_square;
 
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 
-pub fn build_move(from: u8, to: u8, flag: u8) IMove {
+pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     var m_move: u16 = (flag & 0xF);
     m_move <<= 6;
     m_move |= (to & 0x3F);
     m_move <<= 6;
     m_move |= (from & 0x3F);
-    const ret: IMove = .{ .m_move = m_move };
+    const ret: IMove = .{ .m_move = m_move, .m_piece = (@intFromEnum(piece) & 0x3F) };
     return ret;
 }
 
 pub const IMove = struct {
     c_piece: e_piece = e_piece.nEmptySquare,
     m_move: u16 = 0,
+    // first 8 bits = start_piece, last = capture_piece
+    m_piece: u16 = 0,
 
     pub fn setCapture(p_self: *IMove, capture: e_piece) void {
         p_self.c_piece = capture;
+        var m_piece: u16 = @intFromEnum(capture);
+        m_piece <<= 8;
+        p_self.m_piece &= (m_piece | p_self.m_piece);
     }
 
     pub fn equal(self: IMove, other: IMove) bool {
@@ -45,6 +50,15 @@ pub const IMove = struct {
     pub inline fn getFrom(self: IMove) u8 {
         return @intCast((self.m_move & 0x3F));
     }
+
+    pub inline fn getFromPiece(self: IMove) e_piece {
+        return @intFromEnum((self.m_piece & 0xFF));
+    }
+
+    pub inline fn getCapturePiece(self: IMove) e_piece {
+        return @intFromEnum((self.m_piece & 0xFF00));
+    }
+
     pub inline fn getTo(self: IMove) u8 {
         return @intCast((self.m_move & (0xFC0)) >> 6);
     }
@@ -169,6 +183,36 @@ pub const moveContainer = struct {
             i += 1;
         }
         std.debug.print("\n", .{});
+    }
+};
+
+//source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
+const MAX_MATH_LENGTH: usize = 6000;
+pub const matchMoveContainer = struct {
+    moves: [MAX_MATH_LENGTH]IMove = undefined,
+    len: usize = 0,
+    pub fn append(p_self: *matchMoveContainer, move: IMove) bool {
+        if (p_self.len == MAX_MATH_LENGTH) {
+            return false;
+        }
+        p_self.moves[p_self.len] = move;
+        p_self.len += 1;
+        return true;
+    }
+    pub fn pop(p_self: *matchMoveContainer) IMove {
+        if (p_self.len == 0) {
+            return .{};
+        }
+        p_self.len -= 1;
+        return p_self.moves[p_self.len];
+    }
+    pub fn fiftyMoveRule(self: matchMoveContainer) bool {
+        //for (0..50) |i|{
+        //    const move = self.moves[self.len - (i+1)];
+        //    if (move.isCapture() or move.
+        //}
+        _ = self;
+        return false;
     }
 };
 

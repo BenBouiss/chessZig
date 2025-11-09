@@ -123,6 +123,9 @@ pub fn getUserStdinput() [MAX_USER_INPUT]u8 {
 
 pub fn getCmdFromUserInput(buffer: []const u8) e_userCmd {
     var indiv_args = utilsl.split(u8, GLOBAL_ALLOC, utilsl.removePaddingValue(buffer), ' ') catch unreachable;
+    if (indiv_args.items.len == 0) {
+        return .NOOP;
+    }
     const l_cmd = utilsl.lower(GLOBAL_ALLOC, indiv_args.items[0]) catch unreachable;
     defer indiv_args.deinit(GLOBAL_ALLOC);
     defer GLOBAL_ALLOC.free(l_cmd);
