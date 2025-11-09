@@ -3,6 +3,8 @@ const chess = @import("chess.zig");
 const exploration = @import("exploration.zig");
 const std = @import("std");
 const benchmark = @import("benchmark.zig");
+const interfacel = @import("interface.zig");
+
 const example = @import("raylib_ex.zig");
 
 fn test_main_game() !void {
@@ -25,15 +27,16 @@ fn test_bot_v_bot() void {
     game_state.setPlayerType(chess.e_color.BLACK, exploration.e_playerType.Bot);
     game_state.setPlayerSearcType(.BLACK, .DepthBot);
     game_state.setPlayerSearchDepth(.BLACK, 5);
-    game_state.setPlayerHeuristicType(.BLACK, .simple);
+    game_state.setPlayerHeuristicType(.BLACK, .Simple);
     chess.match_routine(&game_state);
 }
 
 pub fn main() anyerror!void {
-    chess.initRayAttacks();
+    //chess.initRayAttacks();
     //try test_main_game();
     //try profiler.main();
     //benchmark.test_benchmark();
     //try example.main();
-    test_bot_v_bot();
+    //test_bot_v_bot();
+    interfacel.shell();
 }

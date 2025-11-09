@@ -8,7 +8,7 @@ pub const simpleQueenScore: i64 = 120;
 pub const simpleCheckMateScore: i64 = 9999;
 pub const simpleStalemateScore: i64 = 0;
 
-pub const e_heuristicType = enum(u8) { simple = 0, bitmap };
+pub const e_heuristicType = enum(u8) { Simple = 0, Bitmap };
 
 pub fn mockHeuristic(p_state: *chess.Board_state) i64 {
     _ = p_state;

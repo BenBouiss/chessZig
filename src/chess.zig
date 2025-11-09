@@ -306,7 +306,7 @@ pub fn getBoardFromFen(fen: []const u8) Board_state {
             tmp_enum = getPieceFromStr(letter);
 
             if (!ret.placePiece(tmp_enum, @enumFromInt(board_offset))) {
-                std.debug.print("Placement failed at: {d} val: {d}\n", .{ board_offset, @intFromEnum(tmp_enum) });
+                //std.debug.print("Placement failed at: {d} val: {d}\n", .{ board_offset, @intFromEnum(tmp_enum) });
             }
             if (board_offset != N_SQUARES) {
                 board_offset += 1;
@@ -1664,7 +1664,7 @@ pub fn emptyLineBuffer(line_buffer: []u8) void {
 
 const MAX_USER_INPUT: u8 = 5;
 
-pub fn getUserStdinput() [MAX_USER_INPUT]u8 {
+fn getUserStdinput() [MAX_USER_INPUT]u8 {
     var stdin_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
     var line_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
     var stdin = std.fs.File.stdin().reader(&stdin_buffer);

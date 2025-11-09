@@ -39,6 +39,9 @@ pub const Player = struct {
         p_self.move_decision_history = try std.ArrayList(moveDecision).initCapacity(allocator, 30);
         p_self.isInitialized = true;
     }
+    pub fn print(self: Player) void {
+        std.debug.print("Player info:\nType: {}, seach_option(type, depth, heuristic): {} / {d} / {d} {}\n", .{ self.type, self.search_option.searchType, self.search_option.searchDeph, @intFromEnum(self.search_option.heuristicType), self.search_option.heuristicType });
+    }
     pub fn setType(p_self: *Player, player_type: e_playerType) void {
         p_self.type = player_type;
     }
@@ -52,10 +55,10 @@ pub const Player = struct {
     pub fn setHeuristicType(p_self: *Player, heuristic: heuristicl.e_heuristicType) void {
         p_self.search_option.heuristicType = heuristic;
         switch (heuristic) {
-            .simple => {
+            .Simple => {
                 p_self.search_option.heuristicFunc = &heuristicl.simpleHeuristic;
             },
-            .bitmap => {
+            .Bitmap => {
                 p_self.search_option.heuristicFunc = &heuristicl.simpleHeuristic;
             },
         }
@@ -65,7 +68,7 @@ pub const Player = struct {
 pub const searchOption = struct {
     searchType: e_searchType = .Random,
     searchDeph: u8 = 1,
-    heuristicType: heuristicl.e_heuristicType = .simple,
+    heuristicType: heuristicl.e_heuristicType = .Simple,
     heuristicFunc: *const fn (*chess.Board_state) i64 = &heuristicl.mockHeuristic,
 };
 
