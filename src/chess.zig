@@ -11,6 +11,7 @@ const heuristicl = @import("heuristic.zig");
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
 const moveContainer = movel.moveContainer;
+const matchMoveContainer = movel.matchMoveContainer;
 
 const e_matchFlag = exploration.e_matchFlag;
 
@@ -122,9 +123,9 @@ pub fn _genShift(x: u64, s: i8) u64 {
     return ret;
 }
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const alloc = gpa.allocator();
+const _alloc = gpa.allocator();
 pub inline fn get_global_alloc() std.mem.Allocator {
-    return alloc;
+    return _alloc;
 }
 
 pub fn genShift(x: u64, s: i8) u64 {
@@ -471,6 +472,15 @@ pub inline fn convertColorToColorPiece(color: e_color) e_piece {
     return arr_color_conv[@intFromEnum(color)];
 }
 
+pub const Board_stateContainer = struct {
+    array: []Board_state,
+    len: usize,
+
+    pub fn free(p_self: *Board_stateContainer, alloc: std.mem.Allocator) void {
+        alloc.free(p_self.array);
+    }
+};
+
 pub fn getEmptyBoardState() Board_state {
     var ret: Board_state = undefined;
     _ = ret.init_board() catch void;
@@ -494,7 +504,7 @@ pub const Board_state = struct {
     castleMoveCounter: [NUMBER_PLAYER][3]i8,
     // 3 index: (queenSide, king, kingSide) store
     // the turn when the piece has 'first' moved
-    move_history: std.ArrayList(IMove),
+    move_history: matchMoveContainer = .{},
     attackMask: Attack_masks,
 
     rngIntGenerator: std.Random.DefaultPrng,
@@ -520,13 +530,20 @@ pub const Board_state = struct {
         p_self.turn = e_color.WHITE;
         p_self.turn_count = 0;
         p_self.occupiedBB = 0;
-        p_self.move_history = try std.ArrayList(IMove).initCapacity(get_global_alloc(), 10);
+        p_self.move_history = .{};
         p_self.attackMask = initMaskAttacks();
         p_self.rngIntGenerator = std.Random.DefaultPrng.init(p_self.seed);
         p_self.randInt = p_self.rngIntGenerator.random();
     }
+    pub fn duplicateNTimes(self: Board_state, alloc: std.mem.Allocator, n: usize) !Board_stateContainer {
+        var ret: []Board_state = try alloc.alloc(Board_state, n);
+        for (0..n) |i| {
+            ret[i] = self;
+        }
+        return .{ .array = ret, .len = ret.len };
+    }
+
     pub fn free_board(p_self: *Board_state) void {
-        p_self.move_history.deinit(get_global_alloc());
         for (0..p_self.players.len) |i| {
             exploration.freePlayer(&p_self.players[i]);
         }
@@ -549,7 +566,8 @@ pub const Board_state = struct {
         p_self.players[@intFromEnum(color)].setHeuristicType(heuristic_type);
     }
     pub fn printHistory(self: Board_state) void {
-        for (self.move_history.items) |move| {
+        for (0..self.move_history.len) |i| {
+            const move = self.move_history.moves[i];
             std.debug.print("{s} ", .{move.getStr()});
         }
         std.debug.print("\n", .{});
@@ -612,14 +630,14 @@ pub const Board_state = struct {
     }
 
     pub fn undoMove(p_self: *Board_state) !bool {
-        if (p_self.move_history.items.len == 0) {
+        if (p_self.move_history.len == 0) {
             return false;
         }
         p_self.undo_turn();
         undoEnPassantStatus(p_self);
 
         var pieceCastle: e_piece = undefined;
-        const poped_move: IMove = p_self.move_history.pop().?;
+        const poped_move: IMove = p_self.move_history.pop();
         const toBB: u64 = ONE << @intCast((poped_move.getTo()));
         const fromBB: u64 = ONE << @intCast((poped_move.getFrom()));
         var moveBB: u64 = (toBB | fromBB);
@@ -659,11 +677,11 @@ pub const Board_state = struct {
         if (poped_move.isCapture()) {
             if (poped_move.isEnpassant()) {
                 const _toBB = enPassantCaptureLocationFromMove(toBB, (p_self.turn));
-                p_self.pieceBB[@intFromEnum(poped_move.c_piece)] |= _toBB;
+                p_self.pieceBB[@intFromEnum(poped_move.getCapturePiece())] |= _toBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] |= _toBB;
                 p_self.occupiedBB ^= (moveBB | _toBB);
             } else {
-                p_self.pieceBB[@intFromEnum(poped_move.c_piece)] |= toBB;
+                p_self.pieceBB[@intFromEnum(poped_move.getCapturePiece())] |= toBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] |= toBB;
                 p_self.occupiedBB |= fromBB;
             }
@@ -687,7 +705,7 @@ pub const Board_state = struct {
             print_bitboard(p_self.occupiedBB);
             @panic("");
         }
-        try p_self.move_history.append(get_global_alloc(), move);
+        _ = p_self.move_history.append(move);
 
         p_self.pieceBB[@intFromEnum(pieceF)] ^= moveBB;
         p_self.c_occupiedBB[@intFromEnum(colorF)] ^= moveBB;
@@ -712,11 +730,11 @@ pub const Board_state = struct {
         if (move.isCapture()) {
             if (move.isEnpassant()) {
                 const _toBB = enPassantCaptureLocationFromMove(toBB, p_self.turn);
-                p_self.pieceBB[@intFromEnum(move.c_piece)] ^= _toBB;
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= _toBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] ^= _toBB;
                 p_self.occupiedBB ^= (moveBB | _toBB);
             } else {
-                p_self.pieceBB[@intFromEnum(move.c_piece)] ^= toBB;
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
                 p_self.occupiedBB ^= fromBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] ^= toBB;
             }
@@ -755,15 +773,15 @@ pub const Board_state = struct {
         p_self.*.pieceBB[@intFromEnum(move.piece) + @intFromEnum(move.color)] ^= movedBB;
         p_self.*.occupiedBB ^= movedBB;
         p_self.*.c_occupiedBB[@intFromEnum(move.color)] ^= movedBB;
-        try p_self.move_history.append(get_global_alloc(), move);
+        _ = p_self.move_history.append(move);
         return true;
     }
     pub fn getLastMove(self: Board_state) IMove {
-        const n = self.move_history.items.len;
+        const n = self.move_history.len;
         if (n == 0) {
             return .{};
         }
-        return self.move_history.items[n - 1].copy();
+        return self.move_history.moves[n - 1];
     }
     pub fn isFull(self: Board_state) bool {
         // also occupiedBB == UNIVERSE
@@ -956,7 +974,7 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     }
 
     print_board(p_board_state);
-    std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.items.len });
+    std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len });
     std.debug.print("Current evaluation: {d} \n", .{heuristicl.simpleHeuristic(p_board_state)});
 
     const valid_w = p_board_state.isLegal(e_color.WHITE);
@@ -971,14 +989,9 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     }
     if (p_board_state.turn_count > 0) {
         std.debug.print("Previous move: ", .{});
-        p_board_state.move_history.items[p_board_state.move_history.items.len - 1].print();
+        p_board_state.move_history.moves[p_board_state.move_history.len - 1].print();
         std.debug.print("\n", .{});
     }
-    //std.debug.print("Move history: ", .{});
-    //for (p_board_state.move_history.items) |move| {
-    //    std.debug.print("{s} ", .{move.getStr()});
-    //}
-    //std.debug.print("\n", .{});
 
     std.debug.print("Castling status array: \n", .{});
     std.debug.print("{any}\n", .{p_board_state.castleMoveCounter});
@@ -1695,7 +1708,7 @@ pub fn askUserMove(p_state: *Board_state) !IMove {
         flag = inferFlagFromMovement(p_state, from, to, line_buffer);
         break;
     }
-    var ret = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag);
+    var ret = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, p_state.get_piece(@intFromEnum(from)));
     if ((flag & @intFromEnum(e_moveFlags.CAPTURE)) != 0) {
         if (flag == @intFromEnum(e_moveFlags.ENPASSANT)) {
             if (p_state.turn == .WHITE) {
@@ -1753,14 +1766,14 @@ pub fn _promo_scenario() void {
     var board_promo = getBoardFromFen(fen_prom);
     print_boardstate(&board_promo);
     askContinue();
-    var move = movel.build_move(@intFromEnum(e_square.b7), @intFromEnum(e_square.b8), @intFromEnum(e_moveFlags.QUEENPROMO));
+    var move = movel.build_move(@intFromEnum(e_square.b7), @intFromEnum(e_square.b8), @intFromEnum(e_moveFlags.QUEENPROMO), .nWhitePawn);
     _ = board_promo.makeMove(move) catch |err| {
         std.debug.print("Caught err: {}\n", .{err});
         return;
     };
     print_boardstate(&board_promo);
     askContinue();
-    move = movel.build_move(@intFromEnum(e_square.b2), @intFromEnum(e_square.b1), @intFromEnum(e_moveFlags.ROOKPROMO));
+    move = movel.build_move(@intFromEnum(e_square.b2), @intFromEnum(e_square.b1), @intFromEnum(e_moveFlags.ROOKPROMO), .nBlackPawn);
     _ = board_promo.makeMove(move) catch |err| {
         std.debug.print("Caught err: {}\n", .{err});
         return;
@@ -1776,7 +1789,7 @@ pub fn _castle_scenario() void {
     var board_castle = getBoardFromFen(fen);
     print_boardstate(&board_castle);
     askContinue();
-    var move = movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.g1), @intFromEnum(e_moveFlags.KINGCASTLE));
+    var move = movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.g1), @intFromEnum(e_moveFlags.KINGCASTLE), .nWhiteKing);
     _ = board_castle.makeMove(move) catch |err| {
         std.debug.print("Caught err: {}\n", .{err});
         return;
@@ -1787,7 +1800,7 @@ pub fn _castle_scenario() void {
     print_boardstate(&board_castle);
     askContinue();
 
-    move = movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.c1), @intFromEnum(e_moveFlags.QUEENCASTLE));
+    move = movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.c1), @intFromEnum(e_moveFlags.QUEENCASTLE), .nWhiteKing);
     _ = board_castle.makeMove(move) catch |err| {
         std.debug.print("Caught err: {}\n", .{err});
         return;

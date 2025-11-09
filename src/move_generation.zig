@@ -56,7 +56,7 @@ pub fn moveGeneration(p_board: *Board_state) !moveContainer {
     return ret;
 }
 
-pub fn moveBitBoardToIMove(p_board: *Board_state, piece_bb: u64, attack_bb: u64, flags: u6, p_out: *moveContainer) void {
+pub fn moveBitBoardToIMove(p_board: *Board_state, piece: e_piece, piece_bb: u64, attack_bb: u64, flags: u6, p_out: *moveContainer) void {
     const sq: i8 = chess.bitscan(piece_bb);
     var _bb = attack_bb;
     var curr_pos: u64 = chess.EMPTY;
@@ -74,15 +74,15 @@ pub fn moveBitBoardToIMove(p_board: *Board_state, piece_bb: u64, attack_bb: u64,
         }
         curr_pos = (chess.ONE << @intCast(lsb));
         if (flags == @intFromEnum(e_moveFlags.ENPASSANT)) {
-            _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags | @intFromEnum(e_moveFlags.CAPTURE));
+            _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags | @intFromEnum(e_moveFlags.CAPTURE), piece);
             c_piece = enpass_capture_pawn;
             _curr_move.setCapture(c_piece);
         } else if (curr_pos & p_board.occupiedBB != 0) {
-            _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags | @intFromEnum(e_moveFlags.CAPTURE));
+            _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags | @intFromEnum(e_moveFlags.CAPTURE), piece);
             c_piece = p_board.get_piece(@intCast(lsb));
             _curr_move.setCapture(c_piece);
         } else {
-            _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags);
+            _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags, piece);
         }
 
         _ = p_out.append(_curr_move);
@@ -117,19 +117,19 @@ pub fn _PieceMovePawnMask(p_board: *Board_state, bb_piece: u64, p_attack_mask: *
             flags |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
         }
 
-        _moveBitBoardtoIMove(p_board, curr_pos, (chess.genShift(curr_pos, (8 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE) | flags, p_out);
+        _moveBitBoardtoIMove(p_board, piece, curr_pos, (chess.genShift(curr_pos, (8 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE) | flags, p_out);
 
-        _moveBitBoardtoIMove(p_board, curr_pos, (p_attack_mask.SimplePawnAttack[@intFromEnum(turn)][@intCast(sq)] & p_board.c_occupiedBB[@intFromEnum(op_color)]), flags | @intFromEnum(e_moveFlags.CAPTURE), p_out);
+        _moveBitBoardtoIMove(p_board, piece, curr_pos, (p_attack_mask.SimplePawnAttack[@intFromEnum(turn)][@intCast(sq)] & p_board.c_occupiedBB[@intFromEnum(op_color)]), flags | @intFromEnum(e_moveFlags.CAPTURE), p_out);
 
         if ((sq > 7 and sq < 16 and piece == e_piece.nWhitePawn) or (sq > 47 and sq < 56 and piece == e_piece.nBlackPawn)) {
             if ((chess.genShift(curr_pos, 8 * c_modif) & p_board.occupiedBB) == 0) {
-                _moveBitBoardtoIMove(p_board, curr_pos, (chess.genShift(curr_pos, (16 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.DOUBLEPAWN), p_out);
+                _moveBitBoardtoIMove(p_board, piece, curr_pos, (chess.genShift(curr_pos, (16 * c_modif))) & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.DOUBLEPAWN), p_out);
             }
         }
 
         // still need logic for enpassant moves
         //(chess.genShift(curr_pos, (8 * c_modif))) & (~p_board.occupiedBB)
-        moveBitBoardToIMove(p_board, curr_pos, (p_attack_mask.SimplePawnAttack[@intFromEnum(turn)][@intCast(sq)] & p_board.enPassantBB[@intFromEnum(op_color)] & (~p_board.occupiedBB)), flags | @intFromEnum(e_moveFlags.ENPASSANT), p_out);
+        moveBitBoardToIMove(p_board, piece, curr_pos, (p_attack_mask.SimplePawnAttack[@intFromEnum(turn)][@intCast(sq)] & p_board.enPassantBB[@intFromEnum(op_color)] & (~p_board.occupiedBB)), flags | @intFromEnum(e_moveFlags.ENPASSANT), p_out);
         _bb_piece ^= curr_pos;
     }
     return;
@@ -151,7 +151,7 @@ pub fn _PieceMoveKnightMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCo
             return;
         }
         one_pos = (chess.ONE << @intCast(sq));
-        moveBitBoardToIMove(p_board, one_pos, chess.knightAttacks(one_pos) & ~p_board.c_occupiedBB[@intFromEnum(color)], @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
+        moveBitBoardToIMove(p_board, piece, one_pos, chess.knightAttacks(one_pos) & ~p_board.c_occupiedBB[@intFromEnum(color)], @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
         _bb_piece ^= (chess.ONE << @intCast(sq));
     }
     return;
@@ -163,8 +163,10 @@ pub fn _PieceMoveBishopMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCo
     var sq_e: e_square = e_square.a1;
 
     var color = e_color.WHITE;
+    var piece = e_piece.nWhiteBishop;
     if (p_board.turn == e_color.BLACK) {
         color = e_color.BLACK;
+        piece = e_piece.nBlackBishop;
     }
     var _bb_piece: u64 = bb_piece;
     while (_bb_piece != 0) {
@@ -177,7 +179,7 @@ pub fn _PieceMoveBishopMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCo
         curr_att |= chess.diagonalAttacks(p_board.occupiedBB, sq_e);
         curr_att &= ~p_board.c_occupiedBB[@intFromEnum(color)];
         _bb_piece ^= (chess.ONE << @intCast(sq));
-        moveBitBoardToIMove(p_board, (chess.ONE << @intCast(sq)), curr_att, @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
+        moveBitBoardToIMove(p_board, piece, (chess.ONE << @intCast(sq)), curr_att, @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
     }
     return;
 }
@@ -205,7 +207,7 @@ pub fn _PieceMoveRookMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCont
         att_mask &= ~p_board.c_occupiedBB[@intFromEnum(color)];
         _bb_piece ^= (chess.ONE << @intCast(sq));
 
-        moveBitBoardToIMove(p_board, (chess.ONE << @intCast(sq)), att_mask, @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
+        moveBitBoardToIMove(p_board, piece, (chess.ONE << @intCast(sq)), att_mask, @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
     }
     return;
 }
@@ -234,7 +236,7 @@ pub fn _PieceMoveQueenMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCon
         att_mask &= ~p_board.c_occupiedBB[@intFromEnum(color)];
         _bb_piece ^= (chess.ONE << @intCast(sq));
 
-        moveBitBoardToIMove(p_board, (chess.ONE << @intCast(sq)), att_mask, @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
+        moveBitBoardToIMove(p_board, piece, (chess.ONE << @intCast(sq)), att_mask, @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
     }
 
     return;
@@ -248,30 +250,30 @@ pub fn _PieceMoveKingMask(p_board: *Board_state, bb_piece: u64, p_attack_mask: *
         color = e_color.BLACK;
     }
     const sq = p_board.getKingSq(p_board.turn);
-    moveBitBoardToIMove(p_board, bb_piece, p_attack_mask.KingAttack[@intCast(sq)] & ~p_board.c_occupiedBB[@intFromEnum(color)], @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
+    moveBitBoardToIMove(p_board, piece, bb_piece, p_attack_mask.KingAttack[@intCast(sq)] & ~p_board.c_occupiedBB[@intFromEnum(color)], @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
 
     if (p_board.canKingSideCastle(p_board.turn)) {
         //std.debug.print("[DEBUG] _PieceMoveKingMask: found a can KingSide castle\n", .{});
-        moveBitBoardToIMove(p_board, bb_piece, bb_piece << 2, @intFromEnum(e_moveFlags.KINGCASTLE), p_out);
+        moveBitBoardToIMove(p_board, piece, bb_piece, bb_piece << 2, @intFromEnum(e_moveFlags.KINGCASTLE), p_out);
     }
 
     if (p_board.canQueenSideCastle(p_board.turn)) {
         //std.debug.print("[DEBUG] _PieceMoveKingMask: found a can queenSide castle\n", .{});
-        moveBitBoardToIMove(p_board, bb_piece, bb_piece >> 2, @intFromEnum(e_moveFlags.QUEENCASTLE), p_out);
+        moveBitBoardToIMove(p_board, piece, bb_piece, bb_piece >> 2, @intFromEnum(e_moveFlags.QUEENCASTLE), p_out);
     }
 
     return;
 }
 
-pub fn _moveBitBoardtoIMove(p_board: *Board_state, piece_bb: u64, attack_bb: u64, flags: u6, p_out: *moveContainer) void {
+pub fn _moveBitBoardtoIMove(p_board: *Board_state, piece: e_piece, piece_bb: u64, attack_bb: u64, flags: u6, p_out: *moveContainer) void {
     if (flags < @intFromEnum(e_moveFlags.KNIGHTPROMO)) {
-        moveBitBoardToIMove(p_board, piece_bb, attack_bb, flags, p_out);
+        moveBitBoardToIMove(p_board, piece, piece_bb, attack_bb, flags, p_out);
         return;
     }
-    moveBitBoardToIMove(p_board, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.KNIGHTPROMO), p_out);
-    moveBitBoardToIMove(p_board, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.BISHOPPROMO), p_out);
-    moveBitBoardToIMove(p_board, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.ROOKPROMO), p_out);
-    moveBitBoardToIMove(p_board, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.QUEENPROMO), p_out);
+    moveBitBoardToIMove(p_board, piece, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.KNIGHTPROMO), p_out);
+    moveBitBoardToIMove(p_board, piece, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.BISHOPPROMO), p_out);
+    moveBitBoardToIMove(p_board, piece, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.ROOKPROMO), p_out);
+    moveBitBoardToIMove(p_board, piece, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.QUEENPROMO), p_out);
     //std.debug.print("[DEBUG] _moveBitBoardtoIMove: Move generated: n = {d}\n", .{m3.items.len});
 }
 
