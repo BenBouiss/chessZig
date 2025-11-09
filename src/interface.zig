@@ -212,7 +212,7 @@ pub fn execSet(p_shellState: *ShellState, userBuffer: []const u8) bool {
     var indiv_args = utilsl.split(u8, GLOBAL_ALLOC, utilsl.removePaddingValue(userBuffer), ' ') catch unreachable;
     defer indiv_args.deinit(GLOBAL_ALLOC);
     if (!verifySetArgs(indiv_args)) {
-        std.debug.print("Command SET failed: expected <3> args for shell variable set or <4> for player specific variables, format:\nSET <FIELD> <VAL>\n SET <PLAYER> <FIELD> <VAL>`\n", .{});
+        std.debug.print("Command SET failed: expected <3> args for shell variable set or <4> for player specific variables, format:\nSET <FIELD> <VAL>\nSET <PLAYER> <FIELD> <VAL>`\n", .{});
         return false;
     }
     if (indiv_args.items.len == 3) {
@@ -313,7 +313,7 @@ pub fn execPerft(p_shellState: *ShellState, userBuffer: []const u8) bool {
     var indiv_args = utilsl.split(u8, GLOBAL_ALLOC, utilsl.removePaddingValue(userBuffer), ' ') catch unreachable;
     defer indiv_args.deinit(GLOBAL_ALLOC);
     if (!verifyPerftArgs(indiv_args)) {
-        //std.debug.print("Command Perft failed: expected 3 args, format: PERFT <MAXDEPTH> <THREAD>\n", .{});
+        std.debug.print("Command PERFT failed: expected 3 args, format: PERFT <MAXDEPTH> <THREAD>\n", .{});
         return false;
     }
     const depth = std.fmt.parseInt(u8, indiv_args.items[1], 10) catch {
@@ -325,7 +325,11 @@ pub fn execPerft(p_shellState: *ShellState, userBuffer: []const u8) bool {
 
 pub fn execStringCmd(p_shellState: *ShellState, cmdStr: []const u8) bool {
     const cmd_type = getCmdFromUserInput(cmdStr);
-    return execCmd(p_shellState, cmd_type, cmdStr);
+    const cmdStatus = execCmd(p_shellState, cmd_type, cmdStr);
+    if (!cmdStatus) {
+        std.debug.print("Command: {} failed\n", .{cmd_type});
+    }
+    return cmdStatus;
 }
 
 pub fn execCmd(p_shellState: *ShellState, cmd: e_userCmd, userBuffer: []const u8) bool {
