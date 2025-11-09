@@ -223,7 +223,7 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
 
     if (depth <= 0) {
         //return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * heuristicl.simpleHeuristic(p_state) };
-        return .{ .move = p_state.move_history.moves[p_state.move_history.len - 1].copy(), .scoring = color_mask * getEvaluation(p_state, p_player) };
+        return .{ .move = p_state.move_history.moves[p_state.move_history.len - 1], .scoring = color_mask * getEvaluation(p_state, p_player) };
     }
     var all_moves: moveContainer = try moveGenl.moveGeneration(p_state);
     all_moves.shuffle(p_state.randInt);

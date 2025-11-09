@@ -660,11 +660,11 @@ pub const Board_state = struct {
         if (poped_move.isCapture()) {
             if (poped_move.isEnpassant()) {
                 const _toBB = enPassantCaptureLocationFromMove(toBB, (p_self.turn));
-                p_self.pieceBB[@intFromEnum(poped_move.c_piece)] |= _toBB;
+                p_self.pieceBB[@intFromEnum(poped_move.getCapturePiece())] |= _toBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] |= _toBB;
                 p_self.occupiedBB ^= (moveBB | _toBB);
             } else {
-                p_self.pieceBB[@intFromEnum(poped_move.c_piece)] |= toBB;
+                p_self.pieceBB[@intFromEnum(poped_move.getCapturePiece())] |= toBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] |= toBB;
                 p_self.occupiedBB |= fromBB;
             }
@@ -713,11 +713,11 @@ pub const Board_state = struct {
         if (move.isCapture()) {
             if (move.isEnpassant()) {
                 const _toBB = enPassantCaptureLocationFromMove(toBB, p_self.turn);
-                p_self.pieceBB[@intFromEnum(move.c_piece)] ^= _toBB;
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= _toBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] ^= _toBB;
                 p_self.occupiedBB ^= (moveBB | _toBB);
             } else {
-                p_self.pieceBB[@intFromEnum(move.c_piece)] ^= toBB;
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
                 p_self.occupiedBB ^= fromBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(colorF))] ^= toBB;
             }
@@ -764,7 +764,7 @@ pub const Board_state = struct {
         if (n == 0) {
             return .{};
         }
-        return self.move_history.moves[n - 1].copy();
+        return self.move_history.moves[n - 1];
     }
     pub fn isFull(self: Board_state) bool {
         // also occupiedBB == UNIVERSE

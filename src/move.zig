@@ -13,25 +13,25 @@ pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     m_move |= (to & 0x3F);
     m_move <<= 6;
     m_move |= (from & 0x3F);
-    const ret: IMove = .{ .m_move = m_move, .m_piece = (@intFromEnum(piece) & 0x3F) };
+    const ret: IMove = .{ .m_move = m_move, .m_piece = (@intFromEnum(piece) & 0xFF) };
     return ret;
 }
 
 pub const IMove = struct {
-    c_piece: e_piece = e_piece.nEmptySquare,
     m_move: u16 = 0,
     // first 8 bits = start_piece, last = capture_piece
     m_piece: u16 = 0,
 
     pub fn setCapture(p_self: *IMove, capture: e_piece) void {
-        p_self.c_piece = capture;
+        //p_self.c_piece = capture;
         var m_piece: u16 = @intFromEnum(capture);
         m_piece <<= 8;
-        p_self.m_piece &= (m_piece | p_self.m_piece);
+        p_self.m_piece &= (0xFF);
+        p_self.m_piece |= (m_piece);
     }
 
     pub fn equal(self: IMove, other: IMove) bool {
-        return ((self.m_move == other.m_move) and (self.c_piece == other.c_piece));
+        return ((self.m_move == other.m_move) and (self.m_piece == other.m_piece));
     }
 
     pub fn softEqual(self: IMove, other: IMove) bool {
@@ -56,7 +56,7 @@ pub const IMove = struct {
     }
 
     pub inline fn getCapturePiece(self: IMove) e_piece {
-        return @intFromEnum((self.m_piece & 0xFF00));
+        return @enumFromInt((self.m_piece & 0xFF00) >> 8);
     }
 
     pub inline fn getTo(self: IMove) u8 {
@@ -92,7 +92,7 @@ pub const IMove = struct {
         return (self.m_move != 0);
     }
     pub fn copy(self: IMove) IMove {
-        return .{ .m_move = self.m_move, .c_piece = self.c_piece };
+        return .{ .m_move = self.m_move, .m_piece = self.m_piece };
     }
     pub fn getStr(self: IMove) [4]u8 {
         var strM: [4]u8 = undefined;
