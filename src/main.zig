@@ -35,8 +35,8 @@ pub fn main() anyerror!void {
     //chess.initRayAttacks();
     //try test_main_game();
     //try profiler.main();
-    //benchmark.test_benchmark();
+    benchmark.test_benchmark();
     //try example.main();
     //test_bot_v_bot();
-    interfacel.shell();
+    //interfacel.shell();
 }

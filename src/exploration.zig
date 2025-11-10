@@ -174,15 +174,18 @@ pub fn simpleMoveBot(p_state: *chess.Board_state, player: Player) !moveDecision 
 
 pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult) !void {
     if (depth <= 0) {
-        p_res.addNode(p_state.getLastMove());
+        //p_res.n_nodes += 1;
+        p_res.addNode(&p_state.getLastMove());
         return;
     }
     var moves: moveContainer = try moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
     for (0..fmoves.len) |i| {
-        _ = try p_state.makeMove(fmoves.moves[i]);
+        //_ = try p_state.makeMoveFast(fmoves.moves[i]);
+        _ = p_state.makeMoveFast(fmoves.moves[i]);
         try explorationNDepth(p_state, depth - 1, p_res);
-        _ = try p_state.undoMove();
+        //_ = try p_state.undoMove();
+        _ = p_state.undoMoveFast();
     }
     return;
 }

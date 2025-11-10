@@ -55,7 +55,7 @@ pub const IMove = struct {
     }
 
     pub inline fn getFromPiece(self: IMove) e_piece {
-        return @intFromEnum((self.m_piece & 0xFF));
+        return @enumFromInt((self.m_piece & 0xFF));
     }
 
     pub inline fn getCapturePiece(self: IMove) e_piece {
@@ -124,9 +124,9 @@ pub const moveContainer = struct {
         ret.len = len;
     }
     pub fn append(p_self: *moveContainer, move: IMove) bool {
-        if (p_self.len == chess.MAX_POSSIBLE_MOVE) {
-            return false;
-        }
+        //if (p_self.len == chess.MAX_POSSIBLE_MOVE) {
+        //    return false;
+        //}
         p_self.moves[p_self.len] = move;
         p_self.len += 1;
         return true;

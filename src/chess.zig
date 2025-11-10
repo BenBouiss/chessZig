@@ -376,7 +376,7 @@ pub fn getRookPiece(turn: e_color) e_piece {
     return @enumFromInt(@intFromEnum(e_piece.nWhiteRook) + @intFromEnum(convertColorToColorPiece(turn)) - 1);
 }
 
-pub fn updateCastlingRookStatus(p_state: *Board_state, sq: u8) void {
+pub fn updateCastlingRookStatus(p_state: *Board_state, turn: e_color, sq: u8) void {
     var target: usize = 0;
     if ((sq == 0) or (sq == 56)) {
         target = QUEENSIDECASTLEID;
@@ -385,14 +385,14 @@ pub fn updateCastlingRookStatus(p_state: *Board_state, sq: u8) void {
     } else {
         return;
     }
-    if (p_state.castleMoveCounter[@intFromEnum(p_state.turn)][target] != INVALID_POSITION) {
+    if (p_state.castleMoveCounter[@intFromEnum(turn)][target] != INVALID_POSITION) {
         return;
     }
-    p_state.castleMoveCounter[@intFromEnum(p_state.turn)][target] = @intCast(p_state.turn_count);
+    p_state.castleMoveCounter[@intFromEnum(turn)][target] = @intCast(p_state.turn_count);
 }
 
-pub fn updateCastlingKingStatus(p_state: *Board_state) void {
-    if (p_state.castleMoveCounter[@intFromEnum(p_state.turn)][KINGCASTLEID] != INVALID_POSITION) {
+pub fn updateCastlingKingStatus(p_state: *Board_state, turn: e_color) void {
+    if (p_state.castleMoveCounter[@intFromEnum(turn)][KINGCASTLEID] != INVALID_POSITION) {
         return;
     }
     p_state.castleMoveCounter[@intFromEnum(p_state.turn)][KINGCASTLEID] = @intCast(p_state.turn_count);
@@ -440,8 +440,8 @@ pub fn enPassantCaptureLocationFromMove(toBB: u64, turn: e_color) u64 {
 pub fn updateEnPassantStatus(p_state: *Board_state, sq: e_square) void {
     const sq_file = getSqFile(sq);
     if (p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] != INVALID_POSITION) {
+        std.debug.print("[PANIC INC] updataEnPassantStatu: senPassant counters: {any} file: {d} counter: {d}\n", .{ p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)], sq_file, p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] });
         print_boardstate(p_state);
-        std.debug.print("enPassant counters: {any} file: {d} counter: {d}\n", .{ p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)], sq_file, p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] });
         print_bitboard(p_state.occupiedBB);
         print_bitboard(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]);
         @panic("[PANIC] updataEnPassantStatus: Trying to set the en passant status of a already double moved pawn\n");
@@ -642,7 +642,8 @@ pub const Board_state = struct {
         const fromBB: u64 = ONE << @intCast((poped_move.getFrom()));
         var moveBB: u64 = (toBB | fromBB);
 
-        const pieceF: e_piece = p_self.get_piece(poped_move.getTo());
+        //const pieceF: e_piece = p_self.get_piece(poped_move.getTo());
+        const pieceF: e_piece = poped_move.getFromPiece();
         const colorF: e_color = getColorFromPiece(pieceF);
 
         if (isRookPiece(pieceF)) {
@@ -651,7 +652,7 @@ pub const Board_state = struct {
             undoCastlingKingStatus(p_self);
         }
         if (poped_move.isPromotion()) {
-            p_self.pieceBB[@intFromEnum(pieceF)] ^= toBB;
+            p_self.pieceBB[@intFromEnum(flagPromotionToPiece(poped_move.getFlag(), colorF))] ^= toBB;
             if (colorF == .WHITE) {
                 p_self.pieceBB[@intFromEnum(e_piece.nWhitePawn)] ^= fromBB;
             } else {
@@ -690,14 +691,115 @@ pub const Board_state = struct {
         }
         return true;
     }
+    pub fn undoMoveFast(p_self: *Board_state) bool {
+        if (p_self.move_history.len == 0) {
+            return false;
+        }
+        p_self.undo_turn();
+        undoEnPassantStatus(p_self);
+        const move = p_self.move_history.pop();
+        const pieceF: e_piece = move.getFromPiece();
+        if (isPawnPiece(pieceF)) {
+            _ = p_self.pawnUndoMove(pieceF, move);
+        } else if (isRookPiece(pieceF)) {
+            _ = p_self.rookUndoMove(pieceF, move);
+        } else if (isKingPiece(pieceF)) {
+            _ = p_self.kingUndoMove(pieceF, move);
+        } else {
+            _ = p_self.defaultUndoMove(pieceF, move);
+        }
+        return true;
+    }
+    pub fn pawnUndoMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        const toBB: u64 = ONE << @intCast(move.getTo());
+        const fromBB: u64 = ONE << @intCast(move.getFrom());
+        const moveBB: u64 = (toBB | fromBB);
 
+        if (move.isPromotion()) {
+            p_self.pieceBB[@intFromEnum(flagPromotionToPiece(move.getFlag(), p_self.turn))] ^= toBB;
+            p_self.pieceBB[@intFromEnum(piece)] ^= fromBB;
+        } else {
+            p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
+        }
+        p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
+
+        if (move.isCapture()) {
+            if (move.isEnpassant()) {
+                const _toBB = enPassantCaptureLocationFromMove(toBB, (p_self.turn));
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] |= _toBB;
+                p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] |= _toBB;
+                p_self.occupiedBB ^= (moveBB | _toBB);
+            } else {
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] |= toBB;
+                p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] |= toBB;
+                p_self.occupiedBB |= fromBB;
+            }
+        } else {
+            p_self.occupiedBB ^= moveBB;
+        }
+        return true;
+    }
+    pub fn rookUndoMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        undoCastlingRookStatus(p_self, move.getFrom());
+        _ = p_self.defaultUndoMove(piece, move);
+        return true;
+    }
+    pub fn kingUndoMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        undoCastlingKingStatus(p_self);
+
+        var pieceCastle: e_piece = undefined;
+        const toBB: u64 = ONE << @intCast(move.getTo());
+        const fromBB: u64 = ONE << @intCast(move.getFrom());
+        var moveBB: u64 = (toBB | fromBB);
+
+        p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
+        p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
+        if (move.isCapture()) {
+            p_self.pieceBB[@intFromEnum(move.getCapturePiece())] |= toBB;
+            p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] |= toBB;
+            p_self.occupiedBB |= fromBB;
+            return true;
+        } else if (move.isKingSideCastle()) {
+            pieceCastle = getRookPiece(p_self.turn);
+            p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (moveBB << 1);
+            p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (moveBB << 1);
+            moveBB |= (moveBB << 1);
+        } else if (move.isQueenSideCastle()) {
+            const _castleBB: u64 = (toBB >> 2) | (toBB << 1);
+            moveBB |= (_castleBB);
+            pieceCastle = getRookPiece(p_self.turn);
+            p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (_castleBB);
+            p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (_castleBB);
+        }
+        p_self.occupiedBB ^= moveBB;
+
+        return true;
+    }
+    pub fn defaultUndoMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        const toBB: u64 = ONE << @intCast(move.getTo());
+        const fromBB: u64 = ONE << @intCast(move.getFrom());
+        const moveBB: u64 = (toBB | fromBB);
+
+        p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
+        p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
+        if (move.isCapture()) {
+            p_self.pieceBB[@intFromEnum(move.getCapturePiece())] |= toBB;
+            p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] |= toBB;
+            p_self.occupiedBB |= fromBB;
+        } else {
+            p_self.occupiedBB ^= moveBB;
+        }
+
+        return true;
+    }
     pub fn makeMove(p_self: *Board_state, move: IMove) !bool {
         var pieceCastle: e_piece = undefined;
         const toBB: u64 = ONE << @intCast(move.getTo());
         const fromBB: u64 = ONE << @intCast(move.getFrom());
-
         var moveBB = toBB | fromBB;
-        const pieceF = p_self.get_piece(move.getFrom());
+
+        //const pieceF = p_self.get_piece(move.getFrom());
+        const pieceF: e_piece = move.getFromPiece();
         const colorF = getColorFromPiece(pieceF);
         if (p_self.pieceBB[@intFromEnum(pieceF)] & fromBB == 0 or pieceF == .nEmptySquare) {
             std.debug.print("[DEBUG] From makeMove: strange move found where piece not found but move formed? Move: {s} {} turn: {}\n", .{ move.getStr(), pieceF, p_self.turn });
@@ -710,9 +812,9 @@ pub const Board_state = struct {
         p_self.pieceBB[@intFromEnum(pieceF)] ^= moveBB;
         p_self.c_occupiedBB[@intFromEnum(colorF)] ^= moveBB;
         if (isRookPiece(pieceF)) {
-            updateCastlingRookStatus(p_self, move.getFrom());
+            updateCastlingRookStatus(p_self, p_self.turn, move.getFrom());
         } else if (isKingPiece(pieceF)) {
-            updateCastlingKingStatus(p_self);
+            updateCastlingKingStatus(p_self, p_self.turn);
         }
         if (move.isKingSideCastle()) {
             pieceCastle = getRookPiece(colorF);
@@ -754,6 +856,109 @@ pub const Board_state = struct {
         p_self.next_turn();
         return true;
     }
+
+    pub fn makeMoveFast(p_self: *Board_state, move: IMove) bool {
+        const pieceF: e_piece = move.getFromPiece();
+        refreshEnPassantSide(p_self, p_self.turn);
+        if (isPawnPiece(pieceF)) {
+            _ = p_self.pawnMakeMove(pieceF, move);
+        } else if (isRookPiece(pieceF)) {
+            _ = p_self.rookMakeMove(pieceF, move);
+        } else if (isKingPiece(pieceF)) {
+            _ = p_self.kingMakeMove(pieceF, move);
+        } else {
+            _ = p_self.defaultMakeMove(pieceF, move);
+        }
+        _ = p_self.move_history.append(move);
+        p_self.next_turn();
+        return true;
+    }
+
+    pub fn pawnMakeMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        const toBB: u64 = ONE << @intCast(move.getTo());
+        const fromBB: u64 = ONE << @intCast(move.getFrom());
+        const moveBB = toBB | fromBB;
+
+        p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
+        p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
+        if (move.isCapture()) {
+            if (move.isEnpassant()) {
+                const _toBB = enPassantCaptureLocationFromMove(toBB, p_self.turn);
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= _toBB;
+                p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= _toBB;
+                p_self.occupiedBB ^= (moveBB | _toBB);
+            } else {
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
+                p_self.occupiedBB ^= fromBB;
+                p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
+            }
+        } else {
+            p_self.occupiedBB ^= moveBB;
+            if (move.isDoublePush()) {
+                updateEnPassantStatus(p_self, @enumFromInt(move.getTo()));
+            }
+        }
+        if (move.isPromotion()) {
+            const prom_piece: e_piece = flagPromotionToPiece(move.getFlag(), p_self.turn);
+            p_self.pieceBB[@intFromEnum(piece)] ^= toBB;
+            p_self.pieceBB[@intFromEnum(prom_piece)] ^= toBB;
+        }
+        return true;
+    }
+    pub fn rookMakeMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        updateCastlingRookStatus(p_self, p_self.turn, move.getFrom());
+        _ = p_self.defaultMakeMove(piece, move);
+        return true;
+    }
+    pub fn kingMakeMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        updateCastlingKingStatus(p_self, p_self.turn);
+
+        var pieceCastle: e_piece = undefined;
+        const toBB: u64 = ONE << @intCast(move.getTo());
+        const fromBB: u64 = ONE << @intCast(move.getFrom());
+        var moveBB = toBB | fromBB;
+
+        p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
+        p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
+        if (move.isCapture()) {
+            p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
+            p_self.occupiedBB ^= fromBB;
+            p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
+            return true;
+        } else if (move.isKingSideCastle()) {
+            pieceCastle = getRookPiece(p_self.turn);
+            p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (moveBB << 1);
+            p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (moveBB << 1);
+            moveBB |= (moveBB << 1);
+        } else if (move.isQueenSideCastle()) {
+            const _castleBB: u64 = (toBB >> 2) | (toBB << 1);
+            moveBB |= (_castleBB);
+            pieceCastle = getRookPiece(p_self.turn);
+            p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (_castleBB);
+            p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (_castleBB);
+        }
+        p_self.occupiedBB ^= moveBB;
+
+        return true;
+    }
+
+    pub fn defaultMakeMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
+        const toBB: u64 = ONE << @intCast(move.getTo());
+        const fromBB: u64 = ONE << @intCast(move.getFrom());
+        const moveBB = toBB | fromBB;
+
+        p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
+        p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
+        if (move.isCapture()) {
+            p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
+            p_self.occupiedBB ^= fromBB;
+            p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
+        } else {
+            p_self.occupiedBB ^= moveBB;
+        }
+        return true;
+    }
+
     pub fn printBoardMoveInfo(p_self: *Board_state, move: IMove) void {
         const pieceF = p_self.get_piece(move.getTo());
         const colorF = getColorFromPiece(pieceF);
@@ -1296,7 +1501,9 @@ pub fn rankAttacks(bb: u64, sq: e_square) u64 {
 pub inline fn getSqRank(sq: e_square) u8 {
     return @intFromEnum(sq) / ROW_SIZE;
 }
-
+pub inline fn getSqIdxRank(sq: u8) u8 {
+    return (sq) / ROW_SIZE;
+}
 pub inline fn getSqFile(sq: e_square) u8 {
     return @intFromEnum(sq) % ROW_SIZE;
 }

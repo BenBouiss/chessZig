@@ -7,6 +7,7 @@ const IMove = movel.IMove;
 pub const benchmarkResult = struct {
     n_nodes: i64 = 0,
     n_captures: i64 = 0,
+    n_doublePawn: i64 = 0,
     n_enpassants: i64 = 0,
     n_castles: i64 = 0,
     n_promotions: i64 = 0,
@@ -14,30 +15,34 @@ pub const benchmarkResult = struct {
     pub fn reset(p_self: *benchmarkResult) void {
         p_self.n_nodes = 0;
         p_self.n_captures = 0;
+        p_self.n_doublePawn = 0;
         p_self.n_enpassants = 0;
         p_self.n_castles = 0;
         p_self.n_promotions = 0;
     }
-    pub fn addNode(p_self: *benchmarkResult, move: IMove) void {
+    pub fn addNode(p_self: *benchmarkResult, p_move: *const IMove) void {
         p_self.n_nodes += 1;
-        if (move.isCapture()) {
+        if (p_move.isCapture()) {
             p_self.n_captures += 1;
         }
-        if (move.isEnpassant()) {
+        if (p_move.isDoublePush()) {
+            p_self.n_doublePawn += 1;
+        }
+        if (p_move.isEnpassant()) {
             p_self.n_enpassants += 1;
         }
-        if (move.isKingSideCastle() or move.isQueenSideCastle()) {
+        if (p_move.isKingSideCastle() or p_move.isQueenSideCastle()) {
             p_self.n_castles += 1;
         }
-        if (move.isPromotion()) {
+        if (p_move.isPromotion()) {
             p_self.n_promotions += 1;
         }
     }
     pub fn printInfo(self: benchmarkResult) void {
-        std.debug.print("\n|Nodes|Capture|Enpassant|castling|promotions|\n", .{});
+        std.debug.print("\n|Nodes|Capture|Doublepush|Enpassant|castling|promotions|\n", .{});
 
         std.debug.print("|=====|=======|=========|========|==========|\n", .{});
-        std.debug.print("|{d}|{d}|{d}|{d}|{d}|\n", .{ self.n_nodes, self.n_captures, self.n_enpassants, self.n_castles, self.n_promotions });
+        std.debug.print("|{d}|{d}|{d}|{d}|{d}|{d}|\n", .{ self.n_nodes, self.n_captures, self.n_doublePawn, self.n_enpassants, self.n_castles, self.n_promotions });
     }
     pub fn copy(self: benchmarkResult) benchmarkResult {
         return .{
@@ -65,6 +70,7 @@ const benchmarkResultsContainer = struct {
         for (self.array) |bench| {
             ret.n_nodes += bench.n_nodes;
             ret.n_captures += bench.n_captures;
+            ret.n_doublePawn += bench.n_doublePawn;
             ret.n_enpassants += bench.n_enpassants;
             ret.n_castles += bench.n_castles;
             ret.n_promotions += bench.n_promotions;
@@ -112,7 +118,7 @@ pub fn test_benchmark() void {
     chess.initRayAttacks();
     var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
     game_state.setSeed(42);
-    nodeExplorationBenchmark(&game_state, 8, 1);
+    nodeExplorationBenchmark(&game_state, 8, 20);
 }
 
 pub fn main() !void {
