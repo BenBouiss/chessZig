@@ -1,5 +1,8 @@
 const std = @import("std");
 
+//https://stackoverflow.com/questions/76384694/how-to-do-conditional-compilation-with-zig
+const build_options = @import("build_options");
+
 const chess = @import("chess.zig");
 const utils = @import("utils.zig");
 const exploration = @import("exploration.zig");
@@ -7,6 +10,7 @@ const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
+const intrinsicsl = @import("intrinsics.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
@@ -152,32 +156,7 @@ pub fn free_move_history(move_arr: std.array_list) void {
     return;
 }
 
-pub fn bitscan(b: u64) i8 {
-    if (b == 0) {
-        return -1;
-    }
-    var lsb: u64 = (((b - 1)) ^ b) & b;
-    var count: i8 = -1;
-    while (lsb != 0) {
-        count += 1;
-        lsb = lsb >> 1;
-    }
-    return count;
-}
-
-pub fn r_bitscan(b: u64) i8 {
-    if (b == 0) {
-        return -1;
-    }
-    var bb = b;
-    var count: i8 = -1;
-    while (bb != 0) {
-        count += 1;
-        bb = (bb >> 1);
-    }
-    return count;
-}
-const index64 = [64]i8{ 0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 61, 54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4, 62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45, 25, 39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63 };
+const fastBitscan = build_options.fastBitscan;
 
 //
 // bitScanForward
@@ -190,13 +169,56 @@ const index64 = [64]i8{ 0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 
 // @precondition bb != 0
 // @return index (0..63) of least significant one bit
 //
-pub fn bitScanForward(bb: u64) i8 {
-    if (bb == 0) {
+
+pub fn bitscan(bb: u64) i8 {
+    if (comptime fastBitscan) {
+        var ret: u32 = undefined;
+        _ = intrinsicsl._BitScanForward64(&ret, bb);
+        return @intCast(ret);
+    } else {
+        return bitscanK(bb);
+    }
+}
+pub fn bitscanK(b: u64) i8 {
+    if (b == 0) {
         return -1;
     }
-    const debruijn64: u64 = (0x03f79d71b4cb0a89);
-    return index64[((bb ^ (bb - 1)) *% debruijn64) >> 58];
+    var lsb: u64 = (((b - 1)) ^ b) & b;
+    var count: i8 = -1;
+    while (lsb != 0) {
+        count += 1;
+        lsb = lsb >> 1;
+    }
+    return count;
 }
+const lsb_64_table = [64]i8{ 63, 30, 3, 32, 59, 14, 11, 33, 60, 24, 50, 9, 55, 19, 21, 34, 61, 29, 2, 53, 51, 23, 41, 18, 56, 28, 1, 43, 46, 27, 0, 35, 62, 31, 58, 4, 5, 49, 54, 6, 15, 52, 12, 40, 7, 42, 45, 16, 25, 57, 48, 13, 10, 39, 8, 44, 20, 47, 38, 22, 17, 37, 36, 26 };
+
+//const LSB_64_table = [154]i8{ 22, 0, 0, 0, 30, 0, 0, 38, 18, 0, 16, 15, 17, 0, 46, 9, 19, 8, 7, 10, 0, 63, 1, 56, 55, 57, 2, 11, 0, 58, 0, 0, 20, 0, 3, 0, 0, 59, 0, 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 4, 0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 29, 0, 0, 37, 0, 0, 0, 13, 0, 0, 45, 0, 0, 0, 5, 0, 0, 61, 0, 0, 0, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 36, 0, 0, 0, 0, 0, 0, 44, 0, 0, 0, 0, 0, 27, 0, 0, 35, 0, 52, 0, 0, 26, 0, 43, 34, 25, 23, 24, 33, 31, 32, 42, 39, 40, 51, 41, 14, 0, 49, 47, 48, 0, 50, 6, 0, 0, 62, 0, 0, 0, 54 };
+
+///**
+// * bitScanForward
+// * @author Walter Faxon, slightly modified
+// * @param bb bitboard to scan
+// * @precondition bb != 0
+// * @return index (0..63) of least significant one bit
+// */
+//pub fn bitScanForward(bb: u64) i8 {
+//    var t32: i32 = 0x01C5FC81;
+//    t32 ^= @intCast((bb ^ (bb - 1)) >> 32);
+//    t32 ^= @intCast(bb ^ (bb - 1)); // lea
+//    t32 += (t32 >> 16);
+//    t32 -= (t32 >> 8) + 51;
+//    return LSB_64_table[@intCast(t32 & 255)];
+//}
+
+//const index64 = [64]i8{ 0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 61, 54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4, 62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45, 25, 39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63 };
+//pub fn bitScanForward(bb: u64) i8 {
+//    if (bb == 0) {
+//        return -1;
+//    }
+//    const debruijn64: u64 = (0x03f79d71b4cb0a89);
+//    return index64[((bb ^ (bb - 1)) *% debruijn64) >> 58];
+//}
 
 const r_index64 = [64]i8{ 0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 61, 54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4, 62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45, 25, 39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63 };
 
@@ -208,18 +230,38 @@ const r_index64 = [64]i8{ 0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3
 // @return index (0..63) of most significant one bit
 ///
 /// This function and the one above are branchless version of bitScan and r_bitScan, function are from chessprogramming.org
-///
-pub fn bitScanReverse(bb: u64) i8 {
-    const debruijn64: u64 = (0x03f79d71b4cb0a89);
-    bb |= bb >> 1;
-    bb |= bb >> 2;
-    bb |= bb >> 4;
-    bb |= bb >> 8;
-    bb |= bb >> 16;
-    bb |= bb >> 32;
-    return r_index64[(bb *% debruijn64) >> 58];
+pub fn r_bitscan(bb: u64) i8 {
+    if (comptime fastBitscan) {
+        var ret: u32 = undefined;
+        _ = intrinsicsl._BitScanForwardReverse64(&ret, bb);
+        return @intCast(ret);
+    } else {
+        return r_bitscanK(bb);
+    }
 }
-
+//pub fn bitScanReverse(bb: u64) i8 {
+//    var _bb = bb;
+//    const debruijn64: u64 = (0x03f79d71b4cb0a89);
+//    _bb |= _bb >> 1;
+//    _bb |= _bb >> 2;
+//    _bb |= _bb >> 4;
+//    _bb |= _bb >> 8;
+//    _bb |= _bb >> 16;
+//    _bb |= _bb >> 32;
+//    return r_index64[(_bb *% debruijn64) >> 58];
+//}
+pub fn r_bitscanK(b: u64) i8 {
+    if (b == 0) {
+        return -1;
+    }
+    var bb = b;
+    var count: i8 = -1;
+    while (bb != 0) {
+        count += 1;
+        bb = (bb >> 1);
+    }
+    return count;
+}
 pub fn print_board(p_board: *Board_state) void {
     var print_buffer: [8][8]u8 = undefined;
     @memset(&print_buffer, .{ 0, 0, 0, 0, 0, 0, 0, 0 });
@@ -1643,7 +1685,27 @@ pub fn getAllAttackMask(p_board: *Board_state, p_attack_masks: *Attack_masks, tu
 
     return ret;
 }
-
+pub fn getAllAttackingChecksMask(p_board: *Board_state, p_attack_masks: *Attack_masks, turn: e_color) u64 {
+    var ret: u64 = EMPTY;
+    if (turn == e_color.BLACK) {
+        const occBB = p_board.occupiedBB ^ p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)];
+        ret |= _AllAttackPawnMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)], p_attack_masks, turn);
+        ret |= _AllAttackKnightMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)]);
+        ret |= _AllAttackBishopMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)], occBB);
+        ret |= _AllAttackRookMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)], occBB);
+        ret |= _AllAttackQueenMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)], occBB);
+        ret |= _AllAttackKingMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)], p_attack_masks);
+    } else {
+        const occBB = p_board.occupiedBB ^ p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)];
+        ret |= _AllAttackPawnMask(p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)], p_attack_masks, turn);
+        ret |= _AllAttackKnightMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]);
+        ret |= _AllAttackBishopMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)], occBB);
+        ret |= _AllAttackRookMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)], occBB);
+        ret |= _AllAttackQueenMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], occBB);
+        ret |= _AllAttackKingMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)], p_attack_masks);
+    }
+    return ret;
+}
 pub fn getAllAttackMaskFromKing(p_board: *Board_state, turn: e_color) u64 {
     var ret: u64 = EMPTY;
 
@@ -1788,7 +1850,7 @@ pub fn print_template_bitboard() void {
 
     test_board = 0;
     test_board |= (1 << 49) | (1 << 56);
-    std.debug.print("bitscanForward testing {d}\n", .{bitScanForward(test_board)});
+    //std.debug.print("bitscanForward testing {d}\n", .{bitScanForward(test_board)});
     print_bitboard(test_board);
 
     std.debug.print("DEFAULT POSITION: \n", .{});

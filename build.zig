@@ -21,7 +21,11 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
     // using the example from https://github.com/tealsnow/zig-tracy
-
+    //https://stackoverflow.com/questions/76384694/how-to-do-conditional-compilation-with-zig
+    const build_options = b.addOptions();
+    // add command line flag
+    // and set default value
+    build_options.addOption(bool, "fastBitscan", b.option(bool, "fastBitscan", "Use the branchless version of bitscan and reverse bitscan") orelse false);
     // doesnt work still get cache error thingy on WSL
     //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     //const alloc = gpa.allocator();
@@ -90,6 +94,8 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    //exe.addOptions("build_options", build_options);
+    exe.root_module.addOptions("build_options", build_options);
 
     const raylib_dep = b.dependency("raylib_zig", .{
         .target = target,
