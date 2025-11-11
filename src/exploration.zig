@@ -226,7 +226,7 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
             &threadedMoves.items[thread_id],
         });
     }
-    for (0..nThread) |thread_id| {
+    for (0.._nThread) |thread_id| {
         threads[thread_id].join();
     }
     p_res.* = arr_benchmarks.combine();
