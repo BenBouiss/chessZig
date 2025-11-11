@@ -199,7 +199,7 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
     if (_nThread == 0) {
         _nThread = try std.Thread.getCpuCount();
     }
-    _nThread = utilsl.min(usize, fmoves.len, nThread);
+    _nThread = utilsl.min(usize, fmoves.len, _nThread);
 
     var threadedMoves = try utilsl.cutArrayListEvenly(IMove, GLOBAL_ALLOC, fmoves_arr, _nThread);
     defer {
