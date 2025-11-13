@@ -9,6 +9,7 @@ const utilsl = @import("utils.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
+const typedMoveContainer = movel.typedMoveContainer;
 const e_square = squarel.e_square;
 
 const assert = std.debug.assert;
@@ -137,7 +138,7 @@ pub fn getScoreMaskFromTurn(color: chess.e_color) i8 {
 }
 
 pub fn simpleBotMoveExploration(p_state: *chess.Board_state, p_player: *const Player) !moveDecision {
-    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    var moves: moveContainer = moveGenl.moveGeneration(p_state);
     moves.shuffle(p_state.randInt);
 
     var decision: moveDecision = .{};
@@ -178,7 +179,7 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
         p_res.addNode(&p_state.getLastMove());
         return;
     }
-    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    var moves: moveContainer = moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
     for (0..fmoves.len) |i| {
         //_ = try p_state.makeMoveFast(fmoves.moves[i]);
@@ -189,9 +190,60 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
     }
     return;
 }
-
+//pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult) !void {
+//    if (depth <= 0) {
+//        //p_res.n_nodes += 1;
+//        p_res.addNode(&p_state.getLastMove());
+//        return;
+//    }
+//    var moves: typedMoveContainer = moveGenl.moveGenerationTyped(p_state);
+//
+//    const fmovesQuiet = try moveGenl.filterMoveLegalFast(p_state, &moves.quietMoves);
+//    for (0..fmovesQuiet.len) |i| {
+//        _ = p_state.makeMoveFaster(fmovesQuiet.moves[i], .QUIET);
+//        try explorationNDepth(p_state, depth - 1, p_res);
+//        _ = p_state.undoMoveFaster();
+//    }
+//
+//    const fmovesCapture = try moveGenl.filterMoveLegalFast(p_state, &moves.captureMoves);
+//    for (0..fmovesCapture.len) |i| {
+//        _ = p_state.makeMoveFaster(fmovesCapture.moves[i], .CAPTURE);
+//        try explorationNDepth(p_state, depth - 1, p_res);
+//        _ = p_state.undoMoveFaster();
+//    }
+//
+//    const fmovesEnpassant = try moveGenl.filterMoveLegalFast(p_state, &moves.enPassantMoves);
+//    for (0..fmovesEnpassant.len) |i| {
+//        _ = p_state.makeMoveFaster(fmovesEnpassant.moves[i], .ENPASSANT);
+//        try explorationNDepth(p_state, depth - 1, p_res);
+//        _ = p_state.undoMoveFaster();
+//    }
+//
+//    const fmovesPromotion = try moveGenl.filterMoveLegalFast(p_state, &moves.promotionMoves);
+//    for (0..fmovesPromotion.len) |i| {
+//        _ = p_state.makeMoveFaster(fmovesPromotion.moves[i], .PROMOTION);
+//        try explorationNDepth(p_state, depth - 1, p_res);
+//        _ = p_state.undoMoveFaster();
+//    }
+//
+//    const fmovesCapturePromotion = try moveGenl.filterMoveLegalFast(p_state, &moves.capturePromotionMoves);
+//    for (0..fmovesCapturePromotion.len) |i| {
+//        _ = p_state.makeMoveFaster(fmovesCapturePromotion.moves[i], .CAPTUREPROMOTION);
+//        try explorationNDepth(p_state, depth - 1, p_res);
+//        _ = p_state.undoMoveFaster();
+//    }
+//
+//    const fmovesDoublePush = try moveGenl.filterMoveLegalFast(p_state, &moves.enPassantMoves);
+//    for (0..fmovesDoublePush.len) |i| {
+//        _ = p_state.makeMoveFaster(fmovesDoublePush.moves[i], .DOUBLEPUSH);
+//        try explorationNDepth(p_state, depth - 1, p_res);
+//        _ = p_state.undoMoveFaster();
+//    }
+//
+//    return;
+//}
 pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, p_res: *benchmark.benchmarkResult) !void {
-    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    var moves: moveContainer = moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
     var fmoves_arr = try fmoves.convertToArrayList(GLOBAL_ALLOC);
     defer fmoves_arr.deinit(GLOBAL_ALLOC);
@@ -242,7 +294,7 @@ pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.
 }
 
 pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
-    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    var moves: moveContainer = moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
     if (fmoves.len == 0) {
         return .{};
@@ -255,7 +307,7 @@ pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
 
 pub fn humanMoveBot(p_state: *chess.Board_state) !moveDecision {
     std.debug.print("[DEBUG] humanMoveBot: \n", .{});
-    var moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    var moves: moveContainer = moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
     var userMove: IMove = undefined;
 
@@ -283,7 +335,7 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
         //return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * heuristicl.simpleHeuristic(p_state) };
         return .{ .move = p_state.move_history.moves[p_state.move_history.len - 1], .scoring = color_mask * getEvaluation(p_state, p_player) };
     }
-    var all_moves: moveContainer = try moveGenl.moveGeneration(p_state);
+    var all_moves: moveContainer = moveGenl.moveGeneration(p_state);
     all_moves.shuffle(p_state.randInt);
     const fmoves = try moveGenl.filterMoveLegalFast(p_state, &all_moves);
 
@@ -291,8 +343,12 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
     var decision: moveDecision = .{};
     const turn = p_state.turn;
     for (0..fmoves.len) |i| {
-        //_ = try p_state.makeMove(all_moves.moves[i]);
-        _ = try p_state.makeMove(fmoves.moves[i]);
+        const move = fmoves.moves[i];
+        //if (move.isCapture()) {
+        //    std.debug.print("[DEBUG] depthBotMoveExploration: turn: {} found a capture move for piece from {d} to {d}\n", .{ p_state.turn, move.getFrom(), move.getTo() });
+        //    chess.print_boardstate(p_state);
+        //}
+        _ = try p_state.makeMove(move);
 
         //if (!p_state.isLegal(turn)) {
         //    _ = try p_state.undoMove();

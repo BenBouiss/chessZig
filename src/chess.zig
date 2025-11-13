@@ -640,6 +640,28 @@ pub const Board_state = struct {
         }
         return e_piece.nEmptySquare;
     }
+    pub fn getPieceFast(p_self: *Board_state, sq: u8, comptime turn: e_color) e_piece {
+        const sq_mask: u64 = (ONE << @intCast(sq));
+        var ret_piece: e_piece = e_piece.nEmptySquare;
+        var bb: u64 = EMPTY;
+        var piece_idx: u8 = undefined;
+        var color_offset: u8 = @intFromEnum(e_piece.nWhite);
+        if (comptime turn == e_color.BLACK) {
+            color_offset = @intFromEnum(e_piece.nBlack);
+        }
+
+        for (1..(N_PIECES_TYPES + 1)) |piece_index| {
+            piece_idx = color_offset;
+            piece_idx += @intCast(piece_index);
+            ret_piece = @enumFromInt(piece_idx);
+            bb = p_self.pieceBB[piece_idx];
+
+            if ((sq_mask & bb) != 0) {
+                return ret_piece;
+            }
+        }
+        return e_piece.nEmptySquare;
+    }
     pub fn invert_turn(p_self: *Board_state) void {
         p_self.turn = invertColor(p_self.turn);
     }
@@ -648,8 +670,24 @@ pub const Board_state = struct {
         p_self.invert_turn();
         p_self.turn_count += 1;
     }
+    fn _next_turn(p_self: *Board_state, comptime turn: e_color) void {
+        if (comptime turn == .WHITE) {
+            p_self.turn = .BLACK;
+        } else {
+            p_self.turn = .WHITE;
+        }
+        p_self.turn_count += 1;
+    }
     fn undo_turn(p_self: *Board_state) void {
         p_self.invert_turn();
+        p_self.turn_count -= 1;
+    }
+    fn _undo_turn(p_self: *Board_state, comptime turn: e_color) void {
+        if (comptime turn == .WHITE) {
+            p_self.turn = .BLACK;
+        } else {
+            p_self.turn = .WHITE;
+        }
         p_self.turn_count -= 1;
     }
     pub fn placePiece(p_self: *Board_state, piece: e_piece, square: e_square) bool {
@@ -749,6 +787,109 @@ pub const Board_state = struct {
             _ = p_self.kingUndoMove(pieceF, move);
         } else {
             _ = p_self.defaultUndoMove(pieceF, move);
+        }
+        return true;
+    }
+    pub fn undoMoveFaster(p_self: *Board_state) bool {
+        const move = p_self.move_history.pop();
+        const pieceF: e_piece = move.getFromPiece();
+        switch (pieceF) {
+            .nWhitePawn => {
+                p_self._undo_turn(.BLACK);
+                undoEnPassantStatus(p_self);
+                _ = p_self.pawnUndoMove(.nWhitePawn, move);
+            },
+            .nWhiteBishop => {
+                p_self._undo_turn(.BLACK);
+                undoEnPassantStatus(p_self);
+                _ = p_self.defaultUndoMove(.nWhiteBishop, move);
+            },
+            .nWhiteKnight => {
+                p_self._undo_turn(.BLACK);
+                undoEnPassantStatus(p_self);
+                _ = p_self.defaultUndoMove(.nWhiteKnight, move);
+            },
+            .nWhiteQueen => {
+                p_self._undo_turn(.BLACK);
+                undoEnPassantStatus(p_self);
+                _ = p_self.defaultUndoMove(.nWhiteQueen, move);
+            },
+            .nWhiteRook => {
+                p_self._undo_turn(.BLACK);
+                undoEnPassantStatus(p_self);
+                _ = p_self.rookUndoMove(.nWhiteRook, move);
+            },
+            .nWhiteKing => {
+                p_self._undo_turn(.BLACK);
+                undoEnPassantStatus(p_self);
+                _ = p_self.kingUndoMove(.nWhiteKing, move);
+            },
+
+            .nBlackPawn => {
+                p_self._undo_turn(.WHITE);
+                undoEnPassantStatus(p_self);
+                _ = p_self.pawnUndoMove(.nBlackPawn, move);
+            },
+            .nBlackBishop => {
+                p_self._undo_turn(.WHITE);
+                undoEnPassantStatus(p_self);
+                _ = p_self.defaultUndoMove(.nBlackBishop, move);
+            },
+            .nBlackKnight => {
+                p_self._undo_turn(.WHITE);
+                undoEnPassantStatus(p_self);
+                _ = p_self.defaultUndoMove(.nBlackKnight, move);
+            },
+            .nBlackQueen => {
+                p_self._undo_turn(.WHITE);
+                undoEnPassantStatus(p_self);
+                _ = p_self.defaultUndoMove(.nBlackQueen, move);
+            },
+            .nBlackRook => {
+                p_self._undo_turn(.WHITE);
+                undoEnPassantStatus(p_self);
+                _ = p_self.rookUndoMove(.nBlackRook, move);
+            },
+            .nBlackKing => {
+                p_self._undo_turn(.WHITE);
+                undoEnPassantStatus(p_self);
+                _ = p_self.kingUndoMove(.nBlackKing, move);
+            },
+            .nWhite, .nBlack, .nEmptySquare => {
+                @panic("");
+            },
+        }
+        return true;
+    }
+    pub fn cstexpr_pawnUndoMove(p_self: *Board_state, piece: e_piece, move: IMove, comptime turn: e_color) bool {
+        const toBB: u64 = ONE << @intCast(move.getTo());
+        const fromBB: u64 = ONE << @intCast(move.getFrom());
+        const moveBB: u64 = (toBB | fromBB);
+        var opp_c: e_color = .BLACK;
+        if (comptime turn == .BLACK) {
+            opp_c = .WHITE;
+        }
+        if (move.isPromotion()) {
+            p_self.pieceBB[@intFromEnum(flagPromotionToPiece(move.getFlag(), turn))] ^= toBB;
+            p_self.pieceBB[@intFromEnum(piece)] ^= fromBB;
+        } else {
+            p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
+        }
+        p_self.c_occupiedBB[@intFromEnum(turn)] ^= moveBB;
+
+        if (move.isCapture()) {
+            if (move.isEnpassant()) {
+                const _toBB = enPassantCaptureLocationFromMove(toBB, turn);
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] |= _toBB;
+                p_self.c_occupiedBB[@intFromEnum(opp_c)] |= _toBB;
+                p_self.occupiedBB ^= (moveBB | _toBB);
+            } else {
+                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] |= toBB;
+                p_self.c_occupiedBB[@intFromEnum(opp_c)] |= toBB;
+                p_self.occupiedBB |= fromBB;
+            }
+        } else {
+            p_self.occupiedBB ^= moveBB;
         }
         return true;
     }
@@ -915,6 +1056,126 @@ pub const Board_state = struct {
         p_self.next_turn();
         return true;
     }
+    pub fn makeMoveFaster(p_self: *Board_state, move: IMove) bool {
+        const pieceF: e_piece = move.getFromPiece();
+        refreshEnPassantSide(p_self, p_self.turn);
+        switch (pieceF) {
+            .nWhitePawn => {
+                _ = p_self.pawnMakeMove(.nWhitePawn, move);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteBishop => {
+                _ = p_self.defaultMakeMove(.nWhiteBishop, move);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteKnight => {
+                _ = p_self.defaultMakeMove(.nWhiteKnight, move);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteQueen => {
+                _ = p_self.defaultMakeMove(.nWhiteQueen, move);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteRook => {
+                _ = p_self.rookMakeMove(.nWhiteRook, move);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteKing => {
+                _ = p_self.kingMakeMove(.nWhiteKing, move);
+                p_self._next_turn(.WHITE);
+            },
+
+            .nBlackPawn => {
+                _ = p_self.pawnMakeMove(.nBlackPawn, move);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackBishop => {
+                _ = p_self.defaultMakeMove(.nBlackBishop, move);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackKnight => {
+                _ = p_self.defaultMakeMove(.nBlackKnight, move);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackQueen => {
+                _ = p_self.defaultMakeMove(.nBlackQueen, move);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackRook => {
+                _ = p_self.rookMakeMove(.nBlackRook, move);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackKing => {
+                _ = p_self.kingMakeMove(.nBlackKing, move);
+                p_self._next_turn(.BLACK);
+            },
+            .nWhite, .nBlack, .nEmptySquare => {
+                @panic("");
+            },
+        }
+        _ = p_self.move_history.append(move);
+        return true;
+    }
+    pub fn makeMoveFasterTyped(p_self: *Board_state, move: IMove, comptime category: movel.e_moveCategory) bool {
+        const pieceF: e_piece = move.getFromPiece();
+        refreshEnPassantSide(p_self, p_self.turn);
+        switch (pieceF) {
+            .nWhitePawn => {
+                _ = p_self.pawnMakeMoveTyped(.nWhitePawn, move, category);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteBishop => {
+                _ = p_self.defaultMakeMoveTyped(.nWhiteBishop, move, category);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteKnight => {
+                _ = p_self.defaultMakeMoveTyped(.nWhiteKnight, move, category);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteQueen => {
+                _ = p_self.defaultMakeMoveTyped(.nWhiteQueen, move, category);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteRook => {
+                _ = p_self.rookMakeMoveTyped(.nWhiteRook, move, category);
+                p_self._next_turn(.WHITE);
+            },
+            .nWhiteKing => {
+                _ = p_self.kingMakeMoveTyped(.nWhiteKing, move, category);
+                p_self._next_turn(.WHITE);
+            },
+
+            .nBlackPawn => {
+                _ = p_self.pawnMakeMoveTyped(.nBlackPawn, move, category);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackBishop => {
+                _ = p_self.defaultMakeMoveTyped(.nBlackBishop, move, category);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackKnight => {
+                _ = p_self.defaultMakeMoveTyped(.nBlackKnight, move, category);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackQueen => {
+                _ = p_self.defaultMakeMoveTyped(.nBlackQueen, move, category);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackRook => {
+                _ = p_self.rookMakeMoveTyped(.nBlackRook, move, category);
+                p_self._next_turn(.BLACK);
+            },
+            .nBlackKing => {
+                _ = p_self.kingMakeMoveTyped(.nBlackKing, move, category);
+                p_self._next_turn(.BLACK);
+            },
+            .nWhite, .nBlack, .nEmptySquare => {
+                @panic("");
+            },
+        }
+        _ = p_self.move_history.append(move);
+        return true;
+    }
 
     pub fn pawnMakeMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
         const toBB: u64 = ONE << @intCast(move.getTo());
@@ -923,28 +1184,33 @@ pub const Board_state = struct {
 
         p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
         p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
-        if (move.isCapture()) {
-            if (move.isEnpassant()) {
-                const _toBB = enPassantCaptureLocationFromMove(toBB, p_self.turn);
-                p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= _toBB;
-                p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= _toBB;
-                p_self.occupiedBB ^= (moveBB | _toBB);
-            } else {
+        if (move.isPromotion()) {
+            if (move.isCapture()) {
                 p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
                 p_self.occupiedBB ^= fromBB;
                 p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
+            } else {
+                p_self.occupiedBB ^= moveBB;
             }
-        } else {
-            p_self.occupiedBB ^= moveBB;
-            if (move.isDoublePush()) {
-                updateEnPassantStatus(p_self, @enumFromInt(move.getTo()));
-            }
-        }
-        if (move.isPromotion()) {
             const prom_piece: e_piece = flagPromotionToPiece(move.getFlag(), p_self.turn);
             p_self.pieceBB[@intFromEnum(piece)] ^= toBB;
             p_self.pieceBB[@intFromEnum(prom_piece)] ^= toBB;
+        } else if (move.isEnpassant()) {
+            const _toBB = enPassantCaptureLocationFromMove(toBB, p_self.turn);
+            p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= _toBB;
+            p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= _toBB;
+            p_self.occupiedBB ^= (moveBB | _toBB);
+        } else if (move.isCapture()) {
+            p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
+            p_self.occupiedBB ^= fromBB;
+            p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
+        } else {
+            if (move.isDoublePush()) {
+                updateEnPassantStatus(p_self, @enumFromInt(move.getTo()));
+            }
+            p_self.occupiedBB ^= moveBB;
         }
+
         return true;
     }
     pub fn rookMakeMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
@@ -967,20 +1233,24 @@ pub const Board_state = struct {
             p_self.occupiedBB ^= fromBB;
             p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
             return true;
-        } else if (move.isKingSideCastle()) {
-            pieceCastle = getRookPiece(p_self.turn);
-            p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (moveBB << 1);
-            p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (moveBB << 1);
-            moveBB |= (moveBB << 1);
-        } else if (move.isQueenSideCastle()) {
-            const _castleBB: u64 = (toBB >> 2) | (toBB << 1);
-            moveBB |= (_castleBB);
-            pieceCastle = getRookPiece(p_self.turn);
-            p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (_castleBB);
-            p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (_castleBB);
+        } else {
+            if (move.isKingSideCastle()) {
+                pieceCastle = getRookPiece(p_self.turn);
+                p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (moveBB << 1);
+                p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (moveBB << 1);
+                moveBB |= (moveBB << 1);
+                p_self.occupiedBB ^= moveBB;
+            } else if (move.isQueenSideCastle()) {
+                const _castleBB: u64 = (toBB >> 2) | (toBB << 1);
+                moveBB |= (_castleBB);
+                pieceCastle = getRookPiece(p_self.turn);
+                p_self.pieceBB[@intFromEnum(pieceCastle)] ^= (_castleBB);
+                p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (_castleBB);
+                p_self.occupiedBB ^= moveBB;
+            } else {
+                p_self.occupiedBB ^= moveBB;
+            }
         }
-        p_self.occupiedBB ^= moveBB;
-
         return true;
     }
 
@@ -1747,10 +2017,11 @@ pub fn extendIMoveArray(p_arr1: *std.ArrayList(IMove), p_arr2: *std.ArrayList(IM
 }
 
 pub fn getColorFromPiece(piece: e_piece) e_color {
-    if (@intFromEnum(piece) < @intFromEnum(e_piece.nBlack)) {
-        return e_color.WHITE;
-    }
-    return e_color.BLACK;
+    //if (@intFromEnum(piece) < @intFromEnum(e_piece.nBlack)) {
+    //    return e_color.WHITE;
+    //}
+    //return e_color.BLACK;
+    return @enumFromInt(@intFromEnum(piece) / @intFromEnum(e_piece.nBlack));
 }
 
 pub fn isPiecePinned(occBB: u64, sq: e_square, kingBB: u64, diagPieceBB: u64, linePieceBB: u64) u64 {

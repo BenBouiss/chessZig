@@ -395,8 +395,6 @@ pub fn useMainTemplate(p_shellState: *ShellState) bool {
     _ = execStringCmd(p_shellState, "SET BLACK SEARCH DEPTH");
     _ = execStringCmd(p_shellState, "SET BLACK DEPTH 5");
     _ = execStringCmd(p_shellState, "SET BLACK HEURISTIC SIMPLE");
-    //p_shellState.chessBoardState.players[0].print();
-    //p_shellState.chessBoardState.players[1].print();
     return true;
 }
 

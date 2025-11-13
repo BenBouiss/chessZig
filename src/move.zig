@@ -1,11 +1,16 @@
 const std = @import("std");
+const build_options = @import("build_options");
+
 const chess = @import("chess.zig");
 const squarel = @import("square.zig");
 
 const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
 
+const ignoreChecks = build_options.fastBitscan;
+
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
+pub const e_moveCategory = enum(u4) { QUIET, CAPTURE, ENPASSANT, PROMOTION, CAPTUREPROMOTION, DOUBLEPUSH };
 
 var GPA = std.heap.GeneralPurposeAllocator(.{}){};
 const GLOBAL_ALLOC = GPA.allocator();
@@ -72,6 +77,10 @@ pub const IMove = struct {
         const ret = (self.getFlag() & @intFromEnum(e_moveFlags.CAPTURE) != 0);
         return ret;
     }
+    pub inline fn isQuietMove(self: IMove) bool {
+        return self.getFlag() == @intFromEnum(e_moveFlags.QUIETMOVE);
+    }
+
     pub inline fn isPromotion(self: IMove) bool {
         return (self.getFlag() >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
     }
@@ -112,6 +121,65 @@ pub const IMove = struct {
     }
 };
 
+pub const typedMoveContainer = struct {
+    quietMoves: moveContainer = .{},
+    captureMoves: moveContainer = .{},
+    enPassantMoves: moveContainer = .{},
+    promotionMoves: moveContainer = .{},
+    capturePromotionMoves: moveContainer = .{},
+    doublePushMoves: moveContainer = .{},
+    len: u64 = 0,
+    pub fn print(self: typedMoveContainer) void {
+        std.debug.print("[PRINT] typedMoveContainer: quiet moves: \n", .{});
+        self.quietMoves.print();
+
+        std.debug.print("[PRINT] typedMoveContainer: capture moves: \n", .{});
+        self.captureMoves.print();
+
+        std.debug.print("[PRINT] typedMoveContainer: en passant moves: \n", .{});
+        self.enPassantMoves.print();
+
+        std.debug.print("[PRINT] typedMoveContainer: promotion moves: \n", .{});
+        self.promotionMoves.print();
+
+        std.debug.print("[PRINT] typedMoveContainer: capture promotion moves: \n", .{});
+        self.capturePromotionMoves.print();
+
+        std.debug.print("[PRINT] typedMoveContainer: double push moves: \n", .{});
+        self.doublePushMoves.print();
+    }
+
+    pub fn flatten(self: typedMoveContainer) moveContainer {
+        var ret: moveContainer = .{ .len = 0 };
+        _ = ret.extend(&self.quietMoves);
+        _ = ret.extend(&self.captureMoves);
+        _ = ret.extend(&self.enPassantMoves);
+        _ = ret.extend(&self.promotionMoves);
+        _ = ret.extend(&self.capturePromotionMoves);
+        _ = ret.extend(&self.doublePushMoves);
+        return ret;
+    }
+
+    fn append(p_self: *typedMoveContainer, move: IMove, comptime category: e_moveCategory) void {
+        if (comptime category == .QUIET) {
+            p_self.quietMoves.append(move);
+        } else if (comptime category == .CAPTURE) {
+            p_self.captureMoves.append(move);
+        } else if (comptime category == .ENPASSANT) {
+            p_self.enPassantMoves.append(move);
+        } else if (comptime category == .PROMOTION) {
+            p_self.promotionMoves.append(move);
+        } else if (comptime category == .CAPTUREPROMOTION) {
+            p_self.capturePromotionMoves.append(move);
+        } else if (comptime category == .DOUBLEPUSH) {
+            p_self.doublePushMoves.append(move);
+        } else {
+            @panic("");
+        }
+        p_self.len += 1;
+    }
+};
+
 pub const moveContainer = struct {
     moves: [chess.MAX_POSSIBLE_MOVE]IMove = undefined,
     len: u8 = 0,
@@ -133,8 +201,10 @@ pub const moveContainer = struct {
     }
 
     pub fn extend(p_self: *moveContainer, p_other: *const moveContainer) bool {
-        if ((p_self.len + p_other.len) > chess.MAX_POSSIBLE_MOVE) {
-            return false;
+        if (comptime !ignoreChecks) {
+            if ((p_self.len + p_other.len) > chess.MAX_POSSIBLE_MOVE) {
+                return false;
+            }
         }
         for (0..p_other.len) |i| {
             p_self.moves[p_self.len + i] = p_other.moves[i];
@@ -202,16 +272,20 @@ pub const matchMoveContainer = struct {
     moves: [MAX_MATH_LENGTH]IMove = undefined,
     len: usize = 0,
     pub fn append(p_self: *matchMoveContainer, move: IMove) bool {
-        if (p_self.len == MAX_MATH_LENGTH) {
-            return false;
+        if (comptime !ignoreChecks) {
+            if (p_self.len == MAX_MATH_LENGTH) {
+                return false;
+            }
         }
         p_self.moves[p_self.len] = move;
         p_self.len += 1;
         return true;
     }
     pub fn pop(p_self: *matchMoveContainer) IMove {
-        if (p_self.len == 0) {
-            return .{};
+        if (comptime !ignoreChecks) {
+            if (p_self.len == 0) {
+                return .{};
+            }
         }
         p_self.len -= 1;
         return p_self.moves[p_self.len];
