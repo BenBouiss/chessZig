@@ -10,7 +10,7 @@ const e_square = squarel.e_square;
 const ignoreChecks = build_options.fastBitscan;
 
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
-pub const e_moveCategory = enum(u4) { QUIET, CAPTURE, ENPASSANT, PROMOTION, CAPTUREPROMOTION, DOUBLEPUSH };
+pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 
 var GPA = std.heap.GeneralPurposeAllocator(.{}){};
 const GLOBAL_ALLOC = GPA.allocator();
@@ -124,10 +124,6 @@ pub const IMove = struct {
 pub const typedMoveContainer = struct {
     quietMoves: moveContainer = .{},
     captureMoves: moveContainer = .{},
-    enPassantMoves: moveContainer = .{},
-    promotionMoves: moveContainer = .{},
-    capturePromotionMoves: moveContainer = .{},
-    doublePushMoves: moveContainer = .{},
     len: u64 = 0,
     pub fn print(self: typedMoveContainer) void {
         std.debug.print("[PRINT] typedMoveContainer: quiet moves: \n", .{});
@@ -135,28 +131,12 @@ pub const typedMoveContainer = struct {
 
         std.debug.print("[PRINT] typedMoveContainer: capture moves: \n", .{});
         self.captureMoves.print();
-
-        std.debug.print("[PRINT] typedMoveContainer: en passant moves: \n", .{});
-        self.enPassantMoves.print();
-
-        std.debug.print("[PRINT] typedMoveContainer: promotion moves: \n", .{});
-        self.promotionMoves.print();
-
-        std.debug.print("[PRINT] typedMoveContainer: capture promotion moves: \n", .{});
-        self.capturePromotionMoves.print();
-
-        std.debug.print("[PRINT] typedMoveContainer: double push moves: \n", .{});
-        self.doublePushMoves.print();
     }
 
     pub fn flatten(self: typedMoveContainer) moveContainer {
         var ret: moveContainer = .{ .len = 0 };
         _ = ret.extend(&self.quietMoves);
         _ = ret.extend(&self.captureMoves);
-        _ = ret.extend(&self.enPassantMoves);
-        _ = ret.extend(&self.promotionMoves);
-        _ = ret.extend(&self.capturePromotionMoves);
-        _ = ret.extend(&self.doublePushMoves);
         return ret;
     }
 
@@ -165,14 +145,6 @@ pub const typedMoveContainer = struct {
             p_self.quietMoves.append(move);
         } else if (comptime category == .CAPTURE) {
             p_self.captureMoves.append(move);
-        } else if (comptime category == .ENPASSANT) {
-            p_self.enPassantMoves.append(move);
-        } else if (comptime category == .PROMOTION) {
-            p_self.promotionMoves.append(move);
-        } else if (comptime category == .CAPTUREPROMOTION) {
-            p_self.capturePromotionMoves.append(move);
-        } else if (comptime category == .DOUBLEPUSH) {
-            p_self.doublePushMoves.append(move);
         } else {
             @panic("");
         }
@@ -307,3 +279,54 @@ pub fn stringFromLERF(sq: e_square) [2]u8 {
     ret[1] = '1' + sq_i / 8;
     return ret;
 }
+
+pub const moveBBState = struct {
+    pawnMoves: u64 = 0,
+    pawnAttacks: u64 = 0,
+    bishopMoves: u64 = 0,
+    knightMoves: u64 = 0,
+    rookMoves: u64 = 0,
+    queenMoves: u64 = 0,
+    kingMoves: u64 = 0,
+    // possible extras here
+    doubleMoves: u64 = 0,
+    enPassantMoves: u64 = 0,
+    promotionMoves: u64 = 0,
+
+    queenSideCastlingMoves: u64,
+    kingSideCastlingMoves: u64,
+
+    pub fn isEmpty(self: moveBBState) bool {
+        return (self.pawnMoves | self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.doubleMoves) == chess.EMPTY;
+    }
+    pub fn print(self: moveBBState) void {
+        // for debugging purposes
+        std.debug.print("Pawn moves: \n", .{});
+        chess.print_bitboard(self.pawnMoves);
+        std.debug.print("Pawn attacks: \n", .{});
+        chess.print_bitboard(self.pawnAttacks);
+
+        std.debug.print("Pawn double moves: \n", .{});
+        chess.print_bitboard(self.doubleMoves);
+        std.debug.print("Pawn enpassant: \n", .{});
+        chess.print_bitboard(self.enPassantMoves);
+        std.debug.print("Pawn promotion: \n", .{});
+        chess.print_bitboard(self.promotionMoves);
+
+        std.debug.print("Bishop moves: \n", .{});
+        chess.print_bitboard(self.bishopMoves);
+        std.debug.print("Knight moves: \n", .{});
+        chess.print_bitboard(self.knightMoves);
+        std.debug.print("Rook moves: \n", .{});
+        chess.print_bitboard(self.rookMoves);
+
+        std.debug.print("Queen moves: \n", .{});
+        chess.print_bitboard(self.queenMoves);
+        std.debug.print("King moves: \n", .{});
+        chess.print_bitboard(self.kingMoves);
+    }
+    pub fn convertToMoveContainer(self: moveBBState) moveContainer {
+        _ = self;
+        return .{};
+    }
+};

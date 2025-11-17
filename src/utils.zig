@@ -31,14 +31,23 @@ pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.A
     var cell: usize = 0;
     var count: usize = 0;
     const last_cell = sizeEach * size;
+    var remainder_start = arr.items.len;
     for (0..arr.items.len) |i| {
-        if ((count == sizeEach) and (i != last_cell)) {
-            count = 0;
-            cell += 1;
-            try ret.append(alloc, .{});
+        if (count == sizeEach) {
+            if (i != last_cell) {
+                count = 0;
+                cell += 1;
+                try ret.append(alloc, .{});
+            } else {
+                remainder_start = i;
+                break;
+            }
         }
         try ret.items[cell].append(alloc, arr.items[i]);
         count += 1;
+    }
+    for (remainder_start..arr.items.len) |i| {
+        try ret.items[i - remainder_start].append(alloc, arr.items[i]);
     }
     return ret;
 }

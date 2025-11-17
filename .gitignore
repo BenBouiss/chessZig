@@ -3,7 +3,8 @@
 src/extern/*
 
 cmd
-
+*.out
+*.c
 *.gz
 *pycache*
 

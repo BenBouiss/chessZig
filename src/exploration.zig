@@ -254,6 +254,11 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
     _nThread = utilsl.min(usize, fmoves.len, _nThread);
 
     var threadedMoves = try utilsl.cutArrayListEvenly(IMove, GLOBAL_ALLOC, fmoves_arr, _nThread);
+    //std.debug.print("Thread work distribution: \n", .{});
+    //for (threadedMoves.items) |cell| {
+    //    std.debug.print("Number of moves: {d}\n", .{cell.items.len});
+    //}
+
     defer {
         for (threadedMoves.items) |*cell| {
             cell.deinit(GLOBAL_ALLOC);
@@ -310,6 +315,10 @@ pub fn humanMoveBot(p_state: *chess.Board_state) !moveDecision {
     var moves: moveContainer = moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
     var userMove: IMove = undefined;
+
+    // TODO Remove these debug lines
+    const testMoveBB = moveGenl.moveGenBB(p_state);
+    testMoveBB.print();
 
     while (true) {
         userMove = try chess.askUserMove(p_state);

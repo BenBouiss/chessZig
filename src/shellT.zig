@@ -15,7 +15,7 @@ const arg = struct {
     func: *const fn (arg) bool,
     pub fn init(alloc: std.mem.Allocator, fmt: []const u8, nArgs: usize, func: *const fn (arg) bool) arg {
         const ret = alloc.create(arg);
-        ret.* = .{.fmt = fmt, .nArgs = nArgs, .func = func};
+        ret.* = .{ .fmt = fmt, .nArgs = nArgs, .func = func };
         //var ret: arg = .{.nArgs = nArgs, .func = func};
         //ret.fmt = GLOBAL_ALLOC.alloc(u8, fmt.len);
         //@memcpy(&ret.fmt, &fmt);
@@ -32,12 +32,11 @@ const shell = struct {
         var ret: shell = undefined;
         ret.args = std.AutoArrayHashMap([]const u8, arg).init(GLOBAL_ALLOC);
     }
-    pub fn 
     pub fn printArgs(self: shell) void {
         var itr = self.args.iterator();
         const kv = self.args.fetchSwapRemove();
         while (itr.next()) |entry| {
-            entry.value_ptr.
+            entry.value_ptr;
         }
         return;
     }
