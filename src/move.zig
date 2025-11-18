@@ -15,6 +15,10 @@ pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 var GPA = std.heap.GeneralPurposeAllocator(.{}){};
 const GLOBAL_ALLOC = GPA.allocator();
 
+//pub fn build_move(p_board: *chess.Board_state, from: u8, to: u8, flag: u8, piece: e_piece) IMove {
+//    return _build_move(from, to, flag, piece);
+//}
+
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     var m_move: u16 = (flag & 0xF);
     m_move <<= 6;
@@ -25,10 +29,61 @@ pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     return ret;
 }
 
+pub fn build_move_ext(from: u8, to: u8, flag: u8, piece: e_piece, m_restore: u16, m_next: u16) IMove {
+    var m_move: u16 = (flag & 0xF);
+    m_move <<= 6;
+    m_move |= (to & 0x3F);
+    m_move <<= 6;
+    m_move |= (from & 0x3F);
+    const ret: IMove = .{ .m_move = m_move, .m_piece = (@intFromEnum(piece) & 0xFF), .m_restore = m_restore, .m_next = m_next };
+    return ret;
+}
+
+pub fn boardStateToSpecial(p_board: *chess.Board_state, comptime turn: chess.e_color) u16 {
+    var ret: u16 = 0;
+    if (comptime turn == .WHITE) {
+        const castl_bits = p_board.castlingBB & 0xFF;
+        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.WHITE)] & 0xFF0000;
+        ret |= (castl_bits << 8) | eP_bits;
+    } else {
+        const castl_bits = p_board.castlingBB & 0xFF00000000000000 >> 56;
+        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.BLACK)] & 0xFF0000000000;
+        ret |= (castl_bits << 8) | eP_bits;
+    }
+    return ret;
+}
+
 pub const IMove = struct {
     m_move: u16 = 0,
     // first 8 bits = start_piece, last = capture_piece
     m_piece: u16 = 0,
+
+    //size:
+    //  for enpassant only 1(one) pawn can be in enpassant state
+    //  Restore (present in p_board at move gen time):
+    //  <3> pawn en passant
+    //  <3> castling possible
+    //  Next Provided by move gen
+    //  <3> pawn en passant
+    //  <3> castling possible
+    //m_special: u16 = 0,
+
+    m_restore: u16 = 0,
+    m_next: u16 = 0,
+
+    pub fn getRestoreEnpassantBB(self: IMove) u64 {
+        return (self.m_restore & 0xFF);
+    }
+    pub fn getNextEnpassantBB(self: IMove) u64 {
+        return (self.m_next & 0xFF);
+    }
+
+    pub fn getRestoreCastlingBB(self: IMove) u64 {
+        return self.m_restore & 0xFF00;
+    }
+    pub fn getNextCastlingBB(self: IMove) u64 {
+        return self.m_next & 0xFF00;
+    }
 
     pub fn setCapture(p_self: *IMove, capture: e_piece) void {
         //p_self.c_piece = capture;
@@ -52,7 +107,6 @@ pub const IMove = struct {
                 return true;
             }
         }
-        //std.debug.print("[DEBUG] isIn: move: {s} is not in the set\n", .{self.getStr()});
         return false;
     }
     pub inline fn getFrom(self: IMove) u8 {
@@ -238,13 +292,13 @@ pub const moveContainer = struct {
 };
 
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
-const MAX_MATH_LENGTH: usize = 6000;
+pub const MAX_MATCH_LENGTH: usize = 6000;
 pub const matchMoveContainer = struct {
-    moves: [MAX_MATH_LENGTH]IMove = undefined,
+    moves: [MAX_MATCH_LENGTH]IMove = undefined,
     len: usize = 0,
     pub fn append(p_self: *matchMoveContainer, move: IMove) bool {
         if (comptime !ignoreChecks) {
-            if (p_self.len == MAX_MATH_LENGTH) {
+            if (p_self.len == MAX_MATCH_LENGTH) {
                 return false;
             }
         }

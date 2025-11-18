@@ -35,18 +35,19 @@ pub fn white_moveGeneration(p_board: *Board_state) moveContainer {
     var ret: moveContainer = .{};
 
     const emptyOrEnemy = ~p_board.c_occupiedBB[@intFromEnum(e_color.WHITE)];
+
     // TODO Unroll the loop
     white_PieceMovePawnMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)], &ret);
 
-    _PieceMoveKnightMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)], &ret, e_color.WHITE, emptyOrEnemy);
+    _PieceMoveKnightMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)], e_color.WHITE, emptyOrEnemy, &ret);
 
-    _PieceMoveKingMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)], &ret, e_color.WHITE, emptyOrEnemy);
+    _PieceMoveKingMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)], e_color.WHITE, emptyOrEnemy, &ret);
 
-    _PieceMoveBishopMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)], &ret, e_color.WHITE, emptyOrEnemy);
+    _PieceMoveBishopMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)], e_color.WHITE, emptyOrEnemy, &ret);
 
-    _PieceMoveRookMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)], &ret, e_color.WHITE, emptyOrEnemy);
+    _PieceMoveRookMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)], e_color.WHITE, emptyOrEnemy, &ret);
 
-    _PieceMoveQueenMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], &ret, e_color.WHITE, emptyOrEnemy);
+    _PieceMoveQueenMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], e_color.WHITE, emptyOrEnemy, &ret);
 
     //std.debug.print("[DEBUG] white_moveGeneration: \n", .{});
     //ret.print();
@@ -62,15 +63,15 @@ pub fn black_moveGeneration(p_board: *Board_state) moveContainer {
 
     black_PieceMovePawnMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)], &ret);
 
-    _PieceMoveKnightMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)], &ret, e_color.BLACK, emptyOrEnemy);
+    _PieceMoveKnightMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)], e_color.BLACK, emptyOrEnemy, &ret);
 
-    _PieceMoveKingMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)], &ret, e_color.BLACK, emptyOrEnemy);
+    _PieceMoveKingMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)], e_color.BLACK, emptyOrEnemy, &ret);
 
-    _PieceMoveBishopMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)], &ret, e_color.BLACK, emptyOrEnemy);
+    _PieceMoveBishopMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)], e_color.BLACK, emptyOrEnemy, &ret);
 
-    _PieceMoveRookMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)], &ret, e_color.BLACK, emptyOrEnemy);
+    _PieceMoveRookMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)], e_color.BLACK, emptyOrEnemy, &ret);
 
-    _PieceMoveQueenMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)], &ret, e_color.BLACK, emptyOrEnemy);
+    _PieceMoveQueenMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)], e_color.BLACK, emptyOrEnemy, &ret);
     return ret;
 }
 pub fn moveBitBoardToIMove_pawn(p_board: *Board_state, piece: e_piece, piece_bb: u64, attack_bb: u64, flags: u6, p_out: *moveContainer, comptime turn: e_color) void {
@@ -187,7 +188,7 @@ pub fn black_PieceMovePawnMask(p_board: *Board_state, bb_piece: u64, p_out: *mov
     return;
 }
 
-pub fn _PieceMoveKnightMask(p_board: *Board_state, bb_piece: u64, p_out: *moveContainer, comptime turn: e_color, emptyOrEnemy: u64) void {
+pub fn _PieceMoveKnightMask(p_board: *Board_state, bb_piece: u64, comptime turn: e_color, emptyOrEnemy: u64, p_out: *moveContainer) void {
     var piece = e_piece.nWhiteKnight;
     var color = e_color.WHITE;
     if (comptime turn == e_color.BLACK) {
@@ -208,7 +209,7 @@ pub fn _PieceMoveKnightMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCo
     return;
 }
 
-pub fn _PieceMoveBishopMask(p_board: *Board_state, bb_piece: u64, p_out: *moveContainer, comptime turn: e_color, emptyOrEnemy: u64) void {
+pub fn _PieceMoveBishopMask(p_board: *Board_state, bb_piece: u64, comptime turn: e_color, emptyOrEnemy: u64, p_out: *moveContainer) void {
     var curr_att: u64 = chess.EMPTY;
     var sq: i8 = 0;
     var sq_e: e_square = e_square.a1;
@@ -235,7 +236,7 @@ pub fn _PieceMoveBishopMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCo
     return;
 }
 
-pub fn _PieceMoveRookMask(p_board: *Board_state, bb_piece: u64, p_out: *moveContainer, comptime turn: e_color, emptyOrEnemy: u64) void {
+pub fn _PieceMoveRookMask(p_board: *Board_state, bb_piece: u64, comptime turn: e_color, emptyOrEnemy: u64, p_out: *moveContainer) void {
     var att_mask: u64 = chess.EMPTY;
     var sq: i8 = 0;
     var sq_e: e_square = e_square.a1;
@@ -261,7 +262,7 @@ pub fn _PieceMoveRookMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCont
     return;
 }
 
-pub fn _PieceMoveQueenMask(p_board: *Board_state, bb_piece: u64, p_out: *moveContainer, comptime turn: e_color, emptyOrEnemy: u64) void {
+pub fn _PieceMoveQueenMask(p_board: *Board_state, bb_piece: u64, comptime turn: e_color, emptyOrEnemy: u64, p_out: *moveContainer) void {
     var att_mask: u64 = chess.EMPTY;
     var sq: i8 = 0;
     var sq_e: e_square = e_square.a1;
@@ -289,7 +290,7 @@ pub fn _PieceMoveQueenMask(p_board: *Board_state, bb_piece: u64, p_out: *moveCon
     return;
 }
 
-pub fn _PieceMoveKingMask(p_board: *Board_state, bb_piece: u64, p_out: *moveContainer, comptime turn: e_color, emptyOrEnemy: u64) void {
+pub fn _PieceMoveKingMask(p_board: *Board_state, bb_piece: u64, comptime turn: e_color, emptyOrEnemy: u64, p_out: *moveContainer) void {
     var piece = e_piece.nWhiteKing;
     var color = e_color.WHITE;
     if (comptime turn == e_color.BLACK) {
@@ -427,14 +428,14 @@ pub fn moveGenKingBB(p_board: *Board_state, comptime color: e_color, emptyOrEnem
     if (comptime color == .WHITE) {
         p_out.kingMoves |= cachedTables.KingAttack[@intCast(p_board.cstgetKingSq(.WHITE))] & emptyOrEnemy;
         const kingBB = p_board.getKingBB(.WHITE);
-        p_out.queenSideCastlingMoves |= p_board.castlingBB[@intFromEnum(e_color.WHITE)] & (kingBB >> 2);
-        p_out.kingSideCastlingMoves |= p_board.castlingBB[@intFromEnum(e_color.WHITE)] & (kingBB << 2);
+        p_out.queenSideCastlingMoves |= p_board.castlingBB & (kingBB >> 2);
+        p_out.kingSideCastlingMoves |= p_board.castlingBB & (kingBB << 2);
         // still need castling moves here
     } else {
         p_out.kingMoves |= cachedTables.KingAttack[@intCast(p_board.cstgetKingSq(.BLACK))] & emptyOrEnemy;
         const kingBB = p_board.getKingBB(.BLACK);
-        p_out.queenSideCastlingMoves |= p_board.castlingBB[@intFromEnum(e_color.BLACK)] & (kingBB >> 2);
-        p_out.kingSideCastlingMoves |= p_board.castlingBB[@intFromEnum(e_color.BLACK)] & (kingBB << 2);
+        p_out.queenSideCastlingMoves |= p_board.castlingBB & (kingBB >> 2);
+        p_out.kingSideCastlingMoves |= p_board.castlingBB & (kingBB << 2);
     }
 }
 pub fn moveGenBishopBB(p_board: *Board_state, p_magicTable: *magicRecord, comptime color: e_color, emptyOrEnemy: u64, p_out: *moveBBState) void {

@@ -54,8 +54,8 @@ pub fn main() anyerror!void {
     //test_magic(&magicl.magicTable);
 
     //chess.initRayAttacks();
-    //benchmark.test_benchmark();
-    interfacel.shell();
+    benchmark.test_benchmark();
+    //interfacel.shell();
     //magicl.magicTables.print();
 
 }
