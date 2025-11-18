@@ -1,18 +1,17 @@
 const chess = @import("chess.zig");
 const squarel = @import("square.zig");
+const mainl = @import("main.zig");
 
 const std = @import("std");
 
 const e_piece = chess.e_piece;
+const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 const magic_err = error{noMagicFound};
 const MAX_MASK_SIZE: usize = 4096;
 
 var rngIntGenerator = std.Random.DefaultPrng.init(42);
 const randInt = rngIntGenerator.random();
-
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-const GLOBAL_ALLOC = GPA.allocator();
 
 const ROOK_MAGIC_MASK = [64]u64{ 0x101010101017e, 0x202020202027c, 0x404040404047a, 0x8080808080876, 0x1010101010106e, 0x2020202020205e, 0x4040404040403e, 0x8080808080807e, 0x1010101017e00, 0x2020202027c00, 0x4040404047a00, 0x8080808087600, 0x10101010106e00, 0x20202020205e00, 0x40404040403e00, 0x80808080807e00, 0x10101017e0100, 0x20202027c0200, 0x40404047a0400, 0x8080808760800, 0x101010106e1000, 0x202020205e2000, 0x404040403e4000, 0x808080807e8000, 0x101017e010100, 0x202027c020200, 0x404047a040400, 0x8080876080800, 0x1010106e101000, 0x2020205e202000, 0x4040403e404000, 0x8080807e808000, 0x1017e01010100, 0x2027c02020200, 0x4047a04040400, 0x8087608080800, 0x10106e10101000, 0x20205e20202000, 0x40403e40404000, 0x80807e80808000, 0x17e0101010100, 0x27c0202020200, 0x47a0404040400, 0x8760808080800, 0x106e1010101000, 0x205e2020202000, 0x403e4040404000, 0x807e8080808000, 0x7e010101010100, 0x7c020202020200, 0x7a040404040400, 0x76080808080800, 0x6e101010101000, 0x5e202020202000, 0x3e404040404000, 0x7e808080808000, 0x7e01010101010100, 0x7c02020202020200, 0x7a04040404040400, 0x7608080808080800, 0x6e10101010101000, 0x5e20202020202000, 0x3e40404040404000, 0x7e80808080808000 };
 const ROOK_MAGIC_KEYS = [64]u64{ 0x80008850224004, 0x4040002000401000, 0x4880200280081000, 0x2080100088004580, 0x200020048104520, 0x1a00120001085410, 0x180020000800900, 0x4080005880002100, 0x2800280400060, 0x4c00401000200040, 0x4081802001100080, 0x23004810002100, 0x2808008000400, 0x2031000209000400, 0x2405000100040200, 0x845000049000086, 0x400808000400020, 0x420004030004000, 0xa0420018220080, 0x1550808008001001, 0x50010080100, 0x820808002000401, 0x8240010429108, 0xa512020004148161, 0xc4400080002c80, 0x240401080200080, 0x800100280200080, 0x2500201200400a00, 0x402000a00209004, 0xa582000404002010, 0x804020c00082910, 0x2c40b200004104, 0x400022800380, 0x100200040401000, 0x802000801002, 0x800800801001, 0xa1000801000410, 0x4002002004040010, 0x1004800100800200, 0x1088004d02001284, 0x2080804000208000, 0x2020052250044000, 0x120200011010042, 0x60800100182800a, 0x2004008040080800, 0x900040002008080, 0x200226110040028, 0x1288088061020004, 0x80002000400040, 0x240008041002100, 0xc0408010220200, 0x4230021084080080, 0x8200040008008080, 0x2a04020004008080, 0x222700042200a100, 0x802004081140200, 0x8040402200110082, 0x810e281400101, 0x200200840820012, 0x104a00208810c006, 0x2000830600406, 0x1000648140009, 0x200021018012094, 0x80200110402c0082 };
@@ -30,6 +29,8 @@ const magic_entry = struct {
 
 //uint64 BISHOP_MOVES [64][4096];
 
+pub var magicTable: magicRecord = undefined;
+
 pub const magicRecord = struct {
     isInitialized: bool = false,
     rookMagic: [64]magic_entry = std.mem.zeroes([64]magic_entry),
@@ -40,7 +41,25 @@ pub const magicRecord = struct {
     pub fn init(alloc: std.mem.Allocator) !magicRecord {
         return .{ .isInitialized = true, .p_rookMoves = try alloc.alloc([MAX_MASK_SIZE]u64, 64), .p_bishopMoves = try alloc.alloc([MAX_MASK_SIZE]u64, 64) };
     }
+    //pub fn free(p_self: *magicRecord, alloc: std.mem.Allocator) void {
+    //    alloc.free(p_self.p_bishopMoves);
+    //    alloc.free(p_self.p_rookMoves);
+    //}
 };
+pub fn _initMagic(p_magic: *magicRecord) void {
+    std.debug.print("Ben\n", .{});
+    const _start = std.time.milliTimestamp();
+    std.debug.print("[PRE] Starting the search for magic keys \n", .{});
+    p_magic.* = magicRecord.init(GLOBAL_ALLOC) catch unreachable;
+    //var ret: magicRecord = magicRecord.init(GLOBAL_ALLOC) catch unreachable;
+
+    //initRookBishopMagic(&ret);
+    initRookBishopMagicCached(p_magic);
+    initRookBishopMoves(p_magic);
+
+    std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
+    return;
+}
 
 pub fn initMagic() magicRecord {
     std.debug.print("Ben\n", .{});

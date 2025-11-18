@@ -4,11 +4,14 @@ const benchmarkl = @import("benchmark.zig");
 const chessl = @import("chess.zig");
 const explorationl = @import("exploration.zig");
 const heuristicl = @import("heuristic.zig");
+const mainl = @import("main.zig");
 
 const e_color = chessl.e_color;
 const e_playerType = explorationl.e_playerType;
 const e_searchType = explorationl.e_searchType;
 const e_heuristicType = heuristicl.e_heuristicType;
+
+const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 const shell_err = error{ERR_ARG};
 
@@ -36,9 +39,6 @@ const e_playerSetTable = enum(u8) {
 };
 
 const MAX_USER_INPUT: u64 = 1024;
-
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-const GLOBAL_ALLOC = GPA.allocator();
 
 const ShellState = struct {
     isOpen: bool = true,
@@ -123,11 +123,12 @@ pub fn getUserStdinput() [MAX_USER_INPUT]u8 {
 
 pub fn getCmdFromUserInput(buffer: []const u8) e_userCmd {
     var indiv_args = utilsl.split(u8, GLOBAL_ALLOC, utilsl.removePaddingValue(buffer), ' ') catch unreachable;
+    defer indiv_args.deinit(GLOBAL_ALLOC);
+
     if (indiv_args.items.len == 0) {
         return .NOOP;
     }
     const l_cmd = utilsl.lower(GLOBAL_ALLOC, indiv_args.items[0]) catch unreachable;
-    defer indiv_args.deinit(GLOBAL_ALLOC);
     defer GLOBAL_ALLOC.free(l_cmd);
 
     if (utilsl.equal(u8, l_cmd, "quit")) {
@@ -175,7 +176,7 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
     };
     defer GLOBAL_ALLOC.free(def_flag);
     if (utilsl.equal(u8, def_flag, "default")) {
-        p_shellState.chessBoardState = chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+        p_shellState.chessBoardState = chessl.getBoardFromFen(chessl.DEFAULT_FEN, GLOBAL_ALLOC);
     } else {
         const concat = utilsl.concatSlice(u8, GLOBAL_ALLOC, indiv_args.items[1..], ' ') catch {
             return false;
@@ -184,9 +185,8 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
         if (concat.len == 1) {
             return false;
         }
-        p_shellState.chessBoardState = chessl.getBoardFromFen(concat);
+        p_shellState.chessBoardState = chessl.getBoardFromFen(concat, GLOBAL_ALLOC);
     }
-
     return true;
 }
 
@@ -400,10 +400,11 @@ pub fn useMainTemplate(p_shellState: *ShellState) bool {
 
 pub fn shell() void {
     var state: ShellState = .{};
-    while (state.isOpen) {
+    const p_state: *ShellState = &state;
+    while (p_state.isOpen) {
         printTerminalGui();
         const userBuffer = getUserStdinput();
         //std.debug.print(" [DEBUG] shell: command found {s}\n", .{userBuffer});
-        _ = execStringCmd(&state, &userBuffer);
+        _ = execStringCmd(p_state, &userBuffer);
     }
 }

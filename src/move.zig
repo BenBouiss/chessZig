@@ -74,8 +74,7 @@ pub const IMove = struct {
         return @intCast((self.m_move & (0xF000)) >> 12);
     }
     pub inline fn isCapture(self: IMove) bool {
-        const ret = (self.getFlag() & @intFromEnum(e_moveFlags.CAPTURE) != 0);
-        return ret;
+        return (self.getFlag() & @intFromEnum(e_moveFlags.CAPTURE) != 0);
     }
     pub inline fn isQuietMove(self: IMove) bool {
         return self.getFlag() == @intFromEnum(e_moveFlags.QUIETMOVE);
@@ -293,8 +292,8 @@ pub const moveBBState = struct {
     enPassantMoves: u64 = 0,
     promotionMoves: u64 = 0,
 
-    queenSideCastlingMoves: u64,
-    kingSideCastlingMoves: u64,
+    queenSideCastlingMoves: u64 = 0,
+    kingSideCastlingMoves: u64 = 0,
 
     pub fn isEmpty(self: moveBBState) bool {
         return (self.pawnMoves | self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.doubleMoves) == chess.EMPTY;

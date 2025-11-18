@@ -2,6 +2,9 @@ const chess = @import("chess.zig");
 const exploration = @import("exploration.zig");
 const movel = @import("move.zig");
 const std = @import("std");
+const mainl = @import("main.zig");
+
+const GLOBAL_ALLOCATOR = mainl.GLOBAL_ALLOC;
 const IMove = movel.IMove;
 
 pub const benchmarkResult = struct {
@@ -115,8 +118,7 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
     }
 }
 pub fn test_benchmark() void {
-    chess.initRayAttacks();
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
+    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN, GLOBAL_ALLOCATOR);
     game_state.setSeed(42);
     nodeExplorationBenchmark(&game_state, 8, 20);
 }

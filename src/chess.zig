@@ -12,12 +12,14 @@ const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
 const intrinsicsl = @import("intrinsics.zig");
 const tablel = @import("moveTables.zig");
+const mainl = @import("main.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
 const moveContainer = movel.moveContainer;
 const matchMoveContainer = movel.matchMoveContainer;
 const cachedTables = tablel.cachedTables;
+const GLOBAL_ALLOCATOR = mainl.GLOBAL_ALLOC;
 
 const e_matchFlag = exploration.e_matchFlag;
 
@@ -154,6 +156,7 @@ pub fn free_move_history(move_arr: std.array_list) void {
 }
 
 pub const fastBitscan = build_options.fastBitscan;
+const ignoreChecks = build_options.fastBitscan;
 
 //
 // bitScanForward
@@ -317,10 +320,10 @@ fn getPieceFromStr(letter: u8) e_piece {
     return e_piece.nEmptySquare;
 }
 
-pub fn getBoardFromFen(fen: []const u8) Board_state {
+pub fn getBoardFromFen(fen: []const u8, alloc: std.mem.Allocator) Board_state {
     // var ret: Board_state = undefined;
     // _ = ret.init_board() catch void;
-    var ret = getEmptyBoardState();
+    var ret = getEmptyBoardState(alloc);
     var letter = fen[0];
     var board_offset = N_SQUARES - 8;
     var post_init: bool = false;
@@ -478,12 +481,15 @@ pub fn enPassantCaptureLocationFromMove(toBB: u64, turn: e_color) u64 {
 
 pub fn updateEnPassantStatus(p_state: *Board_state, sq: e_square) void {
     const sq_file = getSqFile(sq);
-    if (p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] != INVALID_POSITION) {
-        std.debug.print("[PANIC INC] updataEnPassantStatu: senPassant counters: {any} file: {d} counter: {d}\n", .{ p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)], sq_file, p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] });
-        print_boardstate(p_state);
-        print_bitboard(p_state.occupiedBB);
-        print_bitboard(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]);
-        @panic("[PANIC] updataEnPassantStatus: Trying to set the en passant status of a already double moved pawn\n");
+
+    if (comptime !ignoreChecks) {
+        if (p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] != INVALID_POSITION) {
+            std.debug.print("[PANIC INC] updataEnPassantStatu: senPassant counters: {any} file: {d} counter: {d}\n", .{ p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)], sq_file, p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] });
+            print_boardstate(p_state);
+            print_bitboard(p_state.occupiedBB);
+            print_bitboard(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]);
+            @panic("[PANIC] updataEnPassantStatus: Trying to set the en passant status of a already double moved pawn\n");
+        }
     }
     refreshEnPassantSide(p_state, p_state.turn);
     p_state.enPassantTurnCounter[@intFromEnum(p_state.turn)][sq_file] = @intCast(p_state.turn_count);
@@ -520,14 +526,14 @@ pub const Board_stateContainer = struct {
     }
 };
 
-pub fn getEmptyBoardState() Board_state {
+pub fn getEmptyBoardState(alloc: std.mem.Allocator) Board_state {
     var ret: Board_state = undefined;
-    _ = ret.init_board() catch void;
+    _ = ret.init_board(alloc) catch void;
     return ret;
 }
 
 pub const Board_state = struct {
-    players: [NUMBER_PLAYER]exploration.Player, // = std.mem.zeroes([NUMBER_PLAYER]exploration.Player),
+    players: [NUMBER_PLAYER]exploration.Player = [NUMBER_PLAYER]exploration.Player{ .{}, .{} }, // = std.mem.zeroes([NUMBER_PLAYER]exploration.Player),
     pieceBB: [N_PIECES]u64 = std.mem.zeroes([N_PIECES]u64),
 
     enPassantBB: [NUMBER_PLAYER]u64,
@@ -548,7 +554,7 @@ pub const Board_state = struct {
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,
     seed: u64 = 42,
-    pub fn init_board(p_self: *Board_state) !void {
+    pub fn init_board(p_self: *Board_state, alloc: std.mem.Allocator) !void {
         @memset(&p_self.pieceBB, 0);
         @memset(&p_self.castlingBB, 0);
         @memset(&p_self.c_occupiedBB, 0);
@@ -570,11 +576,10 @@ pub const Board_state = struct {
         p_self.move_history = .{};
         p_self.rngIntGenerator = std.Random.DefaultPrng.init(p_self.seed);
         p_self.randInt = p_self.rngIntGenerator.random();
-        try p_self.players[0].init(get_global_alloc());
-        try p_self.players[1].init(get_global_alloc());
 
         p_self.players[0].setType(.Human);
         p_self.players[1].setType(.Human);
+        _ = alloc;
     }
     pub fn duplicateNTimes(self: Board_state, alloc: std.mem.Allocator, n: usize) !Board_stateContainer {
         var ret: []Board_state = try alloc.alloc(Board_state, n);
@@ -587,11 +592,6 @@ pub const Board_state = struct {
     pub fn free_board(p_self: *Board_state) void {
         for (0..p_self.players.len) |i| {
             exploration.freePlayer(&p_self.players[i]);
-        }
-    }
-    pub fn initPlayers(p_self: *Board_state) !void {
-        for (p_self.players) |player| {
-            player.init(get_global_alloc());
         }
     }
     pub fn setPlayerType(p_self: *Board_state, color: e_color, player_type: exploration.e_playerType) void {
@@ -1183,7 +1183,12 @@ pub const Board_state = struct {
 
         p_self.pieceBB[@intFromEnum(piece)] ^= moveBB;
         p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= moveBB;
-        if (move.isPromotion()) {
+        if (move.isQuietMove()) {
+            p_self.occupiedBB ^= moveBB;
+        } else if (move.isDoublePush()) {
+            p_self.occupiedBB ^= moveBB;
+            updateEnPassantStatus(p_self, @enumFromInt(move.getTo()));
+        } else if (move.isPromotion()) {
             if (move.isCapture()) {
                 p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
                 p_self.occupiedBB ^= fromBB;
@@ -1203,11 +1208,6 @@ pub const Board_state = struct {
             p_self.pieceBB[@intFromEnum(move.getCapturePiece())] ^= toBB;
             p_self.occupiedBB ^= fromBB;
             p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
-        } else {
-            if (move.isDoublePush()) {
-                updateEnPassantStatus(p_self, @enumFromInt(move.getTo()));
-            }
-            p_self.occupiedBB ^= moveBB;
         }
 
         return true;
@@ -1398,7 +1398,7 @@ pub const Board_state = struct {
                 if (p_checks.isCheck() and (pinnedBB != p_checks.squares[0].getBB())) {
                     return false;
                 }
-                const capturedPinned = (bitscan(pinnedBB) == @intFromEnum(to));
+                const capturedPinned = (pinnedBB == (ONE << @intCast(@intFromEnum(to))));
                 return ((pinnedBB == isPiecePinned(p_self.occupiedBB ^ (ONE << @intCast(@intFromEnum(from))), to, kingBB, diagPieceBB, linePieceBB)) or capturedPinned);
             }
 
@@ -2082,11 +2082,11 @@ pub fn print_template_bitboard() void {
     var def_board = getDefaultBoard();
     print_board(&def_board);
 
-    var fen_board = getBoardFromFen(DEFAULT_FEN);
+    var fen_board = getBoardFromFen(DEFAULT_FEN, GLOBAL_ALLOCATOR);
     print_boardstate(&fen_board);
 
     std.debug.print("Chess test\n", .{});
-    var test_board2: Board_state = getEmptyBoardState();
+    var test_board2: Board_state = getEmptyBoardState(GLOBAL_ALLOCATOR);
     print_bitboard(test_board2.occupiedBB);
     const move: Move = .{ .from = @enumFromInt(0), .to = @enumFromInt(18), .piece = e_piece.nWhiteBishop, .color = e_color.WHITE };
     const initBB: u64 = 1;
@@ -2250,7 +2250,7 @@ pub fn match_routine(p_state: *Board_state) void {
 
 pub fn _promo_scenario() void {
     const fen_prom = "8/1P6/8/6k1/6K1/3qq3/1p6/8 w";
-    var board_promo = getBoardFromFen(fen_prom);
+    var board_promo = getBoardFromFen(fen_prom, GLOBAL_ALLOCATOR);
     print_boardstate(&board_promo);
     askContinue();
     var move = movel.build_move(@intFromEnum(e_square.b7), @intFromEnum(e_square.b8), @intFromEnum(e_moveFlags.QUEENPROMO), .nWhitePawn);
@@ -2273,7 +2273,7 @@ pub fn _promo_scenario() void {
 
 pub fn _castle_scenario() void {
     const fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w";
-    var board_castle = getBoardFromFen(fen);
+    var board_castle = getBoardFromFen(fen, GLOBAL_ALLOCATOR);
     print_boardstate(&board_castle);
     askContinue();
     var move = movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.g1), @intFromEnum(e_moveFlags.KINGCASTLE), .nWhiteKing);
@@ -2301,14 +2301,14 @@ pub fn _castle_scenario() void {
 pub fn _default_scenarios() void {
     const fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
     std.debug.print("Testing fen: {s}\n", .{fen});
-    var board_promo = getBoardFromFen(fen);
+    var board_promo = getBoardFromFen(fen, GLOBAL_ALLOCATOR);
     print_boardstate(&board_promo);
     askContinue();
 }
 
 pub fn _mate_scenario() void {
     const fen = "k7/6r1/8/7P/7K/7P/6q1/8 b";
-    var board_mate = getBoardFromFen(fen);
+    var board_mate = getBoardFromFen(fen, GLOBAL_ALLOCATOR);
     print_boardstate(&board_mate);
     askContinue();
     board_mate.setPlayerType(.BLACK, .DepthBot);
