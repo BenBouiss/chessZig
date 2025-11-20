@@ -40,11 +40,12 @@ fn test_magic(p_magicTable: *magicl.magicRecord) void {
     var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    const bb1 = magicl.getRookMoves(p_magicTable, .e4, game_state.occupiedBB);
-    const bb2 = magicl.getBishopMoves(p_magicTable, .a3, game_state.occupiedBB);
+    const bb1 = magicl.getRookMoves(.e4, game_state.occupiedBB);
+    const bb2 = magicl.getBishopMoves(.a3, game_state.occupiedBB);
     chess.print_bitboard(game_state.occupiedBB);
     chess.print_bitboard(bb1);
     chess.print_bitboard(bb2);
+    _ = p_magicTable;
 }
 
 pub fn main() anyerror!void {
@@ -57,5 +58,5 @@ pub fn main() anyerror!void {
     benchmark.test_benchmark();
     //interfacel.shell();
     //magicl.magicTables.print();
-
+    //try chess.main();
 }

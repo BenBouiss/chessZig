@@ -1,3 +1,9 @@
+const build_options = @import("build_options");
+
+pub const fastBitscan = build_options.fastBitscan;
+const ignoreChecks = build_options.fastBitscan;
+const useMagic = build_options.useMagic;
+
 const chess = @import("chess.zig");
 const squarel = @import("square.zig");
 const mainl = @import("main.zig");
@@ -9,6 +15,7 @@ const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 const magic_err = error{noMagicFound};
 const MAX_MASK_SIZE: usize = 4096;
+const N_SQUARES: usize = 64;
 
 var rngIntGenerator = std.Random.DefaultPrng.init(42);
 const randInt = rngIntGenerator.random();
@@ -30,16 +37,30 @@ const magic_entry = struct {
 //uint64 BISHOP_MOVES [64][4096];
 
 pub var magicTable: magicRecord = undefined;
+pub const p_magicTable: *magicRecord = &magicTable;
 
 pub const magicRecord = struct {
     isInitialized: bool = false,
-    rookMagic: [64]magic_entry = std.mem.zeroes([64]magic_entry),
-    bishopMagic: [64]magic_entry = std.mem.zeroes([64]magic_entry),
-
-    p_rookMoves: [][MAX_MASK_SIZE]u64,
-    p_bishopMoves: [][MAX_MASK_SIZE]u64,
+    rookMagic: [N_SQUARES]magic_entry = std.mem.zeroes([N_SQUARES]magic_entry),
+    bishopMagic: [N_SQUARES]magic_entry = std.mem.zeroes([N_SQUARES]magic_entry),
+    rookMoves: [N_SQUARES][MAX_MASK_SIZE]u64,
+    bishopMoves: [N_SQUARES][MAX_MASK_SIZE]u64,
+    //p_rookMoves: [*][MAX_MASK_SIZE]u64,
+    //p_bishopMoves: [*][MAX_MASK_SIZE]u64,
     pub fn init(alloc: std.mem.Allocator) !magicRecord {
-        return .{ .isInitialized = true, .p_rookMoves = try alloc.alloc([MAX_MASK_SIZE]u64, 64), .p_bishopMoves = try alloc.alloc([MAX_MASK_SIZE]u64, 64) };
+        //var rook = (try alloc.alloc([MAX_MASK_SIZE]u64, N_SQUARES));
+        //var bishop = try alloc.alloc([MAX_MASK_SIZE]u64, N_SQUARES);
+        //rook = @as([N_SQUARES][MAX_MASK_SIZE]uN_SQUARES, rook);
+        //bishop = @as([64][MAX_MASK_SIZE]u64, bishop);
+        _ = alloc;
+        //const rook = std.mem.zeroes([64][MAX_MASK_SIZE]u64);
+        //const bishop = std.mem.zeroes([64][MAX_MASK_SIZE]u64);
+
+        const rook = undefined;
+        const bishop = undefined;
+
+        //return .{ .isInitialized = true, .p_rookMoves = &rook, .p_bishopMoves = &bishop, .rookMoves = rook, .bishopMoves = bishop };
+        return .{ .isInitialized = true, .rookMoves = rook, .bishopMoves = bishop };
     }
     //pub fn free(p_self: *magicRecord, alloc: std.mem.Allocator) void {
     //    alloc.free(p_self.p_bishopMoves);
@@ -47,6 +68,9 @@ pub const magicRecord = struct {
     //}
 };
 pub fn _initMagic(p_magic: *magicRecord) void {
+    if (comptime useMagic) {
+        std.debug.print("Building using magic move gen!\n", .{});
+    }
     std.debug.print("Ben\n", .{});
     const _start = std.time.milliTimestamp();
     std.debug.print("[PRE] Starting the search for magic keys \n", .{});
@@ -108,8 +132,8 @@ pub fn generateMoves(piece: e_piece, sq: squarel.e_square, magic: magic_entry, p
 
 pub fn initRookBishopMoves(p_record: *magicRecord) void {
     for (0..64) |sq| {
-        generateMoves(.nWhiteRook, @enumFromInt(sq), p_record.rookMagic[sq], &(p_record.p_rookMoves[sq]));
-        generateMoves(.nWhiteBishop, @enumFromInt(sq), p_record.bishopMagic[sq], &(p_record.p_bishopMoves[sq]));
+        generateMoves(.nWhiteRook, @enumFromInt(sq), p_record.rookMagic[sq], &(p_record.rookMoves[sq]));
+        generateMoves(.nWhiteBishop, @enumFromInt(sq), p_record.bishopMagic[sq], &(p_record.bishopMoves[sq]));
     }
 
     return;
@@ -140,14 +164,18 @@ pub fn magicIndex(entry: magic_entry, blockers: u64) usize {
     return @intCast(hash >> @intCast(64 - entry.index_bit));
 }
 
-pub fn getRookMoves(p_magicTable: *magicRecord, sq: squarel.e_square, blockers: u64) u64 {
+pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
     const magic = p_magicTable.rookMagic[@intFromEnum(sq)];
-    return p_magicTable.p_rookMoves[@intFromEnum(sq)][magicIndex(magic, blockers)];
+    const magic_index = magicIndex(magic, blockers);
+    return p_magicTable.rookMoves[@intFromEnum(sq)][magic_index];
 }
 
-pub fn getBishopMoves(p_magicTable: *magicRecord, sq: squarel.e_square, blockers: u64) u64 {
+pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
     const magic = p_magicTable.bishopMagic[@intFromEnum(sq)];
-    return p_magicTable.p_bishopMoves[@intFromEnum(sq)][magicIndex(magic, blockers)];
+    // precomputed then indexing removes the memcpy of indexing then computing then indexing again leading to better perf
+    // from: Compiler explorer
+    const magic_index = magicIndex(magic, blockers);
+    return p_magicTable.bishopMoves[@intFromEnum(sq)][magic_index];
 }
 
 pub fn randomU64() u64 {

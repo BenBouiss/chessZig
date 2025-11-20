@@ -175,11 +175,16 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
     }
     var moves: moveContainer = moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
+    //const _moves: moveContainer = try moveGenl.filterMoveLegal(p_state, &moves);
+    //if (fmoves.len != _moves.len) {
+    //    fmoves.printDifference(_moves);
+    //    chess.print_boardstate(p_state);
+    //}
     //const frame = (p_state.makeFrame());
     for (0..fmoves.len) |i| {
         //_ = try p_state.makeMoveFast(fmoves.moves[i]);
         //p_state.stack.push(frame);
-        _ = p_state.makeMoveFast(fmoves.moves[i]);
+        _ = p_state.makeMoveFaster(fmoves.moves[i]);
         try explorationNDepth(p_state, depth - 1, p_res);
         //_ = try p_state.undoMove();
         _ = p_state.undoMoveFaster();
@@ -288,10 +293,10 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
 
 pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult, p_startingMoves: *std.ArrayList(IMove)) void {
     for (0..p_startingMoves.items.len) |i| {
-        _ = p_state.makeMoveFast(p_startingMoves.items[i]);
+        _ = p_state.makeMoveFaster(p_startingMoves.items[i]);
         try explorationNDepth(p_state, depth - 1, p_res);
+        //_ = p_state.undoMoveFaster();
         _ = p_state.undoMoveFaster();
-        //_ = p_state.undoMoveFastest();
     }
 }
 

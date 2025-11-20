@@ -25,6 +25,7 @@ const e_userCmd = enum(u8) {
     PRINT,
     CLEAR,
     PRESET,
+    UCI,
 };
 
 const e_shellSetTable = enum(u8) {
@@ -44,6 +45,7 @@ const ShellState = struct {
     isOpen: bool = true,
     fenProvided: bool = false,
     chessBoardState: chessl.Board_state = undefined,
+    uciMode: bool = false,
 };
 
 fn printTerminalGui() void {
@@ -147,6 +149,8 @@ pub fn getCmdFromUserInput(buffer: []const u8) e_userCmd {
         return e_userCmd.PRINT;
     } else if (utilsl.equal(u8, l_cmd, "preset")) {
         return e_userCmd.PRESET;
+    } else if (utilsl.equal(u8, l_cmd, "uci")) {
+        return e_userCmd.UCI;
     } else {
         std.debug.print("Command {s} was not found\n", .{l_cmd});
         return e_userCmd.NOOP;
@@ -374,6 +378,10 @@ pub fn execCmd(p_shellState: *ShellState, cmd: e_userCmd, userBuffer: []const u8
         .PRESET => {
             return useMainTemplate(p_shellState);
         },
+        .UCI => {
+            p_shellState.uciMode = !p_shellState.uciMode;
+            return true;
+        },
     }
     return true;
 }
@@ -405,6 +413,10 @@ pub fn shell() void {
         printTerminalGui();
         const userBuffer = getUserStdinput();
         //std.debug.print(" [DEBUG] shell: command found {s}\n", .{userBuffer});
-        _ = execStringCmd(p_state, &userBuffer);
+        if (!p_state.uciMode) {
+            _ = execStringCmd(p_state, &userBuffer);
+        } else {
+            @panic("UCI not implemented yet\n");
+        }
     }
 }

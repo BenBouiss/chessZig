@@ -3,6 +3,10 @@ const std = @import("std");
 //https://stackoverflow.com/questions/76384694/how-to-do-conditional-compilation-with-zig
 const build_options = @import("build_options");
 
+pub const fastBitscan = build_options.fastBitscan;
+const ignoreChecks = build_options.fastBitscan;
+const useMagic = build_options.useMagic;
+
 const chess = @import("chess.zig");
 const utils = @import("utils.zig");
 const exploration = @import("exploration.zig");
@@ -12,6 +16,7 @@ const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
 const intrinsicsl = @import("intrinsics.zig");
 const tablel = @import("moveTables.zig");
+const magicl = @import("magic.zig");
 const mainl = @import("main.zig");
 
 const IMove = movel.IMove;
@@ -25,6 +30,11 @@ const e_matchFlag = exploration.e_matchFlag;
 
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
+
+const _alloc = mainl.GLOBAL_ALLOC;
+pub inline fn get_global_alloc() std.mem.Allocator {
+    return _alloc;
+}
 
 pub const NUMBER_PLAYER: u8 = 2;
 pub const ROW_SIZE: u8 = 8;
@@ -44,6 +54,8 @@ pub const UNIVERSE: u64 = std.math.maxInt(u64);
 //const UNIVERSE: u64 = -1;
 
 // see calc or src/utils.py
+pub const aFile: u64 = 0x101010101010101;
+pub const firstRank: u64 = 0xFF;
 pub const notAFile: u64 = 0xfefefefefefefefe; // ~0x0101010101010101
 pub const notABFile: u64 = 0xfcfcfcfcfcfcfcfc;
 pub const notGHFile: u64 = 0x3f3f3f3f3f3f3f3f;
@@ -111,17 +123,6 @@ pub fn flagPromotionToPiece(flag: u8, turn: e_color) e_piece {
     return e_piece.nEmptySquare;
 }
 
-const Move = struct {
-    piece: e_piece,
-    color: e_color,
-    from: e_square,
-    to: e_square,
-    cpiece: e_piece = e_piece.nEmptySquare,
-    ccolor: e_color = e_color.WHITE,
-    turn: i8 = 0,
-    promotion: e_piece = e_piece.nEmptySquare,
-};
-
 pub fn _genShift(x: u64, s: i8) u64 {
     var ret: u64 = x;
     if (s >= 0) {
@@ -134,11 +135,6 @@ pub fn _genShift(x: u64, s: i8) u64 {
         }
     }
     return ret;
-}
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const _alloc = gpa.allocator();
-pub inline fn get_global_alloc() std.mem.Allocator {
-    return _alloc;
 }
 
 pub fn genShift(x: u64, s: i8) u64 {
@@ -154,9 +150,6 @@ pub fn free_move_history(move_arr: std.array_list) void {
     _ = move_arr;
     return;
 }
-
-pub const fastBitscan = build_options.fastBitscan;
-const ignoreChecks = build_options.fastBitscan;
 
 //
 // bitScanForward
@@ -377,6 +370,7 @@ pub fn getBoardFromFen(fen: []const u8, alloc: std.mem.Allocator) Board_state {
             }
         }
     }
+    initBothSidePinnedBB(&ret);
     return ret;
 }
 
@@ -412,7 +406,11 @@ pub fn getDefaultBoard() Board_state {
 }
 
 pub inline fn invertColor(color: e_color) e_color {
-    return arr_color_inv[@intFromEnum(color)];
+    if (color == .WHITE) {
+        return .BLACK;
+    }
+    return .WHITE;
+    //return arr_color_inv[@intFromEnum(color)];
 }
 pub inline fn isPawnPiece(piece: e_piece) bool {
     return (piece == .nWhitePawn or piece == .nBlackPawn);
@@ -431,25 +429,29 @@ pub fn getRookPiece(turn: e_color) e_piece {
 }
 
 pub fn updateCastlingRookStatus(p_state: *Board_state, sq: u8) void {
-    //var target: usize = 0;
-    //if ((sq == 0) or (sq == 56)) {
-    //    target = QUEENSIDECASTLEID;
-    //} else if ((sq == 7) or (sq == 63)) {
-    //    target = KINGSIDECASTLEID;
-    //} else {
-    //    return;
-    //}
     p_state.castlingBB &= (UNIVERSE ^ (ONE << @intCast(sq)));
 }
 
 pub fn updateCastlingKingStatus(p_state: *Board_state, turn: e_color) void {
     p_state.castlingBB &= (UNIVERSE ^ (ONE << @intCast(p_state.getKingSq(turn))));
-    //if (p_state.castleMoveCounter[@intFromEnum(turn)][KINGCASTLEID] != INVALID_POSITION) {
-    //    return;
-    //}
-    //p_state.castleMoveCounter[@intFromEnum(p_state.turn)][KINGCASTLEID] = @intCast(p_state.turn_count);
+}
+pub fn initBothSidePinnedBB(p_state: *Board_state) void {
+    p_state.pinnedBB[@intFromEnum(e_color.WHITE)] = getPinnedBB(p_state, .WHITE);
+    p_state.pinnedBB[@intFromEnum(e_color.BLACK)] = getPinnedBB(p_state, .BLACK);
+    return;
 }
 
+pub fn getPinnedBB(p_state: *Board_state, comptime turn: e_color) u64 {
+    if (comptime turn == .WHITE) {
+        const diagWhite = moveGenl.diagPinned(p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)], p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)], ~p_state.occupiedBB);
+        const lineWhite = moveGenl.linePinned(p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)], p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)], ~p_state.occupiedBB);
+        return diagWhite | lineWhite;
+    } else {
+        const diagBlack = moveGenl.diagPinned(p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)], ~p_state.occupiedBB);
+        const lineBlack = moveGenl.linePinned(p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)], ~p_state.occupiedBB);
+        return diagBlack | lineBlack;
+    }
+}
 pub fn refreshEnPassantSide(p_state: *Board_state, turn: e_color) void {
     p_state.enPassantBB[@intFromEnum(turn)] = EMPTY;
 }
@@ -527,7 +529,7 @@ pub const boardFrame = struct {
 
     enPassantBB: [NUMBER_PLAYER]u64 = std.mem.zeroes([NUMBER_PLAYER]u64),
     castlingBB: u64 = 0,
-    pinnedBB: u64 = 0,
+    pinnedBB: [NUMBER_PLAYER]u64 = .{ EMPTY, EMPTY },
 };
 
 pub const boardStack = struct {
@@ -557,10 +559,10 @@ pub const Board_state = struct {
     c_occupiedBB: [NUMBER_PLAYER]u64,
 
     enPassantBB: [NUMBER_PLAYER]u64,
+    pinnedBB: [NUMBER_PLAYER]u64,
     castlingBB: u64 = 0,
-    pinnedBB: u64 = 0,
-
     occupiedBB: u64 = 0,
+
     turn: e_color,
     turn_count: u64 = 0,
 
@@ -580,7 +582,8 @@ pub const Board_state = struct {
         p_self.turn = e_color.WHITE;
         p_self.turn_count = 0;
         p_self.occupiedBB = 0;
-        p_self.pinnedBB = 0;
+        p_self.pinnedBB = .{ EMPTY, EMPTY };
+        p_self.castlingBB = 0;
 
         p_self.move_history = .{};
         p_self.rngIntGenerator = std.Random.DefaultPrng.init(p_self.seed);
@@ -607,6 +610,7 @@ pub const Board_state = struct {
         var ret: []Board_state = try alloc.alloc(Board_state, n);
         for (0..n) |i| {
             ret[i] = self;
+            chess.sanityCheckBoardState(&ret[i]);
         }
         return .{ .array = ret, .len = ret.len };
     }
@@ -683,7 +687,7 @@ pub const Board_state = struct {
         }
         return e_piece.nEmptySquare;
     }
-    pub fn invert_turn(p_self: *Board_state) void {
+    pub inline fn invert_turn(p_self: *Board_state) void {
         p_self.turn = invertColor(p_self.turn);
     }
 
@@ -876,11 +880,13 @@ pub const Board_state = struct {
     }
     pub fn undoMoveFastest(p_self: *Board_state) bool {
         //std.debug.print("[DEBUG] undoMoveFastest: last known here\n", .{});
-        p_self.undo_turn();
-        var popped = (p_self.stack.pop());
-        p_self.loadFrame(&popped);
-        _ = p_self.move_history.pop();
-        return true;
+        _ = p_self;
+        @panic("Do not use\n");
+        //p_self.undo_turn();
+        //var popped = (p_self.stack.pop());
+        //p_self.loadFrame(&popped);
+        //_ = p_self.move_history.pop();
+        //return true;
     }
     pub fn cstexpr_pawnUndoMove(p_self: *Board_state, piece: e_piece, move: IMove, comptime turn: e_color) bool {
         const toBB: u64 = ONE << @intCast(move.getTo());
@@ -1129,51 +1135,63 @@ pub const Board_state = struct {
             .nWhitePawn => {
                 _ = p_self.pawnMakeMove(.nWhitePawn, move);
                 p_self._next_turn(.WHITE);
+                //p_self.updatePinnedBB(.WHITE);
             },
             .nWhiteBishop => {
                 _ = p_self.defaultMakeMove(.nWhiteBishop, move);
                 p_self._next_turn(.WHITE);
+                //p_self.updatePinnedBB(.WHITE);
             },
             .nWhiteKnight => {
                 _ = p_self.defaultMakeMove(.nWhiteKnight, move);
                 p_self._next_turn(.WHITE);
+                //p_self.updatePinnedBB(.WHITE);
             },
             .nWhiteQueen => {
                 _ = p_self.defaultMakeMove(.nWhiteQueen, move);
                 p_self._next_turn(.WHITE);
+                //p_self.updatePinnedBB(.WHITE);
             },
             .nWhiteRook => {
                 _ = p_self.rookMakeMove(.nWhiteRook, move);
                 p_self._next_turn(.WHITE);
+                //p_self.updatePinnedBB(.WHITE);
             },
             .nWhiteKing => {
                 _ = p_self.kingMakeMove(.nWhiteKing, move);
                 p_self._next_turn(.WHITE);
+                //p_self.updatePinnedBB(.WHITE);
             },
 
             .nBlackPawn => {
                 _ = p_self.pawnMakeMove(.nBlackPawn, move);
                 p_self._next_turn(.BLACK);
+                //p_self.updatePinnedBB(.BLACK);
             },
             .nBlackBishop => {
                 _ = p_self.defaultMakeMove(.nBlackBishop, move);
                 p_self._next_turn(.BLACK);
+                //p_self.updatePinnedBB(.BLACK);
             },
             .nBlackKnight => {
                 _ = p_self.defaultMakeMove(.nBlackKnight, move);
                 p_self._next_turn(.BLACK);
+                //p_self.updatePinnedBB(.BLACK);
             },
             .nBlackQueen => {
                 _ = p_self.defaultMakeMove(.nBlackQueen, move);
                 p_self._next_turn(.BLACK);
+                //p_self.updatePinnedBB(.BLACK);
             },
             .nBlackRook => {
                 _ = p_self.rookMakeMove(.nBlackRook, move);
                 p_self._next_turn(.BLACK);
+                //p_self.updatePinnedBB(.BLACK);
             },
             .nBlackKing => {
                 _ = p_self.kingMakeMove(.nBlackKing, move);
                 p_self._next_turn(.BLACK);
+                //p_self.updatePinnedBB(.BLACK);
             },
             .nWhite, .nBlack, .nEmptySquare => {
                 @panic("");
@@ -1181,6 +1199,13 @@ pub const Board_state = struct {
         }
         _ = p_self.move_history.append(move);
         return true;
+    }
+    pub fn updatePinnedBB(p_self: *Board_state, comptime turn: e_color) void {
+        if (comptime turn == .WHITE) {
+            p_self.pinnedBB[@intFromEnum(e_color.WHITE)] = getPinnedBB(p_self, .WHITE) & p_self.c_occupiedBB[@intFromEnum(e_color.WHITE)];
+        } else {
+            p_self.pinnedBB[@intFromEnum(e_color.BLACK)] = getPinnedBB(p_self, .BLACK) & p_self.c_occupiedBB[@intFromEnum(e_color.BLACK)];
+        }
     }
 
     pub fn pawnMakeMove(p_self: *Board_state, piece: e_piece, move: IMove) bool {
@@ -1213,7 +1238,6 @@ pub const Board_state = struct {
             p_self.occupiedBB ^= toBB;
             p_self.c_occupiedBB[@intFromEnum(invertColor(p_self.turn))] ^= toBB;
         }
-
         return true;
     }
 
@@ -1246,16 +1270,7 @@ pub const Board_state = struct {
         print_bitboard(p_self.pieceBB[@intFromEnum(pieceF)]);
         return;
     }
-    pub fn soft_insert(p_self: *Board_state, move: Move) !bool {
-        var movedBB: u64 = ONE << @intCast(@intFromEnum(move.to));
-        const fromBB: u64 = ONE << @intCast(@intFromEnum(move.from));
-        movedBB ^= fromBB;
-        p_self.*.pieceBB[@intFromEnum(move.piece) + @intFromEnum(move.color)] ^= movedBB;
-        p_self.*.occupiedBB ^= movedBB;
-        p_self.*.c_occupiedBB[@intFromEnum(move.color)] ^= movedBB;
-        _ = p_self.move_history.append(move);
-        return true;
-    }
+
     pub fn getLastMove(self: Board_state) IMove {
         const n = self.move_history.len;
         if (n == 0) {
@@ -1305,32 +1320,16 @@ pub const Board_state = struct {
         if (turn == .BLACK) {
             sq = .h8;
         }
-        return ((((self.castlingBB & kingBB) >> 4) & self.castlingBB) != 0) and ((rankAttacks(self.occupiedBB, sq) & kingBB) != 0);
-        //if (((self.castleMoveCounter[@intFromEnum(turn)][KINGSIDECASTLEID] != INVALID_POSITION) or (self.castleMoveCounter[@intFromEnum(turn)][KINGCASTLEID] != INVALID_POSITION))) {
-        //    return false;
-        //}
-        //var sq: e_square = .h1;
-        //if (turn == .BLACK) {
-        //    sq = .h8;
-        //}
-        //return ((rankAttacks(self.occupiedBB, sq) & self.getKingBB(turn)) != 0) and ((self.pieceBB[@intFromEnum(getRookPiece(turn))] & (ONE << @intCast(@intFromEnum(sq)))) != 0);
+        return ((((self.castlingBB & kingBB) << 3) & self.castlingBB) != 0) and ((rankAttacks(self.occupiedBB, sq) & kingBB) != 0);
     }
     pub fn canQueenSideCastle(self: Board_state, turn: e_color) bool {
         const kingBB = self.getKingBB(turn);
-        var sq: e_square = .a1;
+        var sq: e_square = .a1; // a1
         if (turn == .BLACK) {
             sq = .a8;
         }
         return ((((self.castlingBB & kingBB) >> 4) & self.castlingBB) != 0) and ((rankAttacks(self.occupiedBB, sq) & kingBB) != 0);
-        //   if (((self.castleMoveCounter[@intFromEnum(turn)][QUEENSIDECASTLEID] != INVALID_POSITION) or (self.castleMoveCounter[@intFromEnum(turn)][KINGCASTLEID] != INVALID_POSITION))) {
-        //       return false;
-        //   }
-        //   var sq: e_square = .a1;
-        //   if (turn == .BLACK) {
-        //       sq = .a8;
-        //   }
-        //   return ((rankAttacks(self.occupiedBB, sq) & self.getKingBB(turn)) != 0) and ((self.pieceBB[@intFromEnum(getRookPiece(turn))] & (ONE << @intCast(@intFromEnum(sq)))) != 0);
-    } //
+    }
 
     pub fn getPieceCount(self: Board_state, piece: e_piece) i8 {
         return l_popcount(self.pieceBB[@intFromEnum(piece)]);
@@ -1361,6 +1360,36 @@ pub const Board_state = struct {
         return (king_bb & all_attack) == 0;
     }
 
+    //pub fn isLegalFast(p_self: *Board_state, all_attack: u64, move: IMove, p_kingSq: *const squareInfo, p_checks: *const squarel.checkContainer) bool {
+    //    const kingBB = (ONE << @intCast(@intFromEnum(p_kingSq.sq)));
+    //    const isAttacked: bool = (kingBB & all_attack) != 0;
+
+    //    const iTo = move.getTo();
+    //    const to: e_square = @enumFromInt(iTo);
+    //    const toBB = ONE << @intCast(iTo);
+
+    //    const iFrom = move.getFrom();
+    //    const from: e_square = @enumFromInt(iFrom);
+    //    const fromBB = ONE << @intCast(iFrom);
+    //    const tPinnedBB: u64 = p_self.pinnedBB[@intFromEnum(p_self.turn)];
+    //    if (from != p_kingSq.sq) {
+    //        if (p_checks.isDoubleCheck()) {
+    //            return false;
+    //        }
+    //        if ((tPinnedBB & fromBB) != 0) {
+    //            return ((tPinnedBB & toBB) != 0 and !isAttacked);
+    //        }
+
+    //        //blocking or capturing as non king
+    //        return (((toBB & tPinnedBB) != 0) or (p_checks.squares[0].sq == to) or !isAttacked);
+    //    }
+
+    //    const toKingBB = (ONE << @intCast(@intFromEnum(to)));
+    //    // either no pinning piece is found or the pinned piece can be captured
+    //    const isNotPinned = (tPinnedBB & toKingBB) == 0;
+    //    const isToSecure = ((all_attack & toKingBB) == 0);
+    //    return (isNotPinned and isToSecure);
+    //}
     pub fn isLegalFast(p_self: *Board_state, all_attack: u64, move: IMove, p_kingSq: *const squareInfo, p_checks: *const squarel.checkContainer, diagPieceBB: u64, linePieceBB: u64) bool {
         const kingBB = (ONE << @intCast(@intFromEnum(p_kingSq.sq)));
         const isAttacked: bool = (kingBB & all_attack) != 0;
@@ -1370,29 +1399,28 @@ pub const Board_state = struct {
             if (p_checks.isDoubleCheck()) {
                 return false;
             }
-            const pinnedBB = isPiecePinned(p_self.occupiedBB, from, kingBB, diagPieceBB, linePieceBB);
+            const pinnedBB = isPiecePinned(p_self.occupiedBB, from, p_kingSq, diagPieceBB, linePieceBB);
             if (pinnedBB != EMPTY) {
                 if (p_checks.isCheck() and (pinnedBB != p_checks.squares[0].getBB())) {
                     return false;
                 }
-                const capturedPinned = (pinnedBB == (ONE << @intCast(@intFromEnum(to))));
-                return ((pinnedBB == isPiecePinned(p_self.occupiedBB ^ (ONE << @intCast(@intFromEnum(from))), to, kingBB, diagPieceBB, linePieceBB)) or capturedPinned);
+                const capturedPinned = (bitscan(pinnedBB) == @intFromEnum(to));
+                return ((pinnedBB == isPiecePinned(p_self.occupiedBB ^ (ONE << @intCast(@intFromEnum(from))), to, p_kingSq, diagPieceBB, linePieceBB)) or capturedPinned);
             }
 
             if (!isAttacked) {
                 return true;
             }
             //blocking or capturing as non king
-            const last_pin = isPiecePinned(p_self.occupiedBB, to, kingBB, diagPieceBB, linePieceBB);
+            const last_pin = isPiecePinned(p_self.occupiedBB, to, p_kingSq, diagPieceBB, linePieceBB);
 
             return ((last_pin == p_checks.squares[0].getBB()) or (p_checks.squares[0].sq == to));
         }
-
-        const toKingBB = (ONE << @intCast(@intFromEnum(to)));
-        const pinInfo = (isPiecePinned(p_self.occupiedBB, from, toKingBB, diagPieceBB, linePieceBB));
+        const toKing = squareInfo.init(to);
+        const pinInfo = (isPiecePinned(p_self.occupiedBB, from, &toKing, diagPieceBB, linePieceBB));
         // either no pinning piece is found or the pinned piece can be captured
-        const isNotPinned = (pinInfo == EMPTY) or ((pinInfo ^ toKingBB) == EMPTY);
-        const isToSecure = ((all_attack & toKingBB) == 0);
+        const isNotPinned = (pinInfo == EMPTY) or ((pinInfo ^ toKing.getBB()) == EMPTY);
+        const isToSecure = ((all_attack & toKing.getBB()) == 0);
         return (isNotPinned and isToSecure);
     }
 
@@ -1653,6 +1681,13 @@ pub fn antiDiagMask(sq: i8) u64 {
     }
 }
 
+pub inline fn fileMaskFromFileN(file: u8) u64 {
+    return aFile << @intCast(file);
+}
+pub inline fn rankMaskFromRankN(rank: u8) u64 {
+    return firstRank << @intCast(8 * rank);
+}
+
 // pre init sliding moves
 
 pub fn simplePawnMask(sq: e_square, color: e_color) u64 {
@@ -1755,10 +1790,6 @@ pub inline fn getSqAntiDiag(sq: e_square) i8 {
     return 7 - (_sq & 7) - (_sq >> 3);
 }
 
-pub fn isMoveInBB(bb: u64, move: Move) u64 {
-    return bb & ((ONE << move.to));
-}
-
 pub fn _AllAttackPawnMask(bb_piece: u64, turn: e_color) u64 {
     var ret: u64 = EMPTY;
     var sq: i8 = 0;
@@ -1776,18 +1807,6 @@ pub fn _AllAttackPawnMask(bb_piece: u64, turn: e_color) u64 {
 
 pub fn _AllAttackKnightMask(bb_piece: u64) u64 {
     return knightAttacks(bb_piece);
-    //    var ret: u64 = EMPTY;
-    //    var sq: i8 = 0;
-    //    var _bb_piece = bb_piece;
-    //    while (_bb_piece != 0) {
-    //        sq = bitscan(_bb_piece);
-    //        if (sq == INVALID_POSITION) {
-    //            continue;
-    //        }
-    //        ret |= p_attack_mask.KnightAttack[@intCast(sq)];
-    //        _bb_piece ^= (ONE << @intCast(sq));
-    //    }
-    //    return ret;
 }
 
 pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
@@ -1801,8 +1820,13 @@ pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
             continue;
         }
         sq_e = @enumFromInt(sq);
-        ret |= antiDiagAttacks(occ_bb, sq_e);
-        ret |= diagonalAttacks(occ_bb, sq_e);
+
+        if (comptime useMagic) {
+            ret |= magicl.getBishopMoves(sq_e, occ_bb);
+        } else {
+            ret |= antiDiagAttacks(occ_bb, sq_e);
+            ret |= diagonalAttacks(occ_bb, sq_e);
+        }
         _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
@@ -1820,8 +1844,12 @@ pub fn _AllAttackRookMask(bb_piece: u64, occ_bb: u64) u64 {
             continue;
         }
         sq_e = @enumFromInt(sq);
-        ret |= fileAttacks(occ_bb, sq_e);
-        ret |= rankAttacks(occ_bb, sq_e);
+        if (comptime useMagic) {
+            ret |= magicl.getRookMoves(sq_e, occ_bb);
+        } else {
+            ret |= fileAttacks(occ_bb, sq_e);
+            ret |= rankAttacks(occ_bb, sq_e);
+        }
         _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
@@ -1838,10 +1866,17 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
             continue;
         }
         sq_e = @enumFromInt(sq);
-        ret |= fileAttacks(occ_bb, sq_e);
-        ret |= rankAttacks(occ_bb, sq_e);
-        ret |= antiDiagAttacks(occ_bb, sq_e);
-        ret |= diagonalAttacks(occ_bb, sq_e);
+
+        if (comptime useMagic) {
+            ret |= magicl.getRookMoves(sq_e, occ_bb);
+            ret |= magicl.getBishopMoves(sq_e, occ_bb);
+        } else {
+            ret |= fileAttacks(occ_bb, sq_e);
+            ret |= rankAttacks(occ_bb, sq_e);
+            ret |= antiDiagAttacks(occ_bb, sq_e);
+            ret |= diagonalAttacks(occ_bb, sq_e);
+        }
+        //ret |= magicl.getRookMoves(sq_e, occ_bb);
         _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
@@ -1922,15 +1957,6 @@ pub fn getAllAttackMaskFromKing(p_board: *Board_state, turn: e_color) u64 {
     return ret;
 }
 
-pub fn extendMoveArray(p_arr1: *std.ArrayList(Move), p_arr2: *std.ArrayList(Move)) !void {
-    if (p_arr2.items.len == 0) {
-        return;
-    }
-    for (0..p_arr2.items.len) |move_idx| {
-        try p_arr1.append(get_global_alloc(), p_arr2.items[move_idx]);
-    }
-}
-
 pub fn extendIMoveArray(p_arr1: *std.ArrayList(IMove), p_arr2: *std.ArrayList(IMove)) !void {
     if (p_arr2.items.len == 0) {
         return;
@@ -1948,25 +1974,53 @@ pub fn getColorFromPiece(piece: e_piece) e_color {
     return @enumFromInt(@intFromEnum(piece) / @intFromEnum(e_piece.nBlack));
 }
 
-pub fn isPiecePinned(occBB: u64, sq: e_square, kingBB: u64, diagPieceBB: u64, linePieceBB: u64) u64 {
-    const diagatts = [_]u64{ antiDiagAttacks(occBB, sq), diagonalAttacks(occBB, sq) };
+pub fn isPiecePinned(occBB: u64, sq: e_square, p_kingSq: *const squareInfo, diagPieceBB: u64, linePieceBB: u64) u64 {
+    if (comptime useMagic) {
+        const bishopAtts = magicl.getBishopMoves(sq, occBB);
+        const kingBB = p_kingSq.getBB();
+        const sqInfo = squareInfo.init(sq);
 
-    const lineatts = [_]u64{ fileAttacks(occBB, sq), rankAttacks(occBB, sq) };
+        const diagatts = [_]u64{ bishopAtts & sqInfo.getAntiDiagBB(), bishopAtts & sqInfo.getDiagBB() };
 
-    if ((((diagatts[0] & diagPieceBB) != 0) and ((diagatts[0] & kingBB) != 0))) {
-        return (diagatts[0] & diagPieceBB);
-    }
+        if ((((diagatts[0] & diagPieceBB) != 0) and ((diagatts[0] & kingBB) != 0))) {
+            return (diagatts[0] & diagPieceBB);
+        }
 
-    if (((diagatts[1] & diagPieceBB) != 0) and ((diagatts[1] & kingBB) != 0)) {
-        return (diagatts[1] & diagPieceBB);
-    }
+        if (((diagatts[1] & diagPieceBB) != 0) and ((diagatts[1] & kingBB) != 0)) {
+            return (diagatts[1] & diagPieceBB);
+        }
 
-    if (((lineatts[0] & linePieceBB) != 0) and ((lineatts[0] & kingBB) != 0)) {
-        return (lineatts[0] & linePieceBB);
-    }
+        const rookAtts = magicl.getRookMoves(sq, occBB);
+        const lineatts = [_]u64{ rookAtts & sqInfo.getFileBB(), rookAtts & sqInfo.getRankBB() };
 
-    if (((lineatts[1] & linePieceBB) != 0) and ((lineatts[1] & kingBB) != 0)) {
-        return (lineatts[1] & linePieceBB);
+        if (((lineatts[0] & linePieceBB) != 0) and ((lineatts[0] & kingBB) != 0)) {
+            return (lineatts[0] & linePieceBB);
+        }
+
+        if (((lineatts[1] & linePieceBB) != 0) and ((lineatts[1] & kingBB) != 0)) {
+            return (lineatts[1] & linePieceBB);
+        }
+    } else {
+        const kingBB = (ONE << @intCast(@intFromEnum(p_kingSq.sq)));
+        const diagatts = [_]u64{ antiDiagAttacks(occBB, sq), diagonalAttacks(occBB, sq) };
+
+        const lineatts = [_]u64{ fileAttacks(occBB, sq), rankAttacks(occBB, sq) };
+
+        if ((((diagatts[0] & diagPieceBB) != 0) and ((diagatts[0] & kingBB) != 0))) {
+            return (diagatts[0] & diagPieceBB);
+        }
+
+        if (((diagatts[1] & diagPieceBB) != 0) and ((diagatts[1] & kingBB) != 0)) {
+            return (diagatts[1] & diagPieceBB);
+        }
+
+        if (((lineatts[0] & linePieceBB) != 0) and ((lineatts[0] & kingBB) != 0)) {
+            return (lineatts[0] & linePieceBB);
+        }
+
+        if (((lineatts[1] & linePieceBB) != 0) and ((lineatts[1] & kingBB) != 0)) {
+            return (lineatts[1] & linePieceBB);
+        }
     }
     return EMPTY;
 }
@@ -2064,7 +2118,6 @@ pub fn print_template_bitboard() void {
     std.debug.print("Chess test\n", .{});
     var test_board2: Board_state = getEmptyBoardState(GLOBAL_ALLOCATOR);
     print_bitboard(test_board2.occupiedBB);
-    const move: Move = .{ .from = @enumFromInt(0), .to = @enumFromInt(18), .piece = e_piece.nWhiteBishop, .color = e_color.WHITE };
     const initBB: u64 = 1;
 
     test_board2.occupiedBB = initBB;
@@ -2072,19 +2125,8 @@ pub fn print_template_bitboard() void {
     print_bitboard(test_board2.occupiedBB);
     print_bitboard(test_board2.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]);
 
-    _ = try test_board2.soft_insert(move);
-    std.debug.print("After move\n", .{});
-    print_bitboard(test_board2.occupiedBB);
-    print_bitboard(test_board2.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]);
-
     std.debug.print("\n\nPrinting the Bishop attack move from the 18nth square\n", .{});
     print_bitboard(cachedTables.RookAttack[31]);
-
-    const _move: Move = .{ .from = @enumFromInt(0), .to = @enumFromInt(63), .piece = e_piece.nWhiteKing, .color = e_color.WHITE };
-    _ = try test_board2.soft_insert(_move);
-
-    print_boardstate(&test_board2);
-    test_board2.free_board();
 
     return;
 }
@@ -2294,6 +2336,69 @@ pub fn _mate_scenario() void {
 
     askContinue();
 }
+pub fn _pin_scenario() void {
+    std.debug.print("[DEBUG] pin scenario: \n", .{});
+    const fen = "k7/1q2q1rq/8/3PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b";
+
+    var board = getBoardFromFen(fen, GLOBAL_ALLOCATOR);
+    const kingInfo = squareInfo.init(@enumFromInt(board.getKingSq(.WHITE)));
+    const cached = moveGenl.getCachedAttackingPiece(&board, .WHITE);
+    print_boardstate(&board);
+    var sq: e_square = .a1;
+    var sqInfo: squareInfo = squareInfo.init(sq);
+
+    std.debug.print("[DEBUG] _pin_scenario: bb for d4\n", .{});
+    sq = .d4;
+    sqInfo = squareInfo.init(sq);
+    print_bitboard(isPiecePinned(board.occupiedBB, sq, &kingInfo, cached[1], cached[0]));
+    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    print_bitboard(sqInfo.getDiagBB());
+    print_bitboard(sqInfo.getAntiDiagBB());
+
+    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+    print_bitboard(sqInfo.getFileBB());
+    print_bitboard(sqInfo.getRankBB());
+
+    std.debug.print("[DEBUG] _pin_scenario: bb for d5\n", .{});
+    sq = .d5;
+    print_bitboard(isPiecePinned(board.occupiedBB, sq, &kingInfo, cached[1], cached[0]));
+    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+
+    std.debug.print("[DEBUG] _pin_scenario: bb for e5\n", .{});
+    sq = .e5;
+    print_bitboard(isPiecePinned(board.occupiedBB, sq, &kingInfo, cached[1], cached[0]));
+    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+
+    std.debug.print("[DEBUG] _pin_scenario: bb for f5\n", .{});
+    sq = .f5;
+    print_bitboard(isPiecePinned(board.occupiedBB, sq, &kingInfo, cached[1], cached[0]));
+    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+
+    std.debug.print("[DEBUG] _pin_scenario: bb for f4\n", .{});
+    sq = .f4;
+    print_bitboard(isPiecePinned(board.occupiedBB, sq, &kingInfo, cached[1], cached[0]));
+    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+
+    std.debug.print("[DEBUG] _pin_scenario: bb for f3\n", .{});
+    sq = .f3;
+    print_bitboard(isPiecePinned(board.occupiedBB, sq, &kingInfo, cached[1], cached[0]));
+    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+
+    std.debug.print("[DEBUG] _pin_scenario: bb for e3\n", .{});
+    sq = .e3;
+    print_bitboard(isPiecePinned(board.occupiedBB, sq, &kingInfo, cached[1], cached[0]));
+    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+
+    askContinue();
+
+    return;
+}
 
 pub fn test_scenarios() void {
     // testing promotion scenario
@@ -2302,8 +2407,9 @@ pub fn test_scenarios() void {
     //utils.clear();
     //_promo_scenario();
     //utils.clear();
-    _castle_scenario();
+    //_castle_scenario();
     //_mate_scenario();
+    _pin_scenario();
     return;
 }
 

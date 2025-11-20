@@ -1,3 +1,5 @@
+const build_options = @import("build_options");
+
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
@@ -21,6 +23,10 @@ const e_moveFlags = movel.e_moveFlags;
 const e_moveCategory = movel.e_moveCategory;
 
 const Board_state = chess.Board_state;
+
+const fastBitscan = build_options.fastBitscan;
+const ignoreChecks = build_options.fastBitscan;
+const useMagic = build_options.useMagic;
 
 pub fn moveGeneration(p_board: *Board_state) moveContainer {
     if (p_board.turn == .WHITE) {
@@ -344,17 +350,16 @@ pub fn filterMoveLegal(p_state: *Board_state, move_list: *moveContainer) !moveCo
 }
 
 pub fn filterMoveLegalFast(p_state: *Board_state, move_list: *moveContainer) !moveContainer {
+    // goal compared to filterMoveLegal: try to not use the make/undo Moves methods
     var ret: moveContainer = .{};
     const turn: e_color = p_state.turn;
-    var diagPieceBB: u64 = 0;
-    var linePieceBB: u64 = 0;
     const cached = getCachedAttackingPiece(p_state, turn);
     const all_attacks = chess.getAllAttackMask(p_state, chess.invertColor(turn));
 
     const kingSqInfo = squareInfo.init(@enumFromInt(p_state.getKingSq(turn)));
     const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackMaskFromKing(p_state, turn));
-    linePieceBB = cached[0];
-    diagPieceBB = cached[1];
+    const linePieceBB = cached[0];
+    const diagPieceBB = cached[1];
     for (0..move_list.len) |i| {
         if (move_list.moves[i].isCastle()) {
             if (chess.isCastleLegalPreMove(p_state, turn, move_list.moves[i], all_attacks)) {
@@ -443,7 +448,12 @@ pub fn moveGenBishopBB(p_board: *Board_state, p_magicTable: *magicRecord, compti
         var _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)];
         while (_bb != 0) {
             const sq = chess.bitscan(_bb);
-            p_out.bishopMoves = magicl.getBishopMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB);
+            if (comptime useMagic) {
+                p_out.bishopMoves |= magicl.getBishopMoves(@enumFromInt(sq), p_board.occupiedBB);
+            } else {
+                p_out.bishopMoves |= chess.antiDiagAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.bishopMoves |= chess.diagonalAttacks(p_board.occupiedBB, @enumFromInt(sq));
+            }
             _bb ^= (chess.ONE << @intCast(sq));
         }
         p_out.bishopMoves &= emptyOrEnemy;
@@ -451,18 +461,29 @@ pub fn moveGenBishopBB(p_board: *Board_state, p_magicTable: *magicRecord, compti
         var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)];
         while (_bb != 0) {
             const sq = chess.bitscan(_bb);
-            p_out.bishopMoves = magicl.getBishopMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB);
+            if (comptime useMagic) {
+                p_out.bishopMoves |= magicl.getBishopMoves(@enumFromInt(sq), p_board.occupiedBB);
+            } else {
+                p_out.bishopMoves |= chess.antiDiagAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.bishopMoves |= chess.diagonalAttacks(p_board.occupiedBB, @enumFromInt(sq));
+            }
             _bb ^= (chess.ONE << @intCast(sq));
         }
         p_out.bishopMoves &= emptyOrEnemy;
     }
+    _ = p_magicTable;
 }
 pub fn moveGenRookBB(p_board: *Board_state, p_magicTable: *magicRecord, comptime color: e_color, emptyOrEnemy: u64, p_out: *moveBBState) void {
     if (comptime color == .WHITE) {
         var _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)];
         while (_bb != 0) {
             const sq = chess.bitscan(_bb);
-            p_out.rookMoves = magicl.getRookMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB);
+            if (comptime useMagic) {
+                p_out.rookMoves |= magicl.getRookMoves(@enumFromInt(sq), p_board.occupiedBB);
+            } else {
+                p_out.rookMoves |= chess.fileAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.rookMoves |= chess.rankAttacks(p_board.occupiedBB, @enumFromInt(sq));
+            }
             _bb ^= (chess.ONE << @intCast(sq));
         }
         p_out.rookMoves &= emptyOrEnemy;
@@ -470,11 +491,17 @@ pub fn moveGenRookBB(p_board: *Board_state, p_magicTable: *magicRecord, comptime
         var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)];
         while (_bb != 0) {
             const sq = chess.bitscan(_bb);
-            p_out.rookMoves = magicl.getRookMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB) & emptyOrEnemy;
+            if (comptime useMagic) {
+                p_out.rookMoves |= magicl.getRookMoves(@enumFromInt(sq), p_board.occupiedBB);
+            } else {
+                p_out.rookMoves |= chess.fileAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.rookMoves |= chess.rankAttacks(p_board.occupiedBB, @enumFromInt(sq));
+            }
             _bb ^= (chess.ONE << @intCast(sq));
         }
         p_out.rookMoves &= emptyOrEnemy;
     }
+    _ = p_magicTable;
 }
 
 pub fn moveGenQueenBB(p_board: *Board_state, p_magicTable: *magicRecord, comptime color: e_color, emptyOrEnemy: u64, p_out: *moveBBState) void {
@@ -482,8 +509,16 @@ pub fn moveGenQueenBB(p_board: *Board_state, p_magicTable: *magicRecord, comptim
         var _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)];
         while (_bb != 0) {
             const sq = chess.bitscan(_bb);
-            p_out.queenMoves = magicl.getRookMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB);
-            p_out.queenMoves |= magicl.getBishopMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB);
+            if (comptime useMagic) {
+                p_out.queenMoves |= magicl.getRookMoves(@enumFromInt(sq), p_board.occupiedBB);
+                p_out.queenMoves |= magicl.getBishopMoves(@enumFromInt(sq), p_board.occupiedBB);
+            } else {
+                p_out.queenMove |= chess.diagonalAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.queenMove |= chess.antiDiagAttacks(p_board.occupiedBB, @enumFromInt(sq));
+
+                p_out.queenMove |= chess.fileAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.queenMove |= chess.rankAttacks(p_board.occupiedBB, @enumFromInt(sq));
+            }
             _bb ^= (chess.ONE << @intCast(sq));
         }
         p_out.queenMoves &= emptyOrEnemy;
@@ -491,12 +526,21 @@ pub fn moveGenQueenBB(p_board: *Board_state, p_magicTable: *magicRecord, comptim
         var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)];
         while (_bb != 0) {
             const sq = chess.bitscan(_bb);
-            p_out.queenMoves = magicl.getRookMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB);
-            p_out.queenMoves |= magicl.getBishopMoves(p_magicTable, @enumFromInt(sq), p_board.occupiedBB);
+            if (comptime useMagic) {
+                p_out.queenMoves |= magicl.getRookMoves(@enumFromInt(sq), p_board.occupiedBB);
+                p_out.queenMoves |= magicl.getBishopMoves(@enumFromInt(sq), p_board.occupiedBB);
+            } else {
+                p_out.queenMove |= chess.diagonalAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.queenMove |= chess.antiDiagAttacks(p_board.occupiedBB, @enumFromInt(sq));
+
+                p_out.queenMove |= chess.fileAttacks(p_board.occupiedBB, @enumFromInt(sq));
+                p_out.queenMove |= chess.rankAttacks(p_board.occupiedBB, @enumFromInt(sq));
+            }
             _bb ^= (chess.ONE << @intCast(sq));
         }
         p_out.queenMoves &= emptyOrEnemy;
     }
+    _ = p_magicTable;
 }
 
 pub fn moveGenBBWhite(p_board: *Board_state, p_magicTable: *magicRecord) moveBBState {
@@ -528,4 +572,144 @@ pub fn moveGenBB(p_board: *Board_state) moveBBState {
         return moveGenBBWhite(p_board, &magicl.magicTable);
     }
     return moveGenBBBlack(p_board, &magicl.magicTable);
+}
+
+pub fn northOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free;
+    gen |= pro & (gen << 8);
+    pro &= pro << 8;
+    gen |= pro & (gen << 16);
+    pro &= pro << 16;
+    gen |= pro & (gen << 32);
+    return gen;
+}
+pub fn northOne(bb: u64) u64 {
+    return bb | (bb << 8);
+}
+pub fn southOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free;
+    gen |= pro & (gen >> 8);
+    pro &= pro >> 8;
+    gen |= pro & (gen >> 16);
+    pro &= pro >> 16;
+    gen |= pro & (gen >> 32);
+    return gen;
+}
+
+pub fn southOne(bb: u64) u64 {
+    return bb | (bb >> 8);
+}
+
+pub fn eastOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen << 1);
+    pro &= pro << 1;
+    gen |= pro & (gen << 2);
+    pro &= pro << 2;
+    gen |= pro & (gen << 4);
+    return gen;
+}
+pub fn eastOne(bb: u64) u64 {
+    return (bb | ((bb & chess.notHFile) << 1));
+}
+
+pub fn westOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notAFile;
+
+    gen |= pro & (gen >> 1);
+    pro &= pro >> 1;
+    gen |= pro & (gen >> 2);
+    pro &= pro >> 2;
+    gen |= pro & (gen >> 4);
+    return gen;
+}
+pub fn westOne(bb: u64) u64 {
+    return (bb | ((bb & chess.notAFile) >> 1));
+}
+
+pub fn northEastOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen << 9);
+    pro &= pro << 9;
+    gen |= pro & (gen << 18);
+    pro &= pro << 18;
+    gen |= pro & (gen << 36);
+    return gen;
+}
+pub fn northEastOne(bb: u64) u64 {
+    return (bb | ((bb & chess.notHFile) << 9));
+}
+
+pub fn northWestOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen << 7);
+    pro &= pro << 7;
+    gen |= pro & (gen << 14);
+    pro &= pro << 14;
+    gen |= pro & (gen << 28);
+    return gen;
+}
+pub fn northWestOne(bb: u64) u64 {
+    return (bb | ((bb & chess.notHFile) << 7));
+}
+
+pub fn southEastOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notAFile;
+
+    gen |= pro & (gen >> 7);
+    pro &= pro >> 7;
+    gen |= pro & (gen >> 14);
+    pro &= pro >> 14;
+    gen |= pro & (gen >> 28);
+    return gen;
+}
+pub fn southEastOne(bb: u64) u64 {
+    return (bb | ((bb & chess.notAFile) >> 7));
+}
+
+pub fn southWestOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen >> 9);
+    pro &= pro >> 9;
+    gen |= pro & (gen >> 18);
+    pro &= pro >> 18;
+    gen |= pro & (gen >> 36);
+    return gen;
+}
+pub fn southWestOne(bb: u64) u64 {
+    return (bb | ((bb & chess.notHFile) >> 9));
+}
+
+pub fn diagPinned(attBB: u64, kingBB: u64, free: u64) u64 {
+    const _free = free ^ kingBB;
+    var intersect = northEastOne(northEastOccl(attBB, _free)) & southWestOne(southWestOccl(kingBB, _free));
+
+    intersect |= northWestOne(northWestOccl(attBB, _free)) & southEastOne(southEastOccl(kingBB, _free));
+
+    intersect |= southEastOne(southEastOccl(attBB, _free)) & northWestOne(northWestOccl(kingBB, _free));
+
+    intersect |= southWestOne(southWestOccl(attBB, _free)) & northEastOne(northEastOccl(kingBB, _free));
+    return intersect;
+}
+pub fn linePinned(attBB: u64, kingBB: u64, free: u64) u64 {
+    const _free = free ^ kingBB;
+    var intersect = northOne(northOccl(attBB, _free)) & southOne(southOccl(kingBB, _free));
+    intersect |= southOne(southOccl(attBB, _free)) & northOne(northOccl(kingBB, _free));
+
+    intersect |= eastOne(eastOccl(attBB, _free)) & westOne(westOccl(kingBB, _free));
+
+    intersect |= westOne(westOccl(attBB, _free)) & eastOne(eastOccl(kingBB, _free));
+    return intersect;
 }

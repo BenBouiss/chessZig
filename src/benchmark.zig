@@ -25,17 +25,20 @@ pub const benchmarkResult = struct {
     }
     pub fn addNode(p_self: *benchmarkResult, p_move: *const IMove) void {
         p_self.n_nodes += 1;
-        if (p_move.isCapture()) {
-            p_self.n_captures += 1;
-        }
+
         if (p_move.isDoublePush()) {
             p_self.n_doublePawn += 1;
-        }
-        if (p_move.isEnpassant()) {
-            p_self.n_enpassants += 1;
+            return;
         }
         if (p_move.isKingSideCastle() or p_move.isQueenSideCastle()) {
             p_self.n_castles += 1;
+            return;
+        }
+        if (p_move.isCapture()) {
+            p_self.n_captures += 1;
+        }
+        if (p_move.isEnpassant()) {
+            p_self.n_enpassants += 1;
         }
         if (p_move.isPromotion()) {
             p_self.n_promotions += 1;
