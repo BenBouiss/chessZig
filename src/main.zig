@@ -1,16 +1,17 @@
+const std = @import("std");
 const rl = @import("raylib");
+
+var GPA = std.heap.GeneralPurposeAllocator(.{}){};
+pub const GLOBAL_ALLOC = GPA.allocator();
+
 const chess = @import("chess.zig");
 const exploration = @import("exploration.zig");
-const std = @import("std");
 const benchmark = @import("benchmark.zig");
 const interfacel = @import("interface.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
 
 const squarel = @import("square.zig");
-
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-pub const GLOBAL_ALLOC = GPA.allocator();
 
 fn test_main_game() !void {
     var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);

@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) void {
     // and set default value
     build_options.addOption(bool, "fastBitscan", b.option(bool, "fastBitscan", "Use the branchless version of bitscan and reverse bitscan") orelse false);
     build_options.addOption(bool, "useMagic", b.option(bool, "useMagic", "Use magic generation for ray pieces") orelse false);
+    build_options.addOption(bool, "useStaged", b.option(bool, "useStaged", "Use the staged move generation") orelse false);
     // doesnt work still get cache error thingy on WSL
     //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     //const alloc = gpa.allocator();

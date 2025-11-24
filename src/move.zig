@@ -3,6 +3,7 @@ const build_options = @import("build_options");
 
 const chess = @import("chess.zig");
 const squarel = @import("square.zig");
+const mainl = @import("main.zig");
 
 const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
@@ -12,8 +13,7 @@ const ignoreChecks = build_options.fastBitscan;
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-const GLOBAL_ALLOC = GPA.allocator();
+const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 //pub fn build_move(p_board: *chess.Board_state, from: u8, to: u8, flag: u8, piece: e_piece) IMove {
 //    return _build_move(from, to, flag, piece);
@@ -39,51 +39,25 @@ pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
 //    return ret;
 //}
 
-pub fn boardStateToSpecial(p_board: *chess.Board_state, comptime turn: chess.e_color) u16 {
-    var ret: u16 = 0;
-    if (comptime turn == .WHITE) {
-        const castl_bits = p_board.castlingBB & 0xFF;
-        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.WHITE)] & 0xFF0000;
-        ret |= (castl_bits << 8) | eP_bits;
-    } else {
-        const castl_bits = p_board.castlingBB & 0xFF00000000000000 >> 56;
-        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.BLACK)] & 0xFF0000000000;
-        ret |= (castl_bits << 8) | eP_bits;
-    }
-    return ret;
-}
+//pub fn boardStateToSpecial(p_board: *chess.Board_state, comptime turn: chess.e_color) u16 {
+//    var ret: u16 = 0;
+//    if (comptime turn == .WHITE) {
+//        const castl_bits = p_board.castlingBB & 0xFF;
+//        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.WHITE)] & 0xFF0000;
+//        ret |= (castl_bits << 8) | eP_bits;
+//    } else {
+//        const castl_bits = p_board.castlingBB & 0xFF00000000000000 >> 56;
+//        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.BLACK)] & 0xFF0000000000;
+//        ret |= (castl_bits << 8) | eP_bits;
+//    }
+//    return ret;
+//}
 
 pub const IMove = struct {
+    // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
     m_move: u16 = 0,
     // first 8 bits = start_piece, last = capture_piece
     m_piece: u16 = 0,
-
-    //size:
-    //  for enpassant only 1(one) pawn can be in enpassant state
-    //  Restore (present in p_board at move gen time):
-    //  <3> pawn en passant
-    //  <3> castling possible
-    //  Next Provided by move gen
-    //  <3> pawn en passant
-    //  <3> castling possible
-    //m_special: u16 = 0,
-
-    //m_restore: u16 = 0,
-    //m_next: u16 = 0,
-
-    //pub fn getRestoreEnpassantBB(self: IMove) u64 {
-    //    return (self.m_restore & 0xFF);
-    //}
-    //pub fn getNextEnpassantBB(self: IMove) u64 {
-    //    return (self.m_next & 0xFF);
-    //}
-
-    //pub fn getRestoreCastlingBB(self: IMove) u64 {
-    //    return self.m_restore & 0xFF00;
-    //}
-    //pub fn getNextCastlingBB(self: IMove) u64 {
-    //    return self.m_next & 0xFF00;
-    //}
 
     pub fn setCapture(p_self: *IMove, capture: e_piece) void {
         //p_self.c_piece = capture;
@@ -91,6 +65,11 @@ pub const IMove = struct {
         m_piece <<= 8;
         p_self.m_piece &= (0xFF);
         p_self.m_piece |= (m_piece);
+    }
+    pub fn setFlag(p_self: *IMove, flag: u8) void {
+        //reset the top 4 bits
+        p_self.m_move &= (0xFFF);
+        p_self.m_move |= (flag & 0xF) << 12;
     }
 
     pub fn equal(self: IMove, other: IMove) bool {
@@ -349,14 +328,49 @@ pub const moveBBState = struct {
     queenSideCastlingMoves: u64 = 0,
     kingSideCastlingMoves: u64 = 0,
 
+    pub fn resetAll(p_self: *moveBBState) void {
+        const newVal: moveBBState = .{};
+        p_self.* = newVal;
+    }
+    pub fn resetPiece(p_self: *moveBBState, piece: e_piece) void {
+        switch (piece) {
+            .nWhitePawn, .nBlackPawn => {
+                p_self.pawnAttacks = chess.EMPTY;
+                p_self.pawnMoves = chess.EMPTY;
+                p_self.enPassantMoves = chess.EMPTY;
+                p_self.promotionMoves = chess.EMPTY;
+            },
+            .nWhiteBishop, .nBlackBishop => {
+                p_self.bishopMoves = chess.EMPTY;
+            },
+            .nWhiteKnight, .nBlackKnight => {
+                p_self.knightMoves = chess.EMPTY;
+            },
+            .nWhiteRook, .nBlackRook => {
+                p_self.rookMoves = chess.EMPTY;
+            },
+            .nWhiteQueen, .nBlackQueen => {
+                p_self.queenMoves = chess.EMPTY;
+            },
+            .nWhiteKing, .nBlackKing => {
+                p_self.kingMoves = chess.EMPTY;
+                p_self.kingSideCastlingMoves = chess.EMPTY;
+                p_self.queenSideCastlingMoves = chess.EMPTY;
+            },
+        }
+    }
+
     pub fn isEmpty(self: moveBBState) bool {
         return (self.pawnMoves | self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.doubleMoves) == chess.EMPTY;
     }
+    pub fn getAttackedMask(self: moveBBState, occB: u64) u64 {
+        return (self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves) & occB;
+    }
     pub fn andFn(self: moveBBState, bb: u64) moveBBState {
-        return .{ .pawnMoves = self.pawnMoves & bb, .pawnAttacks = self.pawnAttacks & bb, .doubleMoves = self.doubleMoves & bb, .bishopMoves = self.bishopMoves & bb, .knightMoves = self.knightMoves & bb, .rookMoves = self.rookMoves & bb, .queenMoves = self.queenMoves & bb, .kingMoves = self.kingMoves & bb };
+        return .{ .pawnMoves = self.pawnMoves & bb, .pawnAttacks = self.pawnAttacks & bb, .doubleMoves = self.doubleMoves & bb, .bishopMoves = self.bishopMoves & bb, .knightMoves = self.knightMoves & bb, .rookMoves = self.rookMoves & bb, .queenMoves = self.queenMoves & bb, .kingMoves = self.kingMoves & bb, .enPassantMoves = self.enPassantMoves & bb, .promotionMoves = self.promotionMoves & bb, .queenSideCastlingMoves = self.queenSideCastlingMoves & bb, .kingSideCastlingMoves = self.kingSideCastlingMoves & bb };
     }
     pub fn orFn(self: moveBBState, bb: u64) moveBBState {
-        return .{ .pawnMoves = self.pawnMoves | bb, .pawnAttacks = self.pawnAttacks | bb, .doubleMoves = self.doubleMoves | bb, .bishopMoves = self.bishopMoves | bb, .knightMoves = self.knightMoves | bb, .rookMoves = self.rookMoves | bb, .queenMoves = self.queenMoves | bb, .kingMoves = self.kingMoves | bb };
+        return .{ .pawnMoves = self.pawnMoves | bb, .pawnAttacks = self.pawnAttacks | bb, .doubleMoves = self.doubleMoves | bb, .bishopMoves = self.bishopMoves | bb, .knightMoves = self.knightMoves | bb, .rookMoves = self.rookMoves | bb, .queenMoves = self.queenMoves | bb, .kingMoves = self.kingMoves | bb, .enPassantMoves = self.enPassantMoves | bb, .promotionMoves = self.promotionMoves | bb, .queenSideCastlingMoves = self.queenSideCastlingMoves | bb, .kingSideCastlingMoves = self.kingSideCastlingMoves | bb };
     }
 
     pub fn andEq(p_self: *moveBBState, bb: u64) void {
@@ -368,6 +382,11 @@ pub const moveBBState = struct {
         p_self.rookMoves &= bb;
         p_self.queenMoves &= bb;
         p_self.kingMoves &= bb;
+
+        p_self.enPassantMoves &= bb;
+        p_self.promotionMoves &= bb;
+        p_self.queenSideCastlingMoves &= bb;
+        p_self.kingSideCastlingMoves &= bb;
         return;
     }
     pub fn orEq(p_self: *moveBBState, bb: u64) void {
@@ -379,6 +398,11 @@ pub const moveBBState = struct {
         p_self.rookMoves |= bb;
         p_self.queenMoves |= bb;
         p_self.kingMoves |= bb;
+
+        p_self.enPassantMoves |= bb;
+        p_self.promotionMoves |= bb;
+        p_self.queenSideCastlingMoves |= bb;
+        p_self.kingSideCastlingMoves |= bb;
         return;
     }
 
@@ -408,7 +432,8 @@ pub const moveBBState = struct {
         std.debug.print("King moves: \n", .{});
         chess.print_bitboard(self.kingMoves);
     }
-    pub fn convertToMoveContainer(self: moveBBState) moveContainer {
+    pub fn convertToMoveContainer(self: moveBBState, p_board: *chess.Board_state) moveContainer {
+        _ = p_board;
         _ = self;
         return .{};
     }

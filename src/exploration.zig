@@ -1,4 +1,5 @@
 const std = @import("std");
+const mainl = @import("main.zig");
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const benchmark = @import("benchmark.zig");
@@ -11,6 +12,7 @@ const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const typedMoveContainer = movel.typedMoveContainer;
 const e_square = squarel.e_square;
+const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 const assert = std.debug.assert;
 
@@ -20,12 +22,9 @@ pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate };
 pub const e_playerType = enum(u8) { Invalid = 0, Human, Bot };
 pub const e_searchType = enum(u8) { Random, Simple, DepthBot };
 
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-const GLOBAL_ALLOC = GPA.allocator();
-
 pub fn freePlayer(p_player: *Player) void {
     if (p_player.isInitialized) {
-        p_player.move_decision_history.deinit(chess.get_global_alloc());
+        p_player.move_decision_history.deinit(GLOBAL_ALLOC);
         p_player.isInitialized = false;
     }
 }
@@ -173,8 +172,10 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
         p_res.addNode(&p_state.getLastMove());
         return;
     }
-    var moves: moveContainer = moveGenl.moveGeneration(p_state);
-    const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
+
+    //var moves: moveContainer = moveGenl.moveGeneration(p_state);
+    //const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     //const _moves: moveContainer = try moveGenl.filterMoveLegal(p_state, &moves);
     //if (fmoves.len != _moves.len) {
     //    fmoves.printDifference(_moves);
@@ -188,6 +189,7 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
         try explorationNDepth(p_state, depth - 1, p_res);
         //_ = try p_state.undoMove();
         _ = p_state.undoMoveFaster();
+        //_ = p_state.undoMoveFastest();
     }
     return;
 }
