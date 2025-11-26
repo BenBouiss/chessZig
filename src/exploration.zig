@@ -185,7 +185,8 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
     for (0..fmoves.len) |i| {
         //_ = try p_state.makeMoveFast(fmoves.moves[i]);
         //p_state.stack.push(frame);
-        _ = p_state.makeMoveFaster(fmoves.moves[i]);
+        //_ = p_state.makeMoveFaster(fmoves.moves[i]);
+        _ = p_state.makeMoveUpdate(fmoves.moves[i]);
         try explorationNDepth(p_state, depth - 1, p_res);
         //_ = try p_state.undoMove();
         _ = p_state.undoMoveFaster();
@@ -193,58 +194,7 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
     }
     return;
 }
-//pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult) !void {
-//    if (depth <= 0) {
-//        //p_res.n_nodes += 1;
-//        p_res.addNode(&p_state.getLastMove());
-//        return;
-//    }
-//    var moves: typedMoveContainer = moveGenl.moveGenerationTyped(p_state);
-//
-//    const fmovesQuiet = try moveGenl.filterMoveLegalFast(p_state, &moves.quietMoves);
-//    for (0..fmovesQuiet.len) |i| {
-//        _ = p_state.makeMoveFaster(fmovesQuiet.moves[i], .QUIET);
-//        try explorationNDepth(p_state, depth - 1, p_res);
-//        _ = p_state.undoMoveFaster();
-//    }
-//
-//    const fmovesCapture = try moveGenl.filterMoveLegalFast(p_state, &moves.captureMoves);
-//    for (0..fmovesCapture.len) |i| {
-//        _ = p_state.makeMoveFaster(fmovesCapture.moves[i], .CAPTURE);
-//        try explorationNDepth(p_state, depth - 1, p_res);
-//        _ = p_state.undoMoveFaster();
-//    }
-//
-//    const fmovesEnpassant = try moveGenl.filterMoveLegalFast(p_state, &moves.enPassantMoves);
-//    for (0..fmovesEnpassant.len) |i| {
-//        _ = p_state.makeMoveFaster(fmovesEnpassant.moves[i], .ENPASSANT);
-//        try explorationNDepth(p_state, depth - 1, p_res);
-//        _ = p_state.undoMoveFaster();
-//    }
-//
-//    const fmovesPromotion = try moveGenl.filterMoveLegalFast(p_state, &moves.promotionMoves);
-//    for (0..fmovesPromotion.len) |i| {
-//        _ = p_state.makeMoveFaster(fmovesPromotion.moves[i], .PROMOTION);
-//        try explorationNDepth(p_state, depth - 1, p_res);
-//        _ = p_state.undoMoveFaster();
-//    }
-//
-//    const fmovesCapturePromotion = try moveGenl.filterMoveLegalFast(p_state, &moves.capturePromotionMoves);
-//    for (0..fmovesCapturePromotion.len) |i| {
-//        _ = p_state.makeMoveFaster(fmovesCapturePromotion.moves[i], .CAPTUREPROMOTION);
-//        try explorationNDepth(p_state, depth - 1, p_res);
-//        _ = p_state.undoMoveFaster();
-//    }
-//
-//    const fmovesDoublePush = try moveGenl.filterMoveLegalFast(p_state, &moves.enPassantMoves);
-//    for (0..fmovesDoublePush.len) |i| {
-//        _ = p_state.makeMoveFaster(fmovesDoublePush.moves[i], .DOUBLEPUSH);
-//        try explorationNDepth(p_state, depth - 1, p_res);
-//        _ = p_state.undoMoveFaster();
-//    }
-//
-//    return;
-//}
+
 pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, p_res: *benchmark.benchmarkResult) !void {
     var moves: moveContainer = moveGenl.moveGeneration(p_state);
     const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);

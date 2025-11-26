@@ -1,5 +1,8 @@
 const chess = @import("chess.zig");
 const magicl = @import("magic.zig");
+const moveGenl = @import("move_generation.zig");
+const squarel = @import("square.zig");
+
 const std = @import("std");
 
 const N_SQUARES = chess.N_SQUARES;
@@ -7,8 +10,18 @@ const NUMBER_PLAYER = chess.NUMBER_PLAYER;
 const ONE = chess.ONE;
 const e_color = chess.e_color;
 const e_direction = chess.e_direction;
+const squareInfo = squarel.squareInfo;
 
 pub const cachedTables: AttackTable = AttackTable.init();
+
+// https://www.chessprogramming.org/Square_Attacked_By#Obstructed
+pub var arrRectangular: [64][64]u64 = undefined;
+
+pub fn _initTables() void {
+    std.debug.print("[PRE] Starting the table move build\n", .{});
+    initInbetween(&arrRectangular);
+    std.debug.print("[PRE] Finished\n", .{});
+}
 
 pub const AttackTable = struct {
     RookAttack: [N_SQUARES]u64 = undefined,
@@ -27,6 +40,7 @@ pub const AttackTable = struct {
         initMaskAttacks(&ret);
         return ret;
     }
+
     pub fn print(self: AttackTable) void {
         std.debug.print("Ben \n", .{});
         chess.print_bitboard(self.RookAttack[10]);
@@ -86,5 +100,48 @@ pub fn initRayAttackDiag(table: *AttackTable) void {
         table.rayAttacks[sq][@intFromEnum(e_direction.NORTHWEST)] = antidiag & ~delMask;
         table.rayAttacks[sq][@intFromEnum(e_direction.SOUTHEAST)] = antidiag & (delMask >> 1);
         table.rayAttacks[sq][@intFromEnum(e_direction.SOUTHWEST)] = diag & (delMask >> 1);
+    }
+}
+
+pub fn initInbetween(table: *[64][64]u64) void {
+    for (0..64) |x| {
+        const fromBB = chess.ONE << @intCast(x);
+        const fromSq: squareInfo = squareInfo.init(@enumFromInt(x));
+        for (0..64) |y| {
+            if (x == y) {
+                table[x][y] = 0;
+                continue;
+            }
+            const toBB = chess.ONE << @intCast(y);
+            const toSq: squareInfo = squareInfo.init(@enumFromInt(y));
+            if (fromSq.file == toSq.file) {
+                if (x < y) {
+                    table[x][y] = moveGenl.northOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = moveGenl.southOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else if (fromSq.rank == toSq.rank) {
+                if (x < y) {
+                    table[x][y] = moveGenl.eastOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = moveGenl.westOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else if (fromSq.diagonal == toSq.diagonal) {
+                if (x < y) {
+                    table[x][y] = moveGenl.northEastOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = moveGenl.southWestOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else if (fromSq.antidiagonal == toSq.antidiagonal) {
+                if (x < y) {
+                    table[x][y] = moveGenl.northWestOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = moveGenl.southEastOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else {
+                table[x][y] = 0;
+                continue;
+            }
+        }
     }
 }

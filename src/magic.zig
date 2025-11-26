@@ -71,7 +71,6 @@ pub fn _initMagic(p_magic: *magicRecord) void {
     if (comptime useMagic) {
         std.debug.print("Building using magic move gen!\n", .{});
     }
-    std.debug.print("Ben\n", .{});
     const _start = std.time.milliTimestamp();
     std.debug.print("[PRE] Starting the search for magic keys \n", .{});
     p_magic.* = magicRecord.init(GLOBAL_ALLOC) catch unreachable;
@@ -165,6 +164,9 @@ pub fn magicIndex(entry: magic_entry, blockers: u64) usize {
 }
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
+    //if (@intFromEnum(sq) > 63) {
+    //    std.debug.print("Found a invalid sq of value: {d}\n", .{@intFromEnum(sq)});
+    //}
     const magic = p_magicTable.rookMagic[@intFromEnum(sq)];
     const magic_index = magicIndex(magic, blockers);
     return p_magicTable.rookMoves[@intFromEnum(sq)][magic_index];

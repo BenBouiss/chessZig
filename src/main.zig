@@ -49,15 +49,27 @@ fn test_magic(p_magicTable: *magicl.magicRecord) void {
     _ = p_magicTable;
 }
 
+fn test_moveTable() void {
+    chess.print_bitboard(chess.inBetween(.a1, .a8));
+    chess.print_bitboard(chess.inBetween(.f1, .f8));
+
+    chess.print_bitboard(chess.inBetween(.h4, .a4));
+    chess.print_bitboard(chess.inBetween(.a8, .h8));
+
+    chess.print_bitboard(chess.inBetween(.a1, .h8));
+    chess.print_bitboard(chess.inBetween(.a8, .h1));
+}
 pub fn main() anyerror!void {
     magicl._initMagic(&magicl.magicTable);
+    moveTablel._initTables();
+    //test_moveTable();
     //magicl.main();
     //var magicTable = magicl.initMagic();
     //test_magic(&magicl.magicTable);
 
     //chess.initRayAttacks();
-    benchmark.test_benchmark();
+    //benchmark.test_benchmark();
     //interfacel.shell();
     //magicl.magicTables.print();
-    //try chess.main();
+    try chess.main();
 }

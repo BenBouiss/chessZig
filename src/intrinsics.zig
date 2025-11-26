@@ -24,3 +24,6 @@ pub inline fn _BitScanForwardReverse64(index: *u32, Mask: u64) i8 {
     }
     return 1;
 }
+
+//https://www.chessprogramming.org/AVX2#Dumb7Fill
+// intrinsics for the use of quad bitboard to computer bishop rook queen all dir fill.

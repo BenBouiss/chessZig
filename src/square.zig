@@ -40,6 +40,12 @@ pub const squareInfo = struct {
     pub fn visibilitySquares(self: squareInfo) u64 {
         return self.getDiagBB() | self.getAntiDiagBB() | self.getRankBB() | self.getFileBB();
     }
+    pub fn getHorizontalBB(self: squareInfo) u64 {
+        return self.getRankBB() | self.getFileBB();
+    }
+    pub fn getDiagonalsBB(self: squareInfo) u64 {
+        return self.getDiagBB() | self.getAntiDiagBB();
+    }
 };
 
 pub const checkContainer = struct {

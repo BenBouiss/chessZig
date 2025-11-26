@@ -21,11 +21,12 @@ const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     var m_move: u16 = (flag & 0xF);
+    const m_piece: u16 = (@intFromEnum(piece) & 0xFF);
     m_move <<= 6;
     m_move |= (to & 0x3F);
     m_move <<= 6;
     m_move |= (from & 0x3F);
-    const ret: IMove = .{ .m_move = m_move, .m_piece = (@intFromEnum(piece) & 0xFF) };
+    const ret: IMove = .{ .m_move = m_move, .m_piece = m_piece };
     return ret;
 }
 
@@ -69,7 +70,8 @@ pub const IMove = struct {
     pub fn setFlag(p_self: *IMove, flag: u8) void {
         //reset the top 4 bits
         p_self.m_move &= (0xFFF);
-        p_self.m_move |= (flag & 0xF) << 12;
+        const _flag: u16 = @intCast(flag);
+        p_self.m_move |= (_flag & 0xF) << 12;
     }
 
     pub fn equal(self: IMove, other: IMove) bool {
@@ -82,7 +84,7 @@ pub const IMove = struct {
 
     pub fn isIn(self: IMove, move_arr: moveContainer) bool {
         for (move_arr.moves) |move| {
-            if (self.softEqual(move)) {
+            if (self.equal(move)) {
                 return true;
             }
         }
@@ -216,7 +218,21 @@ pub const moveContainer = struct {
         p_self.len += p_other.len;
         return true;
     }
-
+    pub fn isDifferent(self: moveContainer, other: moveContainer) bool {
+        var biggerContainer = self;
+        var smallerContainer = other;
+        if (other.len > self.len) {
+            biggerContainer = other;
+            smallerContainer = self;
+        }
+        for (0..biggerContainer.len) |i| {
+            const move = biggerContainer.moves[i];
+            if (!move.isIn(smallerContainer)) {
+                return true;
+            }
+        }
+        return false;
+    }
     pub fn printDifference(self: moveContainer, other: moveContainer) void {
         std.debug.print("[DEBUG] printDifference: Size of container (1): {d}, size of container (2): {d}\n", .{ self.len, other.len });
         var biggerContainer = self;
@@ -231,12 +247,20 @@ pub const moveContainer = struct {
         for (0..biggerContainer.len) |i| {
             const move = biggerContainer.moves[i];
             if (!move.isIn(smallerContainer)) {
-                std.debug.print("{s} ", .{move.getStr()});
+                std.debug.print("{s}-{}-{}-{} ", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
             }
         }
 
         std.debug.print("\n", .{});
+        for (0..smallerContainer.len) |i| {
+            const move = smallerContainer.moves[i];
+            if (!move.isIn(biggerContainer)) {
+                std.debug.print("{s}-{}-{}-{} ", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
+            }
+        }
+        std.debug.print("\n", .{});
         smallerContainer.print();
+        biggerContainer.print();
     }
 
     pub fn shuffle(p_self: *moveContainer, rand: std.Random) void {
@@ -271,7 +295,7 @@ pub const moveContainer = struct {
 };
 
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
-pub const MAX_MATCH_LENGTH: usize = 6000;
+pub const MAX_MATCH_LENGTH: usize = 4096;
 pub const matchMoveContainer = struct {
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     len: usize = 0,
@@ -293,6 +317,12 @@ pub const matchMoveContainer = struct {
         }
         p_self.len -= 1;
         return p_self.moves[p_self.len];
+    }
+    pub fn getLastMove(self: matchMoveContainer) IMove {
+        if (self.len == 0) {
+            return .{};
+        }
+        return self.moves[self.len - 1];
     }
     pub fn fiftyMoveRule(self: matchMoveContainer) bool {
         //for (0..50) |i|{
