@@ -173,31 +173,37 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
         return;
     }
 
-    //var moves: moveContainer = moveGenl.moveGeneration(p_state);
-    //const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    //const _moves: moveContainer = try moveGenl.filterMoveLegal(p_state, &moves);
-    //if (fmoves.len != _moves.len) {
-    //    fmoves.printDifference(_moves);
-    //    chess.print_boardstate(p_state);
-    //}
-    //const frame = (p_state.makeFrame());
     for (0..fmoves.len) |i| {
-        //_ = try p_state.makeMoveFast(fmoves.moves[i]);
-        //p_state.stack.push(frame);
-        //_ = p_state.makeMoveFaster(fmoves.moves[i]);
         _ = p_state.makeMoveUpdate(fmoves.moves[i]);
         try explorationNDepth(p_state, depth - 1, p_res);
-        //_ = try p_state.undoMove();
-        _ = p_state.undoMoveFaster();
-        //_ = p_state.undoMoveFastest();
+        _ = p_state.undoMoveRestore();
     }
     return;
 }
+pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult, batched: bool) !void {
+    if (depth <= 0) {
+        p_res.addNode(&p_state.getLastMove());
+        return;
+    }
 
-pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, p_res: *benchmark.benchmarkResult) !void {
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    if (depth == 1 and batched) {
+        for (0..fmoves.len) |i| {
+            p_res.addNode(&fmoves.moves[i]);
+        }
+        return;
+    }
+    for (0..fmoves.len) |i| {
+        _ = p_state.makeMoveUpdate(fmoves.moves[i]);
+        try explorationNDepthPerft(p_state, depth - 1, p_res, batched);
+        _ = p_state.undoMoveRestore();
+    }
+    return;
+}
+pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, p_res: *benchmark.benchmarkResult, batched: bool) !void {
     var moves: moveContainer = moveGenl.moveGeneration(p_state);
-    const fmoves = try moveGenl.filterMoveLegalFast(p_state, &moves);
+    const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
     var fmoves_arr = try fmoves.convertToArrayList(GLOBAL_ALLOC);
     defer fmoves_arr.deinit(GLOBAL_ALLOC);
     var _nThread: usize = @intCast(nThread);
@@ -229,12 +235,7 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
     defer GLOBAL_ALLOC.free(threads);
 
     for (0.._nThread) |thread_id| {
-        threads[thread_id] = try std.Thread.spawn(.{}, perftWorkerJob, .{
-            &arr_state.array[thread_id],
-            depth,
-            &arr_benchmarks.array[thread_id],
-            &threadedMoves.items[thread_id],
-        });
+        threads[thread_id] = try std.Thread.spawn(.{}, perftWorkerJob, .{ &arr_state.array[thread_id], depth, &arr_benchmarks.array[thread_id], &threadedMoves.items[thread_id], batched });
     }
     for (0.._nThread) |thread_id| {
         threads[thread_id].join();
@@ -243,10 +244,10 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
     return;
 }
 
-pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult, p_startingMoves: *std.ArrayList(IMove)) void {
+pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult, p_startingMoves: *std.ArrayList(IMove), batched: bool) void {
     for (0..p_startingMoves.items.len) |i| {
         _ = p_state.makeMoveFaster(p_startingMoves.items[i]);
-        try explorationNDepth(p_state, depth - 1, p_res);
+        try explorationNDepthPerft(p_state, depth - 1, p_res, batched);
         //_ = p_state.undoMoveFaster();
         _ = p_state.undoMoveFaster();
     }
@@ -300,7 +301,7 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
     }
     var all_moves: moveContainer = moveGenl.moveGeneration(p_state);
     all_moves.shuffle(p_state.randInt);
-    const fmoves = try moveGenl.filterMoveLegalFast(p_state, &all_moves);
+    const fmoves = try moveGenl.filterMoveLegal(p_state, &all_moves);
 
     var final_decision: moveDecision = .{};
     var decision: moveDecision = .{};

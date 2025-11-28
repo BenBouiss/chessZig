@@ -103,7 +103,8 @@ const ExpectedBenchmarkResults = [_]i64{
     2097651003696806,
 };
 // source: https://github.com/Timmoth/grandchesstree
-pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread: u8) void {
+
+pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread: u8, batched: bool) void {
     var bench_res: benchmarkResult = .{};
     var _start: i64 = 0;
     var _end: i64 = 0;
@@ -111,7 +112,7 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
         bench_res.reset();
         _start = std.time.milliTimestamp();
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
-        exploration.explorationNDepthThreadStart(p_state, @intCast(depth), nThread, &bench_res) catch unreachable;
+        exploration.explorationNDepthThreadStart(p_state, @intCast(depth), nThread, &bench_res, batched) catch unreachable;
         _end = std.time.milliTimestamp();
         std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, bench_res.n_nodes, @divFloor((bench_res.n_nodes), (_end - _start + 1)) * 1000 });
         bench_res.printInfo();
@@ -126,7 +127,7 @@ pub fn test_benchmark() void {
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 8, 20);
+    nodeExplorationBenchmark(&game_state, 8, 20, false);
 }
 
 pub fn main() !void {

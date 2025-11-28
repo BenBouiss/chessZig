@@ -68,8 +68,8 @@ pub fn main() anyerror!void {
     //test_magic(&magicl.magicTable);
 
     //chess.initRayAttacks();
-    //benchmark.test_benchmark();
+    benchmark.test_benchmark();
     //interfacel.shell();
     //magicl.magicTables.print();
-    try chess.main();
+    //try chess.main();
 }

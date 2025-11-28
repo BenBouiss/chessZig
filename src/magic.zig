@@ -13,6 +13,9 @@ const std = @import("std");
 const e_piece = chess.e_piece;
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
+// TODO Implement fancy bitboard https://www.chessprogramming.org/Magic_Bitboards
+// related(?) link: http://pradu.us/old/Nov27_2008/Buzz/
+
 const magic_err = error{noMagicFound};
 const MAX_MASK_SIZE: usize = 4096;
 const N_SQUARES: usize = 64;
