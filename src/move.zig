@@ -21,7 +21,10 @@ const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     var m_move: u16 = (flag & 0xF);
-    const m_piece: u16 = (@intFromEnum(piece) & 0xFF);
+    var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare) & 0xFF);
+    m_piece <<= 8;
+    m_piece |= (@intFromEnum(piece) & 0xFF);
+
     m_move <<= 6;
     m_move |= (to & 0x3F);
     m_move <<= 6;

@@ -3,17 +3,23 @@ const exploration = @import("exploration.zig");
 const movel = @import("move.zig");
 const std = @import("std");
 const mainl = @import("main.zig");
+const hashl = @import("hashTable.zig");
+
+const build_options = @import("build_options");
 
 const GLOBAL_ALLOCATOR = mainl.GLOBAL_ALLOC;
 const IMove = movel.IMove;
 
+const useHash = build_options.useHash;
+
 pub const benchmarkResult = struct {
-    n_nodes: i64 = 0,
+    n_nodes: u64 = 0,
     n_captures: i64 = 0,
     n_doublePawn: i64 = 0,
     n_enpassants: i64 = 0,
     n_castles: i64 = 0,
     n_promotions: i64 = 0,
+    n_hashRetrieve: i64 = 0,
 
     pub fn reset(p_self: *benchmarkResult) void {
         p_self.n_nodes = 0;
@@ -25,24 +31,24 @@ pub const benchmarkResult = struct {
     }
     pub fn addNode(p_self: *benchmarkResult, p_move: *const IMove) void {
         p_self.n_nodes += 1;
-
-        if (p_move.isDoublePush()) {
-            p_self.n_doublePawn += 1;
-            return;
-        }
-        if (p_move.isKingSideCastle() or p_move.isQueenSideCastle()) {
-            p_self.n_castles += 1;
-            return;
-        }
-        if (p_move.isCapture()) {
-            p_self.n_captures += 1;
-        }
-        if (p_move.isEnpassant()) {
-            p_self.n_enpassants += 1;
-        }
-        if (p_move.isPromotion()) {
-            p_self.n_promotions += 1;
-        }
+        _ = p_move;
+        //if (p_move.isDoublePush()) {
+        //    p_self.n_doublePawn += 1;
+        //    return;
+        //}
+        //if (p_move.isKingSideCastle() or p_move.isQueenSideCastle()) {
+        //    p_self.n_castles += 1;
+        //    return;
+        //}
+        //if (p_move.isCapture()) {
+        //    p_self.n_captures += 1;
+        //}
+        //if (p_move.isEnpassant()) {
+        //    p_self.n_enpassants += 1;
+        //}
+        //if (p_move.isPromotion()) {
+        //    p_self.n_promotions += 1;
+        //}
     }
     pub fn printInfo(self: benchmarkResult) void {
         std.debug.print("\n|Nodes|Capture|Doublepush|Enpassant|castling|promotions|\n", .{});
@@ -80,6 +86,7 @@ const benchmarkResultsContainer = struct {
             ret.n_enpassants += bench.n_enpassants;
             ret.n_castles += bench.n_castles;
             ret.n_promotions += bench.n_promotions;
+            ret.n_hashRetrieve += bench.n_hashRetrieve;
         }
         return ret;
     }
@@ -114,10 +121,15 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
         exploration.explorationNDepthThreadStart(p_state, @intCast(depth), nThread, &bench_res, batched) catch unreachable;
         _end = std.time.milliTimestamp();
-        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, bench_res.n_nodes, @divFloor((bench_res.n_nodes), (_end - _start + 1)) * 1000 });
+        const _node: i64 = @intCast(bench_res.n_nodes);
+        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, bench_res.n_nodes, @divFloor(_node, (_end - _start + 1)) * 1000 });
         bench_res.printInfo();
         if (bench_res.n_nodes != ExpectedBenchmarkResults[depth]) {
-            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], bench_res.n_nodes, ExpectedBenchmarkResults[depth] - bench_res.n_nodes });
+            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], bench_res.n_nodes, ExpectedBenchmarkResults[depth] - _node });
+        }
+        if (comptime useHash) {
+            std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{bench_res.n_hashRetrieve});
+            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
         }
         //        std.debug.assert(bench_res.n_nodes == ExpectedBenchmarkResults[depth]);
     }

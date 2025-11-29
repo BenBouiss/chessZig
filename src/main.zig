@@ -10,6 +10,7 @@ const benchmark = @import("benchmark.zig");
 const interfacel = @import("interface.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
+const hashl = @import("hashTable.zig");
 
 const squarel = @import("square.zig");
 
@@ -61,6 +62,7 @@ fn test_moveTable() void {
 }
 pub fn main() anyerror!void {
     magicl._initMagic(&magicl.magicTable);
+    hashl._initHash(42, 24);
     moveTablel._initTables();
     //test_moveTable();
     //magicl.main();
@@ -72,4 +74,5 @@ pub fn main() anyerror!void {
     //interfacel.shell();
     //magicl.magicTables.print();
     //try chess.main();
+    hashl.hashTable.free(GLOBAL_ALLOC);
 }

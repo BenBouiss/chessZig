@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "useMagic", b.option(bool, "useMagic", "Use magic generation for ray pieces") orelse false);
     build_options.addOption(bool, "useStaged", b.option(bool, "useStaged", "Use the staged move generation") orelse false);
     build_options.addOption(bool, "useDebug", b.option(bool, "useDebug", "Use debugging checks in the gen/make/unmake of move") orelse false);
+    build_options.addOption(bool, "useHash", b.option(bool, "useHash", "Use hashtable for perft") orelse false);
     // doesnt work still get cache error thingy on WSL
     //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     //const alloc = gpa.allocator();

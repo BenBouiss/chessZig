@@ -7,12 +7,16 @@ const moveGenl = @import("move_generation.zig");
 const squarel = @import("square.zig");
 const heuristicl = @import("heuristic.zig");
 const utilsl = @import("utils.zig");
+const hashl = @import("hashTable.zig");
+const build_options = @import("build_options");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const typedMoveContainer = movel.typedMoveContainer;
 const e_square = squarel.e_square;
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
+
+const useHash = build_options.useHash;
 
 const assert = std.debug.assert;
 
@@ -100,7 +104,7 @@ pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !e_matchFlag {
         }
         return .CheckMate;
     }
-    _ = try p_state.makeMove(moveD.move);
+    _ = p_state.makeMoveUpdate(moveD.move);
     return .Continue;
 }
 
@@ -131,27 +135,30 @@ pub fn getScoreMaskFromTurn(color: chess.e_color) i8 {
 }
 
 pub fn simpleBotMoveExploration(p_state: *chess.Board_state, p_player: *const Player) !moveDecision {
-    var moves: moveContainer = moveGenl.moveGeneration(p_state);
-    moves.shuffle(p_state.randInt);
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
 
     var decision: moveDecision = .{};
     var curr_score: i64 = 0;
     const color_mask: i8 = getScoreMaskFromTurn(p_state.turn);
-    const turn = p_state.turn;
-    for (0..moves.len) |i| {
-        _ = try p_state.makeMove(moves.moves[i]);
-        if (!p_state.isLegal(turn)) {
-            _ = try p_state.undoMove();
-            continue;
-        }
+
+    for (0..fmoves.len) |i| {
+        p_state.stack.push(&p_state.makeFrame());
+        const move: IMove = fmoves.moves[i];
+        _ = p_state.makeMoveUpdate(move);
+
         curr_score = getEvaluation(p_state, p_player);
-        _ = try p_state.undoMove();
+
+        _ = p_state.undoMoveRestore();
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
+
         if (!decision.move.isValid() or
             (curr_score * color_mask > decision.scoring * color_mask))
         {
-            decision.move = moves.moves[i];
+            decision.move = move;
             decision.scoring = curr_score;
         }
+        _ = p_state.undoMoveRestore();
     }
 
     if (!decision.move.isValid()) {
@@ -181,25 +188,43 @@ pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchma
     }
     return;
 }
-pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult, batched: bool) !void {
+pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: bool, p_res: *benchmark.benchmarkResult) u64 {
     if (depth <= 0) {
-        p_res.addNode(&p_state.getLastMove());
-        return;
+        return 1;
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     if (depth == 1 and batched) {
-        for (0..fmoves.len) |i| {
-            p_res.addNode(&fmoves.moves[i]);
+        return fmoves.len;
+    }
+    if (comptime useHash) {
+        //std.debug.print("[DEBUG] explorationNDepthPerft: Searching for valid entries\n", .{});
+        const entry = hashl.getEntryFromPerft(p_state.key, depth);
+        if (entry.valid) {
+            //std.debug.print("[DEBUG] explorationNDepthPerft: Found a valid hash entry \n", .{});
+            p_res.n_hashRetrieve += @intCast(entry.moveAmount);
+            return entry.moveAmount;
         }
-        return;
     }
+    var count: u64 = 0;
     for (0..fmoves.len) |i| {
-        _ = p_state.makeMoveUpdate(fmoves.moves[i]);
-        try explorationNDepthPerft(p_state, depth - 1, p_res, batched);
+        p_state.stack.push(&p_state.makeFrame());
+        const move: IMove = fmoves.moves[i];
+
+        _ = p_state.makeMoveUpdate(move);
+
+        count += explorationNDepthPerft(p_state, depth - 1, batched, p_res);
+
         _ = p_state.undoMoveRestore();
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
     }
-    return;
+    if (comptime useHash) {
+        //std.debug.print("[DEBUG] explorationNDepthPerft: Storing key: {x} with depht: {d} of amount: {d}\n", .{ p_state.key.code, depth, count });
+        const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
+        _ = hashl.hashTable.storeEntry(&entry);
+    }
+    return count;
 }
 pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, p_res: *benchmark.benchmarkResult, batched: bool) !void {
     var moves: moveContainer = moveGenl.moveGeneration(p_state);
@@ -213,11 +238,6 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
     _nThread = utilsl.min(usize, fmoves.len, _nThread);
 
     var threadedMoves = try utilsl.cutArrayListEvenly(IMove, GLOBAL_ALLOC, fmoves_arr, _nThread);
-    //std.debug.print("Thread work distribution: \n", .{});
-    //for (threadedMoves.items) |cell| {
-    //    std.debug.print("Number of moves: {d}\n", .{cell.items.len});
-    //}
-
     defer {
         for (threadedMoves.items) |*cell| {
             cell.deinit(GLOBAL_ALLOC);
@@ -246,10 +266,25 @@ pub fn explorationNDepthThreadStart(p_state: *chess.Board_state, depth: u8, nThr
 
 pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult, p_startingMoves: *std.ArrayList(IMove), batched: bool) void {
     for (0..p_startingMoves.items.len) |i| {
-        _ = p_state.makeMoveFaster(p_startingMoves.items[i]);
-        try explorationNDepthPerft(p_state, depth - 1, p_res, batched);
-        //_ = p_state.undoMoveFaster();
-        _ = p_state.undoMoveFaster();
+        p_state.stack.push(&p_state.makeFrame());
+        const move = p_startingMoves.items[i];
+
+        _ = p_state.makeMoveUpdate(move);
+        //if (comptime useHash) {
+        //    const deltaKey = p_state.key;
+        //    const absKey = hashl.fullComputeZobristKeys(p_state);
+        //    if (deltaKey.code != absKey.code) {
+        //        std.debug.print("[DEBUG] explorationNDepthPerft: Erronous value between delta computed zobrist key: {x} and absolute zobrist key: {x}\n", .{ deltaKey.code, absKey.code });
+        //        //std.debug.print("w: {x}, b: {x}\n", .{ hashl.fullComputeZobristKeys(p_state.WHITE).code, hashl.fullComputeZobristKeys(p_state, .BLACK).code });
+        //        chess.print_boardstate(p_state);
+        //        @panic("");
+        //    }
+        //}
+        p_res.n_nodes += explorationNDepthPerft(p_state, depth - 1, batched, p_res);
+        _ = p_state.undoMoveRestore();
+
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
     }
 }
 
@@ -299,30 +334,25 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
         //return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * heuristicl.simpleHeuristic(p_state) };
         return .{ .move = p_state.move_history.moves[p_state.move_history.len - 1], .scoring = color_mask * getEvaluation(p_state, p_player) };
     }
-    var all_moves: moveContainer = moveGenl.moveGeneration(p_state);
-    all_moves.shuffle(p_state.randInt);
-    const fmoves = try moveGenl.filterMoveLegal(p_state, &all_moves);
+
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
 
     var final_decision: moveDecision = .{};
     var decision: moveDecision = .{};
     const turn = p_state.turn;
     for (0..fmoves.len) |i| {
-        const move = fmoves.moves[i];
-        //if (move.isCapture()) {
-        //    std.debug.print("[DEBUG] depthBotMoveExploration: turn: {} found a capture move for piece from {d} to {d}\n", .{ p_state.turn, move.getFrom(), move.getTo() });
-        //    chess.print_boardstate(p_state);
-        //}
-        _ = try p_state.makeMove(move);
+        p_state.stack.push(&p_state.makeFrame());
+        const move: IMove = fmoves.moves[i];
 
-        //if (!p_state.isLegal(turn)) {
-        //    _ = try p_state.undoMove();
-        //    continue;
-        //}
+        _ = p_state.makeMoveUpdate(move);
 
         decision = try depthBotMoveExploration(p_state, p_player, depth - 1);
 
         decision.invertScore();
-        _ = try p_state.undoMove();
+
+        _ = p_state.undoMoveRestore();
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
 
         if (!final_decision.move.isValid() or final_decision.scoring < decision.scoring) {
             //final_decision.move = all_moves.moves[i];

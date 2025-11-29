@@ -480,7 +480,6 @@ pub fn white_moveGeneration(p_board: *Board_state) moveContainer {
 
     const emptyOrEnemy = ~p_board.c_occupiedBB[@intFromEnum(e_color.WHITE)];
 
-    // TODO Unroll the loop
     white_PieceMovePawnMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)], &ret);
 
     _PieceMoveKnightMask(p_board, p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)], e_color.WHITE, emptyOrEnemy, &ret);
@@ -584,13 +583,13 @@ pub fn white_PieceMovePawnMask(p_board: *Board_state, bb_piece: u64, p_out: *mov
         }
 
         if (sqRank == 1 and ((singlePushBB & freeBB)) != 0) {
-            moveBitBoardToIMove_pawn(p_board, piece, curr_pos, ((singlePushBB) << 8) & (freeBB), @intFromEnum(e_moveFlags.DOUBLEPAWN), p_out, e_color.WHITE);
+            moveBitBoardToIMove_pawn(p_board, piece, curr_pos, ((singlePushBB & freeBB) << 8) & (freeBB), @intFromEnum(e_moveFlags.DOUBLEPAWN), p_out, e_color.WHITE);
         }
         moveBitBoardToIMove_pawn(p_board, piece, curr_pos, (singlePushBB & freeBB), 0, p_out, e_color.WHITE);
 
         moveBitBoardToIMove_pawn(p_board, piece, curr_pos, (cachedTables.SimplePawnAttack[@intFromEnum(e_color.WHITE)][@intCast(sq)] & enemyBB), @intFromEnum(e_moveFlags.CAPTURE), p_out, e_color.WHITE);
 
-        const enPassantBB = chess.ONE << @intCast(p_board.enPassantIdx);
+        const enPassantBB = chess.xToBitboard(p_board.enPassantIdx);
         moveBitBoardToIMove_pawn(p_board, piece, curr_pos, (cachedTables.SimplePawnAttack[@intFromEnum(e_color.WHITE)][@intCast(sq)] & enPassantBB & chess.whitePawnEnpassantRank & (freeBB)), @intFromEnum(e_moveFlags.ENPASSANT), p_out, e_color.WHITE);
         _bb_piece ^= curr_pos;
     }
@@ -777,7 +776,7 @@ pub fn filterMoveLegal(p_state: *Board_state, move_list: *moveContainer) !moveCo
     const diagPieceBB = cached[1];
     for (0..move_list.len) |i| {
         if (move_list.moves[i].isCastle()) {
-            if (chess.isCastleLegalPreMove(p_state, turn, move_list.moves[i], all_attacks)) {
+            if (p_state.isCastleLegalPreMove(turn, move_list.moves[i], all_attacks)) {
                 _ = ret.append(move_list.moves[i]);
             }
         } else if (p_state.isLegalFast(all_attacks, move_list.moves[i], &kingSqInfo, &checks, diagPieceBB, linePieceBB)) {
