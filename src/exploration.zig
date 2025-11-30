@@ -17,6 +17,7 @@ const e_square = squarel.e_square;
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 const useHash = build_options.useHash;
+const useDebug = build_options.useDebug;
 
 const assert = std.debug.assert;
 
@@ -104,7 +105,11 @@ pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !e_matchFlag {
         }
         return .CheckMate;
     }
+    //p_state.stack.push(&p_state.makeFrame());
     _ = p_state.makeMoveUpdate(moveD.move);
+    if (comptime useDebug) {
+        chess.sanityCheckBoardState(p_state);
+    }
     return .Continue;
 }
 
@@ -158,7 +163,6 @@ pub fn simpleBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pl
             decision.move = move;
             decision.scoring = curr_score;
         }
-        _ = p_state.undoMoveRestore();
     }
 
     if (!decision.move.isValid()) {
@@ -173,21 +177,6 @@ pub fn simpleMoveBot(p_state: *chess.Board_state, player: Player) !moveDecision 
     return decision;
 }
 
-pub fn explorationNDepth(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.benchmarkResult) !void {
-    if (depth <= 0) {
-        //p_res.n_nodes += 1;
-        p_res.addNode(&p_state.getLastMove());
-        return;
-    }
-
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    for (0..fmoves.len) |i| {
-        _ = p_state.makeMoveUpdate(fmoves.moves[i]);
-        try explorationNDepth(p_state, depth - 1, p_res);
-        _ = p_state.undoMoveRestore();
-    }
-    return;
-}
 pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: bool, p_res: *benchmark.benchmarkResult) u64 {
     if (depth <= 0) {
         return 1;
@@ -198,10 +187,8 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
         return fmoves.len;
     }
     if (comptime useHash) {
-        //std.debug.print("[DEBUG] explorationNDepthPerft: Searching for valid entries\n", .{});
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
-            //std.debug.print("[DEBUG] explorationNDepthPerft: Found a valid hash entry \n", .{});
             p_res.n_hashRetrieve += @intCast(entry.moveAmount);
             return entry.moveAmount;
         }
@@ -270,16 +257,7 @@ pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.
         const move = p_startingMoves.items[i];
 
         _ = p_state.makeMoveUpdate(move);
-        //if (comptime useHash) {
-        //    const deltaKey = p_state.key;
-        //    const absKey = hashl.fullComputeZobristKeys(p_state);
-        //    if (deltaKey.code != absKey.code) {
-        //        std.debug.print("[DEBUG] explorationNDepthPerft: Erronous value between delta computed zobrist key: {x} and absolute zobrist key: {x}\n", .{ deltaKey.code, absKey.code });
-        //        //std.debug.print("w: {x}, b: {x}\n", .{ hashl.fullComputeZobristKeys(p_state.WHITE).code, hashl.fullComputeZobristKeys(p_state, .BLACK).code });
-        //        chess.print_boardstate(p_state);
-        //        @panic("");
-        //    }
-        //}
+
         p_res.n_nodes += explorationNDepthPerft(p_state, depth - 1, batched, p_res);
         _ = p_state.undoMoveRestore();
 
@@ -289,8 +267,7 @@ pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_res: *benchmark.
 }
 
 pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
-    var moves: moveContainer = moveGenl.moveGeneration(p_state);
-    const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
+    const fmoves = moveGenl.generateLegalMoves(p_state);
     if (fmoves.len == 0) {
         return .{};
     }
@@ -302,8 +279,7 @@ pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
 
 pub fn humanMoveBot(p_state: *chess.Board_state) !moveDecision {
     std.debug.print("[DEBUG] humanMoveBot: \n", .{});
-    var moves: moveContainer = moveGenl.moveGeneration(p_state);
-    const fmoves = try moveGenl.filterMoveLegal(p_state, &moves);
+    const fmoves = moveGenl.generateLegalMoves(p_state);
     var userMove: IMove = undefined;
 
     // TODO Remove these debug lines
@@ -331,8 +307,7 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
     const color_mask: i8 = getScoreMaskFromTurn(p_state.turn);
 
     if (depth <= 0) {
-        //return .{ .move = p_state.move_history.items[p_state.move_history.items.len - 1].copy(), .scoring = color_mask * heuristicl.simpleHeuristic(p_state) };
-        return .{ .move = p_state.move_history.moves[p_state.move_history.len - 1], .scoring = color_mask * getEvaluation(p_state, p_player) };
+        return .{ .move = p_state.getLastMove(), .scoring = color_mask * getEvaluation(p_state, p_player) };
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
@@ -341,9 +316,8 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
     var decision: moveDecision = .{};
     const turn = p_state.turn;
     for (0..fmoves.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move: IMove = fmoves.moves[i];
-
+        p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
         decision = try depthBotMoveExploration(p_state, p_player, depth - 1);
@@ -355,7 +329,6 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
         p_state.loadFrame(&popped);
 
         if (!final_decision.move.isValid() or final_decision.scoring < decision.scoring) {
-            //final_decision.move = all_moves.moves[i];
             final_decision.move = fmoves.moves[i];
             final_decision.scoring = decision.scoring;
         }

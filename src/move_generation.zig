@@ -534,7 +534,7 @@ pub fn moveBitBoardToIMove_pawn(p_board: *Board_state, piece: e_piece, piece_bb:
         _bb &= _bb - 1;
         if (flags == @intFromEnum(e_moveFlags.ENPASSANT)) {
             c_piece = enpass_capture_pawn;
-        } else if (flags == @intFromEnum(e_moveFlags.CAPTURE)) {
+        } else {
             c_piece = p_board.get_piece(@intCast(lsb));
         }
         _curr_move = movel.build_move(@intCast(sq), @intCast(lsb), flags, piece);

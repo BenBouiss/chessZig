@@ -11,8 +11,10 @@ const interfacel = @import("interface.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
 const hashl = @import("hashTable.zig");
-
 const squarel = @import("square.zig");
+
+const build_options = @import("build_options");
+const useDebug = build_options.useDebug;
 
 fn test_main_game() !void {
     var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
@@ -60,18 +62,19 @@ fn test_moveTable() void {
     chess.print_bitboard(chess.inBetween(.a1, .h8));
     chess.print_bitboard(chess.inBetween(.a8, .h1));
 }
-pub fn main() anyerror!void {
-    magicl._initMagic(&magicl.magicTable);
-    hashl._initHash(42, 24);
-    moveTablel._initTables();
-    //test_moveTable();
-    //magicl.main();
-    //var magicTable = magicl.initMagic();
-    //test_magic(&magicl.magicTable);
 
-    //chess.initRayAttacks();
-    benchmark.test_benchmark();
-    //interfacel.shell();
+pub fn initAll() void {
+    magicl._initMagic(&magicl.magicTable);
+    hashl._initHash(42, 19);
+    moveTablel._initTables();
+    if (comptime useDebug) {
+        std.debug.print("[PRE] Building using the useDebug flag\n", .{});
+    }
+}
+
+pub fn main() anyerror!void {
+    initAll();
+    interfacel.shell();
     //magicl.magicTables.print();
     //try chess.main();
     hashl.hashTable.free(GLOBAL_ALLOC);

@@ -91,14 +91,17 @@ pub const Hash_table = struct {
         ret.nBits = nBits;
         ret.size = total_size;
         ret.entries = try alloc.alloc(Hash_bucket, total_size);
-
+        for (0..total_size) |i| {
+            ret.entries[i].lock = false;
+        }
         return ret;
     }
     pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator) void {
         alloc.free(p_self.entries);
     }
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
-        return hash >> @intCast(64 - self.nBits);
+        //return hash >> @intCast(64 - self.nBits);
+        return hash % self.entries.len;
     }
     pub fn getBucketFromFullHashIndex(self: Hash_table, hash: u64) *Hash_bucket {
         const index = self.getHashIndex(hash);
