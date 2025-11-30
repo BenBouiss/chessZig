@@ -310,7 +310,8 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
         return .{ .move = p_state.getLastMove(), .scoring = color_mask * getEvaluation(p_state, p_player) };
     }
 
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    var fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    fmoves.shuffle(p_state.randInt);
 
     var final_decision: moveDecision = .{};
     var decision: moveDecision = .{};

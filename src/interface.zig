@@ -398,6 +398,7 @@ pub fn useMainTemplate(p_shellState: *ShellState) bool {
 
     _ = execStringCmd(p_shellState, "SET WHITE TYPE BOT");
     _ = execStringCmd(p_shellState, "SET WHITE SEARCH SIMPLE");
+    _ = execStringCmd(p_shellState, "SET WHITE HEURISTIC SIMPLE");
 
     _ = execStringCmd(p_shellState, "SET BLACK TYPE BOT");
     _ = execStringCmd(p_shellState, "SET BLACK SEARCH DEPTH");
