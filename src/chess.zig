@@ -349,11 +349,9 @@ pub fn getBoardFromFen(fen: []const u8, alloc: std.mem.Allocator) Board_state {
         }
     }
     initBothSidePinnedBB(&ret);
-    if (comptime useHash) {
-        const key = hashl.fullComputeZobristKeys(&ret);
-        std.debug.print("[DEBUG] getBoardFromFen: Initial zobrist key computed: {x}\n", .{key.code});
-        ret.key = key;
-    }
+    const key = hashl.fullComputeZobristKeys(&ret);
+    std.debug.print("[DEBUG] getBoardFromFen: Initial zobrist key computed: {x}\n", .{key.code});
+    ret.key = key;
     return ret;
 }
 
@@ -453,6 +451,7 @@ pub const boardFrame = struct {
 
     enPassantIdx: u8 = 0,
     castling: u8 = 0,
+    halfMoveClock: u8 = 0,
     lastMove: IMove = .{},
     victim: e_piece = .nEmptySquare,
     key: hashl.Key = .{},
@@ -497,7 +496,7 @@ pub const Board_state = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
     occupiedBB: u64 = 0,
-
+    halfMoveClock: u8 = 0,
     key: hashl.Key = .{},
 
     victim: e_piece = .nEmptySquare,
@@ -545,7 +544,7 @@ pub const Board_state = struct {
         p_self.players[1].setType(.Human);
     }
     pub fn makeFrame(self: Board_state) boardFrame {
-        return .{ .castling = self.castling, .pinnedBB = self.pinnedBB, .victim = self.victim, .checkersBB = self.checkersBB, .enPassantIdx = self.enPassantIdx, .lastMove = self.lastMove, .key = self.key };
+        return .{ .castling = self.castling, .pinnedBB = self.pinnedBB, .victim = self.victim, .checkersBB = self.checkersBB, .enPassantIdx = self.enPassantIdx, .lastMove = self.lastMove, .key = self.key, .halfMoveClock = self.halfMoveClock };
     }
     pub fn loadFrame(p_self: *Board_state, p_frame: *const boardFrame) void {
         p_self.pinnedBB = p_frame.pinnedBB;
@@ -555,6 +554,7 @@ pub const Board_state = struct {
         p_self.enPassantIdx = p_frame.enPassantIdx;
         p_self.lastMove = p_frame.lastMove;
         p_self.key = p_frame.key;
+        p_self.halfMoveClock = p_frame.halfMoveClock;
         return;
     }
     pub fn duplicateNTimes(self: Board_state, alloc: std.mem.Allocator, n: usize) !Board_stateContainer {
@@ -720,6 +720,7 @@ pub const Board_state = struct {
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
+        _ = p_self.move_history.popMove();
         return true;
     }
 
@@ -730,11 +731,9 @@ pub const Board_state = struct {
         }
         p_self.lastMove = move;
         p_self.victim = .nEmptySquare;
-        if (comptime useHash) {
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.playKey);
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.castling]);
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
-        }
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.playKey);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.castling]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
         p_self.enPassantIdx = 0;
 
         const toSq = move.getTo();
@@ -755,14 +754,14 @@ pub const Board_state = struct {
         p_self.pieceArray[toSq] = fromPiece;
 
         p_self.occupiedBB ^= moveBB;
+        p_self.halfMoveClock += 1;
         if (victim != .nEmptySquare) {
             p_self.c_occupiedBB[@intFromEnum(opp)] ^= toBB;
             p_self.occupiedBB ^= toBB;
             p_self.pieceBB[@intFromEnum(victim)] ^= toBB;
             p_self.victim = victim;
-            if (comptime useHash) {
-                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
-            }
+            hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
+            p_self.halfMoveClock = 0;
         }
 
         if (isKingPiece(fromPiece)) {
@@ -775,10 +774,8 @@ pub const Board_state = struct {
 
                 p_self.pieceBB[@intFromEnum(castlePiece)] ^= castleBB;
                 p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (castleBB);
-                if (comptime useHash) {
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq - 1)]);
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq + 1)]);
-                }
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq - 1)]);
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq + 1)]);
                 p_self.occupiedBB ^= castleBB;
                 //
             } else if (move.isQueenSideCastle()) {
@@ -789,23 +786,20 @@ pub const Board_state = struct {
                 p_self.pieceBB[@intFromEnum(castlePiece)] ^= castleBB;
                 p_self.c_occupiedBB[@intFromEnum(p_self.turn)] ^= (castleBB);
                 p_self.occupiedBB ^= castleBB;
-                if (comptime useHash) {
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq + 1)]);
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq - 2)]);
-                }
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq + 1)]);
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq - 2)]);
                 //
             }
         } else if (isPawnPiece(fromPiece)) {
+            p_self.halfMoveClock = 0;
             if (move.isPromotion()) {
                 // can also be or and not xor
                 const promPiece = flagPromotionToPiece(move.getFlag(), p_self.turn);
                 p_self.pieceBB[@intFromEnum(promPiece)] ^= toBB;
                 p_self.pieceBB[@intFromEnum(fromPiece)] ^= toBB;
                 p_self.pieceArray[toSq] = promPiece;
-                if (comptime useHash) {
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][toSq]);
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(promPiece)][toSq]);
-                }
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][toSq]);
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(promPiece)][toSq]);
             } else if (move.isDoublePush()) {
                 // middle between from and to
                 p_self.enPassantIdx = (fromSq + toSq) / 2;
@@ -821,19 +815,16 @@ pub const Board_state = struct {
                 p_self.c_occupiedBB[@intFromEnum(opp)] ^= bisBB;
 
                 p_self.occupiedBB ^= bisBB;
-                if (comptime useHash) {
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][@intFromEnum(victimSq)]);
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
-                }
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][@intFromEnum(victimSq)]);
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
             }
         }
-        if (comptime useHash) {
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][fromSq]);
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][toSq]);
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.castling]);
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
-        }
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][fromSq]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][toSq]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.castling]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
 
+        _ = p_self.move_history.append(move, p_self.key);
         p_self.next_turn();
 
         if (comptime useDebug) {
@@ -990,10 +981,15 @@ pub const Board_state = struct {
         return (isNotPinned and isToSecure);
     }
 
-    pub fn isStaleThreeFold(self: Board_state) bool {
+    pub fn isFiftyMoveRepetition(self: *Board_state) bool {
+        return self.halfMoveClock >= 50;
+    }
+    pub fn isStaleThreeFold(self: *Board_state) bool {
         // TODO: Make it actually adhere to the rule ie check for 3 BOARD_STATE repeated during the _whole_ game
-        _ = self;
-        return false;
+        return self.move_history.checkRepetitions();
+    }
+    pub fn isStaleMateRepetion(p_self: *Board_state) bool {
+        return p_self.isFiftyMoveRepetition() or p_self.isStaleThreeFold();
     }
 
     pub fn setSeed(p_self: *Board_state, seed: u64) void {
@@ -1093,6 +1089,9 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
         p_board_state.lastMove.print();
         std.debug.print("\n", .{});
     }
+
+    std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.halfMoveClock, p_board_state.move_history.getRepetitions(), p_board_state.move_history.lastIrreversibleMoveIndex });
+    std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetion()});
     sanityCheckBoardState(p_board_state);
 }
 
@@ -1831,7 +1830,7 @@ pub fn match_routine(p_state: *Board_state) void {
             return;
         };
         switch (status) {
-            .CheckMate, .StaleMate, .Error => {
+            .CheckMate, .StaleMate, .StaleMateRepetition, .Error => {
                 std.debug.print("[DEBUG] match_routine: match is over flag: {} \n", .{status});
                 askContinue();
                 break;

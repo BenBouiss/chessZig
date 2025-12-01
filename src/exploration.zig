@@ -22,7 +22,7 @@ const useDebug = build_options.useDebug;
 const assert = std.debug.assert;
 
 const e_simpleScore = enum(i64) { CheckMate = 9999, StaleMate = 0 };
-pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate };
+pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition };
 
 pub const e_playerType = enum(u8) { Invalid = 0, Human, Bot };
 pub const e_searchType = enum(u8) { Random, Simple, DepthBot };
@@ -105,10 +105,14 @@ pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !e_matchFlag {
         }
         return .CheckMate;
     }
+
     //p_state.stack.push(&p_state.makeFrame());
     _ = p_state.makeMoveUpdate(moveD.move);
     if (comptime useDebug) {
         chess.sanityCheckBoardState(p_state);
+    }
+    if (p_state.isStaleMateRepetion()) {
+        return .StaleMateRepetition;
     }
     return .Continue;
 }
@@ -179,6 +183,9 @@ pub fn simpleMoveBot(p_state: *chess.Board_state, player: Player) !moveDecision 
 
 pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: bool, p_res: *benchmark.benchmarkResult) u64 {
     if (depth <= 0) {
+        return 1;
+    }
+    if (p_state.isStaleMateRepetion()) {
         return 1;
     }
 
@@ -278,13 +285,11 @@ pub fn randomMoveBot(p_state: *chess.Board_state) !moveDecision {
 }
 
 pub fn humanMoveBot(p_state: *chess.Board_state) !moveDecision {
-    std.debug.print("[DEBUG] humanMoveBot: \n", .{});
+    //std.debug.print("[DEBUG] humanMoveBot: \n", .{});
     const fmoves = moveGenl.generateLegalMoves(p_state);
     var userMove: IMove = undefined;
 
     // TODO Remove these debug lines
-    const testMoveBB = moveGenl.moveGenBB(p_state);
-    testMoveBB.print();
 
     while (true) {
         userMove = try chess.askUserMove(p_state);
@@ -308,6 +313,9 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
 
     if (depth <= 0) {
         return .{ .move = p_state.getLastMove(), .scoring = color_mask * getEvaluation(p_state, p_player) };
+    }
+    if (p_state.isStaleMateRepetion()) {
+        return .{ .move = p_state.getLastMove(), .scoring = heuristicl.simpleStalemateScore };
     }
 
     var fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);

@@ -329,7 +329,14 @@ pub fn execPerft(p_shellState: *ShellState, userBuffer: []const u8) bool {
     const nThread = std.fmt.parseInt(u8, indiv_args.items[2], 10) catch {
         return false;
     };
-    benchmarkl.nodeExplorationBenchmark(&p_shellState.chessBoardState, depth, nThread, false);
+    var batched: bool = false;
+    if (indiv_args.items.len == 4) {
+        const batched_u = std.fmt.parseInt(u8, indiv_args.items[2], 10) catch {
+            return false;
+        };
+        batched = (batched_u != 0);
+    }
+    benchmarkl.nodeExplorationBenchmark(&p_shellState.chessBoardState, depth, nThread, batched);
     return true;
 }
 
@@ -396,14 +403,17 @@ pub fn useMainTemplate(p_shellState: *ShellState) bool {
 
     _ = execStringCmd(p_shellState, "SET SEED 42");
 
-    _ = execStringCmd(p_shellState, "SET WHITE TYPE BOT");
-    _ = execStringCmd(p_shellState, "SET WHITE SEARCH SIMPLE");
-    _ = execStringCmd(p_shellState, "SET WHITE HEURISTIC SIMPLE");
+    _ = execStringCmd(p_shellState, "SET WHITE TYPE HUMAN");
+    _ = execStringCmd(p_shellState, "SET BLACK TYPE HUMAN");
+    //
+    //_ = execStringCmd(p_shellState, "SET WHITE TYPE BOT");
+    //_ = execStringCmd(p_shellState, "SET WHITE SEARCH SIMPLE");
+    //_ = execStringCmd(p_shellState, "SET WHITE HEURISTIC SIMPLE");
 
-    _ = execStringCmd(p_shellState, "SET BLACK TYPE BOT");
-    _ = execStringCmd(p_shellState, "SET BLACK SEARCH DEPTH");
-    _ = execStringCmd(p_shellState, "SET BLACK DEPTH 5");
-    _ = execStringCmd(p_shellState, "SET BLACK HEURISTIC SIMPLE");
+    //_ = execStringCmd(p_shellState, "SET BLACK TYPE BOT");
+    //_ = execStringCmd(p_shellState, "SET BLACK SEARCH DEPTH");
+    //_ = execStringCmd(p_shellState, "SET BLACK DEPTH 5");
+    //_ = execStringCmd(p_shellState, "SET BLACK HEURISTIC SIMPLE");
     return true;
 }
 

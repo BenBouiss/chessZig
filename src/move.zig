@@ -4,11 +4,13 @@ const build_options = @import("build_options");
 const chess = @import("chess.zig");
 const squarel = @import("square.zig");
 const mainl = @import("main.zig");
+const hashl = @import("hashTable.zig");
 
 const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
+const Key = hashl.Key;
 
-const ignoreChecks = build_options.fastBitscan;
+const useDebug = build_options.useDebug;
 
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
@@ -92,6 +94,9 @@ pub const IMove = struct {
             }
         }
         return false;
+    }
+    pub inline fn isIrreversible(self: IMove) bool {
+        return self.isCapture() or chess.isPawnPiece(self.getFromPiece());
     }
     pub inline fn getFrom(self: IMove) u8 {
         return @intCast((self.m_move & 0x3F));
@@ -210,7 +215,7 @@ pub const moveContainer = struct {
     }
 
     pub fn extend(p_self: *moveContainer, p_other: *const moveContainer) bool {
-        if (comptime !ignoreChecks) {
+        if (comptime useDebug) {
             if ((p_self.len + p_other.len) > chess.MAX_POSSIBLE_MOVE) {
                 return false;
             }
@@ -300,23 +305,60 @@ pub const moveContainer = struct {
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
 pub const MAX_MATCH_LENGTH: usize = 4096;
 pub const matchMoveContainer = struct {
-    moves: [MAX_MATCH_LENGTH]IMove = undefined,
+    moves: [MAX_MATCH_LENGTH]IMove = std.mem.zeroes([MAX_MATCH_LENGTH]IMove),
+    keyCodes: [MAX_MATCH_LENGTH]u32 = std.mem.zeroes([MAX_MATCH_LENGTH]u32),
+    lastIrreversibleMoveIndex: u16 = 0,
+
     len: usize = 0,
-    pub fn append(p_self: *matchMoveContainer, move: IMove) bool {
-        if (comptime !ignoreChecks) {
+    pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
+        if (comptime !useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
                 return false;
             }
         }
+        if (move.isIrreversible()) {
+            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
+        }
         p_self.moves[p_self.len] = move;
+        p_self.keyCodes[p_self.len] = @intCast(key.code >> 32);
         p_self.len += 1;
         return true;
     }
-    pub fn pop(p_self: *matchMoveContainer) IMove {
-        if (comptime !ignoreChecks) {
+    pub fn getRepetitions(self: *matchMoveContainer) u8 {
+        var count: u8 = 0;
+        if (self.len >= (self.lastIrreversibleMoveIndex + 4)) {
+            const keyRepet = self.keyCodes[self.len - 1];
+            for (self.lastIrreversibleMoveIndex..self.len - 1) |i| {
+                if (self.keyCodes[i] == keyRepet) {
+                    count += 1;
+                }
+                if (count == 2) {
+                    return count;
+                }
+            }
+        }
+        return count;
+    }
+    pub fn checkRepetitions(self: *matchMoveContainer) bool {
+        const count = self.getRepetitions();
+        return count >= 2;
+    }
+    pub fn popMove(p_self: *matchMoveContainer) IMove {
+        if (comptime !useDebug) {
             if (p_self.len == 0) {
                 return .{};
             }
+        }
+        if (p_self.lastIrreversibleMoveIndex == p_self.len) {
+            var index: u16 = @intCast(p_self.len - 1);
+            while (index > 0) {
+                const move = p_self.moves[index];
+                if (move.isIrreversible()) {
+                    break;
+                }
+                index -= 1;
+            }
+            p_self.lastIrreversibleMoveIndex = index;
         }
         p_self.len -= 1;
         return p_self.moves[p_self.len];

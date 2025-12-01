@@ -75,6 +75,7 @@ pub fn initAll() void {
 pub fn main() anyerror!void {
     initAll();
     interfacel.shell();
+    //benchmark.test_benchmark();
     //magicl.magicTables.print();
     //try chess.main();
     hashl.hashTable.free(GLOBAL_ALLOC);
