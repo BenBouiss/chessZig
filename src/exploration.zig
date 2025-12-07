@@ -8,6 +8,7 @@ const squarel = @import("square.zig");
 const heuristicl = @import("heuristic.zig");
 const utilsl = @import("utils.zig");
 const hashl = @import("hashTable.zig");
+const enginel = @import("engine.zig");
 const build_options = @import("build_options");
 
 const IMove = movel.IMove;
@@ -81,6 +82,18 @@ pub const moveDecision = struct {
         p_self.scoring = -p_self.scoring;
     }
 };
+pub const moveDecisionExt = struct {
+    move: IMove = .{},
+    line: movel.moveContainer = .{},
+    scoring: i64 = 0,
+    timeTake: u64 = 0, //seconds
+    pub fn invertScore(p_self: *moveDecisionExt) void {
+        p_self.scoring = -p_self.scoring;
+    }
+    pub fn isBetter(p_self: *moveDecisionExt, other: *moveDecisionExt) bool {
+        return p_self.scoring > other.scoring;
+    }
+};
 
 pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !e_matchFlag {
     var moveD: moveDecision = undefined;
@@ -111,7 +124,7 @@ pub fn handlePlayer(p_state: *chess.Board_state, player: Player) !e_matchFlag {
     if (comptime useDebug) {
         chess.sanityCheckBoardState(p_state);
     }
-    if (p_state.isStaleMateRepetion()) {
+    if (p_state.isStaleMateRepetition()) {
         return .StaleMateRepetition;
     }
     return .Continue;
@@ -161,7 +174,7 @@ pub fn simpleBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pl
         const popped = (p_state.stack.pop());
         p_state.loadFrame(&popped);
 
-        if (!decision.move.isValid() or
+        if (i == 0 or
             (curr_score * color_mask > decision.scoring * color_mask))
         {
             decision.move = move;
@@ -169,7 +182,7 @@ pub fn simpleBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pl
         }
     }
 
-    if (!decision.move.isValid()) {
+    if (fmoves.len == 0) {
         decision.scoring = heuristicl.simpleCheckMateScore * color_mask;
     }
     return decision;
@@ -185,7 +198,7 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
     if (depth <= 0) {
         return 1;
     }
-    if (p_state.isStaleMateRepetion()) {
+    if (p_state.isStaleMateRepetition()) {
         return 1;
     }
 
@@ -214,7 +227,6 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
         p_state.loadFrame(&popped);
     }
     if (comptime useHash) {
-        //std.debug.print("[DEBUG] explorationNDepthPerft: Storing key: {x} with depht: {d} of amount: {d}\n", .{ p_state.key.code, depth, count });
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
         _ = hashl.hashTable.storeEntry(&entry);
     }
@@ -314,7 +326,7 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
     if (depth <= 0) {
         return .{ .move = p_state.getLastMove(), .scoring = color_mask * getEvaluation(p_state, p_player) };
     }
-    if (p_state.isStaleMateRepetion()) {
+    if (p_state.isStaleMateRepetition()) {
         return .{ .move = p_state.getLastMove(), .scoring = heuristicl.simpleStalemateScore };
     }
 
@@ -337,12 +349,255 @@ pub fn depthBotMoveExploration(p_state: *chess.Board_state, p_player: *const Pla
         const popped = (p_state.stack.pop());
         p_state.loadFrame(&popped);
 
-        if (!final_decision.move.isValid() or final_decision.scoring < decision.scoring) {
+        if (i == 0 or final_decision.scoring < decision.scoring) {
             final_decision.move = fmoves.moves[i];
             final_decision.scoring = decision.scoring;
         }
     }
-    if (!final_decision.move.isValid()) {
+    if (fmoves.len == 0) {
+        if (!p_state.isLegal(turn)) {
+            final_decision.scoring = -@intFromEnum(e_simpleScore.CheckMate) * color_mask;
+        } else {
+            final_decision.scoring = @intFromEnum(e_simpleScore.StaleMate);
+        }
+    }
+    return final_decision;
+}
+
+pub const uciSearcher = struct {
+    config: enginel.goArgStruct = .{},
+    interrupt: bool = false,
+    nThreads: u16 = 1,
+    endCounter: u16 = 0,
+    bestMove: moveDecisionExt = .{},
+    pub fn reset(p_self: *uciSearcher) void {
+        p_self.endCounter = 0;
+        p_self.interrupt = false;
+        p_self.bestMove = .{};
+    }
+};
+pub const threadInfo = struct {
+    currentBest: moveDecisionExt = .{},
+    n_nodeExplored: u64 = 0,
+    depth: u8 = 0,
+    currentMove: moveDecisionExt = .{},
+    currentMoveNumber: u64 = 0,
+    running: bool = false,
+};
+pub const threadInfo_container = struct {
+    len: u16,
+    items: []threadInfo,
+    n_active: u16 = 0,
+    pub fn init(alloc: std.mem.Allocator, size: u16) !threadInfo_container {
+        var ret: threadInfo_container = undefined;
+        ret.len = size;
+        ret.items = try alloc.alloc(threadInfo, size);
+        const emptyStruct: threadInfo = .{};
+        for (0..size) |i| {
+            ret.items[i] = emptyStruct;
+        }
+        return ret;
+    }
+    pub fn combine(self: *threadInfo_container) threadInfo {
+        var ret: threadInfo = .{};
+        self.n_active = 0;
+        for (0..self.len) |i| {
+            const info = self.items[i];
+            ret.n_nodeExplored = info.n_nodeExplored;
+            self.n_active += @intFromBool(info.running);
+        }
+        return ret;
+    }
+    pub fn getBestMove(self: *threadInfo_container) moveDecisionExt {
+        var ret: moveDecisionExt = .{};
+        for (0..self.len) |i| {
+            const info = self.items[i];
+            if (i == 0 or info.currentBest.scoring > ret.scoring) {
+                ret = info.currentBest;
+            }
+        }
+        return ret;
+    }
+    pub fn free(self: *threadInfo_container, alloc: std.mem.Allocator) void {
+        alloc.free(self.items);
+    }
+};
+
+pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8) bool {
+    var moveArray: moveContainer = undefined;
+    if (p_engine.searcher.config.eval) {
+        const score = heuristicl.simpleHeuristic(&p_engine.state);
+        const msg = std.fmt.allocPrint(p_engine.alloc, "eval: {d}", .{score}) catch unreachable;
+        p_engine.respond(msg);
+        return true;
+    }
+    if (p_engine.searcher.config.searchMoves) {
+        var _moveArray = chess.getMoveListFromStr(&p_engine.state, cmdBuffer, p_engine.alloc) catch {
+            return false;
+        };
+        defer _moveArray.deinit(p_engine.alloc);
+        if (p_engine.status.debugMode) {
+            std.debug.print("[DEBUG] dispatchUciGoCmd: searchmoves moves found, len = {d}\n", .{_moveArray.items.len});
+            for (0.._moveArray.items.len) |i| {
+                std.debug.print("{s}, ", .{_moveArray.items[i].getStr()});
+            }
+            std.debug.print("\n", .{});
+        }
+        moveArray = movel.arrayListMoveToMoveContainer(&_moveArray);
+    } else {
+        moveArray = moveGenl.generateLegalMoves(&p_engine.state);
+    }
+    if (p_engine.status.debugMode) {
+        std.debug.print("[DEBUG] dispatchUciGoCmd: Move found to study: ", .{});
+        moveArray.print();
+    }
+    const dispatchThread = std.Thread.spawn(.{}, dispatchUciGoThreads, .{ p_engine, moveArray }) catch {
+        return false;
+    };
+    p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
+        return false;
+    };
+    return true;
+}
+
+pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveContainer) void {
+    const searcher = p_engine.searcher;
+    const _nThread = @min(searcher.nThreads, moveArray.len);
+    if (p_engine.status.debugMode) {
+        std.debug.print("[DEBUG] dispatchUciGoThreads: nthread info: searcher: {d}, movearray: {d}\n", .{ searcher.nThreads, moveArray.len });
+    }
+
+    var threadedMoves = moveArray.cutEvenly(p_engine.alloc, _nThread) catch {
+        std.debug.print("ERROR move container init\n", .{});
+        return;
+    };
+
+    defer {
+        for (threadedMoves.items) |*cell| {
+            cell.deinit(GLOBAL_ALLOC);
+        }
+        threadedMoves.deinit(p_engine.alloc);
+    }
+    var arr_threadInfo: threadInfo_container = threadInfo_container.init(p_engine.alloc, _nThread) catch {
+        std.debug.print("ERROR threadInfo container init\n", .{});
+        return;
+    };
+
+    var threads: []std.Thread = p_engine.alloc.alloc(std.Thread, _nThread) catch {
+        std.debug.print("ERROR thread init\n", .{});
+        return;
+    };
+    defer p_engine.alloc.free(threads);
+    var arr_state = p_engine.state.duplicateNTimes(p_engine.alloc, _nThread) catch {
+        std.debug.print("ERROR board state container init\n", .{});
+        return;
+    };
+    defer arr_state.free(p_engine.alloc);
+
+    for (0.._nThread) |thread_id| {
+        threads[thread_id] = std.Thread.spawn(.{}, threadUciEntrypoint, .{ &arr_state.array[thread_id], &threadedMoves.items[thread_id], &arr_threadInfo.items[thread_id], searcher.config.depth }) catch unreachable;
+    }
+    _ = waitThreadFinish(p_engine, &arr_threadInfo, &threads);
+}
+
+pub fn waitThreadFinish(p_engine: *enginel.engine, p_arr: *threadInfo_container, p_threads: *[]std.Thread) bool {
+    var _start: u64 = 0;
+    var _end: u64 = 0;
+    _start = @intCast(std.time.milliTimestamp());
+    while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
+        std.Thread.sleep(enginel.UPDATE_TICKRATE_NS);
+        const res = p_arr.combine();
+        _end = @intCast(std.time.milliTimestamp());
+        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d}", .{@divFloor(res.n_nodeExplored, (_end - _start + 1)) * 1000}) catch {
+            continue;
+        };
+        defer p_engine.alloc.free(msg);
+        p_engine.respond(msg);
+        p_engine.searcher.endCounter = 0;
+        for (0..p_arr.len) |i| {
+            p_engine.searcher.endCounter += @intFromBool(!p_arr.items[i].running);
+        }
+    }
+    if (p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
+        for (0..p_arr.len) |i| {
+            p_arr.items[i].running = false;
+        }
+        for (0..p_threads.len) |thread_id| {
+            p_threads.*[thread_id].join();
+        }
+    } else {
+        const bestMove = p_arr.getBestMove();
+        p_engine.searcher.bestMove = bestMove;
+
+        const msg = std.fmt.allocPrint(p_engine.alloc, "bestmove {s}", .{bestMove.move.getStr()}) catch unreachable;
+        defer p_engine.alloc.free(msg);
+        p_engine.respond(msg);
+    }
+    defer p_arr.free(p_engine.alloc);
+    return true;
+}
+
+pub fn threadUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
+    p_info.running = true;
+
+    for (0..p_startingMoves.items.len) |i| {
+        p_state.stack.push(&p_state.makeFrame());
+        const move = p_startingMoves.items[i];
+
+        _ = p_state.makeMoveUpdate(move);
+
+        const decision = searchUciDepth(p_state, p_info, depth - 1);
+        _ = p_state.undoMoveRestore();
+
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
+        if (i == 0 or p_info.currentBest.scoring < decision.scoring) {
+            p_info.currentBest = decision;
+            p_info.currentBest.move = move;
+        }
+    }
+    p_info.running = false;
+}
+
+pub fn searchUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16) moveDecisionExt {
+    const color_mask: i8 = getScoreMaskFromTurn(p_state.turn);
+    if (depth <= 0 or !p_info.running) {
+        p_info.n_nodeExplored += 1;
+        const lastMove = p_state.getLastMove();
+        const score = color_mask * heuristicl.simpleHeuristic(p_state);
+        const retMove: moveDecisionExt = .{ .move = lastMove, .scoring = score };
+        return retMove;
+    }
+    if (p_state.isStaleMateRepetition()) {
+        const retMove: moveDecisionExt = .{ .move = p_state.getLastMove(), .scoring = heuristicl.simpleStalemateScore };
+
+        return retMove;
+    }
+
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    //fmoves.shuffle(p_state.randInt);
+    var final_decision: moveDecisionExt = .{};
+    var decision: moveDecisionExt = .{};
+    const turn = p_state.turn;
+    for (0..fmoves.len) |i| {
+        const move: IMove = fmoves.moves[i];
+        p_state.stack.push(&p_state.makeFrame());
+        _ = p_state.makeMoveUpdate(move);
+
+        decision = searchUciDepth(p_state, p_info, depth - 1);
+
+        decision.invertScore();
+
+        _ = p_state.undoMoveRestore();
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
+
+        if (i == 0 or final_decision.scoring < decision.scoring) {
+            final_decision.move = fmoves.moves[i];
+            final_decision.scoring = decision.scoring;
+        }
+    }
+    if (fmoves.len == 0) {
         if (!p_state.isLegal(turn)) {
             final_decision.scoring = -@intFromEnum(e_simpleScore.CheckMate) * color_mask;
         } else {

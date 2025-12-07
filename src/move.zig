@@ -6,6 +6,8 @@ const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 
+const utilsl = @import("utils.zig");
+
 const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
 const Key = hashl.Key;
@@ -35,29 +37,14 @@ pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     return ret;
 }
 
-//pub fn build_move_ext(from: u8, to: u8, flag: u8, piece: e_piece, m_restore: u16, m_next: u16) IMove {
-//    var m_move: u16 = (flag & 0xF);
-//    m_move <<= 6;
-//    m_move |= (to & 0x3F);
-//    m_move <<= 6;
-//    m_move |= (from & 0x3F);
-//    const ret: IMove = .{ .m_move = m_move, .m_piece = (@intFromEnum(piece) & 0xFF), .m_restore = m_restore, .m_next = m_next };
-//    return ret;
-//}
-
-//pub fn boardStateToSpecial(p_board: *chess.Board_state, comptime turn: chess.e_color) u16 {
-//    var ret: u16 = 0;
-//    if (comptime turn == .WHITE) {
-//        const castl_bits = p_board.castlingBB & 0xFF;
-//        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.WHITE)] & 0xFF0000;
-//        ret |= (castl_bits << 8) | eP_bits;
-//    } else {
-//        const castl_bits = p_board.castlingBB & 0xFF00000000000000 >> 56;
-//        const eP_bits = p_board.enPassantBB[@intFromEnum(chess.e_color.BLACK)] & 0xFF0000000000;
-//        ret |= (castl_bits << 8) | eP_bits;
-//    }
-//    return ret;
-//}
+pub fn build_move_reduce(from: u8, to: u8, flag: e_moveFlags) IMove {
+    var m_move: u16 = (@intFromEnum(flag) & 0xF);
+    m_move <<= 6;
+    m_move |= (to & 0x3F);
+    m_move <<= 6;
+    m_move |= (from & 0x3F);
+    return .{ .m_move = m_move };
+}
 
 pub const IMove = struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
@@ -71,6 +58,11 @@ pub const IMove = struct {
         m_piece <<= 8;
         p_self.m_piece &= (0xFF);
         p_self.m_piece |= (m_piece);
+    }
+    pub fn setFromPiece(p_self: *IMove, piece: e_piece) void {
+        //p_self.c_piece = capture;
+        p_self.m_piece &= (0xFF00);
+        p_self.m_piece |= (@intFromEnum(piece));
     }
     pub fn setFlag(p_self: *IMove, flag: u8) void {
         //reset the top 4 bits
@@ -150,8 +142,8 @@ pub const IMove = struct {
     }
     pub fn getStr(self: IMove) [4]u8 {
         var strM: [4]u8 = undefined;
-        const r1 = stringFromLERF(@enumFromInt(self.getFrom()));
-        const r2 = stringFromLERF(@enumFromInt(self.getTo()));
+        const r1 = chess.strFromLERF(@enumFromInt(self.getFrom()));
+        const r2 = chess.strFromLERF(@enumFromInt(self.getTo()));
         strM[0] = r1[0];
         strM[1] = r1[1];
         strM[2] = r2[0];
@@ -194,6 +186,14 @@ pub const typedMoveContainer = struct {
     }
 };
 
+pub fn arrayListMoveToMoveContainer(arr: *std.ArrayList(IMove)) moveContainer {
+    var ret: moveContainer = moveContainer.init(0);
+    for (0..arr.items.len) |i| {
+        _ = ret.append(arr.items[i]);
+    }
+    return ret;
+}
+
 pub const moveContainer = struct {
     moves: [chess.MAX_POSSIBLE_MOVE]IMove = undefined,
     len: u8 = 0,
@@ -201,9 +201,10 @@ pub const moveContainer = struct {
     pub fn init(len: u8) moveContainer {
         var ret: moveContainer = undefined;
         for (0..len) |i| {
-            ret.move[i] = 0;
+            ret.moves[i] = .{};
         }
         ret.len = len;
+        return ret;
     }
     pub fn append(p_self: *moveContainer, move: IMove) bool {
         //if (p_self.len == chess.MAX_POSSIBLE_MOVE) {
@@ -300,6 +301,11 @@ pub const moveContainer = struct {
         }
         return ret;
     }
+    pub fn cutEvenly(self: moveContainer, alloc: std.mem.Allocator, size: usize) !std.ArrayList(std.ArrayList(IMove)) {
+        var arr = try self.convertToArrayList(alloc);
+        defer arr.deinit(alloc);
+        return try utilsl.cutArrayListEvenly(IMove, alloc, arr, size);
+    }
 };
 
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
@@ -378,14 +384,6 @@ pub const matchMoveContainer = struct {
         return false;
     }
 };
-
-pub fn stringFromLERF(sq: e_square) [2]u8 {
-    var ret: [2]u8 = undefined;
-    const sq_i: u8 = @intFromEnum(sq);
-    ret[0] = 'a' + sq_i % 8;
-    ret[1] = '1' + sq_i / 8;
-    return ret;
-}
 
 pub const moveBBState = struct {
     pawnMoves: u64 = 0,
@@ -506,10 +504,5 @@ pub const moveBBState = struct {
         chess.print_bitboard(self.queenMoves);
         std.debug.print("King moves: \n", .{});
         chess.print_bitboard(self.kingMoves);
-    }
-    pub fn convertToMoveContainer(self: moveBBState, p_board: *chess.Board_state) moveContainer {
-        _ = p_board;
-        _ = self;
-        return .{};
     }
 };

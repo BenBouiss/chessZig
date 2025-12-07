@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const assert = std.debug.assert;
 //https://stackoverflow.com/questions/76384694/how-to-do-conditional-compilation-with-zig
 const build_options = @import("build_options");
 
@@ -75,8 +76,11 @@ pub const blackPawnDoubleRank: u64 = 0xFF000000000000;
 pub const whitePawnEnpassantRank: u64 = 0xFF0000000000;
 pub const blackPawnEnpassantRank: u64 = 0xFF0000;
 
-const DEFAULT_POSITION: u64 = 0xFDFD06000040FFDF;
-pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq";
+// 8 pieces per row + 7 / = 71
+// turn + 4 castling rights + enPassant sq + 3 spaces = 80
+// round that up to 100? the match score can be ommited?
+const MAX_FEN_LENGTH: u8 = 100;
+pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0";
 const shift = [8]c_int{ 9, 1, -7, -8, -9, -1, 7, 8 };
 const avoidWrap = [8]u64{
     0xfefefefefefefe00,
@@ -104,7 +108,15 @@ const arr_piece_str = [_]u8{ 'P', 'B', 'N', 'R', 'Q', 'K', 'p', 'b', 'n', 'r', '
 
 pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
 
-const debug_err = error{earlyReturn};
+pub const debug_err = error{ fenErr, earlyReturn };
+
+pub fn strFromLERF(sq: e_square) [2]u8 {
+    var ret: [2]u8 = undefined;
+    const sq_i: u8 = @intFromEnum(sq);
+    ret[0] = 'a' + sq_i % 8;
+    ret[1] = '1' + sq_i / 8;
+    return ret;
+}
 
 pub fn stringToLERF(sq: *[2]u8) e_square {
     if ((sq[0] < 'a') or (sq[0] > 'h')) {
@@ -115,7 +127,15 @@ pub fn stringToLERF(sq: *[2]u8) e_square {
     }
     return @enumFromInt((sq[0] - 'a') + ((sq[1] - '1') * ROW_SIZE));
 }
-
+pub fn cst_stringToLERF(sq: *const [2]u8) e_square {
+    if ((sq[0] < 'a') or (sq[0] > 'h')) {
+        return .invalid;
+    }
+    if ((sq[1] < '1') or (sq[1] > '9')) {
+        return .invalid;
+    }
+    return @enumFromInt((sq[0] - 'a') + ((sq[1] - '1') * ROW_SIZE));
+}
 pub fn flagPromotionToPiece(flag: u8, turn: e_color) e_piece {
     const color_offset = getColorPieceOffset(turn);
     if ((flag == @intFromEnum(e_moveFlags.KNIGHTPROMO)) or (flag == @intFromEnum(e_moveFlags.KNIGHTPROMOCAPTURE))) {
@@ -240,32 +260,15 @@ pub fn r_bitscanK(b: u64) i8 {
 pub fn print_board(p_board: *Board_state) void {
     var print_buffer: [8][8]u8 = undefined;
     @memset(&print_buffer, .{ 0, 0, 0, 0, 0, 0, 0, 0 });
-    var sq: i8 = 0;
-    var bb: u64 = undefined;
-    var curr_letter: u8 = 0;
-    for (0..p_board.pieceBB.len) |idx| {
-        if (idx == @intFromEnum(e_piece.nEmptySquare)) {
-            bb = ~p_board.occupiedBB;
-        } else {
-            bb = p_board.pieceBB[idx];
-        }
-        if (bb == 0) {
-            continue;
-        }
-        if (idx == @intFromEnum(e_piece.nWhite) or idx == @intFromEnum(e_piece.nBlack)) {
-            continue;
-        }
-
-        while (bb != 0) {
-            sq = bitscan(bb);
-            if (sq == INVALID_POSITION) {
-                continue;
-            }
-            curr_letter = arr_piece_str[idx];
-            print_buffer[@intCast(@divTrunc(sq, ROW_SIZE))][@intCast(@mod(sq, ROW_SIZE))] = curr_letter;
-            bb = bb ^ (ONE << @intCast(sq));
-        }
+    //var bb: u64 = undefined;
+    //var curr_letter: u8 = 0;
+    for (0..N_SQUARES) |sq| {
+        const _sq: u8 = @intCast(sq);
+        const piece = p_board.get_piece(_sq);
+        const pieceStr = arr_piece_str[@intFromEnum(piece)];
+        print_buffer[getSqIdxRank(_sq)][getSqIdxFile(_sq)] = pieceStr;
     }
+
     var i: i8 = 7;
 
     std.debug.print("   _______________\n", .{});
@@ -294,64 +297,175 @@ fn getPieceFromStr(letter: u8) e_piece {
     }
     return e_piece.nEmptySquare;
 }
+pub fn getStrFromPiece(piece: e_piece) u8 {
+    return arr_piece_str[@intFromEnum(piece)];
+}
 
-pub fn getBoardFromFen(fen: []const u8, alloc: std.mem.Allocator) Board_state {
-    // var ret: Board_state = undefined;
-    // _ = ret.init_board() catch void;
-    var ret = getEmptyBoardState(alloc);
-    var letter = fen[0];
-    var board_offset = N_SQUARES - 8;
-    var post_init: bool = false;
+pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
+    var ret = getEmptyBoardState();
     var offset: i8 = 0;
-    var tmp_enum: e_piece = e_piece.nEmptySquare;
-    var letter_int: u8 = 0;
+    var board_offset = N_SQUARES - 8;
+    var commitedRowSize: u8 = 0;
     while (offset < fen.len) : (offset += 1) {
-        letter = fen[@intCast(offset)];
-        if (!post_init) {
-            if (letter == '/') {
-                board_offset -= 16;
-                continue;
+        const letter: u8 = fen[@intCast(offset)];
+        if (letter == '/') {
+            board_offset -= 16;
+            if (commitedRowSize != 8) {
+                std.debug.print("[DEBUG] getBoardFromFen: malformed fen code, malformed row with {d} elements \n", .{commitedRowSize});
+                return debug_err.fenErr;
             }
-            if (letter == ' ') {
-                post_init = true;
-                continue;
+            commitedRowSize = 0;
+            continue;
+        }
+        if (letter == ' ') {
+            if (board_offset != (N_SQUARES - 8)) {
+                return ret;
             }
-            if (std.ascii.isDigit(letter)) {
-                letter_int = letter - '0';
-                board_offset += letter_int;
-                continue;
-            }
-            tmp_enum = getPieceFromStr(letter);
+            continue;
+        }
+        if (std.ascii.isDigit(letter)) {
+            const letter_int: u8 = letter - '0';
+            board_offset += letter_int;
+            commitedRowSize += letter_int;
+            continue;
+        }
+        const tmp_enum = getPieceFromStr(letter);
 
-            if (!ret.placePiece(tmp_enum, @enumFromInt(board_offset))) {
-                //std.debug.print("Placement failed at: {d} val: {d}\n", .{ board_offset, @intFromEnum(tmp_enum) });
-            }
-            if (board_offset != N_SQUARES) {
-                board_offset += 1;
-            }
-        } else {
-            if (letter == ' ') {
-                continue;
-            }
-            if (letter == 'w') {
-                ret.turn = e_color.WHITE;
-            } else if (letter == 'b') {
-                ret.turn = e_color.BLACK;
-            } else if (letter == 'K') {
-                ret.castling |= 1;
-            } else if (letter == 'Q') {
-                ret.castling |= 2;
-            } else if (letter == 'k') {
-                ret.castling |= 4;
-            } else if (letter == 'q') {
-                ret.castling |= 8;
+        if (!ret.placePiece(tmp_enum, @enumFromInt(board_offset))) {
+            std.debug.print("[DEBUG] getBoardFromFen_pieces: Fen problem with piece placement\n", .{});
+            print_board(&ret);
+        }
+        if (board_offset != N_SQUARES) {
+            board_offset += 1;
+            commitedRowSize += 1;
+        }
+    }
+    return ret;
+}
+pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) bool {
+    assert(turnToken.len == 1);
+    if (turnToken[0] == 'w') {
+        p_state.turn = .WHITE;
+    } else if (turnToken[0] == 'b') {
+        p_state.turn = .BLACK;
+    } else {
+        @panic("Unknown turn found");
+    }
+    return true;
+}
+
+pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool {
+    assert(turnToken.len != 0);
+    if (turnToken[0] == '-') {
+        p_state.castling = 0;
+    } else {
+        for (0..turnToken.len) |i| {
+            const letter = turnToken[i];
+            if (letter == 'K' or letter == 'H') {
+                p_state.castling |= 1;
+            } else if (letter == 'Q' or letter == 'A') {
+                p_state.castling |= 2;
+            } else if (letter == 'k' or letter == 'h') {
+                p_state.castling |= 4;
+            } else if (letter == 'q' or letter == 'a') {
+                p_state.castling |= 8;
             }
         }
     }
-    initBothSidePinnedBB(&ret);
-    const key = hashl.fullComputeZobristKeys(&ret);
-    std.debug.print("[DEBUG] getBoardFromFen: Initial zobrist key computed: {x}\n", .{key.code});
-    ret.key = key;
+    return true;
+}
+pub fn getBoardFromFen_enPassant(p_state: *Board_state, turnToken: []const u8) bool {
+    assert(turnToken.len != 0);
+    if (turnToken[0] == '-') {
+        p_state.enPassantIdx = 0;
+    } else {
+        assert(turnToken.len == 2);
+        const sq = cst_stringToLERF(turnToken[0..2]);
+        p_state.enPassantIdx = @intFromEnum(sq);
+    }
+    return true;
+}
+pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
+    assert(turnToken.len != 0);
+    const nbr = std.fmt.parseInt(u16, turnToken, 10) catch {
+        return 0;
+    };
+    return nbr;
+}
+pub fn getBoardFromFen(fen: []const u8, alloc: std.mem.Allocator) debug_err!Board_state {
+    var tokens = utils.split(u8, alloc, fen, ' ') catch {
+        return debug_err.fenErr;
+    };
+    defer tokens.deinit(alloc);
+    utils.printArrayListTasStr([]const u8, tokens);
+    if (tokens.items.len < 6) {
+        return debug_err.fenErr;
+    }
+    var board = try getBoardFromFen_pieces(tokens.items[0]);
+    _ = getBoardFromFen_turn(&board, tokens.items[1]);
+    _ = getBoardFromFen_castle(&board, tokens.items[2]);
+    _ = getBoardFromFen_enPassant(&board, tokens.items[3]);
+    board.halfMoveClock = @intCast(getBoardFromFen_clockMove(tokens.items[4]));
+    board.turn_count = @intCast(getBoardFromFen_clockMove(tokens.items[5]));
+    return board;
+}
+
+pub fn getBoardFromUciFen(uciStr: []const u8, alloc: std.mem.Allocator) !Board_state {
+    // format position <fen> moves
+
+    var ret = getBoardFromFen(uciStr, alloc) catch unreachable;
+    try applyUciMoves(&ret, uciStr, alloc);
+    return ret;
+}
+pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.Allocator) !void {
+    var moveArray = try getMoveListFromStr(p_board, uciStr, alloc);
+    defer moveArray.deinit(alloc);
+
+    for (0..moveArray.items.len) |i| {
+        var move = moveArray.items[i];
+        updateMoveWithBoard(p_board, &move);
+        if (move.isEnpassant()) {
+            if (p_board.turn == .WHITE) {
+                move.setCapture(.nBlackPawn);
+            } else {
+                move.setCapture(.nWhitePawn);
+            }
+        }
+        p_board.makeMoveUpdate(move);
+    }
+}
+
+pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: std.mem.Allocator) !std.ArrayList(IMove) {
+    var cmd_split = try utils.split(u8, GLOBAL_ALLOC, strBuffer, ' ');
+    var ret = try std.ArrayList(IMove).initCapacity(alloc, cmd_split.items.len);
+
+    defer cmd_split.deinit(alloc);
+
+    var from: e_square = undefined;
+    var to: e_square = undefined;
+    for (cmd_split.items) |cmd| {
+        if (cmd.len != 4 and cmd.len != 5) {
+            continue;
+        }
+        from = cst_stringToLERF(cmd[0..2]);
+        to = cst_stringToLERF(cmd[2..4]);
+        if (from == .invalid or to == .invalid) {
+            continue;
+        }
+        const flag: u8 = inferFlagFromMovement(p_state, from, to, cmd);
+        const piece = p_state.get_piece(@intFromEnum(from));
+        var toPiece = p_state.get_piece(@intFromEnum(to));
+        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, piece);
+        if (move.isEnpassant()) {
+            if (p_state.turn == .WHITE) {
+                toPiece = .nBlackPawn;
+            } else {
+                toPiece = .nWhitePawn;
+            }
+        }
+        move.setCapture(toPiece);
+        ret.append(alloc, move) catch unreachable;
+    }
     return ret;
 }
 
@@ -432,17 +546,12 @@ pub const Board_stateContainer = struct {
     len: usize,
 
     pub fn free(p_self: *Board_stateContainer, alloc: std.mem.Allocator) void {
-        //for (0..p_self.len) |i| {
-        //    alloc.free(p_self.array[i].p_stack);
-        //}
         alloc.free(p_self.array);
     }
 };
 
-pub fn getEmptyBoardState(alloc: std.mem.Allocator) Board_state {
-    var ret: Board_state = undefined;
-    _ = ret.init_board(alloc) catch void;
-    return ret;
+pub fn getEmptyBoardState() Board_state {
+    return Board_state.init();
 }
 
 pub const boardFrame = struct {
@@ -464,7 +573,7 @@ pub const boardStack = struct {
     pub fn push(p_self: *boardStack, p_frame: *const boardFrame) void {
         if (comptime useDebug) {
             if (p_self.len == movel.MAX_MATCH_LENGTH) {
-                @panic("");
+                @panic("Board stack is full, forgot to pop?");
             }
         }
         p_self.stack[p_self.len] = p_frame.*;
@@ -473,7 +582,7 @@ pub const boardStack = struct {
     pub fn pop(p_self: *boardStack) boardFrame {
         if (comptime useDebug) {
             if (p_self.len == 0) {
-                @panic("");
+                @panic("Popping from empty boardframe, forgot to push?");
             }
         }
         p_self.len -= 1;
@@ -482,7 +591,6 @@ pub const boardStack = struct {
 };
 
 pub const Board_state = struct {
-    players: [NUMBER_PLAYER]exploration.Player = [NUMBER_PLAYER]exploration.Player{ .{}, .{} },
     pieceBB: [N_PIECES]u64 = std.mem.zeroes([N_PIECES]u64),
     c_occupiedBB: [NUMBER_PLAYER]u64,
     pieceArray: [N_SQUARES]e_piece = std.mem.zeroes([N_SQUARES]e_piece),
@@ -506,42 +614,40 @@ pub const Board_state = struct {
     lastMove: IMove = .{},
     move_history: matchMoveContainer = .{},
     stack: boardStack = .{ .len = 0 },
-    //p_stack: *boardStack = undefined,
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,
     seed: u64 = 42,
 
-    pub fn init_board(p_self: *Board_state, alloc: std.mem.Allocator) !void {
-        @memset(&p_self.pieceBB, 0);
-        @memset(&p_self.c_occupiedBB, 0);
+    pub fn init() Board_state {
+        var ret: Board_state = undefined;
+        @memset(&ret.pieceBB, 0);
+        @memset(&ret.c_occupiedBB, 0);
 
-        @memset(&p_self.pieceArray, e_piece.nEmptySquare);
+        @memset(&ret.pieceArray, e_piece.nEmptySquare);
 
-        p_self.pieceBB[@intFromEnum(e_piece.nEmptySquare)] = UNIVERSE;
-        p_self.turn = e_color.WHITE;
-        p_self.turn_count = 0;
-        p_self.occupiedBB = 0;
+        ret.pieceBB[@intFromEnum(e_piece.nEmptySquare)] = UNIVERSE;
+        ret.turn = e_color.WHITE;
+        ret.turn_count = 0;
+        ret.occupiedBB = 0;
 
-        p_self.key = .{};
+        ret.halfMoveClock = 0;
+        ret.key = .{};
 
-        p_self.pinnedBB = 0;
-        p_self.checkersBB = 0;
-        p_self.enPassantIdx = 0;
-        p_self.castling = 0;
+        ret.pinnedBB = 0;
+        ret.checkersBB = 0;
+        ret.enPassantIdx = 0;
+        ret.castling = 0;
 
-        p_self.victim = .nEmptySquare;
+        ret.victim = .nEmptySquare;
 
-        p_self.move_history = .{};
-        p_self.lastMove = .{};
-        p_self.stack = .{ .len = 0 };
-        std.debug.print("[DEBUG] from init_board: size of stack : {d} bytes\n", .{@sizeOf(boardStack)});
-        _ = alloc;
+        ret.move_history = .{};
+        ret.lastMove = .{};
+        ret.stack = .{ .len = 0 };
+        std.debug.print("[DEBUG] from Board_state.init: size of stack : {d} bytes\n", .{@sizeOf(boardStack)});
 
-        p_self.rngIntGenerator = std.Random.DefaultPrng.init(p_self.seed);
-        p_self.randInt = p_self.rngIntGenerator.random();
-
-        p_self.players[0].setType(.Human);
-        p_self.players[1].setType(.Human);
+        ret.rngIntGenerator = std.Random.DefaultPrng.init(ret.seed);
+        ret.randInt = ret.rngIntGenerator.random();
+        return ret;
     }
     pub fn makeFrame(self: Board_state) boardFrame {
         return .{ .castling = self.castling, .pinnedBB = self.pinnedBB, .victim = self.victim, .checkersBB = self.checkersBB, .enPassantIdx = self.enPassantIdx, .lastMove = self.lastMove, .key = self.key, .halfMoveClock = self.halfMoveClock };
@@ -562,28 +668,13 @@ pub const Board_state = struct {
         for (0..n) |i| {
             ret[i] = self;
 
-            sanityCheckBoardState(&ret[i]);
+            if (comptime useDebug) {
+                sanityCheckBoardState(&ret[i]);
+            }
         }
         return .{ .array = ret, .len = ret.len };
     }
 
-    pub fn free_board(p_self: *Board_state) void {
-        for (0..p_self.players.len) |i| {
-            exploration.freePlayer(&p_self.players[i]);
-        }
-    }
-    pub fn setPlayerType(p_self: *Board_state, color: e_color, player_type: exploration.e_playerType) void {
-        p_self.players[@intFromEnum(color)].setType(player_type);
-    }
-    pub fn setPlayerSearchDepth(p_self: *Board_state, color: e_color, depth: u8) void {
-        p_self.players[@intFromEnum(color)].setSearchDepth(depth);
-    }
-    pub fn setPlayerSearcType(p_self: *Board_state, color: e_color, search_type: exploration.e_searchType) void {
-        p_self.players[@intFromEnum(color)].setSearchType(search_type);
-    }
-    pub fn setPlayerHeuristicType(p_self: *Board_state, color: e_color, heuristic_type: heuristicl.e_heuristicType) void {
-        p_self.players[@intFromEnum(color)].setHeuristicType(heuristic_type);
-    }
     pub fn printHistory(self: Board_state) void {
         for (0..self.move_history.len) |i| {
             const move = self.move_history.moves[i];
@@ -592,6 +683,102 @@ pub const Board_state = struct {
         std.debug.print("\n", .{});
     }
 
+    pub fn get_fen(self: *Board_state) [MAX_FEN_LENGTH]u8 {
+        var ret = std.mem.zeroes([MAX_FEN_LENGTH]u8);
+        var miscOffset: u8 = 0;
+        var emptySpaceOffset: u8 = 0;
+        var emptyNumber: u8 = 0;
+        var board_offset = N_SQUARES - 8;
+        for (0..N_SQUARES) |i| {
+            const _i: u8 = @intCast(i);
+            if (i % ROW_SIZE == 0 and i != 0) {
+                if (emptyNumber != 0) {
+                    ret[_i + miscOffset - emptySpaceOffset] = '0' + emptyNumber;
+                    emptyNumber = 0;
+                    miscOffset += 1;
+                }
+                ret[_i + miscOffset - emptySpaceOffset] = '/';
+                miscOffset += 1;
+                board_offset -= 16;
+            }
+            const piece = self.get_piece(board_offset);
+            if (piece != .nEmptySquare) {
+                if (emptyNumber != 0) {
+                    ret[_i + miscOffset - emptySpaceOffset] = '0' + emptyNumber;
+                    emptyNumber = 0;
+                    miscOffset += 1;
+                }
+                const pieceStr = getStrFromPiece(piece);
+                ret[_i + miscOffset - emptySpaceOffset] = pieceStr;
+            } else {
+                emptySpaceOffset += 1;
+                emptyNumber += 1;
+            }
+            board_offset += 1;
+        }
+        const endPiece = N_SQUARES - 1 + miscOffset;
+        ret[endPiece + 1] = ' ';
+        if (self.turn == .WHITE) {
+            ret[endPiece + 2] = 'w';
+        } else {
+            ret[endPiece + 2] = 'b';
+        }
+        ret[endPiece + 3] = ' ';
+        var castleOffset: u8 = 0;
+        if (self.castling & 1 != 0) {
+            ret[endPiece + 4 + castleOffset] = 'H';
+            castleOffset += 1;
+        }
+        if (self.castling & 2 != 0) {
+            ret[endPiece + 4 + castleOffset] = 'A';
+            castleOffset += 1;
+        }
+        if (self.castling & 4 != 0) {
+            ret[endPiece + 4 + castleOffset] = 'h';
+            castleOffset += 1;
+        }
+        if (self.castling & 8 != 0) {
+            ret[endPiece + 4 + castleOffset] = 'a';
+            castleOffset += 1;
+        }
+        var endCastlOffset: u8 = endPiece + 4 + castleOffset;
+        var endEnPassantOffset: u8 = 0;
+        if (castleOffset != 0) {
+            ret[endCastlOffset] = ' ';
+        } else {
+            endCastlOffset -= 1;
+        }
+        if (self.enPassantIdx == 0) {
+            ret[endCastlOffset + 1] = '-';
+            endEnPassantOffset = endCastlOffset + 1;
+        } else {
+            const sqStr = strFromLERF(@enumFromInt(self.enPassantIdx));
+            ret[endCastlOffset + 1] = sqStr[0];
+            ret[endCastlOffset + 2] = sqStr[1];
+            endEnPassantOffset = endCastlOffset + 2;
+        }
+        ret[endEnPassantOffset + 1] = ' ';
+        var buffer: [20]u8 = undefined;
+        const halfMove = std.fmt.bufPrint(&buffer, "{}", .{self.halfMoveClock}) catch {
+            return ret;
+        };
+        var offset: u8 = 0;
+        for (halfMove) |letter| {
+            ret[endEnPassantOffset + 2 + offset] = letter;
+            offset += 1;
+        }
+        const endHalfMoveOffset: u8 = offset + endEnPassantOffset + 2;
+        ret[endHalfMoveOffset] = ' ';
+        offset = 0;
+        const fullMoveClock = std.fmt.bufPrint(&buffer, "{}", .{self.turn_count}) catch {
+            return ret;
+        };
+        for (fullMoveClock) |letter| {
+            ret[endHalfMoveOffset + 1 + offset] = letter;
+            offset += 1;
+        }
+        return ret;
+    }
     pub fn get_piece(p_self: *Board_state, sq: u8) e_piece {
         return p_self.pieceArray[sq];
     }
@@ -626,6 +813,7 @@ pub const Board_state = struct {
         p_self.turn_count -= 1;
     }
     pub fn placePiece(p_self: *Board_state, piece: e_piece, square: e_square) bool {
+        //std.debug.print("[DEBUG] placePiece: Placing piece {} {square}\n", .{piece});
         const one_mask: u64 = (ONE << @intCast(@intFromEnum(square)));
         if (p_self.occupiedBB & one_mask != 0) {
             return false;
@@ -988,7 +1176,7 @@ pub const Board_state = struct {
         // TODO: Make it actually adhere to the rule ie check for 3 BOARD_STATE repeated during the _whole_ game
         return self.move_history.checkRepetitions();
     }
-    pub fn isStaleMateRepetion(p_self: *Board_state) bool {
+    pub fn isStaleMateRepetition(p_self: *Board_state) bool {
         return p_self.isFiftyMoveRepetition() or p_self.isStaleThreeFold();
     }
 
@@ -1070,7 +1258,10 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     }
 
     print_board(p_board_state);
+    std.debug.print("Castling right: {d}\n", .{p_board_state.castling});
     std.debug.print("Zobrist key: {x}\n", .{p_board_state.key.code});
+    const fen = p_board_state.get_fen();
+    std.debug.print("Fen code: {s}\n", .{fen});
     std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len });
     std.debug.print("Current evaluation: {d} \n", .{heuristicl.simpleHeuristic(p_board_state)});
 
@@ -1091,7 +1282,7 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     }
 
     std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.halfMoveClock, p_board_state.move_history.getRepetitions(), p_board_state.move_history.lastIrreversibleMoveIndex });
-    std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetion()});
+    std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
     sanityCheckBoardState(p_board_state);
 }
 
@@ -1707,8 +1898,47 @@ pub fn print_ray_attacks(sq: u8) void {
     print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.WEST)]);
     std.debug.print("\n################ Exiting ray attack state ################ \n", .{});
 }
+pub fn updateMoveWithBoard(p_state: *Board_state, move: *IMove) void {
+    const to = move.getTo();
+    const from = move.getFrom();
 
-pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square, line_buffer: [MAX_USER_INPUT]u8) u8 {
+    var ret_flag: u8 = move.getFlag();
+    var diff: i8 = 0;
+    const c_piece = p_state.get_piece(to);
+    move.setCapture(c_piece);
+    if (c_piece != .nEmptySquare) {
+        ret_flag |= @intFromEnum(e_moveFlags.CAPTURE);
+    }
+
+    const pieceMove = p_state.get_piece(from);
+    move.setFromPiece(pieceMove);
+    if (isKingPiece(pieceMove)) {
+        diff = @intCast(from);
+        diff -= @intCast(to);
+        if (utils.absolute(diff) == 2) {
+            if (from > to) {
+                ret_flag = @intFromEnum(e_moveFlags.QUEENCASTLE);
+            } else {
+                ret_flag = @intFromEnum(e_moveFlags.KINGCASTLE);
+            }
+        }
+    } else if (isPawnPiece(pieceMove)) {
+        diff = @intCast(from);
+        diff -= @intCast(to);
+        if (utils.absolute(diff) == 16) {
+            ret_flag |= @intFromEnum(e_moveFlags.DOUBLEPAWN);
+        }
+        if ((getSqIdxFile(from) != getSqIdxFile(to)) and (c_piece == .nEmptySquare)) {
+            ret_flag |= @intFromEnum(e_moveFlags.ENPASSANT);
+        }
+    }
+    move.setFlag(ret_flag);
+}
+
+pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square, line_buffer: []const u8) u8 {
+    const fromIdx: u8 = @intFromEnum(from);
+    const toIdx: u8 = @intFromEnum(to);
+
     var ret_flag: u8 = @intFromEnum(e_moveFlags.QUIETMOVE);
     var diff: i8 = 0;
     const c_piece = p_state.get_piece(@intFromEnum(to));
@@ -1716,35 +1946,37 @@ pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square
         ret_flag |= @intFromEnum(e_moveFlags.CAPTURE);
     }
 
-    if (line_buffer[4] != 0) {
-        if (line_buffer[4] == 'b' or line_buffer[4] == 'B') {
-            ret_flag |= @intFromEnum(e_moveFlags.BISHOPPROMO);
-        } else if (line_buffer[4] == 'n' or line_buffer[4] == 'N') {
-            ret_flag |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
-        } else if (line_buffer[4] == 'r' or line_buffer[4] == 'R') {
-            ret_flag |= @intFromEnum(e_moveFlags.ROOKPROMO);
-        } else if (line_buffer[4] == 'q' or line_buffer[4] == 'Q') {
-            ret_flag |= @intFromEnum(e_moveFlags.QUEENPROMO);
+    if (line_buffer.len > 4) {
+        if (line_buffer[4] != 0) {
+            if (line_buffer[4] == 'b' or line_buffer[4] == 'B') {
+                ret_flag |= @intFromEnum(e_moveFlags.BISHOPPROMO);
+            } else if (line_buffer[4] == 'n' or line_buffer[4] == 'N') {
+                ret_flag |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
+            } else if (line_buffer[4] == 'r' or line_buffer[4] == 'R') {
+                ret_flag |= @intFromEnum(e_moveFlags.ROOKPROMO);
+            } else if (line_buffer[4] == 'q' or line_buffer[4] == 'Q') {
+                ret_flag |= @intFromEnum(e_moveFlags.QUEENPROMO);
+            }
         }
     }
     const pieceMove = p_state.get_piece(@intFromEnum(from));
     if (isKingPiece(pieceMove)) {
-        diff = @intCast(line_buffer[0]);
-        diff -= @intCast(line_buffer[2]);
+        diff = @intCast(fromIdx);
+        diff -= @intCast(toIdx);
         if (utils.absolute(diff) == 2) {
-            if (line_buffer[0] > line_buffer[2]) {
+            if (fromIdx > toIdx) {
                 ret_flag = @intFromEnum(e_moveFlags.QUEENCASTLE);
             } else {
                 ret_flag = @intFromEnum(e_moveFlags.KINGCASTLE);
             }
         }
     } else if (isPawnPiece(pieceMove)) {
-        diff = @intCast(line_buffer[1]);
-        diff -= @intCast(line_buffer[3]);
-        if (utils.absolute(diff) == 2) {
+        diff = @intCast(fromIdx);
+        diff -= @intCast(toIdx);
+        if (utils.absolute(diff) == 16) {
             ret_flag |= @intFromEnum(e_moveFlags.DOUBLEPAWN);
         }
-        if ((line_buffer[0] != line_buffer[2]) and (c_piece == .nEmptySquare)) {
+        if ((getSqIdxFile(fromIdx) != getSqIdxFile(toIdx)) and (c_piece == .nEmptySquare)) {
             ret_flag |= @intFromEnum(e_moveFlags.ENPASSANT);
         }
     }
@@ -1758,6 +1990,7 @@ pub fn emptyLineBuffer(line_buffer: []u8) void {
 }
 
 const MAX_USER_INPUT: u8 = 5;
+const MOVE_BUFFER_LENGTH: u8 = 5;
 
 fn getUserStdinput() [MAX_USER_INPUT]u8 {
     var stdin_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
@@ -1787,7 +2020,7 @@ pub fn askUserMove(p_state: *Board_state) !IMove {
             std.debug.print("Please enter a valid move: ", .{});
             continue;
         }
-        flag = inferFlagFromMovement(p_state, from, to, line_buffer);
+        flag = inferFlagFromMovement(p_state, from, to, &line_buffer);
         break;
     }
     var ret = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, p_state.get_piece(@intFromEnum(from)));
@@ -1818,12 +2051,12 @@ pub fn askContinue() void {
     return;
 }
 
-pub fn match_routine(p_state: *Board_state) void {
+pub fn match_routine(p_state: *Board_state, p_players: *[NUMBER_PLAYER]exploration.Player) void {
     var curr_player: exploration.Player = undefined;
     var status: e_matchFlag = undefined;
     while (true) {
         print_boardstate(p_state);
-        curr_player = p_state.players[@intFromEnum(p_state.turn)];
+        curr_player = p_players.*[@intFromEnum(p_state.turn)];
         status = exploration.handlePlayer(p_state, curr_player) catch |err| {
             std.debug.print("[DEBUG] match_routine: caught err: {} board might be bugged: \n", .{err});
             print_board(p_state);
@@ -1832,7 +2065,6 @@ pub fn match_routine(p_state: *Board_state) void {
         switch (status) {
             .CheckMate, .StaleMate, .StaleMateRepetition, .Error => {
                 std.debug.print("[DEBUG] match_routine: match is over flag: {} \n", .{status});
-                askContinue();
                 break;
             },
             .Continue => {},
@@ -1846,28 +2078,28 @@ pub fn match_routine(p_state: *Board_state) void {
 pub fn _default_scenarios() void {
     const fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
     std.debug.print("Testing fen: {s}\n", .{fen});
-    var board_promo = getBoardFromFen(fen, GLOBAL_ALLOC);
+    var board_promo = getBoardFromFen(fen, GLOBAL_ALLOC) catch {};
     print_boardstate(&board_promo);
     askContinue();
 }
 
-pub fn _mate_scenario() void {
-    const fen = "k7/6r1/8/7P/7K/7P/6q1/8 b";
-    var board_mate = getBoardFromFen(fen, GLOBAL_ALLOC);
-    print_boardstate(&board_mate);
-    askContinue();
-    board_mate.setPlayerType(.BLACK, .DepthBot);
-    board_mate.setPlayerSearchDepth(.BLACK, 2);
-    board_mate.setPlayerType(.WHITE, .Human);
-    match_routine(&board_mate);
-
-    askContinue();
-}
+//pub fn _mate_scenario() void {
+//    const fen = "k7/6r1/8/7P/7K/7P/6q1/8 b";
+//    var board_mate = getBoardFromFen(fen, GLOBAL_ALLOC) catch {};
+//    print_boardstate(&board_mate);
+//    askContinue();
+//    board_mate.setPlayerType(.BLACK, .DepthBot);
+//    board_mate.setPlayerSearchDepth(.BLACK, 2);
+//    board_mate.setPlayerType(.WHITE, .Human);
+//    match_routine(&board_mate);
+//
+//    askContinue();
+//}
 pub fn _pin_scenario() void {
     std.debug.print("[DEBUG] pin scenario: \n", .{});
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b";
 
-    var board = getBoardFromFen(fen, GLOBAL_ALLOC);
+    var board = getBoardFromFen(fen, GLOBAL_ALLOC) catch {};
     //const kingInfo = squareInfo.init(@enumFromInt(board.getKingSq(.WHITE)));
     print_boardstate(&board);
     getCheckers(&board, .WHITE);

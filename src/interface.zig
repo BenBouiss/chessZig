@@ -4,6 +4,7 @@ const benchmarkl = @import("benchmark.zig");
 const chessl = @import("chess.zig");
 const explorationl = @import("exploration.zig");
 const heuristicl = @import("heuristic.zig");
+const enginel = @import("engine.zig");
 const mainl = @import("main.zig");
 
 const e_color = chessl.e_color;
@@ -45,7 +46,22 @@ const ShellState = struct {
     isOpen: bool = true,
     fenProvided: bool = false,
     chessBoardState: chessl.Board_state = undefined,
+    uciThread: std.Thread = undefined,
+
+    players: [chessl.NUMBER_PLAYER]explorationl.Player = [chessl.NUMBER_PLAYER]explorationl.Player{ .{}, .{} },
     uciMode: bool = false,
+    pub fn setPlayerType(p_self: *ShellState, color: e_color, player_type: explorationl.e_playerType) void {
+        p_self.players[@intFromEnum(color)].setType(player_type);
+    }
+    pub fn setPlayerSearchDepth(p_self: *ShellState, color: e_color, depth: u8) void {
+        p_self.players[@intFromEnum(color)].setSearchDepth(depth);
+    }
+    pub fn setPlayerSearcType(p_self: *ShellState, color: e_color, search_type: explorationl.e_searchType) void {
+        p_self.players[@intFromEnum(color)].setSearchType(search_type);
+    }
+    pub fn setPlayerHeuristicType(p_self: *ShellState, color: e_color, heuristic_type: heuristicl.e_heuristicType) void {
+        p_self.players[@intFromEnum(color)].setHeuristicType(heuristic_type);
+    }
 };
 
 fn printTerminalGui() void {
@@ -180,7 +196,9 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
     };
     defer GLOBAL_ALLOC.free(def_flag);
     if (utilsl.equal(u8, def_flag, "default")) {
-        p_shellState.chessBoardState = chessl.getBoardFromFen(chessl.DEFAULT_FEN, GLOBAL_ALLOC);
+        p_shellState.chessBoardState = chessl.getBoardFromFen(chessl.DEFAULT_FEN, GLOBAL_ALLOC) catch {
+            return false;
+        };
     } else {
         const concat = utilsl.concatSlice(u8, GLOBAL_ALLOC, indiv_args.items[1..], ' ') catch {
             return false;
@@ -189,7 +207,9 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
         if (concat.len == 1) {
             return false;
         }
-        p_shellState.chessBoardState = chessl.getBoardFromFen(concat, GLOBAL_ALLOC);
+        p_shellState.chessBoardState = chessl.getBoardFromFen(concat, GLOBAL_ALLOC) catch {
+            return false;
+        };
     }
     return true;
 }
@@ -278,28 +298,28 @@ pub fn _execSetPlayer(p_shellState: *ShellState, args: std.ArrayList([]const u8)
             const depth = std.fmt.parseInt(u8, args.items[3], 10) catch {
                 return false;
             };
-            p_shellState.chessBoardState.setPlayerSearchDepth(color, depth);
+            p_shellState.setPlayerSearchDepth(color, depth);
         },
         .HEURISTIC => {
             const heuristic = argsToE_HeuristicType(frthArg) catch {
                 return false;
             };
 
-            p_shellState.chessBoardState.setPlayerHeuristicType(color, heuristic);
+            p_shellState.setPlayerHeuristicType(color, heuristic);
         },
         .SEARCH => {
             const heuristic = argsToE_SearchType(frthArg) catch {
                 return false;
             };
 
-            p_shellState.chessBoardState.setPlayerSearcType(color, heuristic);
+            p_shellState.setPlayerSearcType(color, heuristic);
         },
         .TYPE => {
             const player_type = argsToE_PlayerType(frthArg) catch {
                 return false;
             };
 
-            p_shellState.chessBoardState.setPlayerType(color, player_type);
+            p_shellState.setPlayerType(color, player_type);
         },
     }
     return true;
@@ -394,7 +414,7 @@ pub fn execCmd(p_shellState: *ShellState, cmd: e_userCmd, userBuffer: []const u8
 }
 
 pub fn execStart(p_shellState: *ShellState) bool {
-    chessl.match_routine(&p_shellState.chessBoardState);
+    chessl.match_routine(&p_shellState.chessBoardState, &p_shellState.players);
     return true;
 }
 
@@ -403,31 +423,37 @@ pub fn useMainTemplate(p_shellState: *ShellState) bool {
 
     _ = execStringCmd(p_shellState, "SET SEED 42");
 
-    _ = execStringCmd(p_shellState, "SET WHITE TYPE HUMAN");
-    _ = execStringCmd(p_shellState, "SET BLACK TYPE HUMAN");
+    //_ = execStringCmd(p_shellState, "SET WHITE TYPE HUMAN");
+    //_ = execStringCmd(p_shellState, "SET BLACK TYPE HUMAN");
     //
-    //_ = execStringCmd(p_shellState, "SET WHITE TYPE BOT");
-    //_ = execStringCmd(p_shellState, "SET WHITE SEARCH SIMPLE");
-    //_ = execStringCmd(p_shellState, "SET WHITE HEURISTIC SIMPLE");
+    _ = execStringCmd(p_shellState, "SET WHITE TYPE BOT");
+    _ = execStringCmd(p_shellState, "SET WHITE SEARCH SIMPLE");
+    _ = execStringCmd(p_shellState, "SET WHITE HEURISTIC SIMPLE");
 
-    //_ = execStringCmd(p_shellState, "SET BLACK TYPE BOT");
-    //_ = execStringCmd(p_shellState, "SET BLACK SEARCH DEPTH");
-    //_ = execStringCmd(p_shellState, "SET BLACK DEPTH 5");
-    //_ = execStringCmd(p_shellState, "SET BLACK HEURISTIC SIMPLE");
+    _ = execStringCmd(p_shellState, "SET BLACK TYPE BOT");
+    _ = execStringCmd(p_shellState, "SET BLACK SEARCH DEPTH");
+    _ = execStringCmd(p_shellState, "SET BLACK DEPTH 5");
+    _ = execStringCmd(p_shellState, "SET BLACK HEURISTIC SIMPLE");
     return true;
 }
 
 pub fn shell() void {
     var state: ShellState = .{};
     const p_state: *ShellState = &state;
+    var engine = enginel.engine.init(GLOBAL_ALLOC) catch unreachable;
+    const p_engine = &engine;
+    p_state.uciThread = enginel.launch_engine(p_engine) catch unreachable;
+
     while (p_state.isOpen) {
         printTerminalGui();
         const userBuffer = getUserStdinput();
-        //std.debug.print(" [DEBUG] shell: command found {s}\n", .{userBuffer});
         if (!p_state.uciMode) {
             _ = execStringCmd(p_state, &userBuffer);
         } else {
-            @panic("UCI not implemented yet\n");
+            _ = p_engine.addCommand(p_engine.alloc, &userBuffer);
         }
     }
+    p_engine.sendKill();
+    //p_state.uciThread.join();
+    //p_engine.free(GLOBAL_ALLOC);
 }

@@ -80,9 +80,10 @@ pub const Hash_bucket = struct {
 
 pub const Hash_table = struct {
     entries: []Hash_bucket,
-    nBits: u8,
-    size: u64,
+    nBits: u8 = 0,
+    size: u64 = 0,
     n_insertion: u64 = 0,
+    initialized: bool = false,
 
     pub fn init(alloc: std.mem.Allocator, nBits: u8) !Hash_table {
         const total_size: u64 = chess.ONE << @intCast(nBits);
@@ -94,10 +95,14 @@ pub const Hash_table = struct {
         for (0..total_size) |i| {
             ret.entries[i].lock = false;
         }
+        ret.initialized = true;
         return ret;
     }
     pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator) void {
-        alloc.free(p_self.entries);
+        if (p_self.initialized) {
+            alloc.free(p_self.entries);
+            p_self.initialized = false;
+        }
     }
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
         //return hash >> @intCast(64 - self.nBits);
@@ -157,14 +162,14 @@ pub const Zobrist_Keys = struct {
 };
 
 pub var zobristKeys: *Zobrist_Keys = undefined;
-pub var hashTable: Hash_table = undefined;
+pub var hashTable: Hash_table = .{ .entries = undefined };
 
 pub fn _initHash(seed: u64, sizeHashTable: u8) void {
     var rngIntGenerator = std.Random.DefaultPrng.init(seed);
     zobristKeys = Zobrist_Keys.init(GLOBAL_ALLOC);
 
     const rng = rngIntGenerator.random();
-    if (useHash) {
+    if (comptime useHash) {
         std.debug.print("Building using hash logic!\n", .{});
         hashTable = Hash_table.init(GLOBAL_ALLOC, sizeHashTable) catch |err| {
             std.debug.print("[ERROR] _initHash: memory error during alloc {}\n", .{err});
@@ -291,19 +296,3 @@ pub fn convertEPIdxBoardToZobrist(enPassantIdx: u8) u8 {
     }
     return chess.getSqIdxFile(enPassantIdx);
 }
-
-//pub fn reconstructionTest(p_state: *chess.Board_state) void {
-//    const deltaKey = p_state.key;
-//    var board_2 = chess.getBoardFromFen(chess.DEFAULT_FEN, GLOBAL_ALLOC);
-//    for (0..p_state.move_history.len) |i| {
-//        const move = p_state.move_history.moves[i];
-//        updateKeyOnMakeMove(&board_2, &move);
-//        _ = board_2.makeMoveUpdate(move);
-//    }
-//    std.debug.print("[DEBUG] reconstructionTest: original: {x}, reconstructed: {x}\n", .{ deltaKey.code, board_2.key.code });
-//    //if (deltaKey.code != board_2.key.code) {
-//    //    chess.print_boardstate(p_state);
-//    //    chess.print_boardstate(&board_2);
-//    //    @panic("???");
-//    //}
-//}

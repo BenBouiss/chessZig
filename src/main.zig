@@ -1,5 +1,5 @@
 const std = @import("std");
-const rl = @import("raylib");
+//const rl = @import("raylib");
 
 var GPA = std.heap.GeneralPurposeAllocator(.{}){};
 pub const GLOBAL_ALLOC = GPA.allocator();
@@ -17,7 +17,7 @@ const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
 
 fn test_main_game() !void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
+    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN) catch {};
     game_state.setSeed(42);
     game_state.setPlayerType(chess.e_color.WHITE, exploration.e_playerType.Human);
 
@@ -28,7 +28,7 @@ fn test_main_game() !void {
 }
 
 fn test_bot_v_bot() void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
+    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN) catch {};
     game_state.setSeed(42);
     game_state.setPlayerType(chess.e_color.WHITE, exploration.e_playerType.Bot);
     game_state.setPlayerSearcType(.WHITE, .Random);

@@ -2,6 +2,8 @@ const std = @import("std");
 
 const debug_err = error{ERR_INPUT};
 
+pub const strTokens = enum(u8) { standardToken, ignoreCase };
+
 pub fn clear() void {
     //std.debug.print("Clearing screen \n", .{});
     std.debug.print("\x1B[2J\x1B[H", .{});
@@ -64,6 +66,39 @@ pub fn equal(comptime T: type, a: []const T, b: []const T) bool {
     return true;
 }
 
+pub fn lowerLetter(letter: u8) u8 {
+    if ((letter >= 65) and (letter <= 90)) {
+        return letter + 32;
+    }
+    return letter;
+}
+
+pub fn contains(a: []const u8, b: []const u8, comptime token: strTokens) bool {
+    if (b.len > a.len) {
+        return false;
+    }
+    var moveTarget: u32 = 0;
+    for (0..a.len) |i| {
+        if (moveTarget == b.len) {
+            return true;
+        }
+        if (comptime token == .standardToken) {
+            if (a[i] == b[moveTarget]) {
+                moveTarget += 1;
+            } else {
+                moveTarget = 0;
+            }
+        } else if (comptime token == .ignoreCase) {
+            if (lowerLetter(a[i]) == lowerLetter(b[moveTarget])) {
+                moveTarget += 1;
+            } else {
+                moveTarget = 0;
+            }
+        }
+    }
+    return moveTarget == b.len;
+}
+
 pub fn find(comptime T: type, a: []const T, e: T) i8 {
     var ret: i8 = 0;
     for (a) |a_e| {
@@ -98,6 +133,14 @@ pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !st
     }
     return ret;
 }
+pub fn trimStr(str: []const u8) []const u8 {
+    for (0..str.len) |i| {
+        if (str[i] == 0) {
+            return str[0..i];
+        }
+    }
+    return str;
+}
 
 pub fn lower(alloc: std.mem.Allocator, buffer: []const u8) ![]const u8 {
     //var ret = std.mem.zeroes([buffer.len]u8);
@@ -110,6 +153,16 @@ pub fn lower(alloc: std.mem.Allocator, buffer: []const u8) ![]const u8 {
         }
     }
     return ret;
+}
+
+pub fn str_countLetter(buffer: []const u8, letter: u8) u64 {
+    var count: u64 = 0;
+    for (0..buffer.len) |i| {
+        if (buffer[i] == letter) {
+            count += 1;
+        }
+    }
+    return count;
 }
 
 pub fn concatArrayList(comptime T: type, alloc: std.mem.Allocator, arr: std.ArrayList([]const T), separator: T) ![]const T {
