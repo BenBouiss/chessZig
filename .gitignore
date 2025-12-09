@@ -2,6 +2,7 @@
 *.zig-cache
 src/extern/*
 
+logs
 cmd
 *.out
 *.c
