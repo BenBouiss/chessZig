@@ -7,6 +7,7 @@ const configl = @import("config.zig");
 const movel = @import("move.zig");
 const explorationl = @import("exploration.zig");
 const benchmarkl = @import("benchmark.zig");
+const interfacel = @import("interface.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -20,10 +21,17 @@ const e_goTypes = enum(u8) { SEARCHMOVES, PONDER, EVAL };
 const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID };
 const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, INVALID };
 
-pub const TICKRATE: u8 = 20; // alla MC 20 ticks/second
-pub const UPDATE_TICKRATE: u8 = 1; // 1 ticks/second
-pub const WAIT_TICKRATE_NS = (1 / TICKRATE) * (std.math.pow(u64, 10, 9));
-pub const UPDATE_TICKRATE_NS = (1 / UPDATE_TICKRATE) * (std.math.pow(u64, 10, 9));
+pub const TICKRATE: u16 = 360; // alla MC 20 ticks/second
+pub const UPDATE_TICKRATE: u16 = 360; // 1 ticks/second
+pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
+
+pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
+pub const WAIT_TICKRATE_NS = 2777777;
+pub const UPDATE_TICKRATE_NS = 2777777;
+pub const READING_TICKRATE_NS = (2) * (std.math.pow(u64, 10, 6));
+
+const DEBUG_INACTIVITY_READING_S = 30; // 30 seconds in ns
+const DEBUG_INACTIVITY_READING_NS = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
 
 pub const goArgStruct = struct {
     searchMoves: bool = false,
@@ -42,7 +50,7 @@ pub const goArgStruct = struct {
 };
 
 pub const inputChannel = struct {
-    cmdBuffer: std.ArrayList([]const u8),
+    cmdBuffer: std.ArrayList([]u8),
     lock: bool = false,
 
     fn acquireLock(p_self: *inputChannel) void {
@@ -54,7 +62,7 @@ pub const inputChannel = struct {
     fn releaseLock(p_self: *inputChannel) void {
         p_self.lock = false;
     }
-    pub fn readBuffer(p_self: *inputChannel) []const u8 {
+    pub fn readBuffer(p_self: *inputChannel) []u8 {
         p_self.acquireLock();
         const ret = p_self.cmdBuffer.orderedRemove(0);
         p_self.releaseLock();
@@ -62,7 +70,12 @@ pub const inputChannel = struct {
     }
     pub fn putCmd(p_self: *inputChannel, alloc: std.mem.Allocator, cmd: []const u8) bool {
         p_self.acquireLock();
-        p_self.cmdBuffer.append(alloc, cmd) catch {
+        const _cmd = alloc.dupe(u8, cmd) catch {
+            p_self.releaseLock();
+            return false;
+        };
+
+        p_self.cmdBuffer.append(alloc, _cmd) catch {
             p_self.releaseLock();
             return false;
         };
@@ -134,7 +147,7 @@ pub const engine = struct {
         var ret: engine = undefined;
         ret.input = undefined;
         ret.input.lock = false;
-        ret.input.cmdBuffer = try std.ArrayList([]const u8).initCapacity(alloc, 10);
+        ret.input.cmdBuffer = try std.ArrayList([]u8).initCapacity(alloc, 10);
         ret.status = .{};
         ret.id = .{};
         ret.searcher = .{};
@@ -142,9 +155,8 @@ pub const engine = struct {
         ret.options = .{};
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
         ret.alloc = GLOBAL_ALLOC;
-        ret.uciMode = true;
+        ret.uciMode = false;
         try ret.initOptions();
-        ret.printEngineInfo();
 
         return ret;
     }
@@ -169,23 +181,42 @@ pub const engine = struct {
         //p_self.addOption(.THREADS, .SPIN,
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_THREAD, .default = 1 } } });
         try p_self.addOption(.{ .name = "Hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_HASHSIZE, .default = 1 } } });
-        //p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, ._type = bool, .default = true, ._var = .{ false, true } });
+        //p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = [_][]const u8 &{ "false", "true" }, .default = "false" } } });
     }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
         p_self.options.nOptions += 1;
     }
+
+    pub fn readingThread(p_self: *engine) !void {
+        var buffer: [interfacel.MAX_USER_INPUT]u8 = undefined;
+        var f_reader = std.fs.File.stdin().reader(&buffer);
+        const reader = &f_reader.interface;
+        while (p_self.status.running) {
+            const inputBuffer = try interfacel.getMsgStdin(reader);
+            const msg = utilsl.trimStr(&inputBuffer);
+            if (p_self.status.debugMode) {
+                std.debug.print("[DEBUG] readingThread.engine: got '{s}' ({d} bytes)\n", .{ msg, msg.len });
+            }
+
+            std.debug.print("\n", .{});
+            _ = p_self.input.putCmd(p_self.alloc, &inputBuffer);
+        }
+    }
     fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) void {
+        const cmdtype = getEngineCmdType(cmdBuffer);
+
         if (p_self.uciMode) {
-            const cmdtype = getCmdType(cmdBuffer) catch unreachable;
             const trimmedBuffer = utilsl.trimStr(cmdBuffer);
-            //std.debug.print("[DEBUG] executeBuffer: before: ({d}: {s}), after: ({d}: {s})\n", .{ cmdBuffer.len, cmdBuffer, trimmedBuffer.len, trimmedBuffer });
             const status = p_self.uci_executeCmd(cmdtype, trimmedBuffer);
             if (p_self.status.debugMode) {
                 if (cmdtype != .NOOP) {
                     std.debug.print("[DEBUG] executeBuffer: found command type {} status: {}\n", .{ cmdtype, status });
                 }
             }
+        } else if (cmdtype == .UCI) {
+            p_self.uciMode = true;
+            p_self.printEngineInfo();
         }
     }
     pub fn uci_executeCmd(p_self: *engine, cmd: e_engineCmd, cmdBuffer: []const u8) bool {
@@ -247,8 +278,28 @@ pub const engine = struct {
         return true;
     }
     pub fn respond(self: engine, msg: []const u8) void {
-        _ = self;
-        std.debug.print("\t [RESP]: {s}\n", .{msg});
+        if (self.status.debugMode) {
+            std.debug.print("[DEBUG] respond.engine: sending msg: '{s}'\n", .{msg});
+        }
+        const respmsg = std.fmt.allocPrint(self.alloc, "\t [RESP]: {s} \n", .{msg}) catch unreachable;
+        defer self.alloc.free(respmsg);
+        //std.debug.print("{s}\n", .{respmsg});
+
+        var buffer: [interfacel.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
+        var writer = std.fs.File.stdout().writer(&buffer);
+        const interface = &writer.interface;
+        interface.writeAll(respmsg) catch |err| {
+            if (self.status.debugMode) {
+                std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
+            }
+            return;
+        };
+        interface.flush() catch |err| {
+            if (self.status.debugMode) {
+                std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
+            }
+            return;
+        };
     }
     pub fn addCommand(p_self: *engine, alloc: std.mem.Allocator, cmd: []const u8) bool {
         _ = p_self.input.putCmd(alloc, cmd);
@@ -315,14 +366,7 @@ pub const engine = struct {
         if (tokens.items.len < 3) {
             return false;
         }
-        //if (tokens.items.len == 3)
-        //const optionType: e_engineOptions = parseSetOptionTypeCmd(tokens.items[2]);
-        //switch (optionType) {
-        //    .INVALID => {
-        //        return false;
-        //    },
-        //    .THREADS => {},
-        //}
+
         return true;
     }
 
@@ -335,7 +379,7 @@ pub const engine = struct {
     fn executePositionCmd(p_self: *engine, cmdBuffer: []const u8, alloc: std.mem.Allocator) bool {
         const cmdOffset = 8;
         //* position [fen <fenstring> | startpos ]  moves <move1> .... <movei>
-        // ex: position rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah -
+        // ex: position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah -
         if (utilsl.contains(cmdBuffer, "startpos", .ignoreCase)) {
             chess.applyUciMoves(&p_self.state, cmdBuffer[cmdOffset..], alloc) catch {
                 return false;
@@ -445,17 +489,37 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
     }
     return .INVALID;
 }
-pub fn inputThreading(p_self: *engine) void {
+fn inputThreading(p_self: *engine) void {
+    var cumulTime: u64 = 0;
     while (p_self.status.running) {
-        if (p_self.input.cmdBuffer.items.len != 0) {
+        while (p_self.input.cmdBuffer.items.len != 0) {
             const cmdBuffer = p_self.input.readBuffer();
+            defer p_self.alloc.free(cmdBuffer);
             p_self.executeBuffer(cmdBuffer);
+            cumulTime = 0;
+        }
+        if (cumulTime > DEBUG_INACTIVITY_READING_NS) {
+            std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{DEBUG_INACTIVITY_READING_S});
+            cumulTime = 0;
         }
         std.Thread.sleep(WAIT_TICKRATE_NS);
+        cumulTime += WAIT_TICKRATE_NS;
     }
 }
 
-pub fn getCmdType(cmd: []const u8) !e_engineCmd {
+fn entrypointReaderThreading(p_self: *engine) void {
+    p_self.readingThread() catch unreachable;
+}
+fn mainThread() void {
+    var eng = engine.init(GLOBAL_ALLOC) catch unreachable;
+    eng.status.running = true;
+
+    const inputThread = std.Thread.spawn(.{}, entrypointReaderThreading, .{&eng}) catch unreachable;
+    eng.workingThreads.append(eng.alloc, inputThread) catch unreachable;
+    inputThreading(&eng);
+}
+
+fn getEngineCmdType(cmd: []const u8) e_engineCmd {
     if (utilsl.contains(cmd, "isready", .ignoreCase)) {
         return .ISREADY;
     } else if (utilsl.contains(cmd, "go", .ignoreCase)) {
@@ -483,8 +547,12 @@ pub fn getCmdType(cmd: []const u8) !e_engineCmd {
     }
     return .NOOP;
 }
-
-pub fn launch_engine(p_engine: *engine) !std.Thread {
+pub fn launch_engine() !void {
+    mainThread();
+    //_ = try std.Thread.spawn(.{}, mainThread, .{});
+    return;
+}
+pub fn launch_engine_shell(p_engine: *engine) !std.Thread {
     p_engine.status.running = true;
     const inputThread = try std.Thread.spawn(.{}, inputThreading, .{p_engine});
     try p_engine.workingThreads.append(p_engine.alloc, inputThread);

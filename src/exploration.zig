@@ -370,9 +370,11 @@ pub const uciSearcher = struct {
     nThreads: u16 = 1,
     endCounter: u16 = 0,
     bestMove: moveDecisionExt = .{},
+    searching: bool = false,
     pub fn reset(p_self: *uciSearcher) void {
         p_self.endCounter = 0;
         p_self.interrupt = false;
+        p_self.searching = false;
         p_self.bestMove = .{};
     }
 };
@@ -457,6 +459,7 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8) bool {
     p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
         return false;
     };
+
     return true;
 }
 
@@ -468,7 +471,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     }
 
     var threadedMoves = moveArray.cutEvenly(p_engine.alloc, _nThread) catch {
-        std.debug.print("ERROR move container init\n", .{});
+        std.debug.print("[ERROR] dispatchUciGoThreads: move container init\n", .{});
         return;
     };
 
@@ -494,6 +497,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     };
     defer arr_state.free(p_engine.alloc);
 
+    p_engine.searcher.searching = true;
     for (0.._nThread) |thread_id| {
         threads[thread_id] = std.Thread.spawn(.{}, threadUciEntrypoint, .{ &arr_state.array[thread_id], &threadedMoves.items[thread_id], &arr_threadInfo.items[thread_id], searcher.config.depth }) catch unreachable;
     }
@@ -505,7 +509,7 @@ pub fn waitThreadFinish(p_engine: *enginel.engine, p_arr: *threadInfo_container,
     var _end: u64 = 0;
     _start = @intCast(std.time.milliTimestamp());
     while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
-        std.Thread.sleep(enginel.UPDATE_TICKRATE_NS);
+        std.Thread.sleep(enginel.INFO_TICKRATE_NS);
         const res = p_arr.combine();
         _end = @intCast(std.time.milliTimestamp());
         const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d}", .{@divFloor(res.n_nodeExplored, (_end - _start + 1)) * 1000}) catch {
@@ -518,6 +522,7 @@ pub fn waitThreadFinish(p_engine: *enginel.engine, p_arr: *threadInfo_container,
             p_engine.searcher.endCounter += @intFromBool(!p_arr.items[i].running);
         }
     }
+    p_engine.searcher.searching = false;
     if (p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
         for (0..p_arr.len) |i| {
             p_arr.items[i].running = false;
@@ -546,7 +551,10 @@ pub fn threadUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Ar
 
         _ = p_state.makeMoveUpdate(move);
 
-        const decision = searchUciDepth(p_state, p_info, depth - 1);
+        var decision = searchUciDepth(p_state, p_info, depth - 1);
+
+        decision.invertScore();
+
         _ = p_state.undoMoveRestore();
 
         const popped = (p_state.stack.pop());
@@ -577,14 +585,14 @@ pub fn searchUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     //fmoves.shuffle(p_state.randInt);
     var final_decision: moveDecisionExt = .{};
-    var decision: moveDecisionExt = .{};
+    //var decision: moveDecisionExt = .{};
     const turn = p_state.turn;
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
         p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
-        decision = searchUciDepth(p_state, p_info, depth - 1);
+        var decision = searchUciDepth(p_state, p_info, depth - 1);
 
         decision.invertScore();
 
@@ -599,7 +607,7 @@ pub fn searchUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(turn)) {
-            final_decision.scoring = -@intFromEnum(e_simpleScore.CheckMate) * color_mask;
+            final_decision.scoring = -@intFromEnum(e_simpleScore.CheckMate);
         } else {
             final_decision.scoring = @intFromEnum(e_simpleScore.StaleMate);
         }

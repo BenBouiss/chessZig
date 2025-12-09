@@ -226,7 +226,7 @@ pub fn removePaddingValue(buffer: []const u8) []const u8 {
 pub fn printArrayListTasStr(comptime T: type, a: std.ArrayList(T)) void {
     std.debug.print("(", .{});
     for (0..a.items.len) |i| {
-        std.debug.print("{s} ", .{a.items[i]});
+        std.debug.print("'{s}'(size: {d}) ", .{ a.items[i], a.items[i].len });
         if (i != (a.items.len - 1)) {
             std.debug.print(", ", .{});
         }

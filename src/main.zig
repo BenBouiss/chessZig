@@ -12,12 +12,15 @@ const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
 const hashl = @import("hashTable.zig");
 const squarel = @import("square.zig");
+const guil = @import("gui.zig");
+const enginel = @import("engine.zig");
+const utilsl = @import("utils.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
 
 fn test_main_game() !void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN) catch {};
+    var game_state = chess.getBoardFromFen(GLOBAL_ALLOC, chess.DEFAULT_FEN) catch {};
     game_state.setSeed(42);
     game_state.setPlayerType(chess.e_color.WHITE, exploration.e_playerType.Human);
 
@@ -28,7 +31,7 @@ fn test_main_game() !void {
 }
 
 fn test_bot_v_bot() void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN) catch {};
+    var game_state = chess.getBoardFromFen(GLOBAL_ALLOC, chess.DEFAULT_FEN) catch {};
     game_state.setSeed(42);
     game_state.setPlayerType(chess.e_color.WHITE, exploration.e_playerType.Bot);
     game_state.setPlayerSearcType(.WHITE, .Random);
@@ -41,7 +44,7 @@ fn test_bot_v_bot() void {
 }
 
 fn test_magic(p_magicTable: *magicl.magicRecord) void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
+    var game_state = chess.getBoardFromFen(GLOBAL_ALLOC, chess.DEFAULT_FEN);
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
     const bb1 = magicl.getRookMoves(.e4, game_state.occupiedBB);
@@ -72,11 +75,33 @@ pub fn initAll() void {
     }
 }
 
+pub fn stdoutPrint() !void {
+    var buffer: [interfacel.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
+    var writer = std.fs.File.stdout().writer(&buffer);
+    const interface = &writer.interface;
+    try interface.writeAll("Hello from main! \n");
+    try interface.flush();
+}
+
 pub fn main() anyerror!void {
     initAll();
-    interfacel.shell();
     //benchmark.test_benchmark();
     //magicl.magicTables.print();
     //try chess.main();
+    //interfacel.shell();
+    //const args = std.os.argv;
+    const args = try std.process.argsAlloc(GLOBAL_ALLOC);
+
+    defer std.process.argsFree(GLOBAL_ALLOC, args);
+
+    if (args.len != 1) {
+        if (utilsl.equal(u8, args[1], "engine")) {
+            std.debug.print("[DEBUG] main: making engine child process\n", .{});
+            enginel.launch_engine() catch unreachable;
+        }
+    } else {
+        std.debug.print("[DEBUG] main: making gui process\n", .{});
+        guil.main();
+    }
     hashl.hashTable.free(GLOBAL_ALLOC);
 }

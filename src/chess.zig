@@ -265,7 +265,7 @@ pub fn print_board(p_board: *Board_state) void {
     for (0..N_SQUARES) |sq| {
         const _sq: u8 = @intCast(sq);
         const piece = p_board.get_piece(_sq);
-        const pieceStr = arr_piece_str[@intFromEnum(piece)];
+        const pieceStr = getStrFromPiece(piece);
         print_buffer[getSqIdxRank(_sq)][getSqIdxFile(_sq)] = pieceStr;
     }
 
@@ -331,11 +331,18 @@ pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
         }
         const tmp_enum = getPieceFromStr(letter);
 
+        if (board_offset == N_SQUARES) {
+            std.debug.print("[DEBUG] getBoardFromFen_pieces: letter: {d}, fen: {s}\n", .{ letter, fen });
+            for (0..fen.len) |i| {
+                std.debug.print("({c}, {d}), ", .{ fen[i], fen[i] });
+            }
+            std.debug.print("[DEBUG] getBoardFromFen_pieces. \n", .{});
+        }
         if (!ret.placePiece(tmp_enum, @enumFromInt(board_offset))) {
             std.debug.print("[DEBUG] getBoardFromFen_pieces: Fen problem with piece placement\n", .{});
             print_board(&ret);
         }
-        if (board_offset != N_SQUARES) {
+        if (board_offset != (N_SQUARES)) {
             board_offset += 1;
             commitedRowSize += 1;
         }
@@ -344,11 +351,13 @@ pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
 }
 pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) bool {
     assert(turnToken.len == 1);
-    if (turnToken[0] == 'w') {
+    const turnLetter = utils.lowerLetter(turnToken[0]);
+    if (turnLetter == 'w') {
         p_state.turn = .WHITE;
-    } else if (turnToken[0] == 'b') {
+    } else if (turnLetter == 'b') {
         p_state.turn = .BLACK;
     } else {
+        std.debug.print("[PANIC] getBoardFromFen_turn: turn letter found: letter: {c} token: {s}\n", .{ turnLetter, turnToken });
         @panic("Unknown turn found");
     }
     return true;
@@ -392,15 +401,15 @@ pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
     };
     return nbr;
 }
-pub fn getBoardFromFen(fen: []const u8, alloc: std.mem.Allocator) debug_err!Board_state {
+pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Board_state {
     var tokens = utils.split(u8, alloc, fen, ' ') catch {
         return debug_err.fenErr;
     };
     defer tokens.deinit(alloc);
-    utils.printArrayListTasStr([]const u8, tokens);
     if (tokens.items.len < 6) {
         return debug_err.fenErr;
     }
+    //utils.printArrayListTasStr([]const u8, tokens);
     var board = try getBoardFromFen_pieces(tokens.items[0]);
     _ = getBoardFromFen_turn(&board, tokens.items[1]);
     _ = getBoardFromFen_castle(&board, tokens.items[2]);
@@ -412,25 +421,17 @@ pub fn getBoardFromFen(fen: []const u8, alloc: std.mem.Allocator) debug_err!Boar
 
 pub fn getBoardFromUciFen(uciStr: []const u8, alloc: std.mem.Allocator) !Board_state {
     // format position <fen> moves
-
-    var ret = getBoardFromFen(uciStr, alloc) catch unreachable;
+    //std.debug.print("[DEBUG] getBoardFromUciFen: {s}\n", .{uciStr});
+    var ret = getBoardFromFen(alloc, uciStr) catch unreachable;
     try applyUciMoves(&ret, uciStr, alloc);
     return ret;
 }
 pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.Allocator) !void {
     var moveArray = try getMoveListFromStr(p_board, uciStr, alloc);
     defer moveArray.deinit(alloc);
-
     for (0..moveArray.items.len) |i| {
         var move = moveArray.items[i];
         updateMoveWithBoard(p_board, &move);
-        if (move.isEnpassant()) {
-            if (p_board.turn == .WHITE) {
-                move.setCapture(.nBlackPawn);
-            } else {
-                move.setCapture(.nWhitePawn);
-            }
-        }
         p_board.makeMoveUpdate(move);
     }
 }
@@ -1173,7 +1174,6 @@ pub const Board_state = struct {
         return self.halfMoveClock >= 50;
     }
     pub fn isStaleThreeFold(self: *Board_state) bool {
-        // TODO: Make it actually adhere to the rule ie check for 3 BOARD_STATE repeated during the _whole_ game
         return self.move_history.checkRepetitions();
     }
     pub fn isStaleMateRepetition(p_self: *Board_state) bool {
@@ -1183,11 +1183,6 @@ pub const Board_state = struct {
     pub fn setSeed(p_self: *Board_state, seed: u64) void {
         p_self.rngIntGenerator.seed(seed);
         p_self.randInt = p_self.rngIntGenerator.random();
-    }
-    pub fn getFen(self: Board_state) []const u8 {
-        const ret = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
-        _ = self;
-        return ret;
     }
 };
 
@@ -1931,6 +1926,13 @@ pub fn updateMoveWithBoard(p_state: *Board_state, move: *IMove) void {
         if ((getSqIdxFile(from) != getSqIdxFile(to)) and (c_piece == .nEmptySquare)) {
             ret_flag |= @intFromEnum(e_moveFlags.ENPASSANT);
         }
+        if (move.isEnpassant()) {
+            if (p_state.turn == .WHITE) {
+                move.setCapture(.nBlackPawn);
+            } else {
+                move.setCapture(.nWhitePawn);
+            }
+        }
     }
     move.setFlag(ret_flag);
 }
@@ -2078,7 +2080,7 @@ pub fn match_routine(p_state: *Board_state, p_players: *[NUMBER_PLAYER]explorati
 pub fn _default_scenarios() void {
     const fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
     std.debug.print("Testing fen: {s}\n", .{fen});
-    var board_promo = getBoardFromFen(fen, GLOBAL_ALLOC) catch {};
+    var board_promo = getBoardFromFen(GLOBAL_ALLOC, fen) catch {};
     print_boardstate(&board_promo);
     askContinue();
 }
@@ -2099,7 +2101,7 @@ pub fn _pin_scenario() void {
     std.debug.print("[DEBUG] pin scenario: \n", .{});
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b";
 
-    var board = getBoardFromFen(fen, GLOBAL_ALLOC) catch {};
+    var board = getBoardFromFen(GLOBAL_ALLOC, fen) catch {};
     //const kingInfo = squareInfo.init(@enumFromInt(board.getKingSq(.WHITE)));
     print_boardstate(&board);
     getCheckers(&board, .WHITE);

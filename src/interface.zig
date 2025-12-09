@@ -40,7 +40,7 @@ const e_playerSetTable = enum(u8) {
     TYPE,
 };
 
-const MAX_USER_INPUT: u64 = 1024;
+pub const MAX_USER_INPUT: u64 = 1024;
 
 const ShellState = struct {
     isOpen: bool = true,
@@ -134,11 +134,26 @@ pub fn getUserStdinput() [MAX_USER_INPUT]u8 {
     var stdin_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
     var line_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
     var stdin = std.fs.File.stdin().reader(&stdin_buffer);
+
     var w: std.io.Writer = .fixed(&line_buffer);
     _ = stdin.interface.streamDelimiter(&w, '\n') catch unreachable;
     return line_buffer;
 }
-
+pub fn getMsgStdin(reader: *std.io.Reader) ![MAX_USER_INPUT]u8 {
+    var buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
+    var w: std.io.Writer = .fixed(&buffer);
+    _ = try reader.streamDelimiter(&w, '\n');
+    _ = reader.toss(1);
+    return buffer;
+}
+pub fn getMsgStdout() ![MAX_USER_INPUT]u8 {
+    var buffer: [MAX_USER_INPUT]u8 = undefined;
+    var stdin_reader = std.fs.File.stdout().reader(&buffer);
+    const reader = &stdin_reader.interface;
+    const msg = try reader.takeDelimiter('\n');
+    //_ = reader.toss(1);
+    return msg;
+}
 pub fn getCmdFromUserInput(buffer: []const u8) e_userCmd {
     var indiv_args = utilsl.split(u8, GLOBAL_ALLOC, utilsl.removePaddingValue(buffer), ' ') catch unreachable;
     defer indiv_args.deinit(GLOBAL_ALLOC);
@@ -196,7 +211,7 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
     };
     defer GLOBAL_ALLOC.free(def_flag);
     if (utilsl.equal(u8, def_flag, "default")) {
-        p_shellState.chessBoardState = chessl.getBoardFromFen(chessl.DEFAULT_FEN, GLOBAL_ALLOC) catch {
+        p_shellState.chessBoardState = chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN) catch {
             return false;
         };
     } else {
@@ -207,7 +222,7 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
         if (concat.len == 1) {
             return false;
         }
-        p_shellState.chessBoardState = chessl.getBoardFromFen(concat, GLOBAL_ALLOC) catch {
+        p_shellState.chessBoardState = chessl.getBoardFromFen(GLOBAL_ALLOC, concat) catch {
             return false;
         };
     }
@@ -442,7 +457,7 @@ pub fn shell() void {
     const p_state: *ShellState = &state;
     var engine = enginel.engine.init(GLOBAL_ALLOC) catch unreachable;
     const p_engine = &engine;
-    p_state.uciThread = enginel.launch_engine(p_engine) catch unreachable;
+    p_state.uciThread = enginel.launch_engine_shell(p_engine) catch unreachable;
 
     while (p_state.isOpen) {
         printTerminalGui();

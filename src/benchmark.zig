@@ -135,7 +135,7 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
     }
 }
 pub fn test_benchmark() void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN, GLOBAL_ALLOCATOR) catch {};
+    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch {};
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);

@@ -140,14 +140,19 @@ pub const IMove = struct {
     pub fn copy(self: IMove) IMove {
         return .{ .m_move = self.m_move, .m_piece = self.m_piece };
     }
-    pub fn getStr(self: IMove) [4]u8 {
-        var strM: [4]u8 = undefined;
+    pub fn getStr(self: IMove) [5]u8 {
+        var strM: [5]u8 = undefined;
         const r1 = chess.strFromLERF(@enumFromInt(self.getFrom()));
         const r2 = chess.strFromLERF(@enumFromInt(self.getTo()));
         strM[0] = r1[0];
         strM[1] = r1[1];
         strM[2] = r2[0];
         strM[3] = r2[1];
+        if (self.isPromotion()) {
+            strM[4] = chess.getStrFromPiece(chess.flagPromotionToPiece(self.getFlag(), .BLACK));
+        } else {
+            strM[4] = 0;
+        }
         return strM;
     }
     pub fn print(self: IMove) void {
