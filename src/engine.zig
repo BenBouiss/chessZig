@@ -21,18 +21,6 @@ const e_goTypes = enum(u8) { SEARCHMOVES, PONDER, EVAL };
 const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID };
 const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, INVALID };
 
-pub const TICKRATE: u16 = 360; // alla MC 20 ticks/second
-pub const UPDATE_TICKRATE: u16 = 360; // 1 ticks/second
-pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
-
-pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
-pub const WAIT_TICKRATE_NS = 2777777;
-pub const UPDATE_TICKRATE_NS = 2777777;
-pub const READING_TICKRATE_NS = (2) * (std.math.pow(u64, 10, 6));
-
-const DEBUG_INACTIVITY_READING_S = 30; // 30 seconds in ns
-const DEBUG_INACTIVITY_READING_NS = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
-
 pub const goArgStruct = struct {
     searchMoves: bool = false,
     ponder: bool = false,
@@ -197,9 +185,9 @@ pub const engine = struct {
             const msg = utilsl.trimStr(&inputBuffer);
             if (p_self.status.debugMode) {
                 std.debug.print("[DEBUG] readingThread.engine: got '{s}' ({d} bytes)\n", .{ msg, msg.len });
+                std.debug.print("\n", .{});
             }
 
-            std.debug.print("\n", .{});
             _ = p_self.input.putCmd(p_self.alloc, &inputBuffer);
         }
     }
@@ -281,9 +269,8 @@ pub const engine = struct {
         if (self.status.debugMode) {
             std.debug.print("[DEBUG] respond.engine: sending msg: '{s}'\n", .{msg});
         }
-        const respmsg = std.fmt.allocPrint(self.alloc, "\t [RESP]: {s} \n", .{msg}) catch unreachable;
+        const respmsg = std.fmt.allocPrint(self.alloc, "{s} \n", .{msg}) catch unreachable;
         defer self.alloc.free(respmsg);
-        //std.debug.print("{s}\n", .{respmsg});
 
         var buffer: [interfacel.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
         var writer = std.fs.File.stdout().writer(&buffer);
@@ -398,7 +385,7 @@ pub const engine = struct {
 
     pub fn executeIsReady(p_self: *engine) bool {
         while (p_self.status.searching) {
-            std.Thread.sleep(WAIT_TICKRATE_NS);
+            std.Thread.sleep(configl.WAIT_TICKRATE_NS);
         }
         p_self.respond("readyok");
         return true;
@@ -498,12 +485,12 @@ fn inputThreading(p_self: *engine) void {
             p_self.executeBuffer(cmdBuffer);
             cumulTime = 0;
         }
-        if (cumulTime > DEBUG_INACTIVITY_READING_NS) {
-            std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{DEBUG_INACTIVITY_READING_S});
+        if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
+            std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
             cumulTime = 0;
         }
-        std.Thread.sleep(WAIT_TICKRATE_NS);
-        cumulTime += WAIT_TICKRATE_NS;
+        std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+        cumulTime += configl.WAIT_TICKRATE_NS;
     }
 }
 

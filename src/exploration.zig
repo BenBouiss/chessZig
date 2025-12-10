@@ -9,6 +9,7 @@ const heuristicl = @import("heuristic.zig");
 const utilsl = @import("utils.zig");
 const hashl = @import("hashTable.zig");
 const enginel = @import("engine.zig");
+const configl = @import("config.zig");
 const build_options = @import("build_options");
 
 const IMove = movel.IMove;
@@ -509,7 +510,7 @@ pub fn waitThreadFinish(p_engine: *enginel.engine, p_arr: *threadInfo_container,
     var _end: u64 = 0;
     _start = @intCast(std.time.milliTimestamp());
     while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
-        std.Thread.sleep(enginel.INFO_TICKRATE_NS);
+        std.Thread.sleep(configl.INFO_TICKRATE_NS);
         const res = p_arr.combine();
         _end = @intCast(std.time.milliTimestamp());
         const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d}", .{@divFloor(res.n_nodeExplored, (_end - _start + 1)) * 1000}) catch {

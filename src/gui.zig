@@ -19,13 +19,7 @@ const Board_state = chessl.Board_state;
 const INITIAL_LOGSIZE: u16 = 100;
 const DEFAULT_TIME: i64 = 300 * 1000; // 5 min in ms
 const DEFAULT_TIME_INC: i64 = 5 * 1000; // 5 sec in ms
-const LIFE_TICKRATE: u16 = 10;
-const LIFE_TICKRATE_NS = std.math.pow(u64, 10, 8); // 2 seconds in ns
 
-const START_TICKRATE_NS = 2 * std.math.pow(u64, 10, 9); // 2 seconds in ns
-
-const DEBUG_INACTIVITY_SERVING_S = 30; // 30 seconds in ns
-const DEBUG_INACTIVITY_SERVING_NS = DEBUG_INACTIVITY_SERVING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
 const e_guiCmd = enum(u8) { NOOP = 0, INFO, BESTMOVE, READYOK, UCIOK, ID, OPTION };
 const e_guiPhase = enum(u8) { INVALID, WAITING, MATCH };
 
@@ -113,7 +107,7 @@ const guiState = struct {
         }
     }
     pub fn appendLog(p_self: *guiState, log: []const u8) !void {
-        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => {s}\n", .{ std.time.milliTimestamp() - p_self.start_time_ms, log });
+        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => {s}", .{ std.time.milliTimestamp() - p_self.start_time_ms, log });
         try p_self.logs.append(p_self.alloc, logmsg);
     }
     pub fn freeLog(p_self: *guiState) void {
@@ -124,14 +118,14 @@ const guiState = struct {
     }
     pub fn respond(p_self: *guiState, msg: []const u8) !void {
         var writer = &p_self.f_writer.interface;
-        const respmsg = try std.fmt.allocPrint(p_self.alloc, "out: {s} \n", .{msg});
+        const respmsg = try std.fmt.allocPrint(p_self.alloc, "OUT: {s} \n", .{msg});
         defer p_self.alloc.free(respmsg);
 
         try writer.print("{s}\n", .{msg});
         try p_self.appendLog(respmsg);
         try writer.flush();
         if (p_self.status.debugMode) {
-            std.debug.print("[DEBUG] respond.gui: sent msg: '{s}'\n", .{msg});
+            std.debug.print("[DEBUG] respond.gui: sent msg: '{s}'", .{respmsg});
         }
     }
 
@@ -147,10 +141,15 @@ const guiState = struct {
             _ = reader.toss(1);
             const msg = line.written();
 
-            std.debug.print("[DEBUG] readingThread.gui: found {d} bytes, message: {s}\n", .{ n, msg });
+            if (p_self.status.debugMode) {
+                std.debug.print("[DEBUG] readingThread.gui: found {d} bytes, message: {s}\n", .{ n, msg });
+            }
 
             _ = p_self.input.putCmd(p_self.alloc, msg);
-            try p_self.appendLog(utilsl.trimStr(msg));
+
+            const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN: {s}\n", .{msg});
+            defer p_self.alloc.free(respmsg);
+            try p_self.appendLog(respmsg);
             line.clearRetainingCapacity();
         }
     }
@@ -163,12 +162,12 @@ const guiState = struct {
                 p_self.handleCmd(cmdBuffer);
                 cumulTime = 0;
             }
-            if (cumulTime > DEBUG_INACTIVITY_SERVING_NS) {
-                std.debug.print("[INACTIVITY] servingGuiThread.gui: no activity found in the last {d}s \n", .{DEBUG_INACTIVITY_SERVING_S});
+            if (cumulTime > configl.DEBUG_INACTIVITY_SERVING_NS) {
+                std.debug.print("[INACTIVITY] servingGuiThread.gui: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_SERVING_S});
                 cumulTime = 0;
             }
-            std.Thread.sleep(enginel.WAIT_TICKRATE_NS);
-            cumulTime += enginel.WAIT_TICKRATE_NS;
+            std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+            cumulTime += configl.WAIT_TICKRATE_NS;
         }
     }
     pub fn saveLog(self: *guiState) !void {
@@ -305,7 +304,7 @@ const guiState = struct {
         var sent: bool = false;
         p_currentP.status.ready = false;
         while (!p_currentP.status.ready) {
-            std.Thread.sleep(LIFE_TICKRATE_NS);
+            std.Thread.sleep(configl.LIFE_TICKRATE_NS);
             if (!sent) {
                 sent = true;
                 try p_self.respond("ISREADY");
@@ -383,7 +382,7 @@ fn mainGuiThread(p_self: *guiState) void {
         p_self.respond("UCI") catch |err| {
             std.debug.print("[DEBUG] mainGuiThread: First UCI send failed, sleep then retrying (err: {})\n", .{err});
         };
-        std.Thread.sleep(START_TICKRATE_NS);
+        std.Thread.sleep(configl.START_TICKRATE_NS);
     }
     p_self.setDebugMode(false);
     const status: bool = p_self.startMatch(chessl.DEFAULT_FEN) catch {
@@ -395,17 +394,19 @@ fn mainGuiThread(p_self: *guiState) void {
 
     var cumulTime: u64 = 0;
     while (p_self.status.running) {
-        std.Thread.sleep(enginel.WAIT_TICKRATE_NS);
-        cumulTime += enginel.WAIT_TICKRATE_NS;
-        if (cumulTime > DEBUG_INACTIVITY_SERVING_NS) {
-            std.debug.print("[INACTIVITY] mainGuiThread.gui: no activity found in the last {d}s \n", .{DEBUG_INACTIVITY_SERVING_S});
+        std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+        cumulTime += configl.WAIT_TICKRATE_NS;
+        if (cumulTime > configl.DEBUG_INACTIVITY_SERVING_NS) {
+            std.debug.print("[INACTIVITY] mainGuiThread.gui: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_SERVING_S});
             cumulTime = 0;
         }
         if (p_self.match.nextTurnTrigger) {
+            utilsl.clear();
+            chessl.print_boardstate(&p_self.match.chessState);
+
             p_self.match.nextTurnTrigger = false;
             cumulTime = 0;
 
-            chessl.print_boardstate(&p_self.match.chessState);
             const turn_status = p_self.nextTurn() catch {
                 p_self.close();
                 break;
