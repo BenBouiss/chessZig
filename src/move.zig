@@ -319,8 +319,8 @@ pub const matchMoveContainer = struct {
     moves: [MAX_MATCH_LENGTH]IMove = std.mem.zeroes([MAX_MATCH_LENGTH]IMove),
     keyCodes: [MAX_MATCH_LENGTH]u32 = std.mem.zeroes([MAX_MATCH_LENGTH]u32),
     lastIrreversibleMoveIndex: u16 = 0,
-
     len: usize = 0,
+
     pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
         if (comptime !useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {

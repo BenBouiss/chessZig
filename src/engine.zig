@@ -8,6 +8,9 @@ const movel = @import("move.zig");
 const explorationl = @import("exploration.zig");
 const benchmarkl = @import("benchmark.zig");
 const interfacel = @import("interface.zig");
+const hashTablel = @import("hashTable.zig");
+const magicl = @import("magic.zig");
+const moveTablel = @import("moveTables.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -16,16 +19,18 @@ const debug_err = chess.debug_err;
 
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
-const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT };
-const e_goTypes = enum(u8) { SEARCHMOVES, PONDER, EVAL };
+const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
+const e_goTypes = enum(u8) { SEARCHMOVES, PONDER, EVAL, PERFT };
 const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID };
-const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, INVALID };
+pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, INVALID };
 
 pub const goArgStruct = struct {
     searchMoves: bool = false,
     ponder: bool = false,
     infinite: bool = false,
     eval: bool = false,
+    perft: bool = false,
+    useBatched: bool = false,
     wtime: u32 = 0,
     btime: u32 = 0,
     winc: u32 = 0,
@@ -75,17 +80,32 @@ pub const inputChannel = struct {
 const MAX_THREAD: u32 = 64;
 const MAX_HASHSIZE = 1000; // in MB => 1 GB
 
-const optionInfo_spin = struct { min: u32, max: u32, default: u32 };
+const spinVarType: type = u32;
+const optionInfo_spin = struct {
+    min: spinVarType,
+    max: spinVarType,
+    default: spinVarType,
 
-const optionInfo_str = struct { default: []const u8, _var: []const u8 };
+    pub fn validateValue(self: optionInfo_spin, value: spinVarType) bool {
+        return (value >= self.min) and (value <= self.max);
+    }
+};
+
+const optionInfo_str = struct {
+    default: []const u8,
+    _var: []const u8,
+    pub fn validateValue(self: optionInfo_str, value: []const u8) bool {
+        return utilsl.contains(self._var, value, .ignoreCase);
+    }
+};
 
 const optionInfo = union { spin: optionInfo_spin, str: optionInfo_str };
 
 pub const setOptionEntry = struct {
-    name: []const u8,
+    name: []const u8 = undefined,
     optionType: e_engineOptions = .INVALID,
     argType: e_engineOptionsArgType = .INVALID,
-    info: optionInfo,
+    info: optionInfo = undefined,
     pub fn optionNameMsg(self: *setOptionEntry, alloc: std.mem.Allocator) ![]const u8 {
         var msg: []const u8 = undefined;
         if (self.argType == .SPIN) {
@@ -104,6 +124,7 @@ pub const engineStatus = struct {
     searching: bool = false,
     debugMode: bool = false,
     positionProvided: bool = false,
+    initializedInternals: bool = false,
 };
 pub const engineIdentification = struct {
     name: []const u8 = configl.NAME,
@@ -113,9 +134,9 @@ pub const engineIdentification = struct {
 };
 
 pub const engineOptions = struct {
-    nThreads: u16 = 1,
-    useHashTable: bool = false,
-    hashTableSize: u64 = 0,
+    nThreads: spinVarType = configl.DEFAULT_THREAD,
+    useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
+    hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     setOptions: std.ArrayList(setOptionEntry) = undefined,
     nOptions: u16 = 0,
 };
@@ -168,12 +189,21 @@ pub const engine = struct {
     pub fn initOptions(p_self: *engine) !void {
         //p_self.addOption(.THREADS, .SPIN,
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_THREAD, .default = 1 } } });
-        try p_self.addOption(.{ .name = "Hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_HASHSIZE, .default = 1 } } });
-        //p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = [_][]const u8 &{ "false", "true" }, .default = "false" } } });
+        try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
+        try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
     }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
         p_self.options.nOptions += 1;
+    }
+    pub fn getOptionEntry(p_self: *engine, opt: e_engineOptions) setOptionEntry {
+        for (0..p_self.options.nOptions) |i| {
+            const _opt = p_self.options.setOptions.items[i];
+            if (opt == _opt.optionType) {
+                return _opt;
+            }
+        }
+        return .{};
     }
 
     pub fn readingThread(p_self: *engine) !void {
@@ -241,7 +271,6 @@ pub const engine = struct {
                 return p_self.executeRegisterCmd(cmdBuffer);
             },
             .SETOPTION => {
-                p_self.respond("setoption needs to be setup");
                 return p_self.executeSetOptionCmd(cmdBuffer);
             },
             .DEBUG => {
@@ -254,6 +283,9 @@ pub const engine = struct {
             .PONDERHIT => {
                 p_self.respond("pondering ...");
                 return true;
+            },
+            .BENCHMARK => {
+                return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINT => {
                 if (p_self.status.positionProvided) {
@@ -346,12 +378,50 @@ pub const engine = struct {
         return true;
     }
     pub fn executeSetOptionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
+        // format: setoption name <id> [value <x>]
         var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer, ' ') catch {
             return false;
         };
         defer tokens.deinit(p_self.alloc);
         if (tokens.items.len < 3) {
             return false;
+        }
+        const name: e_engineOptions = parseSetOptionTypeCmd(cmdBuffer);
+        const entry = p_self.getOptionEntry(name);
+
+        switch (name) {
+            .THREADS => {
+                const val = getSpinValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.spin.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.nThreads = val;
+                return true;
+            },
+            .USEHASHTABLE => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useHashTable = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .HASHTABLESIZE => {
+                const val = getSpinValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.spin.validateValue(val)) {
+                    return false;
+                }
+                return p_self.updateHash(val);
+            },
+            .INVALID => {
+                return false;
+            },
         }
 
         return true;
@@ -368,12 +438,15 @@ pub const engine = struct {
         //* position [fen <fenstring> | startpos ]  moves <move1> .... <movei>
         // ex: position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah -
         if (utilsl.contains(cmdBuffer, "startpos", .ignoreCase)) {
-            chess.applyUciMoves(&p_self.state, cmdBuffer[cmdOffset..], alloc) catch {
+            p_self.state = chess.getBoardFromFen(p_self.alloc, chess.DEFAULT_FEN) catch {
+                return false;
+            };
+            chess.applyUciMoves(&p_self.state, cmdBuffer[cmdOffset..], alloc, p_self.status.debugMode) catch {
                 return false;
             };
         } else if (utilsl.contains(cmdBuffer, "fen", .ignoreCase)) {
             const fenCmdOffset = 4;
-            p_self.state = chess.getBoardFromUciFen(cmdBuffer[(cmdOffset + fenCmdOffset)..], alloc) catch {
+            p_self.state = chess.getBoardFromUciFen(cmdBuffer[(cmdOffset + fenCmdOffset)..], alloc, p_self.status.debugMode) catch {
                 return false;
             };
         } else {
@@ -383,11 +456,28 @@ pub const engine = struct {
         return true;
     }
 
+    fn initInternals(p_self: *engine) bool {
+        p_self.status.initializedInternals = true;
+        magicl._initMagic(&magicl.magicTable);
+
+        moveTablel._initTables();
+        hashTablel._initZobrist(p_self.alloc, configl.SEED);
+        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
+        return true;
+    }
+    fn updateHash(p_self: *engine, hashSize: u32) bool {
+        p_self.options.hashTableSize = hashSize;
+        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
+        return true;
+    }
     pub fn executeIsReady(p_self: *engine) bool {
         while (p_self.status.searching) {
             std.Thread.sleep(configl.WAIT_TICKRATE_NS);
         }
         p_self.respond("readyok");
+        if (!p_self.status.initializedInternals) {
+            return p_self.initInternals();
+        }
         return true;
     }
     pub fn executeGoCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -399,8 +489,14 @@ pub const engine = struct {
 
         p_self.searcher.reset();
         p_self.searcher.config = goArg;
+        p_self.searcher.nThreads = p_self.options.nThreads;
         p_self.status.positionProvided = false;
         return explorationl.dispatchUciGoCmd(p_self, cmdBuffer);
+    }
+    pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
+        _ = p_self;
+        _ = cmdBuffer;
+        return true;
     }
 };
 pub fn getLastMoveFromUci(p_board: *Board_state, cmdBuffer: []const u8, alloc: std.mem.Allocator) !IMove {
@@ -433,6 +529,12 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
         } else if (utilsl.contains(arg, "eval", .ignoreCase)) {
             goArgs.eval = true;
             break;
+        } else if (utilsl.contains(arg, "perft", .ignoreCase)) {
+            goArgs.perft = true;
+            tokenIndex -= 1;
+        } else if (utilsl.contains(arg, "batched", .ignoreCase)) {
+            goArgs.useBatched = true;
+            tokenIndex -= 1;
         } else if (utilsl.contains(arg, "ponder", .ignoreCase)) {
             goArgs.ponder = true;
             tokenIndex -= 1;
@@ -467,15 +569,42 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
 }
 
 pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
-    if (utilsl.contains(cmdBuffer, "threads", .ignoreCase)) {
+    if (utilsl.contains(cmdBuffer, " threads", .ignoreCase)) {
         return .THREADS;
-    } else if (utilsl.contains(cmdBuffer, "hash", .ignoreCast)) {
+    } else if (utilsl.contains(cmdBuffer, " hash", .ignoreCase)) {
         return .HASHTABLESIZE;
-    } else if (utilsl.contains(cmdBuffer, "usehash", .ignoreCast)) {
+    } else if (utilsl.contains(cmdBuffer, " usehash", .ignoreCase)) {
         return .USEHASHTABLE;
     }
     return .INVALID;
 }
+pub fn getSpinValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) !spinVarType {
+    for (0..tokens.items.len) |i| {
+        const token = tokens.items[i];
+        if (utilsl.contains(token, "value", .ignoreCase)) {
+            if (i != tokens.items.len - 1) {
+                const ret = std.fmt.parseInt(spinVarType, tokens.items[i + 1], 10) catch {
+                    return debug_err.valueErr;
+                };
+                return ret;
+            }
+        }
+    }
+    return debug_err.valueErr;
+}
+pub fn getCheckValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) ![]const u8 {
+    for (0..tokens.items.len) |i| {
+        const token = tokens.items[i];
+
+        if (utilsl.contains(token, "value", .ignoreCase)) {
+            if (i != tokens.items.len - 1) {
+                return tokens.items[i + 1];
+            }
+        }
+    }
+    return debug_err.valueErr;
+}
+
 fn inputThreading(p_self: *engine) void {
     var cumulTime: u64 = 0;
     while (p_self.status.running) {
@@ -497,12 +626,13 @@ fn inputThreading(p_self: *engine) void {
 fn entrypointReaderThreading(p_self: *engine) void {
     p_self.readingThread() catch unreachable;
 }
-fn mainThread() void {
+fn mainThread(debugMode: bool) void {
     var eng = engine.init(GLOBAL_ALLOC) catch unreachable;
     eng.status.running = true;
 
     const inputThread = std.Thread.spawn(.{}, entrypointReaderThreading, .{&eng}) catch unreachable;
     eng.workingThreads.append(eng.alloc, inputThread) catch unreachable;
+    eng.status.debugMode = debugMode;
     inputThreading(&eng);
 }
 
@@ -531,12 +661,13 @@ fn getEngineCmdType(cmd: []const u8) e_engineCmd {
         return .PONDERHIT;
     } else if (utilsl.contains(cmd, "print", .ignoreCase)) {
         return .PRINT;
+    } else if (utilsl.contains(cmd, "bench", .ignoreCase)) {
+        return .BENCHMARK;
     }
     return .NOOP;
 }
-pub fn launch_engine() !void {
-    mainThread();
-    //_ = try std.Thread.spawn(.{}, mainThread, .{});
+pub fn launch_engine(debugMode: bool) !void {
+    mainThread(debugMode);
     return;
 }
 pub fn launch_engine_shell(p_engine: *engine) !std.Thread {

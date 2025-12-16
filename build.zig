@@ -30,6 +30,7 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "useStaged", b.option(bool, "useStaged", "Use the staged move generation") orelse false);
     build_options.addOption(bool, "useDebug", b.option(bool, "useDebug", "Use debugging checks in the gen/make/unmake of move") orelse false);
     build_options.addOption(bool, "useHash", b.option(bool, "useHash", "Use hashtable for perft") orelse false);
+
     // doesnt work still get cache error thingy on WSL
     //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     //const alloc = gpa.allocator();
@@ -73,8 +74,8 @@ pub fn build(b: *std.Build) void {
     //
     // If neither case applies to you, feel free to delete the declaration you
     // don't need and to put everything under a single module.
-    const exe = b.addExecutable(.{
-        .name = "Chess",
+    const engine = b.addExecutable(.{
+        .name = "engine",
         .root_module = b.createModule(.{
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
@@ -94,30 +95,39 @@ pub fn build(b: *std.Build) void {
                 // repeated because you are allowed to rename your imports, which
                 // can be extremely useful in case of collisions (which can happen
                 // importing modules from different packages).
-                .{ .name = "Chess", .module = mod },
+                .{ .name = "engine_l", .module = mod },
             },
         }),
     });
-    //exe.addOptions("build_options", build_options);
-    exe.root_module.addOptions("build_options", build_options);
+    const gui = b.addExecutable(.{
+        .name = "gui",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main_gui.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "gui_l", .module = mod },
+            },
+        }),
+    });
+    engine.root_module.addOptions("build_options", build_options);
+    gui.root_module.addOptions("build_options", build_options);
 
-    //const raylib_dep = b.dependency("raylib_zig", .{
-    //    .target = target,
-    //    .optimize = optimize,
-    //});
+    const raylib_dep = b.dependency("raylib", .{
+        .target = target,
+        .optimize = optimize,
+    });
 
-    //const raylib = raylib_dep.module("raylib"); // main raylib module
-    //const raygui = raylib_dep.module("raygui"); // raygui module
-    //const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
+    const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
     //
-    //exe.linkLibrary(raylib_artifact);
-    //exe.root_module.addImport("raylib", raylib);
-    //exe.root_module.addImport("raygui", raygui);
+    gui.linkLibrary(raylib_artifact);
+    engine.linkLibrary(raylib_artifact);
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
     // by passing `--prefix` or `-p`.
-    b.installArtifact(exe);
+    b.installArtifact(engine);
+    b.installArtifact(gui);
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).
@@ -132,7 +142,7 @@ pub fn build(b: *std.Build) void {
     // or if another step depends on it, so it's up to you to define when and
     // how this Run step will be executed. In our case we want to run it when
     // the user runs `zig build run`, so we create a dependency link.
-    const run_cmd = b.addRunArtifact(exe);
+    const run_cmd = b.addRunArtifact(engine);
     run_step.dependOn(&run_cmd.step);
 
     // By making the run step depend on the default step, it will be run from the
@@ -147,10 +157,19 @@ pub fn build(b: *std.Build) void {
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
-    const mod_tests = b.addTest(.{
-        .root_module = mod,
-    });
+    //const mod_tests = b.addTest(.{
+    //    .root_module = mod,
+    //});
+    const mod_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "Chess", .module = mod },
+        },
+    }) });
 
+    mod_tests.root_module.addOptions("build_options", build_options);
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);
 
@@ -158,7 +177,7 @@ pub fn build(b: *std.Build) void {
     // root module. Note that test executables only test one module at a time,
     // hence why we have to create two separate ones.
     const exe_tests = b.addTest(.{
-        .root_module = exe.root_module,
+        .root_module = engine.root_module,
     });
 
     // A run step that will run the second test executable.

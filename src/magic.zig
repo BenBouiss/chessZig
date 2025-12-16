@@ -48,27 +48,12 @@ pub const magicRecord = struct {
     bishopMagic: [N_SQUARES]magic_entry = std.mem.zeroes([N_SQUARES]magic_entry),
     rookMoves: [N_SQUARES][MAX_MASK_SIZE]u64,
     bishopMoves: [N_SQUARES][MAX_MASK_SIZE]u64,
-    //p_rookMoves: [*][MAX_MASK_SIZE]u64,
-    //p_bishopMoves: [*][MAX_MASK_SIZE]u64,
-    pub fn init(alloc: std.mem.Allocator) !magicRecord {
-        //var rook = (try alloc.alloc([MAX_MASK_SIZE]u64, N_SQUARES));
-        //var bishop = try alloc.alloc([MAX_MASK_SIZE]u64, N_SQUARES);
-        //rook = @as([N_SQUARES][MAX_MASK_SIZE]uN_SQUARES, rook);
-        //bishop = @as([64][MAX_MASK_SIZE]u64, bishop);
-        _ = alloc;
-        //const rook = std.mem.zeroes([64][MAX_MASK_SIZE]u64);
-        //const bishop = std.mem.zeroes([64][MAX_MASK_SIZE]u64);
-
+    pub fn init() magicRecord {
         const rook = undefined;
         const bishop = undefined;
 
-        //return .{ .isInitialized = true, .p_rookMoves = &rook, .p_bishopMoves = &bishop, .rookMoves = rook, .bishopMoves = bishop };
         return .{ .isInitialized = true, .rookMoves = rook, .bishopMoves = bishop };
     }
-    //pub fn free(p_self: *magicRecord, alloc: std.mem.Allocator) void {
-    //    alloc.free(p_self.p_bishopMoves);
-    //    alloc.free(p_self.p_rookMoves);
-    //}
 };
 pub fn _initMagic(p_magic: *magicRecord) void {
     if (comptime useMagic) {
@@ -76,8 +61,7 @@ pub fn _initMagic(p_magic: *magicRecord) void {
     }
     const _start = std.time.milliTimestamp();
     std.debug.print("[PRE] Starting the search for magic keys \n", .{});
-    p_magic.* = magicRecord.init(GLOBAL_ALLOC) catch unreachable;
-    //var ret: magicRecord = magicRecord.init(GLOBAL_ALLOC) catch unreachable;
+    p_magic.* = magicRecord.init();
 
     //initRookBishopMagic(&ret);
     initRookBishopMagicCached(p_magic);
@@ -92,9 +76,8 @@ pub fn initMagic() magicRecord {
     const _start = std.time.milliTimestamp();
     std.debug.print("[PRE] Starting the search for magic keys \n", .{});
 
-    var ret: magicRecord = magicRecord.init(GLOBAL_ALLOC) catch unreachable;
+    var ret: magicRecord = magicRecord.init();
 
-    //initRookBishopMagic(&ret);
     initRookBishopMagicCached(&ret);
     initRookBishopMoves(&ret);
 

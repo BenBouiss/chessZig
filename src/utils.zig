@@ -74,6 +74,7 @@ pub fn lowerLetter(letter: u8) u8 {
 }
 
 pub fn contains(a: []const u8, b: []const u8, comptime token: strTokens) bool {
+    // checks if the string b is present in a
     if (b.len > a.len) {
         return false;
     }

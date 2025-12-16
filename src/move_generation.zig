@@ -51,6 +51,9 @@ pub fn generateLegalMoves(p_board: *Board_state) moveContainer {
         return fmoves;
     }
 }
+pub fn generatePseudolegalMoves(p_board: *Board_state) moveContainer {
+    return moveGeneration(p_board);
+}
 
 pub fn push_promotion(from: u8, to: u8, piece: e_piece, p_out: *moveContainer) void {
     var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), piece);
@@ -622,7 +625,7 @@ pub fn black_PieceMovePawnMask(p_board: *Board_state, bb_piece: u64, p_out: *mov
 
         moveBitBoardToIMove_pawn(p_board, piece, curr_pos, (cachedTables.SimplePawnAttack[@intFromEnum(e_color.BLACK)][@intCast(sq)] & enemyBB), @intFromEnum(e_moveFlags.CAPTURE), p_out, e_color.BLACK);
 
-        const enPassantBB = chess.ONE << @intCast(p_board.enPassantIdx);
+        const enPassantBB = chess.xToBitboard(p_board.enPassantIdx);
         moveBitBoardToIMove_pawn(p_board, piece, curr_pos, (cachedTables.SimplePawnAttack[@intFromEnum(e_color.BLACK)][@intCast(sq)] & enPassantBB & freeBB & chess.blackPawnEnpassantRank), @intFromEnum(e_moveFlags.ENPASSANT), p_out, e_color.BLACK);
 
         _bb_piece ^= curr_pos;

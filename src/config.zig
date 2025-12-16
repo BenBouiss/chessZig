@@ -1,11 +1,20 @@
+const build_options = @import("build_options");
+
 const std = @import("std");
 
 pub const NAME = "Ben";
 pub const AUTHOR = "Ben";
 pub const VERSION = "0.0.1";
+pub const SEED: u64 = 42;
 
 pub const MAX_HASH_BITS = 18;
-//
+pub const DEFAULT_THREAD = 1;
+pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
+pub const DEFAULT_USEHASHTABLE = true;
+
+// hashTable constants
+pub const ITEM_PER_BUCKET = 4;
+
 // inactivity timers:
 //
 pub const DEBUG_INACTIVITY_SERVING_S = 30; // 30 seconds in ns
@@ -27,3 +36,5 @@ pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 2777777;
 pub const UPDATE_TICKRATE_NS = 2777777;
 pub const READING_TICKRATE_NS = (2) * (std.math.pow(u64, 10, 6));
+
+pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";

@@ -95,7 +95,7 @@ const benchmarkResultsContainer = struct {
     }
 };
 
-const ExpectedBenchmarkResults = [_]i64{
+pub const ExpectedBenchmarkResults = [_]i64{
     1,
     20,
     400,
@@ -135,11 +135,11 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
     }
 }
 pub fn test_benchmark() void {
-    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch {};
+    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch unreachable;
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 7, 1, false);
+    nodeExplorationBenchmark(&game_state, 7, 0, false);
 }
 
 pub fn main() !void {

@@ -3,6 +3,8 @@ const std = @import("std");
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
+const configl = @import("config.zig");
+
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
 
@@ -11,22 +13,20 @@ const e_color = chess.e_color;
 const e_square = squarel.e_square;
 const useHash = build_options.useHash;
 
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-pub const GLOBAL_ALLOC = GPA.allocator();
-
 pub const Key = struct {
     code: u64 = 0,
     //?? index: u32 source hqperft
 };
 
-const ITEM_PER_BUCKET = 6;
 pub const Hash_entry = struct {
     key: Key = .{},
     moveAmount: u64 = 0,
+
     evaluation: i32 = 0,
     exploredDeph: u8 = 0,
-    valid: bool = false,
     age: u8 = 0,
+
+    valid: bool = false,
     lock: bool = false,
 };
 
@@ -34,29 +34,35 @@ pub fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entr
     return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
 }
 pub const Hash_bucket = struct {
-    entries: [ITEM_PER_BUCKET]Hash_entry,
+    entries: [configl.ITEM_PER_BUCKET]Hash_entry,
+    //TODO find a way to put entries outside of this struct as the following 2 bytes are now worth the pointer to entries in mem 8 bytes
     len: u8 = 0,
-    hashTableOffset: u64,
-    has_collision: bool = false,
     lock: bool = false,
+    //hashTableOffset: u64,
+    //has_collision: bool = false,
+    pub fn printSize(p_self: *Hash_bucket) void {
+        std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
+        std.debug.print("[DEBUG] printSize: entries size is {d} bytes\n", .{@sizeOf(Hash_entry)});
+        _ = p_self;
+    }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
         //p_self.acquireLock();
         p_self.entries[p_self.len] = p_entry.*;
-        p_self.len = ((p_self.len + 1) % ITEM_PER_BUCKET);
+        p_self.len = ((p_self.len + 1) % configl.ITEM_PER_BUCKET);
         //if (comptime useDebug) {
         //    _ = checkHashCollision(p_self, p_entry);
         //}
         //p_self.releaseLock();
     }
-    pub fn checkHashCollision(self: Hash_bucket, p_entry: *const Hash_entry) bool {
-        for (0..self.len) |i| {
-            if (self.entries[i].key.code != p_entry) {
-                self.has_collision = true;
-                return true;
-            }
-        }
-        return false;
-    }
+    //pub fn checkHashCollision(self: Hash_bucket, p_entry: *const Hash_entry) bool {
+    //    for (0..self.len) |i| {
+    //        if (self.entries[i].key.code != p_entry) {
+    //            self.has_collision = true;
+    //            return true;
+    //        }
+    //    }
+    //    return false;
+    //}
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
         //p_self.acquireLock();
         for (0..p_self.len) |i| {
@@ -80,25 +86,33 @@ pub const Hash_bucket = struct {
 
 pub const Hash_table = struct {
     entries: []Hash_bucket,
-    nBits: u8 = 0,
+    MBsize: u32 = 0,
     size: u64 = 0,
     n_insertion: u64 = 0,
     initialized: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator, nBits: u8) !Hash_table {
-        const total_size: u64 = chess.ONE << @intCast(nBits);
-        std.debug.print("[PRE] Initializing hash table with a size of {d} buckets !\n", .{total_size});
+    pub fn init(alloc: std.mem.Allocator, MBsize: u32) !Hash_table {
+        var total_size: u64 = @intCast(MBsize * 1000000);
+        total_size = @divFloor(total_size, @sizeOf(Hash_bucket));
         var ret: Hash_table = undefined;
-        ret.nBits = nBits;
+        ret.MBsize = MBsize;
         ret.size = total_size;
-        ret.entries = try alloc.alloc(Hash_bucket, total_size);
+        ret.n_insertion = 0;
+
+        ret.entries = (try alloc.alloc(Hash_bucket, total_size));
+
         for (0..total_size) |i| {
             ret.entries[i].lock = false;
+            ret.entries[i].len = 0;
         }
         ret.initialized = true;
+
+        std.debug.print("[PRE] Initializing hash table with a size of {d} buckets !\n", .{total_size});
+        ret.entries[0].printSize();
         return ret;
     }
     pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator) void {
+        std.debug.print("[FREE] Freeing the entries in the hashtable \n", .{});
         if (p_self.initialized) {
             alloc.free(p_self.entries);
             p_self.initialized = false;
@@ -120,7 +134,7 @@ pub const Hash_table = struct {
         const index = p_entry.key.code;
         p_self.n_insertion += 1;
         var p_bucket = p_self.getBucketFromFullHashIndex(index);
-        if (p_bucket.len == ITEM_PER_BUCKET) {
+        if (p_bucket.len == configl.ITEM_PER_BUCKET) {
             _ = strategyEntryRemoval(p_bucket, p_entry);
         }
         //p_bucket.hashTableOffset = p_self.getHashIndex(p_entry.key.code);
@@ -132,7 +146,7 @@ pub const Hash_table = struct {
 pub fn strategyEntryRemoval(p_bucket: *Hash_bucket, p_entry: *const Hash_entry) bool {
     _ = p_bucket;
     _ = p_entry;
-    @panic("bucket is full!");
+    @panic("bucket is full! :)");
 }
 
 pub fn getEntryFromPerft(key: Key, depth: u8) Hash_entry {
@@ -164,19 +178,32 @@ pub const Zobrist_Keys = struct {
 pub var zobristKeys: *Zobrist_Keys = undefined;
 pub var hashTable: Hash_table = .{ .entries = undefined };
 
-pub fn _initHash(seed: u64, sizeHashTable: u8) void {
+pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
     var rngIntGenerator = std.Random.DefaultPrng.init(seed);
-    zobristKeys = Zobrist_Keys.init(GLOBAL_ALLOC);
-
+    zobristKeys = Zobrist_Keys.init(alloc);
     const rng = rngIntGenerator.random();
-    if (comptime useHash) {
-        std.debug.print("Building using hash logic!\n", .{});
-        hashTable = Hash_table.init(GLOBAL_ALLOC, sizeHashTable) catch |err| {
-            std.debug.print("[ERROR] _initHash: memory error during alloc {}\n", .{err});
-            @panic("Mem error");
-        };
-    }
     initZobristKeys(rng);
+}
+pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32) void {
+    // size in MB
+
+    if (hashTable.MBsize == sizeHashTable and hashTable.initialized) {
+        return;
+    }
+
+    std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
+    if (hashTable.initialized) {
+        hashTable.free(alloc);
+    }
+    hashTable = Hash_table.init(alloc, sizeHashTable) catch |err| {
+        std.debug.print("[ERROR] _initHash: memory error during alloc {}\n", .{err});
+        @panic("Mem error");
+    };
+}
+
+pub fn _initHash(alloc: std.mem.Allocator, seed: u64, bitsHashTable: u8) void {
+    _initZobrist(alloc, seed);
+    _ = bitsHashTable;
     return;
 }
 
