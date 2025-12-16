@@ -38,7 +38,44 @@ def knight_move(b):
     return (h1 << 16) | (h1 >> 16) | (h2 << 8) | (h2 >> 8)
 
 
+def soutOccl(gen, pro):
+    gen |= pro & (gen >> 8)
+    pro &= pro >> 8
+    gen |= pro & (gen >> 16)
+    pro &= pro >> 16
+    gen |= pro & (gen >> 32)
+    return gen
+
+
+def southOne(bb):
+    return bb | (bb >> 8)
+
+
+def NorthFill(gen):
+    gen |= gen << 8
+    gen |= gen << 16
+    gen |= gen << 32
+    return gen
+
+
 if __name__ == "__main__":
     b = sys.argv[1]
     print(f"Found argument {b} with type {type(b)}")
-    print_bitboard(b)
+    # print_bitboard(b)
+    gen = 0x4400000000
+    pro = 0x444444
+    # pro = 0x4400FFFF
+    print(f"Gen bitboard: ")
+    print_bitboard(gen)
+
+    print(f"Pro bitboard: ")
+    print_bitboard(pro)
+
+    print(f"North fill bitboard: ")
+    print_bitboard(NorthFill(gen))
+
+    print(f"South occl bitboard: ")
+    print_bitboard(soutOccl(gen, ~pro))
+
+    print(f"South att bitboard: ")
+    print_bitboard(southOne(soutOccl(gen, ~pro)))

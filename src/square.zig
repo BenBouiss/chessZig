@@ -22,6 +22,30 @@ pub const squareInfo = struct {
     pub fn getBB(self: squareInfo) u64 {
         return chess.ONE << @intCast(@intFromEnum(self.sq));
     }
+    pub inline fn getDiagBB(self: squareInfo) u64 {
+        return chess.diagonalMask(@intCast(@intFromEnum(self.sq)));
+    }
+    pub inline fn getAntiDiagBB(self: squareInfo) u64 {
+        return chess.antiDiagMask(@intCast(@intFromEnum(self.sq)));
+    }
+    pub inline fn getFileBB(self: squareInfo) u64 {
+        return chess.fileMaskFromFileN(self.file);
+    }
+    pub inline fn getRankBB(self: squareInfo) u64 {
+        return chess.rankMaskFromRankN(self.rank);
+    }
+    pub fn getAllAttackingSquares(self: squareInfo) u64 {
+        return self.getDiagBB() | self.getAntiDiagBB() | self.getRankBB() | self.getFileBB() | chess.knightAttacks(self.getBB());
+    }
+    pub fn visibilitySquares(self: squareInfo) u64 {
+        return self.getDiagBB() | self.getAntiDiagBB() | self.getRankBB() | self.getFileBB();
+    }
+    pub fn getHorizontalBB(self: squareInfo) u64 {
+        return self.getRankBB() | self.getFileBB();
+    }
+    pub fn getDiagonalsBB(self: squareInfo) u64 {
+        return self.getDiagBB() | self.getAntiDiagBB();
+    }
 };
 
 pub const checkContainer = struct {

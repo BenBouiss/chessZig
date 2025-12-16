@@ -1,6 +1,12 @@
 *zig-out
 *.zig-cache
-cmd
+src/extern/*
 
+logs
+cmd
+*.out
+*.c
 *.gz
 *pycache*
+
+

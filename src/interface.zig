@@ -4,11 +4,15 @@ const benchmarkl = @import("benchmark.zig");
 const chessl = @import("chess.zig");
 const explorationl = @import("exploration.zig");
 const heuristicl = @import("heuristic.zig");
+const enginel = @import("engine.zig");
+const mainl = @import("main.zig");
 
 const e_color = chessl.e_color;
 const e_playerType = explorationl.e_playerType;
 const e_searchType = explorationl.e_searchType;
 const e_heuristicType = heuristicl.e_heuristicType;
+
+const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 const shell_err = error{ERR_ARG};
 
@@ -22,6 +26,7 @@ const e_userCmd = enum(u8) {
     PRINT,
     CLEAR,
     PRESET,
+    UCI,
 };
 
 const e_shellSetTable = enum(u8) {
@@ -35,15 +40,28 @@ const e_playerSetTable = enum(u8) {
     TYPE,
 };
 
-const MAX_USER_INPUT: u64 = 1024;
-
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-const GLOBAL_ALLOC = GPA.allocator();
+pub const MAX_USER_INPUT: u64 = 1024;
 
 const ShellState = struct {
     isOpen: bool = true,
     fenProvided: bool = false,
     chessBoardState: chessl.Board_state = undefined,
+    uciThread: std.Thread = undefined,
+
+    players: [chessl.NUMBER_PLAYER]explorationl.Player = [chessl.NUMBER_PLAYER]explorationl.Player{ .{}, .{} },
+    uciMode: bool = false,
+    pub fn setPlayerType(p_self: *ShellState, color: e_color, player_type: explorationl.e_playerType) void {
+        p_self.players[@intFromEnum(color)].setType(player_type);
+    }
+    pub fn setPlayerSearchDepth(p_self: *ShellState, color: e_color, depth: u8) void {
+        p_self.players[@intFromEnum(color)].setSearchDepth(depth);
+    }
+    pub fn setPlayerSearcType(p_self: *ShellState, color: e_color, search_type: explorationl.e_searchType) void {
+        p_self.players[@intFromEnum(color)].setSearchType(search_type);
+    }
+    pub fn setPlayerHeuristicType(p_self: *ShellState, color: e_color, heuristic_type: heuristicl.e_heuristicType) void {
+        p_self.players[@intFromEnum(color)].setHeuristicType(heuristic_type);
+    }
 };
 
 fn printTerminalGui() void {
@@ -116,18 +134,34 @@ pub fn getUserStdinput() [MAX_USER_INPUT]u8 {
     var stdin_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
     var line_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
     var stdin = std.fs.File.stdin().reader(&stdin_buffer);
+
     var w: std.io.Writer = .fixed(&line_buffer);
     _ = stdin.interface.streamDelimiter(&w, '\n') catch unreachable;
     return line_buffer;
 }
-
+pub fn getMsgStdin(reader: *std.io.Reader) ![MAX_USER_INPUT]u8 {
+    var buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
+    var w: std.io.Writer = .fixed(&buffer);
+    _ = try reader.streamDelimiter(&w, '\n');
+    _ = reader.toss(1);
+    return buffer;
+}
+pub fn getMsgStdout() ![MAX_USER_INPUT]u8 {
+    var buffer: [MAX_USER_INPUT]u8 = undefined;
+    var stdin_reader = std.fs.File.stdout().reader(&buffer);
+    const reader = &stdin_reader.interface;
+    const msg = try reader.takeDelimiter('\n');
+    //_ = reader.toss(1);
+    return msg;
+}
 pub fn getCmdFromUserInput(buffer: []const u8) e_userCmd {
     var indiv_args = utilsl.split(u8, GLOBAL_ALLOC, utilsl.removePaddingValue(buffer), ' ') catch unreachable;
+    defer indiv_args.deinit(GLOBAL_ALLOC);
+
     if (indiv_args.items.len == 0) {
         return .NOOP;
     }
     const l_cmd = utilsl.lower(GLOBAL_ALLOC, indiv_args.items[0]) catch unreachable;
-    defer indiv_args.deinit(GLOBAL_ALLOC);
     defer GLOBAL_ALLOC.free(l_cmd);
 
     if (utilsl.equal(u8, l_cmd, "quit")) {
@@ -146,6 +180,8 @@ pub fn getCmdFromUserInput(buffer: []const u8) e_userCmd {
         return e_userCmd.PRINT;
     } else if (utilsl.equal(u8, l_cmd, "preset")) {
         return e_userCmd.PRESET;
+    } else if (utilsl.equal(u8, l_cmd, "uci")) {
+        return e_userCmd.UCI;
     } else {
         std.debug.print("Command {s} was not found\n", .{l_cmd});
         return e_userCmd.NOOP;
@@ -175,7 +211,9 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
     };
     defer GLOBAL_ALLOC.free(def_flag);
     if (utilsl.equal(u8, def_flag, "default")) {
-        p_shellState.chessBoardState = chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+        p_shellState.chessBoardState = chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN) catch {
+            return false;
+        };
     } else {
         const concat = utilsl.concatSlice(u8, GLOBAL_ALLOC, indiv_args.items[1..], ' ') catch {
             return false;
@@ -184,9 +222,10 @@ pub fn execSetBoard(p_shellState: *ShellState, userBuffer: []const u8) bool {
         if (concat.len == 1) {
             return false;
         }
-        p_shellState.chessBoardState = chessl.getBoardFromFen(concat);
+        p_shellState.chessBoardState = chessl.getBoardFromFen(GLOBAL_ALLOC, concat) catch {
+            return false;
+        };
     }
-
     return true;
 }
 
@@ -274,28 +313,28 @@ pub fn _execSetPlayer(p_shellState: *ShellState, args: std.ArrayList([]const u8)
             const depth = std.fmt.parseInt(u8, args.items[3], 10) catch {
                 return false;
             };
-            p_shellState.chessBoardState.setPlayerSearchDepth(color, depth);
+            p_shellState.setPlayerSearchDepth(color, depth);
         },
         .HEURISTIC => {
             const heuristic = argsToE_HeuristicType(frthArg) catch {
                 return false;
             };
 
-            p_shellState.chessBoardState.setPlayerHeuristicType(color, heuristic);
+            p_shellState.setPlayerHeuristicType(color, heuristic);
         },
         .SEARCH => {
             const heuristic = argsToE_SearchType(frthArg) catch {
                 return false;
             };
 
-            p_shellState.chessBoardState.setPlayerSearcType(color, heuristic);
+            p_shellState.setPlayerSearcType(color, heuristic);
         },
         .TYPE => {
             const player_type = argsToE_PlayerType(frthArg) catch {
                 return false;
             };
 
-            p_shellState.chessBoardState.setPlayerType(color, player_type);
+            p_shellState.setPlayerType(color, player_type);
         },
     }
     return true;
@@ -325,7 +364,14 @@ pub fn execPerft(p_shellState: *ShellState, userBuffer: []const u8) bool {
     const nThread = std.fmt.parseInt(u8, indiv_args.items[2], 10) catch {
         return false;
     };
-    benchmarkl.nodeExplorationBenchmark(&p_shellState.chessBoardState, depth, nThread);
+    var batched: bool = false;
+    if (indiv_args.items.len == 4) {
+        const batched_u = std.fmt.parseInt(u8, indiv_args.items[2], 10) catch {
+            return false;
+        };
+        batched = (batched_u != 0);
+    }
+    benchmarkl.nodeExplorationBenchmark(&p_shellState.chessBoardState, depth, nThread, batched);
     return true;
 }
 
@@ -374,12 +420,16 @@ pub fn execCmd(p_shellState: *ShellState, cmd: e_userCmd, userBuffer: []const u8
         .PRESET => {
             return useMainTemplate(p_shellState);
         },
+        .UCI => {
+            p_shellState.uciMode = !p_shellState.uciMode;
+            return true;
+        },
     }
     return true;
 }
 
 pub fn execStart(p_shellState: *ShellState) bool {
-    chessl.match_routine(&p_shellState.chessBoardState);
+    chessl.match_routine(&p_shellState.chessBoardState, &p_shellState.players);
     return true;
 }
 
@@ -388,24 +438,37 @@ pub fn useMainTemplate(p_shellState: *ShellState) bool {
 
     _ = execStringCmd(p_shellState, "SET SEED 42");
 
+    //_ = execStringCmd(p_shellState, "SET WHITE TYPE HUMAN");
+    //_ = execStringCmd(p_shellState, "SET BLACK TYPE HUMAN");
+    //
     _ = execStringCmd(p_shellState, "SET WHITE TYPE BOT");
-    _ = execStringCmd(p_shellState, "SET WHITE SEARCH RANDOM");
+    _ = execStringCmd(p_shellState, "SET WHITE SEARCH SIMPLE");
+    _ = execStringCmd(p_shellState, "SET WHITE HEURISTIC SIMPLE");
 
     _ = execStringCmd(p_shellState, "SET BLACK TYPE BOT");
     _ = execStringCmd(p_shellState, "SET BLACK SEARCH DEPTH");
     _ = execStringCmd(p_shellState, "SET BLACK DEPTH 5");
     _ = execStringCmd(p_shellState, "SET BLACK HEURISTIC SIMPLE");
-    //p_shellState.chessBoardState.players[0].print();
-    //p_shellState.chessBoardState.players[1].print();
     return true;
 }
 
 pub fn shell() void {
     var state: ShellState = .{};
-    while (state.isOpen) {
+    const p_state: *ShellState = &state;
+    var engine = enginel.engine.init(GLOBAL_ALLOC) catch unreachable;
+    const p_engine = &engine;
+    p_state.uciThread = enginel.launch_engine_shell(p_engine) catch unreachable;
+
+    while (p_state.isOpen) {
         printTerminalGui();
         const userBuffer = getUserStdinput();
-        //std.debug.print(" [DEBUG] shell: command found {s}\n", .{userBuffer});
-        _ = execStringCmd(&state, &userBuffer);
+        if (!p_state.uciMode) {
+            _ = execStringCmd(p_state, &userBuffer);
+        } else {
+            _ = p_engine.addCommand(p_engine.alloc, &userBuffer);
+        }
     }
+    p_engine.sendKill();
+    //p_state.uciThread.join();
+    //p_engine.free(GLOBAL_ALLOC);
 }
