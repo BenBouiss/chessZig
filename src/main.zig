@@ -1,42 +1,37 @@
-const rl = @import("raylib");
-const chess = @import("chess.zig");
-const exploration = @import("exploration.zig");
 const std = @import("std");
-const benchmark = @import("benchmark.zig");
-const interfacel = @import("interface.zig");
 
-const example = @import("raylib_ex.zig");
+var GPA = std.heap.GeneralPurposeAllocator(.{}){};
+pub const GLOBAL_ALLOC = GPA.allocator();
 
-fn test_main_game() !void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
-    game_state.setSeed(42);
-    game_state.setPlayerType(chess.e_color.WHITE, exploration.e_playerType.Human);
+const magicl = @import("magic.zig");
+const moveTablel = @import("moveTables.zig");
+const hashl = @import("hashTable.zig");
+const enginel = @import("engine.zig");
+const benchl = @import("benchmark.zig");
 
-    game_state.setPlayerType(chess.e_color.BLACK, exploration.e_playerType.Human);
-    game_state.setPlayerSearchDepth(chess.e_color.BLACK, 4);
+const build_options = @import("build_options");
+const useDebug = build_options.useDebug;
 
-    chess.match_routine(&game_state);
+pub fn initAll() void {
+    magicl._initMagic(&magicl.magicTable);
+    //hashl._initHash(GLOBAL_ALLOC, 42, 19);
+
+    hashl._initZobrist(GLOBAL_ALLOC, 42);
+    hashl._initOrReallocHashTable(GLOBAL_ALLOC, 2000);
+
+    moveTablel._initTables();
+    if (comptime useDebug) {
+        std.debug.print("[PRE] Building using the useDebug flag\n", .{});
+    }
 }
-
-fn test_bot_v_bot() void {
-    var game_state = chess.getBoardFromFen(chess.DEFAULT_FEN);
-    game_state.setSeed(42);
-    game_state.setPlayerType(chess.e_color.WHITE, exploration.e_playerType.Bot);
-    game_state.setPlayerSearcType(.WHITE, .Random);
-
-    game_state.setPlayerType(chess.e_color.BLACK, exploration.e_playerType.Bot);
-    game_state.setPlayerSearcType(.BLACK, .DepthBot);
-    game_state.setPlayerSearchDepth(.BLACK, 5);
-    game_state.setPlayerHeuristicType(.BLACK, .Simple);
-    chess.match_routine(&game_state);
+pub fn test_bench() void {
+    initAll();
+    benchl.test_benchmark();
 }
 
 pub fn main() anyerror!void {
-    //chess.initRayAttacks();
-    //try test_main_game();
-    //try profiler.main();
-    //benchmark.test_benchmark();
-    //try example.main();
-    //test_bot_v_bot();
-    interfacel.shell();
+    //test_bench();
+    //initAll();
+    enginel.launch_engine(true) catch unreachable;
+    hashl.hashTable.free(GLOBAL_ALLOC);
 }
