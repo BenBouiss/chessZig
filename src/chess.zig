@@ -436,7 +436,7 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.A
     for (0..moves.len) |i| {
         var move = moves.moves[i];
         fillMoveFromState(p_board, &move);
-        updateMoveWithBoard(p_board, &move);
+        //updateMoveWithBoard(p_board, &move);
         p_board.makeMoveUpdate(move);
         if (debug) {
             sanityCheckBoardState(p_board);
@@ -2088,104 +2088,12 @@ pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square
     return ret_flag;
 }
 
-pub fn emptyLineBuffer(line_buffer: []u8) void {
-    for (0..line_buffer.len) |i| {
-        line_buffer[i] = 0;
-    }
-}
-
-const MAX_USER_INPUT: u8 = 5;
-const MOVE_BUFFER_LENGTH: u8 = 5;
-
-fn getUserStdinput() [MAX_USER_INPUT]u8 {
-    var stdin_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
-    var line_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
-    var stdin = std.fs.File.stdin().reader(&stdin_buffer);
-    var w: std.io.Writer = .fixed(&line_buffer);
-    _ = stdin.interface.streamDelimiter(&w, '\n') catch unreachable;
-    return line_buffer;
-}
-
-pub fn askUserMove(p_state: *Board_state) !IMove {
-    var line_buffer = std.mem.zeroes([MAX_USER_INPUT]u8);
-    var from: e_square = undefined;
-    var to: e_square = undefined;
-    var flag: u8 = 0;
-    std.debug.print("Please enter a move: ", .{});
-    while (true) {
-        line_buffer = getUserStdinput();
-        std.debug.print("\n", .{});
-        if (line_buffer[0] == 0) {
-            std.debug.print("Please enter a valid move: ", .{});
-            continue;
-        }
-        from = stringToLERF(line_buffer[0..2]);
-        to = stringToLERF(line_buffer[2..4]);
-        if ((from == .invalid) or (to == .invalid)) {
-            std.debug.print("Please enter a valid move: ", .{});
-            continue;
-        }
-        flag = inferFlagFromMovement(p_state, from, to, &line_buffer);
-        break;
-    }
-    var ret = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, p_state.get_piece(@intFromEnum(from)));
-    if ((flag & @intFromEnum(e_moveFlags.CAPTURE)) != 0) {
-        if (flag == @intFromEnum(e_moveFlags.ENPASSANT)) {
-            if (p_state.turn == .WHITE) {
-                ret.setCapture(.nBlackPawn);
-            } else {
-                ret.setCapture(.nWhitePawn);
-            }
-        } else {
-            ret.setCapture(p_state.get_piece(@intFromEnum(to)));
-        }
-    }
-    return ret;
-}
-
-pub fn askContinue() void {
-    std.debug.print("Press continue: ", .{});
-    var stdin_buffer: [32]u8 = undefined;
-    var line_buffer: [32]u8 = undefined;
-    var stdin = std.fs.File.stdin().reader(&stdin_buffer);
-    var w: std.io.Writer = .fixed(&line_buffer);
-
-    _ = stdin.interface.streamDelimiterLimit(&w, '\n', .unlimited) catch void;
-
-    std.debug.print("\n", .{});
-    return;
-}
-
-pub fn match_routine(p_state: *Board_state, p_players: *[NUMBER_PLAYER]exploration.Player) void {
-    var curr_player: exploration.Player = undefined;
-    var status: e_matchFlag = undefined;
-    while (true) {
-        print_boardstate(p_state);
-        curr_player = p_players.*[@intFromEnum(p_state.turn)];
-        status = exploration.handlePlayer(p_state, curr_player) catch |err| {
-            std.debug.print("[DEBUG] match_routine: caught err: {} board might be bugged: \n", .{err});
-            print_board(p_state);
-            return;
-        };
-        switch (status) {
-            .CheckMate, .StaleMate, .StaleMateRepetition, .Error => {
-                std.debug.print("[DEBUG] match_routine: match is over flag: {} \n", .{status});
-                break;
-            },
-            .Continue => {},
-        }
-        utils.clear();
-    }
-
-    return;
-}
-
 pub fn _default_scenarios() void {
     const fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
     std.debug.print("Testing fen: {s}\n", .{fen});
     var board_promo = getBoardFromFen(get_global_alloc(), fen) catch {};
     print_boardstate(&board_promo);
-    askContinue();
+    utils.askContinue();
 }
 
 pub fn _pin_scenario() void {
@@ -2250,7 +2158,7 @@ pub fn _pin_scenario() void {
     print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
     print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
 
-    askContinue();
+    utils.askContinue();
 
     return;
 }

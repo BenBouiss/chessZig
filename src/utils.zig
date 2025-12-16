@@ -235,3 +235,15 @@ pub fn printArrayListTasStr(comptime T: type, a: std.ArrayList(T)) void {
     std.debug.print(") \n", .{});
     return;
 }
+pub fn askContinue() void {
+    std.debug.print("Press continue: ", .{});
+    var stdin_buffer: [32]u8 = undefined;
+    var line_buffer: [32]u8 = undefined;
+    var stdin = std.fs.File.stdin().reader(&stdin_buffer);
+    var w: std.io.Writer = .fixed(&line_buffer);
+
+    _ = stdin.interface.streamDelimiterLimit(&w, '\n', .unlimited) catch void;
+
+    std.debug.print("\n", .{});
+    return;
+}
