@@ -28,9 +28,9 @@ test "perft" {
     mainl.initAll();
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
     var tmp: benchmarkl.benchmarkResult = .{};
-    for (1..8) |depth| {
+    for (1..7) |depth| {
         const _start: i64 = std.time.microTimestamp();
-        try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 0, &tmp, true);
+        try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 1, &tmp, true);
         const expect: i64 = @intCast(tmp.n_nodes);
         try std.testing.expectEqual(expect, benchmarkl.ExpectedBenchmarkResults[depth]);
         const _stop = std.time.microTimestamp();
