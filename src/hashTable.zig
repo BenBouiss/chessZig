@@ -184,6 +184,9 @@ pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
     const rng = rngIntGenerator.random();
     initZobristKeys(rng);
 }
+pub fn isHashTable_init() bool {
+    return hashTable.initialized;
+}
 pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32) void {
     // size in MB
 

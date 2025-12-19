@@ -6,11 +6,13 @@ const explorationl = @import("exploration.zig");
 const heuristicl = @import("heuristic.zig");
 const enginel = @import("engine.zig");
 const mainl = @import("main.zig");
+const configl = @import("config.zig");
 
 const e_color = chessl.e_color;
 const e_playerType = explorationl.e_playerType;
 const e_searchType = explorationl.e_searchType;
 const e_heuristicType = heuristicl.e_heuristicType;
+const MAX_USER_INPUT = configl.MAX_USER_INPUT;
 
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
@@ -39,8 +41,6 @@ const e_playerSetTable = enum(u8) {
     HEURISTIC,
     TYPE,
 };
-
-pub const MAX_USER_INPUT: u64 = 1024;
 
 const ShellState = struct {
     isOpen: bool = true,

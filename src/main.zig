@@ -14,10 +14,9 @@ const useDebug = build_options.useDebug;
 
 pub fn initAll() void {
     magicl._initMagic(&magicl.magicTable);
-    //hashl._initHash(GLOBAL_ALLOC, 42, 19);
 
     hashl._initZobrist(GLOBAL_ALLOC, 42);
-    hashl._initOrReallocHashTable(GLOBAL_ALLOC, 2000);
+    //hashl._initOrReallocHashTable(GLOBAL_ALLOC, 2000);
 
     moveTablel._initTables();
     if (comptime useDebug) {
@@ -31,7 +30,5 @@ pub fn test_bench() void {
 
 pub fn main() anyerror!void {
     //test_bench();
-    //initAll();
-    enginel.launch_engine(true) catch unreachable;
-    hashl.hashTable.free(GLOBAL_ALLOC);
+    try enginel.launch_engine(true);
 }

@@ -144,7 +144,6 @@ pub fn trimStr(str: []const u8) []const u8 {
 }
 
 pub fn lower(alloc: std.mem.Allocator, buffer: []const u8) ![]const u8 {
-    //var ret = std.mem.zeroes([buffer.len]u8);
     var ret = try alloc.alloc(u8, buffer.len);
     for (0..buffer.len) |i| {
         if ((buffer[i] >= 65) and (buffer[i] <= 90)) {
