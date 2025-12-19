@@ -1,6 +1,7 @@
 *zig-out
 *.zig-cache
 src/extern/*
+secrets/*
 
 logs
 cmd

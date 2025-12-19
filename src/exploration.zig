@@ -16,7 +16,9 @@ const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const typedMoveContainer = movel.typedMoveContainer;
 const e_square = squarel.e_square;
-const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
+
+var GPA = std.heap.GeneralPurposeAllocator(.{}){};
+const GLOBAL_ALLOC = GPA.allocator();
 
 const useHash = build_options.useHash;
 const useDebug = build_options.useDebug;
@@ -36,7 +38,7 @@ pub const moveDecision = struct {
 };
 pub const moveDecisionExt = struct {
     move: IMove = .{},
-    line: movel.moveContainer = .{},
+    line: movel.matchMoveContainer = .{},
     scoring: i64 = 0,
     timeTake: u64 = 0, //seconds
     pub fn invertScore(p_self: *moveDecisionExt) void {
@@ -213,12 +215,12 @@ pub const threadInfo_container = struct {
 
 pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8) bool {
     var moveArray: moveContainer = undefined;
-    if (p_engine.searcher.config.eval) {
-        const score = heuristicl.simpleHeuristic(&p_engine.state);
-        const msg = std.fmt.allocPrint(p_engine.alloc, "eval: {d}", .{score}) catch unreachable;
-        p_engine.respond(msg);
-        return true;
-    }
+    //if (p_engine.searcher.config.type == .EVAL) {
+    //    const score = heuristicl.simpleHeuristic(&p_engine.state);
+    //    const msg = std.fmt.allocPrint(p_engine.alloc, "eval: {d}", .{score}) catch unreachable;
+    //    p_engine.respond(msg);
+    //    return true;
+    //}
     if (p_engine.searcher.config.searchMoves) {
         var _moveArray = chess.getMoveListFromStr(&p_engine.state, cmdBuffer, p_engine.alloc) catch {
             return false;
@@ -266,7 +268,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
 
     defer {
         for (threadedMoves.items) |*cell| {
-            cell.deinit(GLOBAL_ALLOC);
+            cell.deinit(p_engine.alloc);
         }
         threadedMoves.deinit(p_engine.alloc);
     }
@@ -296,16 +298,19 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
         }
     }
     for (0.._nThread) |thread_id| {
-        if (searcher.config.perft) {
+        if (searcher.config.type == .PERFT) {
             threads[thread_id] = std.Thread.spawn(.{}, threadUciPerftEntrypoint, .{ &arr_state.array[thread_id], &threadedMoves.items[thread_id], &arr_threadInfo.items[thread_id], searcher.config.depth, feats }) catch unreachable;
         } else {
-            threads[thread_id] = std.Thread.spawn(.{}, threadUciEntrypoint, .{ &arr_state.array[thread_id], &threadedMoves.items[thread_id], &arr_threadInfo.items[thread_id], searcher.config.depth }) catch unreachable;
+            threads[thread_id] = std.Thread.spawn(.{}, threadUciEntrypointLine, .{ &arr_state.array[thread_id], &threadedMoves.items[thread_id], &arr_threadInfo.items[thread_id], searcher.config.depth }) catch unreachable;
         }
     }
-    _ = waitThreadFinish(p_engine, &arr_threadInfo, &threads);
+    _ = waitThreadFinish(p_engine, &arr_threadInfo, &threads) catch {
+        std.debug.print("ERROR wait thread\n", .{});
+        return;
+    };
 }
 
-pub fn waitThreadFinish(p_engine: *enginel.engine, p_arr: *threadInfo_container, p_threads: *[]std.Thread) bool {
+pub fn waitThreadFinish(p_engine: *enginel.engine, p_arr: *threadInfo_container, p_threads: *[]std.Thread) !bool {
     var _start: u64 = 0;
     var _end: u64 = 0;
     _start = @intCast(std.time.milliTimestamp());
@@ -336,8 +341,20 @@ pub fn waitThreadFinish(p_engine: *enginel.engine, p_arr: *threadInfo_container,
         p_engine.searcher.bestMove = bestMove;
 
         const msg = std.fmt.allocPrint(p_engine.alloc, "bestmove {s}", .{bestMove.move.getStr()}) catch unreachable;
+        p_engine.respond(utilsl.trimStr(msg));
         defer p_engine.alloc.free(msg);
-        p_engine.respond(msg);
+        if (p_engine.searcher.config.type == .EVAL) {
+            const msg_score = std.fmt.allocPrint(p_engine.alloc, "score {d} at depth {d}", .{ bestMove.scoring, p_engine.searcher.config.depth }) catch unreachable;
+            defer p_engine.alloc.free(msg_score);
+            p_engine.respond(msg_score);
+        }
+        if (p_engine.status.debugMode) {
+            var lineStr = try bestMove.line.getLineString(p_engine.alloc);
+            const msg_score = std.fmt.allocPrint(p_engine.alloc, "line found: {s}", .{lineStr._slice()}) catch unreachable;
+            defer p_engine.alloc.free(msg_score);
+            defer lineStr.free(p_engine.alloc);
+            p_engine.respond(msg_score);
+        }
     }
     defer p_arr.free(p_engine.alloc);
     return true;
@@ -362,7 +379,7 @@ pub fn threadUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Ar
         p_state.loadFrame(&popped);
         if (i == 0 or p_info.currentBest.scoring < decision.scoring) {
             p_info.currentBest = decision;
-            p_info.currentBest.move = move;
+            p_info.currentBest.move = move.copy();
         }
     }
     p_info.running = false;
@@ -395,6 +412,87 @@ pub fn threadUciPerftEntrypoint(p_state: *chess.Board_state, p_startingMoves: *s
     }
     p_info.running = false;
 }
+pub fn threadUciEntrypointLine(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
+    p_info.running = true;
+
+    for (0..p_startingMoves.items.len) |i| {
+        p_state.stack.push(&p_state.makeFrame());
+        const move = p_startingMoves.items[i];
+        var currentDecision: moveDecisionExt = .{};
+        _ = p_state.makeMoveUpdate(move);
+
+        _ = currentDecision.line.append(move, p_state.key);
+
+        assert(currentDecision.line.len == 1);
+
+        var decision = searchUciDepthLine(p_state, p_info, depth - 1, &currentDecision);
+
+        decision.invertScore();
+
+        _ = p_state.undoMoveRestore();
+
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
+
+        //var lineStr = decision.line.getLineString(GLOBAL_ALLOC) catch unreachable;
+        //defer lineStr.free(GLOBAL_ALLOC);
+        //std.debug.print("[DEBUG] threadUciEntrypointLine: for move: {s}, line found: {s} scoring: {d}, line length: {d}\n", .{ move.getStr(), lineStr._slice(), decision.scoring, decision.line.len });
+        if (i == 0 or p_info.currentBest.scoring < decision.scoring) {
+            p_info.currentBest = decision;
+            p_info.currentBest.move = move;
+        }
+    }
+    p_info.running = false;
+}
+pub fn searchUciDepthLine(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, currentLine: *moveDecisionExt) moveDecisionExt {
+    const color_mask: i8 = getScoreMaskFromTurn(p_state.turn);
+    if (depth <= 0 or !p_info.running) {
+        p_info.n_nodeExplored += 1;
+        const score = color_mask * heuristicl.pastHeuristic(p_state);
+        //const score = color_mask * heuristicl.simpleHeuristic(p_state);
+        currentLine.scoring = score;
+        return currentLine.*;
+    }
+    if (p_state.isStaleMateRepetition()) {
+        currentLine.scoring = heuristicl.simpleStalemateScore;
+        return currentLine.*;
+    }
+
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    const turn = p_state.turn;
+    var final_decision: moveDecisionExt = .{};
+    for (0..fmoves.len) |i| {
+        const move: IMove = fmoves.moves[i];
+        p_state.stack.push(&p_state.makeFrame());
+        _ = p_state.makeMoveUpdate(move);
+
+        _ = currentLine.line.append(move, p_state.key);
+
+        var decision = searchUciDepthLine(p_state, p_info, depth - 1, currentLine);
+        decision.invertScore();
+
+        _ = p_state.undoMoveRestore();
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
+
+        if (i == 0 or final_decision.scoring < decision.scoring) {
+            final_decision.scoring = decision.scoring;
+            final_decision.line.merge(&decision.line);
+            //final_decision.line = decision.line;
+        }
+        currentLine.line.popMoveInplace();
+    }
+    if (fmoves.len == 0) {
+        final_decision.line.merge(&currentLine.line);
+        //final_decision.line = currentLine.line;
+        if (!p_state.isLegal(turn)) {
+            final_decision.scoring = -(@intFromEnum(e_simpleScore.CheckMate) + depth);
+        } else {
+            final_decision.scoring = @intFromEnum(e_simpleScore.StaleMate);
+        }
+    }
+    return final_decision;
+}
 pub fn searchUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16) moveDecisionExt {
     const color_mask: i8 = getScoreMaskFromTurn(p_state.turn);
     if (depth <= 0 or !p_info.running) {
@@ -411,9 +509,7 @@ pub fn searchUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    //fmoves.shuffle(p_state.randInt);
     var final_decision: moveDecisionExt = .{};
-    //var decision: moveDecisionExt = .{};
     const turn = p_state.turn;
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
@@ -429,7 +525,7 @@ pub fn searchUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u
         p_state.loadFrame(&popped);
 
         if (i == 0 or final_decision.scoring < decision.scoring) {
-            final_decision.move = fmoves.moves[i];
+            final_decision.move = move.copy();
             final_decision.scoring = decision.scoring;
         }
     }

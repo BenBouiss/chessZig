@@ -2,7 +2,6 @@
 const chessl = @import("../chess.zig");
 const move_genl = @import("../move_generation.zig");
 const enginel = @import("../engine.zig");
-const interfacel = @import("../interface.zig");
 const mainl = @import("../main.zig");
 const utilsl = @import("../utils.zig");
 const configl = @import("../config.zig");
@@ -116,8 +115,8 @@ const guiState = struct {
         ret.input = undefined;
         ret.input.lock = false;
 
-        const player_white: player = .{ .color = .WHITE, .searchDepth = 2, .engineUsed = try engine_info.init(ret.alloc) };
-        const player_black: player = .{ .color = .BLACK, .searchDepth = 1, .engineUsed = try engine_info.init(ret.alloc) };
+        const player_white: player = .{ .color = .WHITE, .searchDepth = 4, .engineUsed = try engine_info.init(ret.alloc) };
+        const player_black: player = .{ .color = .BLACK, .searchDepth = 4, .engineUsed = try engine_info.init(ret.alloc) };
         ret.match.playerInv[0] = player_white;
         ret.match.playerInv[1] = player_black;
 
@@ -365,8 +364,12 @@ const guiState = struct {
         }
     }
     fn sendPositionUpdate(self: *guiState) !void {
-        const msg = try std.fmt.allocPrint(self.alloc, "position startpos {s}", .{self.match.chessState.getLastMove().getStr()});
+        var lineBuffer = try self.match.chessState.move_history.getLineString(self.alloc);
+        const msg = try std.fmt.allocPrint(self.alloc, "position startpos {s}", .{lineBuffer._slice()});
+
+        defer lineBuffer.free(self.alloc);
         defer self.alloc.free(msg);
+
         try self.respond(msg);
     }
     fn sendGoSearchCommand(self: *guiState) !void {
@@ -537,8 +540,8 @@ fn entrypointServingThreading(p_self: *guiState) void {
     p_self.servingGuiThread() catch unreachable;
 }
 
-var stdin_buffer: [interfacel.MAX_USER_INPUT]u8 = std.mem.zeroes([interfacel.MAX_USER_INPUT]u8);
-var stdout_buffer: [interfacel.MAX_USER_INPUT]u8 = std.mem.zeroes([interfacel.MAX_USER_INPUT]u8);
+var stdin_buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+var stdout_buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
 
 pub fn launch_gui() !void {
     const argv: [1][]const u8 = .{configl.ENGINE_PATH};

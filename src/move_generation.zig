@@ -125,7 +125,10 @@ pub fn moveGenBBToMoveContainer(p_board: *Board_state, p_moveBB: *moveBBState) m
         } else {
             // only blocking / capturing moves for non king pieces
             const kingBB = p_moveBB.kingMoves;
+            p_moveBB.enPassantMoves = chess.genShift(p_moveBB.enPassantMoves, -pawnDir);
             p_moveBB.andEq(p_board.checkersBB);
+            p_moveBB.enPassantMoves = chess.genShift(p_moveBB.enPassantMoves, pawnDir);
+
             p_moveBB.kingMoves = kingBB;
             p_moveBB.kingSideCastlingMoves = chess.EMPTY;
             p_moveBB.queenSideCastlingMoves = chess.EMPTY;

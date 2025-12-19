@@ -139,7 +139,7 @@ pub fn test_benchmark() void {
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 7, 0, false);
+    nodeExplorationBenchmark(&game_state, 7, 1, true);
 }
 
 pub fn main() !void {

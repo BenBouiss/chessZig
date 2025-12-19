@@ -5,11 +5,13 @@ const chess = @import("chess.zig");
 const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
+const stringl = @import("string.zig");
 
 const utilsl = @import("utils.zig");
 
 const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
+const string = stringl.string;
 const Key = hashl.Key;
 
 const useDebug = build_options.useDebug;
@@ -18,6 +20,7 @@ pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2
 pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
+const MOVE_STR_MAX_LENGTH = 5;
 
 //pub fn build_move(p_board: *chess.Board_state, from: u8, to: u8, flag: u8, piece: e_piece) IMove {
 //    return _build_move(from, to, flag, piece);
@@ -232,6 +235,22 @@ pub const moveContainer = struct {
         p_self.len += p_other.len;
         return true;
     }
+    pub fn merge(p_self: *moveContainer, p_other: *const moveContainer) void {
+        //std.debug.assert(p_self.len == p_other.len);
+        var currentIndex: usize = 0;
+        for (0..p_other.len) |i| {
+            const move: IMove = p_other.moves[i];
+            if (currentIndex == p_self.len) {
+                p_self.append(move);
+                continue;
+            }
+            if (!p_self.moves[i].equal(move)) {
+                p_self.moves[i] = move;
+            }
+            currentIndex += 1;
+        }
+        p_self.len = p_other.len;
+    }
     pub fn isDifferent(self: moveContainer, other: moveContainer) bool {
         var biggerContainer = self;
         var smallerContainer = other;
@@ -302,7 +321,7 @@ pub const moveContainer = struct {
     pub fn convertToArrayList(self: moveContainer, alloc: std.mem.Allocator) !std.ArrayList(IMove) {
         var ret = try std.ArrayList(IMove).initCapacity(alloc, self.len);
         for (0..self.len) |i| {
-            try ret.append(GLOBAL_ALLOC, self.moves[i].copy());
+            try ret.append(alloc, self.moves[i].copy());
         }
         return ret;
     }
@@ -322,7 +341,7 @@ pub const matchMoveContainer = struct {
     len: usize = 0,
 
     pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
-        if (comptime !useDebug) {
+        if (comptime useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
                 return false;
             }
@@ -334,6 +353,47 @@ pub const matchMoveContainer = struct {
         p_self.keyCodes[p_self.len] = @intCast(key.code >> 32);
         p_self.len += 1;
         return true;
+    }
+    pub fn _append(p_self: *matchMoveContainer, move: IMove, key: u32) bool {
+        if (comptime useDebug) {
+            if (p_self.len == MAX_MATCH_LENGTH) {
+                return false;
+            }
+        }
+        if (move.isIrreversible()) {
+            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
+        }
+        p_self.moves[p_self.len] = move;
+        p_self.keyCodes[p_self.len] = key;
+        p_self.len += 1;
+        return true;
+    }
+    pub fn merge(p_self: *matchMoveContainer, p_other: *const matchMoveContainer) void {
+        //std.debug.assert(p_self.len == p_other.len);
+        //var lmsg = p_self.getLineString(GLOBAL_ALLOC) catch unreachable;
+        //var rmsg = p_other.getLineString(GLOBAL_ALLOC) catch unreachable;
+        //defer lmsg.free(GLOBAL_ALLOC);
+        //defer rmsg.free(GLOBAL_ALLOC);
+        //std.debug.print("[DEBUG] matchMoveContainer.merge: left line {s} \n right line: {s}\n", .{ lmsg._slice(), rmsg._slice() });
+        var currentIndex: usize = 0;
+        for (0..p_other.len) |i| {
+            const move: IMove = p_other.moves[i];
+            const key: u32 = p_other.keyCodes[i];
+            if (currentIndex == p_self.len) {
+                _ = p_self._append(move, key);
+                continue;
+            }
+            if (!p_self.moves[currentIndex].equal(move)) {
+                p_self.moves[currentIndex] = move;
+            }
+            currentIndex += 1;
+        }
+
+        p_self.len = p_other.len;
+
+        //var resmsg = p_self.getLineString(GLOBAL_ALLOC) catch unreachable;
+        //defer resmsg.free(GLOBAL_ALLOC);
+        //std.debug.print("[DEBUG] matchMoveContainer.merge: result {s}\n", .{resmsg._slice()});
     }
     pub fn getRepetitions(self: *matchMoveContainer) u8 {
         var count: u8 = 0;
@@ -353,6 +413,27 @@ pub const matchMoveContainer = struct {
     pub fn checkRepetitions(self: *matchMoveContainer) bool {
         const count = self.getRepetitions();
         return count >= 2;
+    }
+    pub fn popMoveInplace(p_self: *matchMoveContainer) void {
+        //if (comptime !useDebug) {
+        //    return;
+        //}
+        if (p_self.len == 0) {
+            return;
+        }
+        if (p_self.lastIrreversibleMoveIndex == p_self.len) {
+            var index: u16 = @intCast(p_self.len - 1);
+            while (index > 0) {
+                const move = p_self.moves[index];
+                if (move.isIrreversible()) {
+                    break;
+                }
+                index -= 1;
+            }
+            p_self.lastIrreversibleMoveIndex = index;
+        }
+        p_self.len -= 1;
+        return;
     }
     pub fn popMove(p_self: *matchMoveContainer) IMove {
         if (comptime !useDebug) {
@@ -380,13 +461,19 @@ pub const matchMoveContainer = struct {
         }
         return self.moves[self.len - 1];
     }
-    pub fn fiftyMoveRule(self: matchMoveContainer) bool {
-        //for (0..50) |i|{
-        //    const move = self.moves[self.len - (i+1)];
-        //    if (move.isCapture() or move.
-        //}
-        _ = self;
-        return false;
+    pub fn getLineString(self: matchMoveContainer, alloc: std.mem.Allocator) !string {
+        var lineStr: string = try string.zeroInit(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
+        for (0..self.len) |i| {
+            const move = self.moves[i];
+            const moveStr = move.getStr();
+            if (moveStr[4] == 0) {
+                _ = lineStr.extend(moveStr[0..4]);
+            } else {
+                _ = lineStr.extend(&moveStr);
+            }
+            _ = lineStr.put(' ');
+        }
+        return lineStr;
     }
 };
 

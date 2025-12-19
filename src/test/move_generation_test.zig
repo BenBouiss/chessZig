@@ -4,6 +4,7 @@ const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
 const explorationl = @import("../exploration.zig");
 const benchmarkl = @import("../benchmark.zig");
+const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
 
 const std = @import("std");
@@ -17,6 +18,8 @@ test "en passant checking" {
     mainl.initAll();
     var tmp: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, "5bnr/5ppp/1Q6/2Bkp3/3pP3/3P4/5PPP/4KBNR b H e3 0 39");
     const allMoves = moveGenl.generateLegalMoves(&tmp);
+    allMoves.print();
+    chessl.print_boardstate(&tmp);
     try std.testing.expectEqual(allMoves.len, 1);
     const move = allMoves.moves[0];
     try std.testing.expect(move.isEnpassant());
@@ -28,6 +31,8 @@ test "perft" {
     mainl.initAll();
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
     var tmp: benchmarkl.benchmarkResult = .{};
+    // perft performed without hashTable
+    try std.testing.expect(!hashl.isHashTable_init());
     for (1..7) |depth| {
         const _start: i64 = std.time.microTimestamp();
         try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 1, &tmp, true);

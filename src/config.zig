@@ -6,11 +6,24 @@ pub const NAME = "Ben";
 pub const AUTHOR = "Ben";
 pub const VERSION = "0.0.1";
 pub const SEED: u64 = 42;
+pub const MAX_USER_INPUT: u64 = 1024;
 
 pub const MAX_HASH_BITS = 18;
 pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
 pub const DEFAULT_USEHASHTABLE = true;
+
+pub const DEFAULT_DEPTH: u16 = 4;
+pub const MIN_DEPTH: u16 = 1;
+pub const MAX_DEPTH: u16 = 6;
+
+pub const _DEFAULT_LIMIT_ELO = "false";
+pub const DEFAULT_LIMIT_ELO = false;
+pub const DEFAULT_ELO: u32 = 2400;
+pub const MIN_ELO: u32 = 1000;
+pub const MAX_ELO: u32 = 3000;
+
+//pub const ELO_BREAKPOINTS =
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 4;
