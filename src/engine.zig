@@ -8,6 +8,7 @@ const explorationl = @import("exploration.zig");
 const hashTablel = @import("hashTable.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
+const speedTestl = @import("speedTest.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -238,7 +239,7 @@ pub const engine = struct {
             _ = p_self.input.putCmd(p_self.alloc, &inputBuffer);
         }
     }
-    fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) void {
+    pub fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) void {
         const cmdtype = getEngineCmdType(cmdBuffer);
 
         if (p_self.uciMode) {
@@ -283,7 +284,7 @@ pub const engine = struct {
                 return p_self.executeIsReady();
             },
             .GO => {
-                if (!p_self.status.positionProvided) {
+                if (!p_self.status.positionProvided or p_self.searcher.searching) {
                     return false;
                 }
                 if (!p_self.status.initializedInternals) {
@@ -315,6 +316,7 @@ pub const engine = struct {
                 return true;
             },
             .BENCHMARK => {
+                // by default single threaded will probably just use the engine options maybe
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINT => {
@@ -562,9 +564,11 @@ pub const engine = struct {
         return explorationl.dispatchUciGoCmd(p_self, cmdBuffer);
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
-        _ = p_self;
         _ = cmdBuffer;
-        return true;
+        if (p_self.searcher.searching) {
+            return false;
+        }
+        return speedTestl.executeEngineBenchmark(p_self);
     }
 };
 pub fn getLastMoveFromUci(p_board: *Board_state, cmdBuffer: []const u8, alloc: std.mem.Allocator) !IMove {
@@ -733,7 +737,7 @@ fn getEngineCmdType(cmd: []const u8) e_engineCmd {
         return .PONDERHIT;
     } else if (utilsl.contains(cmd, "print", .ignoreCase)) {
         return .PRINT;
-    } else if (utilsl.contains(cmd, "bench", .ignoreCase)) {
+    } else if (utilsl.contains(cmd, "benchmark", .ignoreCase)) {
         return .BENCHMARK;
     }
     return .NOOP;

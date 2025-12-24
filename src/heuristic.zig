@@ -3,14 +3,14 @@ const chess = @import("chess.zig");
 const std = @import("std");
 
 const e_piece = chess.e_piece;
-const scoreType: type = i64;
+pub const scoreType: type = i64;
 
-pub const simplePawnScore: scoreType = 10;
-pub const simpleBishopScore: scoreType = 40;
-pub const simpleKnightScore: scoreType = 40;
-pub const simpleRookScore: scoreType = 60;
-pub const simpleQueenScore: scoreType = 120;
-pub const simpleCheckMateScore: scoreType = 9999;
+pub const simplePawnScore: scoreType = 100;
+pub const simpleBishopScore: scoreType = 400;
+pub const simpleKnightScore: scoreType = 400;
+pub const simpleRookScore: scoreType = 600;
+pub const simpleQueenScore: scoreType = 1200;
+pub const simpleCheckMateScore: scoreType = 99999;
 pub const simpleStalemateScore: scoreType = 0;
 
 pub const e_heuristicType = enum(u8) { Simple = 0, Bitmap };
@@ -103,7 +103,7 @@ pub fn simpleHeuristic(p_state: *chess.Board_state) scoreType {
     return score;
 }
 /// heuristic from past engine python projects
-pub fn pastHeuristic(p_state: *chess.Board_state) scoreType {
+pub fn _pastHeuristic(p_state: *chess.Board_state) scoreType {
     var score: scoreType = 0;
     score += matDotScore(getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), pawnScoreArr);
     score += matDotScore(getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]), knightScoreArr);
@@ -118,7 +118,55 @@ pub fn pastHeuristic(p_state: *chess.Board_state) scoreType {
     score -= matDotScore(getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), rookScoreArr);
     score -= matDotScore(getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), queenScoreArr);
     score -= matDotScore(getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)])), kingScoreArr);
-    return score;
+    return score + simpleHeuristic(p_state);
+}
+pub fn pastHeuristic(p_state: *chess.Board_state) scoreType {
+    var score: scoreType = 0;
+    for (0..chess.N_SQUARES) |sq| {
+        const piece = p_state.get_piece(@intCast(sq));
+        switch (piece) {
+            .nEmptySquare, .nWhite, .nBlack => {},
+
+            .nWhitePawn => {
+                score += pawnScoreArr[sq];
+            },
+            .nWhiteBishop => {
+                score += bishopScoreArr[sq];
+            },
+            .nWhiteKnight => {
+                score += knightScoreArr[sq];
+            },
+            .nWhiteRook => {
+                score += rookScoreArr[sq];
+            },
+            .nWhiteQueen => {
+                score += queenScoreArr[sq];
+            },
+            .nWhiteKing => {
+                score += kingScoreArr[sq];
+            },
+
+            .nBlackPawn => {
+                score -= pawnScoreArr[(chess.N_SQUARES - 1) - sq];
+            },
+            .nBlackBishop => {
+                score -= bishopScoreArr[(chess.N_SQUARES - 1) - sq];
+            },
+            .nBlackKnight => {
+                score -= knightScoreArr[(chess.N_SQUARES - 1) - sq];
+            },
+            .nBlackRook => {
+                score -= rookScoreArr[(chess.N_SQUARES - 1) - sq];
+            },
+            .nBlackQueen => {
+                score -= queenScoreArr[(chess.N_SQUARES - 1) - sq];
+            },
+            .nBlackKing => {
+                score -= kingScoreArr[(chess.N_SQUARES - 1) - sq];
+            },
+        }
+    }
+    return score + simpleHeuristic(p_state);
 }
 
 pub fn matDotScore(m1: [chess.N_SQUARES]scoreType, m2: [chess.N_SQUARES]scoreType) scoreType {

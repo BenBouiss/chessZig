@@ -4,6 +4,7 @@ const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const configl = @import("config.zig");
+const heuristicl = @import("heuristic.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -12,6 +13,7 @@ const e_piece = chess.e_piece;
 const e_color = chess.e_color;
 const e_square = squarel.e_square;
 const useHash = build_options.useHash;
+const scoreType = heuristicl.scoreType;
 
 pub const Key = struct {
     code: u64 = 0,
@@ -22,7 +24,7 @@ pub const Hash_entry = struct {
     key: Key = .{},
     moveAmount: u64 = 0,
 
-    evaluation: i32 = 0,
+    evaluation: scoreType = 0,
     exploredDeph: u8 = 0,
     age: u8 = 0,
 
@@ -32,6 +34,9 @@ pub const Hash_entry = struct {
 
 pub fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
     return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
+}
+pub fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
+    return .{ .key = key, .exploredDeph = depth, .valid = true, .evaluation = eval };
 }
 pub const Hash_bucket = struct {
     entries: [configl.ITEM_PER_BUCKET]Hash_entry,
@@ -46,23 +51,10 @@ pub const Hash_bucket = struct {
         _ = p_self;
     }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
-        //p_self.acquireLock();
         p_self.entries[p_self.len] = p_entry.*;
         p_self.len = ((p_self.len + 1) % configl.ITEM_PER_BUCKET);
-        //if (comptime useDebug) {
-        //    _ = checkHashCollision(p_self, p_entry);
-        //}
-        //p_self.releaseLock();
     }
-    //pub fn checkHashCollision(self: Hash_bucket, p_entry: *const Hash_entry) bool {
-    //    for (0..self.len) |i| {
-    //        if (self.entries[i].key.code != p_entry) {
-    //            self.has_collision = true;
-    //            return true;
-    //        }
-    //    }
-    //    return false;
-    //}
+
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
         //p_self.acquireLock();
         for (0..p_self.len) |i| {
@@ -73,6 +65,15 @@ pub const Hash_bucket = struct {
             }
         }
         //p_self.releaseLock();
+        return .{ .valid = false };
+    }
+    pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
+        for (0..p_self.len) |i| {
+            const entry = p_self.entries[i];
+            if (entry.key.code == hash and entry.exploredDeph >= depth) {
+                return entry;
+            }
+        }
         return .{ .valid = false };
     }
     fn acquireLock(p_self: *Hash_bucket) void {
@@ -152,6 +153,10 @@ pub fn strategyEntryRemoval(p_bucket: *Hash_bucket, p_entry: *const Hash_entry) 
 pub fn getEntryFromPerft(key: Key, depth: u8) Hash_entry {
     const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
     return p_bucket.getEntryPerft(key.code, depth);
+}
+pub fn getEntryFromMatch(key: Key, depth: u8) Hash_entry {
+    const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
+    return p_bucket.getEntryMatch(key.code, depth);
 }
 
 pub const Zobrist_Keys = struct {

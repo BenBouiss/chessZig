@@ -6,6 +6,7 @@ const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const stringl = @import("string.zig");
+const configl = @import("config.zig");
 
 const utilsl = @import("utils.zig");
 
@@ -235,7 +236,7 @@ pub const moveContainer = struct {
         p_self.len += p_other.len;
         return true;
     }
-    pub fn merge(p_self: *moveContainer, p_other: *const moveContainer) void {
+    pub fn merge(p_self: *moveContainer, p_other: *moveContainer) void {
         //std.debug.assert(p_self.len == p_other.len);
         var currentIndex: usize = 0;
         for (0..p_other.len) |i| {
@@ -335,11 +336,23 @@ pub const moveContainer = struct {
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
 pub const MAX_MATCH_LENGTH: usize = 4096;
 pub const matchMoveContainer = struct {
-    moves: [MAX_MATCH_LENGTH]IMove = std.mem.zeroes([MAX_MATCH_LENGTH]IMove),
-    keyCodes: [MAX_MATCH_LENGTH]u32 = std.mem.zeroes([MAX_MATCH_LENGTH]u32),
+    // replace the std.mem.zeros with undefined for faster init(?)
+    //moves: [MAX_MATCH_LENGTH]IMove = std.mem.zeroes([MAX_MATCH_LENGTH]IMove),
+    //keyCodes: [MAX_MATCH_LENGTH]u32 = std.mem.zeroes([MAX_MATCH_LENGTH]u32),
+    moves: [MAX_MATCH_LENGTH]IMove = undefined,
+    keyCodes: [MAX_MATCH_LENGTH]u32 = undefined,
     lastIrreversibleMoveIndex: u16 = 0,
     len: usize = 0,
 
+    pub fn print(p_self: *matchMoveContainer) void {
+        // FOR DEBUG ONLY
+        var line_str = p_self.getLineString(GLOBAL_ALLOC) catch {
+            return;
+        };
+        defer line_str.free(GLOBAL_ALLOC);
+        std.debug.print("{s}\n", .{line_str._slice()});
+        return;
+    }
     pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
         if (comptime useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
@@ -368,14 +381,8 @@ pub const matchMoveContainer = struct {
         p_self.len += 1;
         return true;
     }
-    pub fn merge(p_self: *matchMoveContainer, p_other: *const matchMoveContainer) void {
-        //std.debug.assert(p_self.len == p_other.len);
-        //var lmsg = p_self.getLineString(GLOBAL_ALLOC) catch unreachable;
-        //var rmsg = p_other.getLineString(GLOBAL_ALLOC) catch unreachable;
-        //defer lmsg.free(GLOBAL_ALLOC);
-        //defer rmsg.free(GLOBAL_ALLOC);
-        //std.debug.print("[DEBUG] matchMoveContainer.merge: left line {s} \n right line: {s}\n", .{ lmsg._slice(), rmsg._slice() });
-        var currentIndex: usize = 0;
+    pub fn merge(p_self: *matchMoveContainer, p_other: *matchMoveContainer, selfOffset: usize) void {
+        var currentIndex: usize = selfOffset;
         for (0..p_other.len) |i| {
             const move: IMove = p_other.moves[i];
             const key: u32 = p_other.keyCodes[i];
@@ -390,10 +397,6 @@ pub const matchMoveContainer = struct {
         }
 
         p_self.len = p_other.len;
-
-        //var resmsg = p_self.getLineString(GLOBAL_ALLOC) catch unreachable;
-        //defer resmsg.free(GLOBAL_ALLOC);
-        //std.debug.print("[DEBUG] matchMoveContainer.merge: result {s}\n", .{resmsg._slice()});
     }
     pub fn getRepetitions(self: *matchMoveContainer) u8 {
         var count: u8 = 0;
@@ -415,9 +418,6 @@ pub const matchMoveContainer = struct {
         return count >= 2;
     }
     pub fn popMoveInplace(p_self: *matchMoveContainer) void {
-        //if (comptime !useDebug) {
-        //    return;
-        //}
         if (p_self.len == 0) {
             return;
         }
@@ -474,6 +474,86 @@ pub const matchMoveContainer = struct {
             _ = lineStr.put(' ');
         }
         return lineStr;
+    }
+};
+
+pub const moveLine = struct {
+    moves: [configl.MAX_LINE_LENGTH]IMove = undefined,
+    len: usize = 0,
+
+    pub fn init() moveLine {
+        return .{};
+    }
+    pub fn append(p_self: *moveLine, move: IMove) bool {
+        if (p_self.len == configl.MAX_LINE_LENGTH) {
+            return false;
+        }
+        p_self.moves[p_self.len] = move;
+        p_self.len += 1;
+        return true;
+    }
+    pub fn popVoid(p_self: *moveLine) void {
+        if (p_self.len == 0) {
+            return;
+        }
+        p_self.len -= 1;
+    }
+    pub fn merge(p_self: *moveLine, p_other: *moveLine, selfOffset: usize) void {
+        //
+        var currentIndex: usize = selfOffset;
+        for (0..p_other.len) |i| {
+            const move: IMove = p_other.moves[i];
+            if (currentIndex == p_self.len) {
+                _ = p_self.append(move);
+                continue;
+            }
+            if (!p_self.moves[currentIndex].equal(move)) {
+                p_self.moves[currentIndex] = move;
+            }
+            currentIndex += 1;
+        }
+
+        p_self.len = p_other.len;
+    }
+    pub fn merge_match(p_self: *moveLine, p_other: *matchMoveContainer, selfOffset: usize) void {
+        //
+        var currentIndex: usize = selfOffset;
+        for (0..p_other.len) |i| {
+            const move: IMove = p_other.moves[i];
+            if (currentIndex == p_self.len) {
+                _ = p_self.append(move);
+                continue;
+            }
+            if (!p_self.moves[currentIndex].equal(move)) {
+                p_self.moves[currentIndex] = move;
+            }
+            currentIndex += 1;
+        }
+
+        p_self.len = p_other.len;
+    }
+    pub fn getLineString(self: moveLine, alloc: std.mem.Allocator) !string {
+        var lineStr: string = try string.zeroInit(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
+        for (0..self.len) |i| {
+            const move = self.moves[i];
+            const moveStr = move.getStr();
+            if (moveStr[4] == 0) {
+                _ = lineStr.extend(moveStr[0..4]);
+            } else {
+                _ = lineStr.extend(&moveStr);
+            }
+            _ = lineStr.put(' ');
+        }
+        return lineStr;
+    }
+    pub fn print(p_self: *moveLine) void {
+        // FOR DEBUG ONLY
+        var line_str = p_self.getLineString(GLOBAL_ALLOC) catch {
+            return;
+        };
+        defer line_str.free(GLOBAL_ALLOC);
+        std.debug.print("{s}\n", .{line_str._slice()});
+        return;
     }
 };
 

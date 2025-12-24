@@ -6,6 +6,7 @@ const explorationl = @import("../exploration.zig");
 const benchmarkl = @import("../benchmark.zig");
 const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
+const perftl = @import("../search/perft.zig");
 
 const std = @import("std");
 
@@ -18,8 +19,6 @@ test "en passant checking" {
     mainl.initAll();
     var tmp: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, "5bnr/5ppp/1Q6/2Bkp3/3pP3/3P4/5PPP/4KBNR b H e3 0 39");
     const allMoves = moveGenl.generateLegalMoves(&tmp);
-    allMoves.print();
-    chessl.print_boardstate(&tmp);
     try std.testing.expectEqual(allMoves.len, 1);
     const move = allMoves.moves[0];
     try std.testing.expect(move.isEnpassant());
@@ -29,18 +28,18 @@ test "en passant checking" {
 }
 test "perft" {
     mainl.initAll();
+    const perft_THREAD = 1;
+    const perft_BATCHED = true;
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
-    var tmp: benchmarkl.benchmarkResult = .{};
-    // perft performed without hashTable
     try std.testing.expect(!hashl.isHashTable_init());
     for (1..7) |depth| {
         const _start: i64 = std.time.microTimestamp();
-        try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 1, &tmp, true);
-        const expect: i64 = @intCast(tmp.n_nodes);
+        //try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 1, &tmp, true);
+        const res = try perftl.perftThreadStart(&board, @intCast(depth), perft_THREAD, perft_BATCHED);
+        const expect: i64 = @intCast(res.n_nodeExplored);
         try std.testing.expectEqual(expect, benchmarkl.ExpectedBenchmarkResults[depth]);
         const _stop = std.time.microTimestamp();
         std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(_stop - _start, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, 1 + (_stop - _start)) });
-        tmp.reset();
     }
 
     std.debug.print("[TEST]: Perft checks passed\n", .{});
