@@ -150,9 +150,6 @@ pub fn magicIndex(entry: magic_entry, blockers: u64) usize {
 }
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
-    //if (@intFromEnum(sq) > 63) {
-    //    std.debug.print("Found a invalid sq of value: {d}\n", .{@intFromEnum(sq)});
-    //}
     const magic = p_magicTable.rookMagic[@intFromEnum(sq)];
     const magic_index = magicIndex(magic, blockers);
     return p_magicTable.rookMoves[@intFromEnum(sq)][magic_index];
