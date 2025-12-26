@@ -515,6 +515,8 @@ pub const engine = struct {
         moveTablel._initTables();
         hashTablel._initZobrist(p_self.alloc, configl.SEED);
         hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
+
+        _ = p_self.updateElo(p_self.options.engineElo);
         return true;
     }
     fn updateHash(p_self: *engine, hashSize: spinVarType) bool {
