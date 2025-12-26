@@ -1,34 +1,17 @@
 const std = @import("std");
-const mainl = @import("../main.zig");
 const chess = @import("../chess.zig");
 const movel = @import("../move.zig");
-const benchmark = @import("../benchmark.zig");
 const moveGenl = @import("../move_generation.zig");
-const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
-const utilsl = @import("../utils.zig");
-const hashl = @import("../hashTable.zig");
-const enginel = @import("../engine.zig");
-const configl = @import("../config.zig");
-const build_options = @import("../build_options");
 const explorationl = @import("../exploration.zig");
 const threadingl = @import("threading.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
-const typedMoveContainer = movel.typedMoveContainer;
-const e_square = squarel.e_square;
 const scoreType = heuristicl.scoreType;
-const moveLine = movel.moveLine;
 
 const moveDecisionExt = explorationl.moveDecisionExt;
-const uciSearcher = explorationl.uciSearcher;
 const threadInfo = threadingl.threadInfo;
-
-const useHash = build_options.useHash;
-const useDebug = build_options.useDebug;
-
-const assert = std.debug.assert;
 
 pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
     p_info.running = true;

@@ -49,14 +49,9 @@ pub fn dispatchUciPerftCmd(p_engine: *enginel.engine) bool {
 
 pub fn dispatchUciPerftThreads(p_engine: *enginel.engine) void {
     var moveArray = moveGenl.generateLegalMoves(&p_engine.state);
-    if (p_engine.status.debugMode) {
-        std.debug.print("[DEBUG] dispatchUciGoCmd: Searcher threads: {d}, move found to study: ", .{p_engine.searcher.nThreads});
-        moveArray.print();
-    }
     const searcher = p_engine.searcher;
     const _nThread: u32 = @min(searcher.nThreads, moveArray.len);
     if (_nThread == 0) {
-        moveArray.print();
         @panic("No thread or no moves available");
     }
     var pack = threadingl.getThreadPackArray(p_engine.alloc, &p_engine.state, &moveArray, _nThread) catch {

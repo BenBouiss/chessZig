@@ -45,6 +45,6 @@ pub fn test_speedTest() !void {
 
 pub fn main() anyerror!void {
     //test_bench();
-    try enginel.launch_engine(false);
+    try enginel.launch_engine(true);
     //try test_speedTest();
 }

@@ -22,9 +22,10 @@ pub const Key = struct {
 
 pub const Hash_entry = struct {
     key: Key = .{},
-    moveAmount: u64 = 0,
 
+    moveAmount: u64 = 0,
     evaluation: scoreType = 0,
+
     exploredDeph: u8 = 0,
     age: u8 = 0,
 

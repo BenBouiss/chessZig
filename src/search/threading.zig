@@ -26,7 +26,6 @@ pub const threadInfo = struct {
     currentMove: moveDecisionExt = .{},
     n_nodeExplored: u64 = 0,
     n_hashRetrieve: u64 = 0,
-    currentMoveNumber: u64 = 0,
     depth: u8 = 0,
     running: bool = false,
 };
@@ -144,4 +143,25 @@ pub fn waitBenchmarkThread(p_engine: *engine, p_threadPack: *threadPackageArray)
     if (p_engine.status.debugMode) {
         std.debug.print("[DEBUG] waitBenchmarkThread: finished waiting on results\n", .{});
     }
+}
+pub fn waitThreadFinish_NpsReport(p_engine: *enginel.engine, p_arr: *threadPackageArray) !bool {
+    const _start: u64 = @intCast(std.time.milliTimestamp());
+    while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
+        std.Thread.sleep(configl.INFO_TICKRATE_NS);
+
+        p_engine.searcher.endCounter = 0;
+        for (0..p_arr.len) |i| {
+            p_engine.searcher.endCounter += @intFromBool(!p_arr.items(._tInfo)[i].running);
+        }
+
+        const res = getCombinedFromPack(p_arr);
+        const _end: u64 = @intCast(std.time.milliTimestamp());
+        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.n_nodeExplored, (_end - _start + 1)) * 1000, res.n_nodeExplored, res.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+            continue;
+        };
+        defer p_engine.alloc.free(msg);
+        p_engine.respond(msg);
+    }
+    p_engine.searcher.searching = false;
+    return true;
 }
