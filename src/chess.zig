@@ -12,7 +12,6 @@ const useDebug = build_options.useDebug;
 
 const chess = @import("chess.zig");
 const utils = @import("utils.zig");
-const exploration = @import("exploration.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const moveGenl = @import("move_generation.zig");
@@ -22,14 +21,14 @@ const tablel = @import("moveTables.zig");
 const magicl = @import("magic.zig");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
+const board_statusl = @import("board_status.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
 const moveContainer = movel.moveContainer;
 const matchMoveContainer = movel.matchMoveContainer;
 const cachedTables = tablel.cachedTables;
-
-const e_matchFlag = exploration.e_matchFlag;
+const status = board_statusl.status;
 
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
@@ -89,7 +88,6 @@ const avoidWrap = [8]u64{
     0x7f7f7f7f7f7f7f00,
     0xffffffffffffff00,
 };
-// taken from hqperft from github
 pub const MASK_CASTLING = [64]u8{ 13, 15, 15, 15, 12, 15, 15, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 7, 15, 15, 15, 3, 15, 15, 11 };
 
 pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite = 13, nBlack = 14 };
@@ -393,6 +391,7 @@ pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
     };
     return nbr;
 }
+/// All memory used by the alloc is freed at return
 pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Board_state {
     var tokens = utils.split(u8, alloc, fen, ' ') catch {
         return debug_err.fenErr;
@@ -509,7 +508,7 @@ pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: s
     return ret;
 }
 
-pub inline fn invertColor(color: e_color) e_color {
+pub fn invertColor(color: e_color) e_color {
     if (color == .WHITE) {
         return .BLACK;
     }
@@ -583,18 +582,19 @@ pub fn getEmptyBoardState() Board_state {
 pub const boardFrame = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
+    key: hashl.Key = .{},
+
+    lastMove: IMove = .{},
 
     enPassantIdx: u8 = 0,
     castling: u8 = 0,
     halfMoveClock: u8 = 0,
-    lastMove: IMove = .{},
     victim: e_piece = .nEmptySquare,
-    key: hashl.Key = .{},
 };
 
 pub const boardStack = struct {
     stack: [movel.MAX_MATCH_LENGTH]boardFrame = undefined,
-    len: u8 = 0,
+    len: usize = 0,
 
     pub fn push(p_self: *boardStack, p_frame: *const boardFrame) void {
         if (comptime useDebug) {
@@ -842,7 +842,7 @@ pub const Board_state = struct {
     }
     pub fn placePiece(p_self: *Board_state, piece: e_piece, square: e_square) bool {
         //std.debug.print("[DEBUG] placePiece: Placing piece {} {square}\n", .{piece});
-        const one_mask: u64 = (ONE << @intCast(@intFromEnum(square)));
+        const one_mask: u64 = sqToBitboard(square);
         if (p_self.occupiedBB & one_mask != 0) {
             return false;
         }
@@ -861,7 +861,7 @@ pub const Board_state = struct {
 
     pub fn undoMoveRestore(p_self: *Board_state) bool {
         // test to reduce the undoMove load
-        // Very inspired from hqperft
+
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
@@ -1107,15 +1107,12 @@ pub const Board_state = struct {
         return ((self.castling & 1) != 0) and (canMove(.e1, .h1, self.occupiedBB));
     }
     pub fn canQueenSideCastle(self: Board_state, turn: e_color) bool {
-        //const kingBB = self.getKingBB(turn);
         if (turn == .BLACK) {
             return ((self.castling & 8) != 0) and (canMove(.e8, .a8, self.occupiedBB));
         }
         return ((self.castling & 2) != 0) and (canMove(.e1, .a1, self.occupiedBB));
     }
     pub fn canKingSideCastleAtt(self: Board_state, turn: e_color, attackedSquares: u64) bool {
-        //const kingBB = self.getKingBB(turn);
-
         if (turn == .BLACK) {
             return ((self.castling & 4) != 0) and canMove(.e8, .h8, self.occupiedBB) and ((attackedSquares & inBetween(.e8, .h8)) == EMPTY);
         }
@@ -1142,7 +1139,7 @@ pub const Board_state = struct {
     }
 
     pub fn isLegalFast(p_self: *Board_state, all_attack: u64, move: IMove, p_kingSq: *const squareInfo, p_checks: *const squarel.checkContainer, diagPieceBB: u64, linePieceBB: u64) bool {
-        const kingBB = (ONE << @intCast(@intFromEnum(p_kingSq.sq)));
+        const kingBB = sqToBitboard(p_kingSq.sq);
         const isAttacked: bool = (kingBB & all_attack) != 0;
         const to: e_square = @enumFromInt(move.getTo());
         const from: e_square = @enumFromInt(move.getFrom());
@@ -1594,7 +1591,6 @@ pub inline fn getSqFromCoord(rank: u8, file: u8) e_square {
 }
 
 pub inline fn getSqDiag(sq: e_square) i8 {
-    //  const diag: i8 = (sq & 7) - (sq >> 3);
     const _sq: i8 = @intCast(@intFromEnum(sq));
     return (_sq & 7) - (_sq >> 3);
 }
@@ -1605,7 +1601,7 @@ pub inline fn getSqAntiDiag(sq: e_square) i8 {
 }
 
 pub fn getAllAttackingSquares(sq: e_square) u64 {
-    const sqBB = ONE << @intFromEnum(sq);
+    const sqBB = sqToBitboard(sq);
     const file = getSqFile(sq);
     const rank = getSqRank(sq);
 
@@ -1618,11 +1614,9 @@ pub fn _AllAttackPawnMask(bb_piece: u64, turn: e_color) u64 {
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         sq = bitscan(_bb_piece);
-        if (sq == INVALID_POSITION) {
-            continue;
-        }
+        _bb_piece &= _bb_piece - 1;
+
         ret |= cachedTables.SimplePawnAttack[@intFromEnum(turn)][@intCast(sq)];
-        _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
 }
@@ -1649,12 +1643,10 @@ pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         sq = bitscan(_bb_piece);
-        if (sq == INVALID_POSITION) {
-            continue;
-        }
+        _bb_piece &= _bb_piece - 1;
+
         sq_e = @enumFromInt(sq);
         ret |= getBishopAttacks(occ_bb, sq_e);
-        _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
 }
@@ -1666,14 +1658,10 @@ pub fn _AllAttackRookMask(bb_piece: u64, occ_bb: u64) u64 {
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         sq = bitscan(_bb_piece);
+        _bb_piece &= _bb_piece - 1;
 
-        if (sq == INVALID_POSITION) {
-            continue;
-        }
         sq_e = @enumFromInt(sq);
         ret |= getRookAttacks(occ_bb, sq_e);
-
-        _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
 }
@@ -1685,15 +1673,11 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         sq = bitscan(_bb_piece);
-        if (sq == INVALID_POSITION) {
-            continue;
-        }
+        _bb_piece &= _bb_piece - 1;
         sq_e = @enumFromInt(sq);
 
         ret |= getRookAttacks(occ_bb, sq_e);
         ret |= getBishopAttacks(occ_bb, sq_e);
-
-        _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
 }
@@ -1704,11 +1688,8 @@ pub fn _AllAttackKingMask(bb_piece: u64) u64 {
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         sq = bitscan(_bb_piece);
-        if (sq == INVALID_POSITION) {
-            continue;
-        }
+        _bb_piece &= _bb_piece - 1;
         ret |= getKingAttacks(@enumFromInt(sq));
-        _bb_piece ^= (ONE << @intCast(sq));
     }
     return ret;
 }
@@ -1785,7 +1766,6 @@ pub fn cst_getAllAttackMaskFromKing(p_board: *Board_state, comptime turn: e_colo
     return ret;
 }
 pub fn getCheckers(p_board: *Board_state, turn: e_color) void {
-    //TODO check for later implementation in hqperft github
     var rq: u64 = undefined;
     var bq: u64 = undefined;
     var n: u64 = undefined;
@@ -1835,15 +1815,6 @@ pub fn getCheckers(p_board: *Board_state, turn: e_color) void {
     return;
 }
 
-pub fn extendIMoveArray(p_arr1: *std.ArrayList(IMove), p_arr2: *std.ArrayList(IMove)) !void {
-    if (p_arr2.items.len == 0) {
-        return;
-    }
-    for (0..p_arr2.items.len) |move_idx| {
-        try p_arr1.append(get_global_alloc(), p_arr2.items[move_idx]);
-    }
-}
-
 pub fn getColorFromPiece(piece: e_piece) e_color {
     return @enumFromInt(@intFromEnum(piece) / (N_PIECES_TYPES));
 }
@@ -1876,38 +1847,7 @@ pub fn isPiecePinned(occBB: u64, sq: e_square, p_kingSq: *const squareInfo, diag
     return EMPTY;
 }
 
-pub fn print_ray_attacks(sq: u8) void {
-    std.debug.print("\n################ Ray attack state ################ \n", .{});
-
-    std.debug.print("Ray attack north\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.NORTH)]);
-
-    std.debug.print("Ray attack north east\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.NORTHEAST)]);
-
-    std.debug.print("Ray attack north west\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.NORTHWEST)]);
-
-    std.debug.print("Ray attack south\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.SOUTH)]);
-
-    std.debug.print("Ray attack south east\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.SOUTHEAST)]);
-
-    std.debug.print("Ray attack south west\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.SOUTHWEST)]);
-
-    std.debug.print("Ray attack east\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.EAST)]);
-
-    std.debug.print("Ray attack west\n", .{});
-    print_bitboard(cachedTables.rayAttacks[sq][@intFromEnum(e_direction.WEST)]);
-    std.debug.print("\n################ Exiting ray attack state ################ \n", .{});
-}
-
 pub fn fillMoveFromState(p_state: *Board_state, move: *IMove) void {
-    //move.setFlag(inferFlagFromMovement(p_state, move.getTo(), move.getFrom(),
-
     const fromIdx: u8 = move.getFrom();
     const toIdx: u8 = move.getTo();
     var c_piece = p_state.get_piece(toIdx);
@@ -1994,17 +1934,9 @@ pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square
     return ret_flag;
 }
 
-pub fn _default_scenarios() void {
-    const fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
-    std.debug.print("Testing fen: {s}\n", .{fen});
-    var board_promo = getBoardFromFen(get_global_alloc(), fen) catch {};
-    print_boardstate(&board_promo);
-    utils.askContinue();
-}
-
 pub fn _pin_scenario() void {
     std.debug.print("[DEBUG] pin scenario: \n", .{});
-    const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b";
+    const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
 
     var board = getBoardFromFen(get_global_alloc(), fen) catch {};
     //const kingInfo = squareInfo.init(@enumFromInt(board.getKingSq(.WHITE)));
@@ -2070,19 +2002,32 @@ pub fn _pin_scenario() void {
 }
 
 pub fn test_scenarios() void {
-    // testing promotion scenario
-    //const str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
-    //_default_scenarios();
-    //utils.clear();
-    //_promo_scenario();
-    //utils.clear();
-    //_castle_scenario();
-    //_mate_scenario();
     _pin_scenario();
     return;
 }
+pub fn test_avx() !void {
+    const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
+    //const fen = DEFAULT_FEN;
+    var state = try getBoardFromFen(get_global_alloc(), fen);
+    const bb = moveGenl.avx2DumbFill(&state, .WHITE).collapse();
+    const _bb = moveGenl.avx2DumbFill(&state, .BLACK).collapse();
+    print_board(&state);
+    print_bitboard(bb);
+    print_bitboard(_bb);
+
+    const _pinners = moveGenl.getPinned_avx2(&state, .BLACK);
+    print_bitboard(_pinners);
+
+    const pinners = moveGenl.getPinned_avx2(&state, .WHITE);
+    print_bitboard(pinners);
+
+    getCheckers(&state, .WHITE);
+    print_bitboard(state.pinnedBB);
+}
 
 pub fn main() !void {
-    test_scenarios();
+    mainl.initAll();
+    try test_avx();
+    //test_scenarios();
     return;
 }

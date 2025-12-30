@@ -10,6 +10,7 @@ const enginel = @import("engine.zig");
 const benchl = @import("benchmark.zig");
 const speedTestl = @import("speedTest.zig");
 const configl = @import("config.zig");
+const chessl = @import("chess.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -44,7 +45,8 @@ pub fn test_speedTest() !void {
 }
 
 pub fn main() anyerror!void {
+    try chessl.main();
     //test_bench();
-    try enginel.launch_engine(true);
+    //try enginel.launch_engine(true);
     //try test_speedTest();
 }

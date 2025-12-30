@@ -21,7 +21,7 @@ pub const MAX_DEPTH: u16 = 6;
 
 pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;
-pub const DEFAULT_ELO: u32 = 2400;
+pub const DEFAULT_ELO: u32 = 1400;
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
 
