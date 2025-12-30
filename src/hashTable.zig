@@ -17,7 +17,6 @@ const scoreType = heuristicl.scoreType;
 
 pub const Key = struct {
     code: u64 = 0,
-    //?? index: u32 source hqperft
 };
 
 pub const Hash_entry = struct {
@@ -163,7 +162,6 @@ pub fn getEntryFromMatch(key: Key, depth: u8) Hash_entry {
 pub const Zobrist_Keys = struct {
     pieceKeys: [12][64]Key = std.mem.zeroes([12][64]Key),
     turnKey: [chess.NUMBER_PLAYER]Key = std.mem.zeroes([chess.NUMBER_PLAYER]Key),
-    // taken from hqperft
     playKey: Key = .{},
     castlingKeys: [16]Key = std.mem.zeroes([16]Key),
     enPassantKeys: [64]Key = std.mem.zeroes([64]Key),
@@ -256,74 +254,6 @@ pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
 
 pub fn updateKey(keyDst: *Key, keySrc: *Key) void {
     keyDst.code ^= keySrc.code;
-}
-
-pub fn updateKeyOnMakeMove(p_board: *chess.Board_state, move: *const movel.IMove) void {
-    // This function relies on the move not beeing already made (ie: all bitboard and arrPiece are "old");
-    // most of this method has been grafted to the makeMove funcs as this branches are aleady computed during a move make.
-    //  Thus this function double checks what is already checked.
-    const toSq = move.getTo();
-    const fromSq = move.getFrom();
-    const piece = move.getFromPiece();
-    const victim = move.getCapturePiece();
-    var enPassantIdx: u8 = 0;
-
-    var castlePiece: e_piece = .nWhiteRook;
-
-    if (p_board.turn == .BLACK) {
-        castlePiece = .nBlackRook;
-    }
-
-    //std.debug.print("[DEBUG] updateKeyOnMakeMove: Initial key: {x} re-calculated: {x} for move: {s}-{}-{}-{}\n", .{ p_board.key.code, fullComputeZobristKeys(p_board).code, move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
-
-    if (victim != .nEmptySquare) {
-        updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
-    }
-    if (chess.isKingPiece(piece)) {
-        const kingTo: i8 = @intCast(toSq);
-        const kingFrom: i8 = @intCast(fromSq);
-        if (kingTo == (kingFrom + 2)) {
-            // king side castle
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo - 1)]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo + 1)]);
-        } else if (kingTo == (kingFrom - 2)) {
-            // queen side castle
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo + 1)]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo - 2)]);
-        }
-    } else if (chess.isPawnPiece(piece)) {
-        if (move.isPromotion()) {
-            const promPiece = chess.flagPromotionToPiece(move.getFlag(), p_board.turn);
-
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(piece)][toSq]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(promPiece)][toSq]);
-        } else if (move.isDoublePush()) {
-            enPassantIdx = (fromSq + toSq) / 2;
-        } else if (move.isEnpassant()) {
-            const victimSq: e_square = chess.getSqFromCoord(chess.getSqIdxRank(fromSq), chess.getSqIdxFile(toSq));
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(victim)][@intFromEnum(victimSq)]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
-            //std.debug.print("[DEBUG] updateKeyOnMakeMove: updating on en passant move victim: {}, victimSq: {}, toSq: {d}\n", .{ victim, victimSq, toSq });
-        }
-    }
-
-    //std.debug.print("[DEBUG] updateKeyOnMakeMove: old: {d}, old-c: {d}, new: {d}\n", .{ p_board.enPassantIdx, enP, enPassantIdx });
-
-    // flag type of keys
-
-    updateKey(&p_board.key, &zobristKeys.playKey);
-    updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(piece)][fromSq]);
-    updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(piece)][toSq]);
-
-    updateKey(&p_board.key, &zobristKeys.castlingKeys[p_board.castling]);
-    updateKey(&p_board.key, &zobristKeys.castlingKeys[p_board.castling & chess.MASK_CASTLING[@intCast(toSq)] & chess.MASK_CASTLING[@intCast(fromSq)]]);
-
-    updateKey(&p_board.key, &zobristKeys.enPassantKeys[p_board.enPassantIdx]);
-    updateKey(&p_board.key, &zobristKeys.enPassantKeys[enPassantIdx]);
-
-    //updateKey(&p_board.key, &zobristKeys.turnKey[@intFromEnum(nextTurn)]);
-
-    //std.debug.print("[DEBUG] updateKeyOnMakeMove: end key: {x} \n", .{p_board.key.code});
 }
 
 pub fn convertEPIdxBoardToZobrist(enPassantIdx: u8) u8 {
