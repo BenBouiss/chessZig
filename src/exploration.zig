@@ -53,8 +53,8 @@ pub const moveDecisionExt = struct {
     }
 };
 
-pub fn getScoreMaskFromTurn(color: chess.e_color) i8 {
-    if (color == .WHITE) {
+pub fn getScoreMaskFromTurn(white: bool) i8 {
+    if (white) {
         return 1;
     }
     return -1;

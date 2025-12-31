@@ -583,7 +583,7 @@ pub fn getLastMoveFromUci(p_board: *Board_state, cmdBuffer: []const u8, alloc: s
     var retMove = moveArray.items[n - 1];
     chess.fillMoveFromState(p_board, &retMove);
     if (retMove.isEnpassant()) {
-        if (p_board.turn == .WHITE) {
+        if (p_board.whiteToMove()) {
             retMove.setCapture(.nBlackPawn);
         } else {
             retMove.setCapture(.nWhitePawn);

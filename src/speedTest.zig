@@ -91,6 +91,7 @@ pub fn dispatchBenchmark(p_engine: *engine, p_threadPack: *threadPackageArray, d
     return true;
 }
 
+
 pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
     p_info.running = true;
 
@@ -99,7 +100,6 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
 
     var currentDecision: moveDecisionExt = .{};
     for (0..p_startingMoves.items.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
         _ = p_state.makeMoveUpdate(move);
 
@@ -108,9 +108,6 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
         const score = -moveSearchLoop(p_state, p_info, depth - 1, &currentDecision, alpha, beta);
 
         _ = p_state.undoMoveRestore();
-
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (i == 0 or p_info.currentBest.scoring < score) {
             p_info.currentBest = currentDecision;
@@ -125,7 +122,7 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
     p_info.running = false;
 }
 pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: u16, currentLine: *moveDecisionExt, alpha: scoreType, beta: scoreType) scoreType {
-    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.turn);
+    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);
@@ -145,12 +142,10 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     }
 
     const fmoves: movel.moveContainer = moveGenl.generateLegalMoves(p_state);
-    const turn = p_state.turn;
     var _alpha = alpha;
     var decision: moveDecisionExt = .{};
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
         _ = decision.line.append(move);
@@ -164,8 +159,6 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
         decision.line.len -= 1;
 
         _ = p_state.undoMoveRestore();
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (currentLine.scoring > _alpha) {
             _alpha = currentLine.scoring;
@@ -175,7 +168,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
         }
     }
     if (fmoves.len == 0) {
-        if (!p_state.isLegal(turn)) {
+        if (!p_state.isLegal(p_state.whiteToMove())) {
             currentLine.scoring = -(heuristicl.simpleCheckMateScore + depth);
         } else {
             currentLine.scoring = heuristicl.simpleStalemateScore;

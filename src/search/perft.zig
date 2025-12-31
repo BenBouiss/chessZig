@@ -2,7 +2,7 @@ const std = @import("std");
 const mainl = @import("../main.zig");
 const chess = @import("../chess.zig");
 const movel = @import("../move.zig");
-const benchmark = @import("../benchmark.zig");
+const benchmarkl = @import("../benchmark.zig");
 const moveGenl = @import("../move_generation.zig");
 const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
@@ -26,6 +26,7 @@ const engine = enginel.engine;
 const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
 const threadInfo_container = threadingl.threadInfo_container;
+const benchmarkResult = benchmarkl.benchmarkResult;
 
 var GPA = std.heap.GeneralPurposeAllocator(.{}){};
 const GLOBAL_ALLOC = GPA.allocator();
@@ -128,7 +129,6 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
     }
 
     for (0..p_startingMoves.items.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
 
         _ = p_state.makeMoveUpdate(move);
@@ -136,9 +136,6 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
         _ = perftUciDepth(p_state, p_info, @intCast(depth - 1), feats);
 
         _ = p_state.undoMoveRestore();
-
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
     }
     p_info.running = false;
 }
@@ -170,14 +167,11 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
     var count: u64 = 0;
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
         count += perftUciDepth(p_state, p_info, depth - 1, feats);
 
         _ = p_state.undoMoveRestore();
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
     }
     if (feats.useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
@@ -210,16 +204,10 @@ pub fn perftThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, bat
 }
 pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_info: *threadInfo, p_startingMoves: *std.ArrayList(IMove), batched: bool) void {
     for (0..p_startingMoves.items.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
-
         _ = p_state.makeMoveUpdate(move);
-
         p_info.n_nodeExplored += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
         _ = p_state.undoMoveRestore();
-
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
     }
 }
 pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: bool, p_info: *threadInfo) u64 {
@@ -243,16 +231,45 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
     }
     var count: u64 = 0;
     for (0..fmoves.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move: IMove = fmoves.moves[i];
 
         _ = p_state.makeMoveUpdate(move);
-
         count += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
-
         _ = p_state.undoMoveRestore();
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
+    }
+    if (comptime useHash) {
+        const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
+        _ = hashl.hashTable.storeEntry(&entry);
+    }
+    return count;
+}
+pub fn perft_debug_loop(p_state: *chess.Board_state, depth: u8, batched: bool, p_res: *benchmarkResult) u64 {
+    if (depth <= 0) {
+        p_res.addNode(&p_state.getLastMove());
+        return 1;
+    }
+    if (p_state.isStaleMateRepetition()) {
+        return 1;
+    }
+
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    if (depth == 1 and batched) {
+        return fmoves.len;
+    }
+    if (comptime useHash) {
+        const entry = hashl.getEntryFromPerft(p_state.key, depth);
+        if (entry.valid) {
+            p_res.n_hashRetrieve += @intCast(entry.moveAmount);
+            return entry.moveAmount;
+        }
+    }
+    var count: u64 = 0;
+    for (0..fmoves.len) |i| {
+        const move: IMove = fmoves.moves[i];
+
+        _ = p_state.makeMoveUpdate(move);
+        count += perft_debug_loop(p_state, depth - 1, batched, p_res);
+        _ = p_state.undoMoveRestore();
     }
     if (comptime useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
