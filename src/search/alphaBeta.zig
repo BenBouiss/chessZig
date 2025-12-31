@@ -20,17 +20,12 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     const beta: scoreType = heuristicl.simpleCheckMateScore;
 
     for (0..p_startingMoves.items.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
-
         _ = p_state.makeMoveUpdate(move);
 
         const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta);
 
         _ = p_state.undoMoveRestore();
-
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (i == 0 or p_info.currentBest.scoring < score) {
             p_info.currentBest.move = move;
@@ -40,7 +35,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     p_info.running = false;
 }
 fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType) scoreType {
-    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.turn);
+    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);
@@ -51,19 +46,15 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    const turn = p_state.turn;
     var _alpha = alpha;
     var finalScore: scoreType = 0;
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
         const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha);
 
         _ = p_state.undoMoveRestore();
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (i == 0 or finalScore < score) {
             finalScore = score;
@@ -76,7 +67,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
     }
     if (fmoves.len == 0) {
-        if (!p_state.isLegal(turn)) {
+        if (!p_state.isLegal(p_state.whiteToMove())) {
             finalScore = -(heuristicl.simpleCheckMateScore + depth);
         } else {
             finalScore = heuristicl.simpleStalemateScore;

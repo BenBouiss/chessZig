@@ -153,7 +153,7 @@ pub const IMove = struct {
         strM[2] = r2[0];
         strM[3] = r2[1];
         if (self.isPromotion()) {
-            strM[4] = chess.getStrFromPiece(chess.flagPromotionToPiece(self.getFlag(), .BLACK));
+            strM[4] = chess.getStrFromPiece(chess.flagPromotionToPiece(self.getFlag(), false));
         } else {
             strM[4] = 0;
         }
@@ -285,14 +285,14 @@ pub const moveContainer = struct {
             }
         }
 
-        std.debug.print("\n", .{});
+        std.debug.print("\n Other container: \n '", .{});
         for (0..smallerContainer.len) |i| {
             const move = smallerContainer.moves[i];
             if (!move.isIn(biggerContainer)) {
                 std.debug.print("{s}-{}-{}-{} ", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
             }
         }
-        std.debug.print("\n", .{});
+        std.debug.print(" '\n", .{});
         smallerContainer.print();
         biggerContainer.print();
     }
