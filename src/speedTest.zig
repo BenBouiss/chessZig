@@ -99,7 +99,6 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
 
     var currentDecision: moveDecisionExt = .{};
     for (0..p_startingMoves.items.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
         _ = p_state.makeMoveUpdate(move);
 
@@ -108,9 +107,6 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
         const score = -moveSearchLoop(p_state, p_info, depth - 1, &currentDecision, alpha, beta);
 
         _ = p_state.undoMoveRestore();
-
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (i == 0 or p_info.currentBest.scoring < score) {
             p_info.currentBest = currentDecision;
@@ -150,7 +146,6 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     var decision: moveDecisionExt = .{};
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
         _ = decision.line.append(move);
@@ -164,8 +159,6 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
         decision.line.len -= 1;
 
         _ = p_state.undoMoveRestore();
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (currentLine.scoring > _alpha) {
             _alpha = currentLine.scoring;
