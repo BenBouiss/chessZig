@@ -92,10 +92,10 @@ pub const MASK_CASTLING = [64]u8{ 13, 15, 15, 15, 12, 15, 15, 14, 15, 15, 15, 15
 
 pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite = 13, nBlack = 14 };
 
-pub const e_color = enum(u8) { WHITE = 0, BLACK = 1 };
+pub const e_color = enum(u8) { BLACK = 0, WHITE = 1 };
 
-const arr_color_conv = [2]e_piece{ e_piece.nWhite, e_piece.nBlack };
-const arr_color_inv = [2]e_color{ e_color.BLACK, e_color.WHITE };
+const arr_color_conv = [2]e_piece{ e_piece.nBlack, e_piece.nWhite };
+const arr_color_inv = [2]e_color{ e_color.WHITE, e_color.BLACK };
 const arr_piece_str = [_]u8{ 'P', 'B', 'N', 'R', 'Q', 'K', 'p', 'b', 'n', 'r', 'q', 'k', '_', '1', '2' };
 
 pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
@@ -344,8 +344,10 @@ pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) bool {
     const turnLetter = utils.lowerLetter(turnToken[0]);
     if (turnLetter == 'w') {
         p_state.turn = .WHITE;
+        p_state.stat.whiteToMove = true;
     } else if (turnLetter == 'b') {
         p_state.turn = .BLACK;
+        p_state.stat.whiteToMove = false;
     } else {
         std.debug.print("[PANIC] getBoardFromFen_turn: turn letter found: letter: {c} token: {s}\n", .{ turnLetter, turnToken });
         @panic("Unknown turn found");
@@ -362,12 +364,16 @@ pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool
             const letter = turnToken[i];
             if (letter == 'K' or letter == 'H') {
                 p_state.castling |= 1;
+                p_state.stat.WCastlingK = true;
             } else if (letter == 'Q' or letter == 'A') {
                 p_state.castling |= 2;
+                p_state.stat.WCastlingQ = true;
             } else if (letter == 'k' or letter == 'h') {
                 p_state.castling |= 4;
+                p_state.stat.BCastlingK = true;
             } else if (letter == 'q' or letter == 'a') {
                 p_state.castling |= 8;
+                p_state.stat.BCastlingQ = true;
             }
         }
     }
@@ -636,10 +642,12 @@ pub const Board_state = struct {
     victim: e_piece = .nEmptySquare,
     turn: e_color,
     turn_count: u64 = 0,
+    stat: status = .{},
 
     lastMove: IMove = .{},
     move_history: matchMoveContainer = .{},
     stack: boardStack = .{ .len = 0 },
+    s_stack: board_statusl.statusStack = .{},
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,
     seed: u64 = 42,
@@ -937,10 +945,18 @@ pub const Board_state = struct {
             sanityCheckBoardState(p_self);
         }
         _ = p_self.move_history.popMove();
+
+        const popped = (p_self.stack.pop());
+        p_self.loadFrame(&popped);
+
+        const s_popped = p_self.s_stack.pop();
+        p_self.stat = s_popped;
         return true;
     }
 
     pub fn makeMoveUpdate(p_self: *Board_state, move: IMove) void {
+        p_self.stack.push(&p_self.makeFrame());
+        p_self.s_stack.push(p_self.stat);
         // test to reduce the makeMove load
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
@@ -978,6 +994,10 @@ pub const Board_state = struct {
             p_self.victim = victim;
             hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
             p_self.halfMoveClock = 0;
+            if (isRookPiece(victim)) {
+                p_self.stat.whiteToMove = !p_self.stat.whiteToMove;
+                p_self.stat = p_self.stat.onRookMove(toBB);
+            }
         }
 
         if (isKingPiece(fromPiece)) {
@@ -1006,6 +1026,7 @@ pub const Board_state = struct {
                 hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(toSq - 2)]);
                 //
             }
+            p_self.stat = p_self.stat.onKingMove();
         } else if (isPawnPiece(fromPiece)) {
             p_self.halfMoveClock = 0;
             if (move.isPromotion()) {
@@ -1034,6 +1055,11 @@ pub const Board_state = struct {
                 hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][@intFromEnum(victimSq)]);
                 hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
             }
+            p_self.stat.whiteToMove = !p_self.stat.whiteToMove;
+        } else if (isRookPiece(fromPiece)) {
+            p_self.stat = p_self.stat.onRookMove(fromBB);
+        } else {
+            p_self.stat.whiteToMove = !p_self.stat.whiteToMove;
         }
         hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][fromSq]);
         hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][toSq]);
@@ -1265,6 +1291,10 @@ pub fn sanityCheckBoardState(p_board_state: *Board_state) void {
     if (empty_count != (empty_count_g)) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: Number of empty spaces in pieceArray not consistent with population counts. Expected {d} got {d}. OccupiedBB: \n", .{ empty_count_g, empty_count });
         chess.print_bitboard(p_board_state.occupiedBB);
+        panic = true;
+    }
+    if (p_board_state.castling != p_board_state.stat.castlingKey()) {
+        std.debug.print("[DEBUG] from sanityCheckBoardState: Castling right mismatch between array rights {d} and status rights {d}\n", .{ p_board_state.castling, p_board_state.stat.castlingKey() });
         panic = true;
     }
 

@@ -45,8 +45,8 @@ pub fn test_speedTest() !void {
 }
 
 pub fn main() anyerror!void {
-    try chessl.main();
-    //test_bench();
+    //try chessl.main();
+    test_bench();
     //try enginel.launch_engine(true);
     //try test_speedTest();
 }

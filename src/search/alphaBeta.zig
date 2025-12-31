@@ -20,7 +20,6 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     const beta: scoreType = heuristicl.simpleCheckMateScore;
 
     for (0..p_startingMoves.items.len) |i| {
-        p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
 
         _ = p_state.makeMoveUpdate(move);
@@ -28,9 +27,6 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
         const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta);
 
         _ = p_state.undoMoveRestore();
-
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (i == 0 or p_info.currentBest.scoring < score) {
             p_info.currentBest.move = move;
@@ -56,14 +52,11 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var finalScore: scoreType = 0;
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
         const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha);
 
         _ = p_state.undoMoveRestore();
-        const popped = (p_state.stack.pop());
-        p_state.loadFrame(&popped);
 
         if (i == 0 or finalScore < score) {
             finalScore = score;
