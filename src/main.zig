@@ -45,6 +45,7 @@ pub fn test_speedTest() !void {
 }
 
 pub fn main() anyerror!void {
+    //magicl.main();
     //try chessl.main();
     test_bench();
     //try enginel.launch_engine(true);
