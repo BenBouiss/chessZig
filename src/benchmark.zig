@@ -32,21 +32,20 @@ pub const benchmarkResult = struct {
     }
     pub fn addNode(p_self: *benchmarkResult, p_move: *const IMove) void {
         p_self.n_nodes += 1;
-        if (p_move.isCapture()) {
-            p_self.n_captures += 1;
-        }
-
         if (p_move.isDoublePush()) {
             p_self.n_doublePawn += 1;
-        }
-        if (p_move.isEnpassant()) {
+        } else if (p_move.isEnpassant()) {
             p_self.n_enpassants += 1;
-        }
-        if (p_move.isCastle()) {
-            p_self.n_castles += 1;
-        }
-        if (p_move.isPromotion()) {
+            p_self.n_captures += 1;
+        } else if (p_move.isPromotion()) {
             p_self.n_promotions += 1;
+            if (p_move.isCapture()) {
+                p_self.n_captures += 1;
+            }
+        } else if (p_move.isCapture()) {
+            p_self.n_captures += 1;
+        } else if (p_move.isCastle()) {
+            p_self.n_castles += 1;
         }
     }
     pub fn printInfo(self: benchmarkResult) void {
@@ -116,13 +115,10 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
     for (1..(n_max + 1)) |depth| {
         _start = std.time.milliTimestamp();
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
-        //exploration.explorationNDepthThreadStart(p_state, @intCast(depth), nThread, &bench_res, batched) catch unreachable;
-        //const _node: i64 = @intCast(bench_res.n_nodes);
         const res = perftl.perftThreadStart(p_state, @intCast(depth), nThread, batched) catch unreachable;
         const _node: i64 = @intCast(res.n_nodeExplored);
         _end = std.time.milliTimestamp();
         std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, res.n_nodeExplored, @divFloor(_node, (_end - _start + 1)) * 1000 });
-        //bench_res.printInfo();
         if (res.n_nodeExplored != ExpectedBenchmarkResults[depth]) {
             std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], res.n_nodeExplored, ExpectedBenchmarkResults[depth] - _node });
         }
@@ -130,7 +126,6 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{res.n_hashRetrieve});
             std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
         }
-        //        std.debug.assert(bench_res.n_nodes == ExpectedBenchmarkResults[depth]);
     }
 }
 pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool) void {

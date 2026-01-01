@@ -31,6 +31,8 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "useDebug", b.option(bool, "useDebug", "Use debugging checks in the gen/make/unmake of move") orelse false);
     build_options.addOption(bool, "useHash", b.option(bool, "useHash", "Use hashtable for perft") orelse false);
 
+    build_options.addOption(bool, "useAVX2", b.option(bool, "useAVX2", "Use avx2 for checkers bitboard generation") orelse false);
+
     // doesnt work still get cache error thingy on WSL
     //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     //const alloc = gpa.allocator();
