@@ -29,7 +29,7 @@ test "en passant checking" {
 test "perft" {
     mainl.initAll();
     const perft_THREAD = 1;
-    const perft_BATCHED = false;
+    const perft_BATCHED = true;
     const perft_MAX_DEPTH = 7;
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
     try std.testing.expect(!hashl.isHashTable_init());
