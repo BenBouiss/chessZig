@@ -337,8 +337,6 @@ pub const moveContainer = struct {
 pub const MAX_MATCH_LENGTH: usize = 4096;
 pub const matchMoveContainer = struct {
     // replace the std.mem.zeros with undefined for faster init(?)
-    //moves: [MAX_MATCH_LENGTH]IMove = std.mem.zeroes([MAX_MATCH_LENGTH]IMove),
-    //keyCodes: [MAX_MATCH_LENGTH]u32 = std.mem.zeroes([MAX_MATCH_LENGTH]u32),
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     keyCodes: [MAX_MATCH_LENGTH]u32 = undefined,
     lastIrreversibleMoveIndex: u16 = 0,
