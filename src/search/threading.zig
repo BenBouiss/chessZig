@@ -84,7 +84,7 @@ pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *Board_state, moveA
         std.debug.print("[ERROR] getThreadPackArray: move container init\n", .{});
         return debug_err.valueErr;
     };
-
+    //const cont = try p_state.duplicateNTimes(alloc, @intCast(n_threads));
     for (0.._nThread) |i| {
         try ret.append(alloc, .{ .chessState = p_state.*, .moves = threadedMoves.items[i], .threadHandle = undefined, ._tInfo = .{} });
     }
@@ -107,6 +107,8 @@ pub fn freeThreadPackArray(alloc: std.mem.Allocator, p_array: *threadPackageArra
     for (0..p_array.len) |i| {
         var cell: std.ArrayList(IMove) = p_array.items(.moves)[i];
         cell.deinit(alloc);
+        var state: Board_state = p_array.items(.chessState)[i];
+        state.free(alloc);
     }
     p_array.deinit(alloc);
 }

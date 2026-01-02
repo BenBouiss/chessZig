@@ -30,9 +30,10 @@ test "perft" {
     mainl.initAll();
     const perft_THREAD = 1;
     const perft_BATCHED = true;
+    const perft_MAX_DEPTH = 7;
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
     try std.testing.expect(!hashl.isHashTable_init());
-    for (1..7) |depth| {
+    for (1..perft_MAX_DEPTH + 1) |depth| {
         const _start: i64 = std.time.microTimestamp();
         //try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 1, &tmp, true);
         const res = try perftl.perftThreadStart(&board, @intCast(depth), perft_THREAD, perft_BATCHED);

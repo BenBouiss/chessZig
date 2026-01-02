@@ -23,10 +23,6 @@ pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 const MOVE_STR_MAX_LENGTH = 5;
 
-//pub fn build_move(p_board: *chess.Board_state, from: u8, to: u8, flag: u8, piece: e_piece) IMove {
-//    return _build_move(from, to, flag, piece);
-//}
-
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     var m_move: u16 = (flag & 0xF);
     var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare) & 0xFF);
@@ -153,7 +149,7 @@ pub const IMove = struct {
         strM[2] = r2[0];
         strM[3] = r2[1];
         if (self.isPromotion()) {
-            strM[4] = chess.getStrFromPiece(chess.flagPromotionToPiece(self.getFlag(), .BLACK));
+            strM[4] = chess.getStrFromPiece(chess.flagPromotionToPiece(self.getFlag(), false));
         } else {
             strM[4] = 0;
         }
@@ -285,14 +281,14 @@ pub const moveContainer = struct {
             }
         }
 
-        std.debug.print("\n", .{});
+        std.debug.print("\n Other container: \n '", .{});
         for (0..smallerContainer.len) |i| {
             const move = smallerContainer.moves[i];
             if (!move.isIn(biggerContainer)) {
                 std.debug.print("{s}-{}-{}-{} ", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
             }
         }
-        std.debug.print("\n", .{});
+        std.debug.print(" '\n", .{});
         smallerContainer.print();
         biggerContainer.print();
     }
@@ -337,8 +333,6 @@ pub const moveContainer = struct {
 pub const MAX_MATCH_LENGTH: usize = 4096;
 pub const matchMoveContainer = struct {
     // replace the std.mem.zeros with undefined for faster init(?)
-    //moves: [MAX_MATCH_LENGTH]IMove = std.mem.zeroes([MAX_MATCH_LENGTH]IMove),
-    //keyCodes: [MAX_MATCH_LENGTH]u32 = std.mem.zeroes([MAX_MATCH_LENGTH]u32),
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     keyCodes: [MAX_MATCH_LENGTH]u32 = undefined,
     lastIrreversibleMoveIndex: u16 = 0,
@@ -406,7 +400,7 @@ pub const matchMoveContainer = struct {
                 if (self.keyCodes[i] == keyRepet) {
                     count += 1;
                 }
-                if (count == 2) {
+                if (count >= 2) {
                     return count;
                 }
             }

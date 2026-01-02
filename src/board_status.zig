@@ -12,12 +12,12 @@ const useDebug = build_options.useDebug;
 const LEFT_ROOKS: u64 = 0x100000000000001;
 const RIGHT_ROOKS: u64 = 0x8000000000000080;
 
-pub const wCastleKKingBit: u64 = 0xA;
-pub const wCastleKRookBit: u64 = 0x5;
-pub const wCastleQKingBit: u64 = 0x28;
-pub const wCastleQRookBit: u64 = 0x90;
+pub const wCastleKKingBit: u64 = 0x50;
+pub const wCastleKRookBit: u64 = 0xA0;
+pub const wCastleQKingBit: u64 = 0x14;
+pub const wCastleQRookBit: u64 = 0x9;
 
-pub const bCastleKKingBit: u64 = 0x5000000000000000;
+pub const bCastleKKingBit: u64 = 0x5000000000000009;
 pub const bCastleKRookBit: u64 = 0xA000000000000000;
 pub const bCastleQKingBit: u64 = 0x1400000000000000;
 pub const bCastleQRookBit: u64 = 0x900000000000000;
@@ -81,22 +81,26 @@ pub const status = struct {
             return .{ .whiteToMove = true, .BCastlingK = false, .BCastlingQ = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ };
         }
     }
-    pub fn onRookMove(self: status, rooks: u64) status {
-        if (isLeftRook(rooks)) {
-            if (self.whiteToMove) {
+    pub fn onRookMove(self: status, rooks: u64, comptime white: bool) status {
+        if (comptime white) {
+            if (isLeftRook(rooks)) {
                 return .{ .whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
-            } else {
-                return .{ .whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = false };
-            }
-        } else if (isRightRook(rooks)) {
-            if (self.whiteToMove) {
+            } else if (isRightRook(rooks)) {
                 return .{ .whiteToMove = false, .WCastlingK = false, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
             } else {
+                return .{ .whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+            }
+        } else {
+            if (isLeftRook(rooks)) {
+                return .{ .whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = false };
+            } else if (isRightRook(rooks)) {
                 return .{ .whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = false, .BCastlingQ = self.BCastlingQ };
+            } else {
+                return .{ .whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
             }
         }
-        return .{ .whiteToMove = !self.whiteToMove, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
     }
+
     pub fn castlingKey(self: status) u4 {
         const r1: u4 = @intCast(@intFromBool(self.WCastlingK));
         const r2: u4 = @intCast(@intFromBool(self.WCastlingQ));

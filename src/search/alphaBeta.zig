@@ -21,7 +21,6 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
-
         _ = p_state.makeMoveUpdate(move);
 
         const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta);
@@ -36,7 +35,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     p_info.running = false;
 }
 fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType) scoreType {
-    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.turn);
+    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);
@@ -47,7 +46,6 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    const turn = p_state.turn;
     var _alpha = alpha;
     var finalScore: scoreType = 0;
     for (0..fmoves.len) |i| {
@@ -69,7 +67,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
     }
     if (fmoves.len == 0) {
-        if (!p_state.isLegal(turn)) {
+        if (!p_state.isLegal(p_state.whiteToMove())) {
             finalScore = -(heuristicl.simpleCheckMateScore + depth);
         } else {
             finalScore = heuristicl.simpleStalemateScore;
