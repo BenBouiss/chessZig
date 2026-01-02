@@ -73,22 +73,12 @@ pub const blackPawnDoubleRank: u64 = 0xFF000000000000;
 pub const whitePawnEnpassantRank: u64 = 0xFF0000000000;
 pub const blackPawnEnpassantRank: u64 = 0xFF0000;
 
-// 8 pieces per row + 7 / = 71
+// 8 pieces per row + 7 '/' = 71
 // turn + 4 castling rights + enPassant sq + 3 spaces = 80
 // round that up to 100? the match score can be ommited?
 const MAX_FEN_LENGTH: u8 = 100;
 pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0";
-const shift = [8]c_int{ 9, 1, -7, -8, -9, -1, 7, 8 };
-const avoidWrap = [8]u64{
-    0xfefefefefefefe00,
-    0xfefefefefefefefe,
-    0x00fefefefefefefe,
-    0x00ffffffffffffff,
-    0x007f7f7f7f7f7f7f,
-    0x7f7f7f7f7f7f7f7f,
-    0x7f7f7f7f7f7f7f00,
-    0xffffffffffffff00,
-};
+
 pub const MASK_CASTLING = [64]u8{ 13, 15, 15, 15, 12, 15, 15, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 7, 15, 15, 15, 3, 15, 15, 11 };
 
 pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite = 13, nBlack = 14 };
@@ -101,7 +91,7 @@ const arr_piece_str = [_]u8{ 'P', 'B', 'N', 'R', 'Q', 'K', 'p', 'b', 'n', 'r', '
 
 pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
 
-pub const debug_err = error{ fenErr, earlyReturn, valueErr };
+pub const debug_err = error{ fenErr, earlyReturn, valueErr, memErr };
 
 pub fn strFromLERF(sq: e_square) [2]u8 {
     var ret: [2]u8 = undefined;
@@ -304,8 +294,10 @@ pub fn getStrFromPiece(piece: e_piece) u8 {
     return arr_piece_str[@intFromEnum(piece)];
 }
 
-pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
-    var ret = getEmptyBoardState();
+pub fn getBoardFromFen_pieces(alloc: std.mem.Allocator, fen: []const u8) debug_err!Board_state {
+    var ret = getEmptyBoardState(alloc) catch {
+        return debug_err.memErr;
+    };
     var offset: i8 = 0;
     var board_offset = N_SQUARES - 8;
     var commitedRowSize: u8 = 0;
@@ -422,7 +414,7 @@ pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Boar
         return debug_err.fenErr;
     }
     //utils.printArrayListTasStr([]const u8, tokens);
-    var board = try getBoardFromFen_pieces(tokens.items[0]);
+    var board = try getBoardFromFen_pieces(alloc, tokens.items[0]);
     _ = getBoardFromFen_turn(&board, tokens.items[1]);
     _ = getBoardFromFen_castle(&board, tokens.items[2]);
     _ = getBoardFromFen_enPassant(&board, tokens.items[3]);
@@ -598,11 +590,14 @@ pub const Board_stateContainer = struct {
 
     pub fn free(p_self: *Board_stateContainer, alloc: std.mem.Allocator) void {
         alloc.free(p_self.array);
+        for (0..p_self.len) |i| {
+            p_self.array[i].free(alloc);
+        }
     }
 };
 
-pub fn getEmptyBoardState() Board_state {
-    return Board_state.init();
+pub fn getEmptyBoardState(alloc: std.mem.Allocator) !Board_state {
+    return try Board_state.init(alloc);
 }
 
 pub const boardFrame = struct {
@@ -645,6 +640,8 @@ pub const Board_state = struct {
     c_occupiedBB: [NUMBER_PLAYER]u64,
     pieceArray: [N_SQUARES]e_piece = std.mem.zeroes([N_SQUARES]e_piece),
 
+    wKingSq: e_square = .a1,
+    bKingSq: e_square = .a1,
     // castling info
     // first 2 bits white, next 2 black
     // 2 bit: 1st = k, 2st = q
@@ -656,29 +653,32 @@ pub const Board_state = struct {
     halfMoveClock: u8 = 0,
     enPassantIdx: u8 = 0,
 
-    wKingSq: e_square = .a1,
-    bKingSq: e_square = .a1,
+    // big structures might be better to alloc then and
+    // only store the pointers(?)
+    // 184KB current size need better way
+    //s_stack: *board_statusl.statusStack = undefined,
+    //move_history: *matchMoveContainer = undefined,
+    //stack: *boardStack = undefined,
 
+    s_stack: board_statusl.statusStack = .{},
+    move_history: matchMoveContainer = .{},
+    stack: boardStack = .{},
     victim: e_piece = .nEmptySquare,
     turn_count: u64 = 0,
 
     stat: status,
     lastMove: IMove = .{},
-    move_history: matchMoveContainer = .{},
-    stack: boardStack = .{ .len = 0 },
-    s_stack: board_statusl.statusStack = .{},
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,
     seed: u64 = 42,
+    isInit: bool = false,
 
-    pub fn init() Board_state {
+    pub fn init(alloc: std.mem.Allocator) !Board_state {
         var ret: Board_state = undefined;
         @memset(&ret.pieceBB, 0);
         @memset(&ret.c_occupiedBB, 0);
-
         @memset(&ret.pieceArray, e_piece.nEmptySquare);
 
-        ret.pieceBB[@intFromEnum(e_piece.nEmptySquare)] = UNIVERSE;
         ret.stat = .{};
         ret.turn_count = 0;
         ret.occupiedBB = 0;
@@ -692,17 +692,40 @@ pub const Board_state = struct {
 
         ret.victim = .nEmptySquare;
 
-        ret.move_history = .{};
         ret.lastMove = .{};
+
+        ret.move_history = .{};
         ret.stack = .{};
         ret.s_stack = .{};
+
+        _ = alloc;
+        // stack vs heap
+        //ret.move_history = try alloc.create(matchMoveContainer);
+        //ret.stack = try alloc.create(boardStack);
+        //ret.s_stack = try alloc.create(board_statusl.statusStack);
+        //ret.move_history.* = .{};
+        //ret.stack.* = .{};
+        //ret.s_stack.* = .{};
+        //ret.isInit = true;
         if (useDebug) {
+            std.debug.print("[DEBUG] from Board_state.init: size of board state: {d} bytes\n", .{@sizeOf(Board_state)});
             std.debug.print("[DEBUG] from Board_state.init: size of stack : {d} bytes\n", .{@sizeOf(boardStack)});
         }
 
         ret.rngIntGenerator = std.Random.DefaultPrng.init(ret.seed);
         ret.randInt = ret.rngIntGenerator.random();
+        //
         return ret;
+    }
+    pub fn free(p_self: *Board_state, alloc: std.mem.Allocator) void {
+        _ = alloc;
+        _ = p_self;
+        //if (p_self.isInit) {
+        //    alloc.destroy(p_self.stack);
+        //    alloc.destroy(p_self.s_stack);
+        //    alloc.destroy(p_self.move_history);
+        //    p_self.isInit = false;
+        //}
     }
     pub inline fn whiteToMove(self: Board_state) bool {
         return self.stat.whiteToMove;
@@ -724,6 +747,14 @@ pub const Board_state = struct {
         var ret: []Board_state = try alloc.alloc(Board_state, n);
         for (0..n) |i| {
             ret[i] = self;
+
+            //ret[i].stack = try alloc.create(boardStack);
+            //ret[i].s_stack = try alloc.create(board_statusl.statusStack);
+            //ret[i].move_history = try alloc.create(matchMoveContainer);
+
+            //ret[i].stack.* = self.stack.*;
+            //ret[i].s_stack.* = self.s_stack.*;
+            //ret[i].move_history.* = self.move_history.*;
 
             if (comptime useDebug) {
                 sanityCheckBoardState(&ret[i]);
