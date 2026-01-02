@@ -1092,6 +1092,7 @@ pub fn southWestOne(bb: u64) u64 {
     return (bb | ((bb & chess.notHFile) >> 9));
 }
 
+// kogge-stone algo
 pub fn diagPinned(attBB: u64, kingBB: u64, free: u64) u64 {
     const _free = free ^ kingBB;
     var intersect = northEastOne(northEastOccl(attBB, _free)) & southWestOne(southWestOccl(kingBB, _free));
