@@ -400,7 +400,7 @@ pub const matchMoveContainer = struct {
                 if (self.keyCodes[i] == keyRepet) {
                     count += 1;
                 }
-                if (count == 2) {
+                if (count >= 2) {
                     return count;
                 }
             }

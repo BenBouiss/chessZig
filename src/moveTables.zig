@@ -46,8 +46,29 @@ pub const kingTable = struct {
 
 pub fn initKingAttacks(table: *kingTable) void {
     for (0..N_SQUARES) |sq| {
-        table.KingAttack[sq] = chess.kingAttacks(@intCast(sq));
+        table.KingAttack[sq] = kingAttacks(@intCast(sq));
     }
+}
+pub fn kingAttacks(sq: i8) u64 {
+    var ret: u64 = chess.EMPTY;
+    const pos: u64 = (ONE << @intCast(sq));
+
+    ret |= (pos >> 8);
+    ret |= (pos << 8);
+
+    if (pos & chess.notAFile != 0) {
+        ret |= (pos >> 1);
+        ret |= (pos << 7);
+        ret |= (pos >> 9);
+    }
+
+    if (pos & chess.notHFile != 0) {
+        ret |= (pos << 1);
+        ret |= (pos << 9);
+        ret |= (pos >> 7);
+    }
+
+    return ret;
 }
 
 pub fn initRayAttacks(table: *AttackTable) void {

@@ -11,7 +11,6 @@ const useStaged = build_options.useStaged;
 const useDebug = build_options.useDebug;
 const useAVX2 = build_options.useAVX2;
 
-const chess = @import("chess.zig");
 const utils = @import("utils.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
@@ -516,12 +515,6 @@ pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: s
     return ret;
 }
 
-pub fn invertColor(color: e_color) e_color {
-    if (color == .WHITE) {
-        return .BLACK;
-    }
-    return .WHITE;
-}
 pub inline fn isPawnPiece(piece: e_piece) bool {
     return (piece == .nWhitePawn or piece == .nBlackPawn);
 }
@@ -542,30 +535,11 @@ pub fn inBetween(from: e_square, to: e_square) u64 {
     return tablel.arrRectangular[@intFromEnum(from)][@intFromEnum(to)];
 }
 
-pub fn getRookPiece(white: bool) e_piece {
-    return @enumFromInt(@intFromEnum(e_piece.nWhiteRook) + _getColorPieceOffset(white));
-}
-
-pub fn initBothSidePinnedBB(p_state: *Board_state) void {
-    p_state.pinnedBB = getPinnedBB(p_state, true);
-    p_state.pinnedBB |= getPinnedBB(p_state, false);
-    return;
-}
-
-pub fn getPinnedBB(p_state: *Board_state, comptime white: bool) u64 {
-    if (comptime white) {
-        const diagWhite = moveGenl.diagPinned(p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)], p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)], ~p_state.occupiedBB);
-        const lineWhite = moveGenl.linePinned(p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)], p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)], ~p_state.occupiedBB);
-        return diagWhite | lineWhite;
-    } else {
-        const diagBlack = moveGenl.diagPinned(p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)], ~p_state.occupiedBB);
-        const lineBlack = moveGenl.linePinned(p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)], ~p_state.occupiedBB);
-        return diagBlack | lineBlack;
+pub fn invertColor(color: e_color) e_color {
+    if (color == .WHITE) {
+        return .BLACK;
     }
-}
-
-pub inline fn convertColorToColorPiece(color: e_color) e_piece {
-    return arr_color_conv[@intFromEnum(color)];
+    return .WHITE;
 }
 pub fn getColorPieceOffset(color: e_color) u8 {
     if (color == .WHITE) {
@@ -637,9 +611,6 @@ pub const Board_state = struct {
 
     wKingSq: e_square = .a1,
     bKingSq: e_square = .a1,
-    // castling info
-    // first 2 bits white, next 2 black
-    // 2 bit: 1st = k, 2st = q
 
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
@@ -1341,22 +1312,22 @@ pub fn sanityCheckBoardState(p_board_state: *Board_state) void {
         }
 
         std.debug.print("Occupied: \n", .{});
-        chess.print_bitboard(p_board_state.occupiedBB);
+        print_bitboard(p_board_state.occupiedBB);
         panic = true;
     }
     if ((_bbfromPieceArr ^ p_board_state.occupiedBB) != EMPTY) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: pieces are present in the pieceArray that are not in the occupied BB\n", .{});
         std.debug.print("PieceArray BB: \n", .{});
-        chess.print_bitboard(_bbfromPieceArr);
+        print_bitboard(_bbfromPieceArr);
 
         std.debug.print("Occupied: \n", .{});
-        chess.print_bitboard(p_board_state.occupiedBB);
+        print_bitboard(p_board_state.occupiedBB);
         panic = true;
     }
     const empty_count_g = l_popcount(~p_board_state.occupiedBB);
     if (empty_count != (empty_count_g)) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: Number of empty spaces in pieceArray not consistent with population counts. Expected {d} got {d}. OccupiedBB: \n", .{ empty_count_g, empty_count });
-        chess.print_bitboard(p_board_state.occupiedBB);
+        print_bitboard(p_board_state.occupiedBB);
         panic = true;
     }
 
@@ -1499,28 +1470,6 @@ pub fn knightAttacks(knights: u64) u64 {
     return (h1 << 16) | (h1 >> 16) | (h2 << 8) | (h2 >> 8);
 }
 
-pub fn kingAttacks(sq: i8) u64 {
-    var ret: u64 = EMPTY;
-    const pos: u64 = (ONE << @intCast(sq));
-
-    ret |= (pos >> 8);
-    ret |= (pos << 8);
-
-    if (pos & notAFile != 0) {
-        ret |= (pos >> 1);
-        ret |= (pos << 7);
-        ret |= (pos >> 9);
-    }
-
-    if (pos & notHFile != 0) {
-        ret |= (pos << 1);
-        ret |= (pos << 9);
-        ret |= (pos >> 7);
-    }
-
-    return ret;
-}
-
 pub fn diagonalMask(sq: i8) u64 {
     const maindia: u64 = (0x8040201008040201);
     const diag: i8 = (sq & 7) - (sq >> 3);
@@ -1549,34 +1498,6 @@ pub inline fn rankMaskFromRankN(rank: u8) u64 {
 }
 
 // pre init sliding moves
-
-pub fn simplePawnMask(sq: e_square, color: e_color) u64 {
-    var ret: u64 = EMPTY;
-    const _sq: u6 = @intCast(@intFromEnum(sq));
-    const pos: u64 = ONE << _sq;
-    if (color == e_color.BLACK) {
-        if (_sq < 8) {
-            return EMPTY;
-        }
-        if (pos & notHFile != 0) {
-            ret |= (ONE << (_sq - 7));
-        }
-        if (pos & notAFile != 0) {
-            ret |= (ONE << (_sq - 9));
-        }
-    } else if (color == e_color.WHITE) {
-        if (_sq > 55) {
-            return EMPTY;
-        }
-        if (pos & notAFile != 0) {
-            ret |= (ONE << (_sq + 7));
-        }
-        if (pos & notHFile != 0) {
-            ret |= (ONE << (_sq + 9));
-        }
-    }
-    return ret;
-}
 
 pub fn getAttackPositiveRay(occupied: u64, dir: e_direction, square: e_square) u64 {
     const attacks = cachedTables.rayAttacks[@intFromEnum(square)][@intFromEnum(dir)];
@@ -1921,18 +1842,18 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
         var pinned: u64 = 0;
         const rBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedRookAtt) ^ p_board.occupiedBB;
         var pinner = (cachedRookAtt ^ getRookAttacks(rBlockers, king_E)) & rq;
-        while (pinner != chess.EMPTY) {
-            const pinsq = chess.bitscan(pinner);
+        while (pinner != EMPTY) {
+            const pinsq = bitscan(pinner);
             pinner &= pinner - 1;
-            pinned |= chess.inBetween(@enumFromInt(pinsq), king_E);
+            pinned |= inBetween(@enumFromInt(pinsq), king_E);
         }
 
         const bBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedBishAtt) ^ p_board.occupiedBB;
         pinner = (cachedBishAtt ^ getBishopAttacks(bBlockers, king_E)) & bq;
-        while (pinner != chess.EMPTY) {
-            const pinsq = chess.bitscan(pinner);
+        while (pinner != EMPTY) {
+            const pinsq = bitscan(pinner);
             pinner &= pinner - 1;
-            pinned |= chess.inBetween(@enumFromInt(pinsq), king_E);
+            pinned |= inBetween(@enumFromInt(pinsq), king_E);
         }
         p_board.pinnedBB = pinned;
     }
