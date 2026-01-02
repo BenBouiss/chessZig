@@ -79,8 +79,6 @@ pub const blackPawnEnpassantRank: u64 = 0xFF0000;
 const MAX_FEN_LENGTH: u8 = 100;
 pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0";
 
-pub const MASK_CASTLING = [64]u8{ 13, 15, 15, 15, 12, 15, 15, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 7, 15, 15, 15, 3, 15, 15, 11 };
-
 pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite = 13, nBlack = 14 };
 
 pub const e_color = enum(u8) { BLACK = 0, WHITE = 1 };
@@ -204,9 +202,6 @@ pub fn bitscanK(b: u64) i8 {
     }
     return count;
 }
-const lsb_64_table = [64]i8{ 63, 30, 3, 32, 59, 14, 11, 33, 60, 24, 50, 9, 55, 19, 21, 34, 61, 29, 2, 53, 51, 23, 41, 18, 56, 28, 1, 43, 46, 27, 0, 35, 62, 31, 58, 4, 5, 49, 54, 6, 15, 52, 12, 40, 7, 42, 45, 16, 25, 57, 48, 13, 10, 39, 8, 44, 20, 47, 38, 22, 17, 37, 36, 26 };
-
-const r_index64 = [64]i8{ 0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 61, 54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4, 62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45, 25, 39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63 };
 
 ///*
 // bitScanReverse
@@ -648,6 +643,12 @@ pub const Board_state = struct {
 
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
+
+    //wPinnedBB: u64 = 0,
+    //wCheckersBB: u64 = 0,
+    //bPinnedBB: u64 = 0,
+    //bCheckersBB: u64 = 0,
+
     occupiedBB: u64 = 0,
     key: hashl.Key = .{},
     halfMoveClock: u8 = 0,
@@ -1645,12 +1646,18 @@ pub fn getBishopAttacks(occBB: u64, sq: e_square) u64 {
         return ret;
     }
 }
-pub fn getPawnAttacks(sq: e_square, white: bool) u64 {
-    return cachedTables.SimplePawnAttack[@intFromBool(white)][@intFromEnum(sq)];
+
+pub fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
+    const sqBB = sqToBitboard(sq);
+    if (comptime white) {
+        return ((sqBB << 7) & notHFile) | ((sqBB << 9) & notAFile);
+    } else {
+        return ((sqBB >> 7) & notAFile) | ((sqBB >> 9) & notHFile);
+    }
 }
 
 pub fn getKingAttacks(sq: e_square) u64 {
-    return cachedTables.KingAttack[@intFromEnum(sq)];
+    return tablel.cachedKingTable.KingAttack[@intFromEnum(sq)];
 }
 
 pub fn xrayRookAttacks(occ: u64, blockers: u64, rookSq: e_square) u64 {
@@ -1702,30 +1709,26 @@ pub fn getAllAttackingSquares(sq: e_square) u64 {
 }
 
 pub fn _AllAttackPawnMask(bb_piece: u64, white: bool) u64 {
-    var ret: u64 = EMPTY;
-    var sq: i8 = 0;
-    var _bb_piece = bb_piece;
-    while (_bb_piece != 0) {
-        sq = bitscan(_bb_piece);
-        _bb_piece &= _bb_piece - 1;
-
-        ret |= cachedTables.SimplePawnAttack[@intFromBool(white)][@intCast(sq)];
+    if (white) {
+        return _AllAttackPawnMask_cst(bb_piece, true);
     }
-    return ret;
+    return _AllAttackPawnMask_cst(bb_piece, false);
 }
+
 pub fn _AllAttackPawnMask_cst(bb_piece: u64, comptime white: bool) u64 {
     var ret: u64 = EMPTY;
     if (comptime white) {
-        ret |= (bb_piece & notAFile) << 7;
-        ret |= (bb_piece & notHFile) << 9;
+        ret |= (bb_piece << 7) & notHFile;
+        ret |= (bb_piece << 9) & notAFile;
+        return ret;
     } else {
-        ret |= (bb_piece & notHFile) >> 7;
-        ret |= (bb_piece & notAFile) >> 9;
+        ret |= (bb_piece >> 7) & notAFile;
+        ret |= (bb_piece >> 9) & notHFile;
+        return ret;
     }
-    return ret;
 }
 
-pub fn _AllAttackKnightMask(bb_piece: u64) u64 {
+pub inline fn _AllAttackKnightMask(bb_piece: u64) u64 {
     return knightAttacks(bb_piece);
 }
 
@@ -1856,6 +1859,9 @@ pub fn cst_getAllAttackMaskFromKing(p_board: *Board_state, comptime white: bool)
     return ret;
 }
 pub fn getCheckers(p_board: *Board_state, white: bool) void {
+    // this method is responsible for ~30-40% of the compute cost of perft
+    // plan when loading a fen do a "full" get checkers
+    // when making a move: do a "partial" get checkers using the previous state
     if (white) {
         getCheckers_cst(p_board, true);
     } else {
@@ -1863,6 +1869,20 @@ pub fn getCheckers(p_board: *Board_state, white: bool) void {
     }
     return;
 }
+//pub fn getPartialCheckers(p_board: *Board_state, whiteMoved: bool, lastMove: IMove) void {
+//    // this method assumes that the previous move performed was legal, as the moveGen should not let it go through
+//    // thus the current player who made the move should not be in check
+//    const to: u8 = lastMove.getTo();
+//    const toPiece: e_piece = p_board.
+//    if (whiteMoved) {
+//        p_board.wCheckersBB = EMPTY;
+//    } else {
+//        p_board.bCheckersBB = EMPTY;
+//    }
+//
+//    return;
+//}
+
 pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
     var rq: u64 = undefined;
     var bq: u64 = undefined;
@@ -1874,16 +1894,18 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
         bq = p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)];
         n = p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)];
         p = p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
-        king_E = @enumFromInt(bitscan(p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)]));
+        king_E = p_board.wKingSq;
     } else {
         rq = p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)];
         bq = p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)];
         n = p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)];
         p = p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
-        king_E = @enumFromInt(bitscan(p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)]));
+        king_E = p_board.bKingSq;
     }
 
-    var directChecks = (getBishopAttacks(p_board.occupiedBB, king_E) & bq) | (getRookAttacks(p_board.occupiedBB, king_E) & rq);
+    const cachedBishAtt = getBishopAttacks(p_board.occupiedBB, king_E);
+    const cachedRookAtt = getRookAttacks(p_board.occupiedBB, king_E);
+    var directChecks = (cachedBishAtt & bq) | (cachedRookAtt & rq);
     var _check = directChecks;
     while (_check != EMPTY) {
         const checksq = bitscan(_check);
@@ -1897,14 +1919,16 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
         p_board.pinnedBB = moveGenl.getPinned_avx2(p_board, white);
     } else {
         var pinned: u64 = 0;
-        var pinner = chess.xrayRookAttacks(p_board.occupiedBB, p_board.c_occupiedBB[@intFromBool(white)], king_E) & rq;
+        const rBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedRookAtt) ^ p_board.occupiedBB;
+        var pinner = (cachedRookAtt ^ getRookAttacks(rBlockers, king_E)) & rq;
         while (pinner != chess.EMPTY) {
             const pinsq = chess.bitscan(pinner);
             pinner &= pinner - 1;
             pinned |= chess.inBetween(@enumFromInt(pinsq), king_E);
         }
 
-        pinner = chess.xrayBishopAttacks(p_board.occupiedBB, p_board.c_occupiedBB[@intFromBool(white)], king_E) & bq;
+        const bBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedBishAtt) ^ p_board.occupiedBB;
+        pinner = (cachedBishAtt ^ getBishopAttacks(bBlockers, king_E)) & bq;
         while (pinner != chess.EMPTY) {
             const pinsq = chess.bitscan(pinner);
             pinner &= pinner - 1;
