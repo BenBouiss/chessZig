@@ -317,7 +317,7 @@ const guiState = struct {
         }
         p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
         if (p_self.match.availableMoves.len == 0) {
-            if (p_self.match.chessState.isLegal(p_self.match.chessState.turn)) {
+            if (p_self.match.chessState.isLegal(p_self.match.chessState.whiteToMove())) {
                 p_self.match.status = .StaleMate;
                 return false;
             } else {
@@ -383,7 +383,7 @@ const guiState = struct {
         try self.respond(msg);
     }
     pub fn getCurrentPlayer(self: *guiState) *player {
-        return &self.match.playerInv[@intFromEnum(self.match.chessState.turn)];
+        return &self.match.playerInv[@intFromBool(self.match.chessState.whiteToMove())];
     }
     pub fn allPlayersConnected(self: *guiState) bool {
         return self.match.playerInv[0].engineUsed.alive and self.match.playerInv[1].engineUsed.alive;

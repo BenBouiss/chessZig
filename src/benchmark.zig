@@ -32,21 +32,20 @@ pub const benchmarkResult = struct {
     }
     pub fn addNode(p_self: *benchmarkResult, p_move: *const IMove) void {
         p_self.n_nodes += 1;
-        if (p_move.isCapture()) {
-            p_self.n_captures += 1;
-        }
-
         if (p_move.isDoublePush()) {
             p_self.n_doublePawn += 1;
-        }
-        if (p_move.isEnpassant()) {
+        } else if (p_move.isEnpassant()) {
             p_self.n_enpassants += 1;
-        }
-        if (p_move.isCastle()) {
-            p_self.n_castles += 1;
-        }
-        if (p_move.isPromotion()) {
+            p_self.n_captures += 1;
+        } else if (p_move.isPromotion()) {
             p_self.n_promotions += 1;
+            if (p_move.isCapture()) {
+                p_self.n_captures += 1;
+            }
+        } else if (p_move.isCapture()) {
+            p_self.n_captures += 1;
+        } else if (p_move.isCastle()) {
+            p_self.n_castles += 1;
         }
     }
     pub fn printInfo(self: benchmarkResult) void {
@@ -149,6 +148,7 @@ pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{bench_res.n_hashRetrieve});
             std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
         }
+        //        std.debug.assert(bench_res.n_nodes == ExpectedBenchmarkResults[depth]);
     }
 }
 
@@ -157,8 +157,8 @@ pub fn test_benchmark() void {
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    //nodeExplorationBenchmark(&game_state, 7, 1, false);
-    nodeBenchmark_debug(&game_state, 7, false);
+    nodeExplorationBenchmark(&game_state, 7, 1, false);
+    //nodeBenchmark_debug(&game_state, 7, false);
 }
 
 pub fn main() !void {

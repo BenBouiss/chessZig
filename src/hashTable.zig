@@ -10,7 +10,6 @@ const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
 
 const e_piece = chess.e_piece;
-const e_color = chess.e_color;
 const e_square = squarel.e_square;
 const useHash = build_options.useHash;
 const scoreType = heuristicl.scoreType;
@@ -237,7 +236,7 @@ pub fn initZobristKeys(rng: std.Random) void {
 pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
     // for better perfs look for incremental xor key update using the previous move
 
-    var retKey = zobristKeys.turnKey[@intFromEnum(p_board.turn)];
+    var retKey = zobristKeys.turnKey[@intFromBool(p_board.whiteToMove())];
     for (0..(chess.N_PIECES_TYPES) * 2) |i| {
         var bb = p_board.pieceBB[i];
         while (bb != chess.EMPTY) {

@@ -13,6 +13,7 @@ const e_direction = chess.e_direction;
 const squareInfo = squarel.squareInfo;
 
 pub const cachedTables: AttackTable = AttackTable.init();
+pub const cachedKingTable: kingTable = kingTable.init();
 
 // https://www.chessprogramming.org/Square_Attacked_By#Obstructed
 pub var arrRectangular: [64][64]u64 = undefined;
@@ -24,44 +25,50 @@ pub fn _initTables() void {
 }
 
 pub const AttackTable = struct {
-    RookAttack: [N_SQUARES]u64 = undefined,
-    BishopAttack: [N_SQUARES]u64 = undefined,
-    QueenAttack: [N_SQUARES]u64 = undefined,
-    //PawnAttack: [N_SQUARES]u64 = undefined,
-    //KnightAttack: [N_SQUARES]u64 = undefined,
-    KingAttack: [N_SQUARES]u64 = undefined,
-    SimplePawnAttack: [NUMBER_PLAYER][N_SQUARES]u64 = undefined,
     rayAttacks: [64][8]u64 = undefined,
 
     pub fn init() AttackTable {
         var ret: AttackTable = .{};
         initRayAttackDiag(&ret);
         initRayAttacks(&ret);
-        initMaskAttacks(&ret);
         return ret;
     }
+};
+pub const kingTable = struct {
+    KingAttack: [N_SQUARES]u64 = undefined,
 
-    pub fn print(self: AttackTable) void {
-        std.debug.print("Ben \n", .{});
-        chess.print_bitboard(self.RookAttack[10]);
+    pub fn init() kingTable {
+        var ret: kingTable = .{};
+        initKingAttacks(&ret);
+        return ret;
     }
 };
 
-pub fn initMaskAttacks(table: *AttackTable) void {
-    var diagsMask: [N_SQUARES][2]u64 = undefined;
+pub fn initKingAttacks(table: *kingTable) void {
     for (0..N_SQUARES) |sq| {
-        diagsMask[sq][0] = chess.diagonalMask(@intCast(sq));
-        diagsMask[sq][1] = chess.antiDiagMask(@intCast(sq));
-        table.BishopAttack[sq] = (diagsMask[sq][0] | diagsMask[sq][1]);
-        table.QueenAttack[sq] = (diagsMask[sq][0] | diagsMask[sq][1]);
-
-        table.RookAttack[sq] = table.rayAttacks[sq][0] | table.rayAttacks[sq][1] | table.rayAttacks[sq][2] | table.rayAttacks[sq][3];
-
-        table.QueenAttack[sq] |= table.RookAttack[sq];
-        table.SimplePawnAttack[@intFromEnum(e_color.WHITE)][sq] = chess.simplePawnMask(@enumFromInt(sq), e_color.WHITE);
-        table.SimplePawnAttack[@intFromEnum(e_color.BLACK)][sq] = chess.simplePawnMask(@enumFromInt(sq), e_color.BLACK);
-        table.KingAttack[sq] = chess.kingAttacks(@intCast(sq));
+        table.KingAttack[sq] = kingAttacks(@intCast(sq));
     }
+}
+pub fn kingAttacks(sq: i8) u64 {
+    var ret: u64 = chess.EMPTY;
+    const pos: u64 = (ONE << @intCast(sq));
+
+    ret |= (pos >> 8);
+    ret |= (pos << 8);
+
+    if (pos & chess.notAFile != 0) {
+        ret |= (pos >> 1);
+        ret |= (pos << 7);
+        ret |= (pos >> 9);
+    }
+
+    if (pos & chess.notHFile != 0) {
+        ret |= (pos << 1);
+        ret |= (pos << 9);
+        ret |= (pos >> 7);
+    }
+
+    return ret;
 }
 
 pub fn initRayAttacks(table: *AttackTable) void {
