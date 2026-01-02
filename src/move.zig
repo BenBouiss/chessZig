@@ -23,10 +23,6 @@ pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 const MOVE_STR_MAX_LENGTH = 5;
 
-//pub fn build_move(p_board: *chess.Board_state, from: u8, to: u8, flag: u8, piece: e_piece) IMove {
-//    return _build_move(from, to, flag, piece);
-//}
-
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     var m_move: u16 = (flag & 0xF);
     var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare) & 0xFF);
