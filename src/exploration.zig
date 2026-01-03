@@ -12,23 +12,13 @@ const threadingl = @import("search/threading.zig");
 const alphaBetal = @import("search/alphaBeta.zig");
 const perftl = @import("search/perft.zig");
 
-const build_options = @import("build_options");
-
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
-const typedMoveContainer = movel.typedMoveContainer;
 const scoreType = heuristicl.scoreType;
 const moveLine = movel.moveLine;
 
 const threadInfo = threadingl.threadInfo;
 const threadInfo_container = threadingl.threadInfo_container;
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-const GLOBAL_ALLOC = GPA.allocator();
-
-const useHash = build_options.useHash;
-const useDebug = build_options.useDebug;
-
-const assert = std.debug.assert;
 
 pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition };
 
@@ -40,19 +30,6 @@ pub const moveDecision = struct {
         p_self.scoring = -p_self.scoring;
     }
 };
-pub const moveDecisionExt = struct {
-    move: IMove = .{},
-    line: moveLine = .{},
-    scoring: scoreType = 0,
-    timeTake: u64 = 0, //seconds
-    pub fn invertScore(p_self: *moveDecisionExt) void {
-        p_self.scoring = -p_self.scoring;
-    }
-    pub fn isBetter(p_self: *moveDecisionExt, other: *moveDecisionExt) bool {
-        return p_self.scoring > other.scoring;
-    }
-};
-
 pub fn getScoreMaskFromTurn(white: bool) i8 {
     if (white) {
         return 1;
@@ -60,23 +37,6 @@ pub fn getScoreMaskFromTurn(white: bool) i8 {
     return -1;
 }
 
-pub const uciSearcher = struct {
-    config: enginel.goArgStruct = .{},
-    bestMove: moveDecisionExt = .{},
-    nThreads: u32 = 1,
-    endCounter: u16 = 0,
-    searching: bool = false,
-    interrupt: bool = false,
-    pub fn reset(p_self: *uciSearcher) void {
-        p_self.endCounter = 0;
-        p_self.interrupt = false;
-        p_self.searching = false;
-        p_self.bestMove = .{};
-    }
-    pub fn printInfo(self: uciSearcher) void {
-        std.debug.print("searcher thread: {d}\n", .{self.nThreads});
-    }
-};
 pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8) bool {
     var moveArray: moveContainer = undefined;
 

@@ -6,6 +6,7 @@ const explorationl = @import("exploration.zig");
 const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
 const hashl = @import("hashTable.zig");
+const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
 
 const mailn = @import("main.zig");
@@ -19,7 +20,7 @@ const threadInfo = threadingl.threadInfo;
 const threadInfo_container = threadingl.threadInfo_container;
 const threadPackageArray = threadingl.threadPackageArray;
 const scoreType = heuristicl.scoreType;
-const moveDecisionExt = explorationl.moveDecisionExt;
+const moveDecisionExt = schedulerl.moveDecisionExt;
 const debug_err = chessl.debug_err;
 
 /// Benchmark function to test the node generation speed in
@@ -91,7 +92,6 @@ pub fn dispatchBenchmark(p_engine: *engine, p_threadPack: *threadPackageArray, d
     return true;
 }
 
-
 pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
     p_info.running = true;
 
@@ -100,6 +100,7 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
 
     var currentDecision: moveDecisionExt = .{};
     for (0..p_startingMoves.items.len) |i| {
+        p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
         _ = p_state.makeMoveUpdate(move);
 
@@ -108,6 +109,9 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
         const score = -moveSearchLoop(p_state, p_info, depth - 1, &currentDecision, alpha, beta);
 
         _ = p_state.undoMoveRestore();
+
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
 
         if (i == 0 or p_info.currentBest.scoring < score) {
             p_info.currentBest = currentDecision;
@@ -142,10 +146,12 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     }
 
     const fmoves: movel.moveContainer = moveGenl.generateLegalMoves(p_state);
+    const turn = p_state.whiteToMove();
     var _alpha = alpha;
     var decision: moveDecisionExt = .{};
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
+        p_state.stack.push(&p_state.makeFrame());
         _ = p_state.makeMoveUpdate(move);
 
         _ = decision.line.append(move);
@@ -159,6 +165,8 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
         decision.line.len -= 1;
 
         _ = p_state.undoMoveRestore();
+        const popped = (p_state.stack.pop());
+        p_state.loadFrame(&popped);
 
         if (currentLine.scoring > _alpha) {
             _alpha = currentLine.scoring;
@@ -168,7 +176,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
         }
     }
     if (fmoves.len == 0) {
-        if (!p_state.isLegal(p_state.whiteToMove())) {
+        if (!p_state.isLegal(turn)) {
             currentLine.scoring = -(heuristicl.simpleCheckMateScore + depth);
         } else {
             currentLine.scoring = heuristicl.simpleStalemateScore;

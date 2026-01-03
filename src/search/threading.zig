@@ -2,10 +2,10 @@ const configl = @import("../config.zig");
 const enginel = @import("../engine.zig");
 const movel = @import("../move.zig");
 const chessl = @import("../chess.zig");
-const explorationl = @import("../exploration.zig");
 const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
 const hashl = @import("../hashTable.zig");
+const schedulerl = @import("scheduler.zig");
 const mailn = @import("../main.zig");
 
 const std = @import("std");
@@ -15,7 +15,7 @@ const IMove = movel.IMove;
 const Board_state = chessl.Board_state;
 const scoreType = heuristicl.scoreType;
 const debug_err = chessl.debug_err;
-const moveDecisionExt = explorationl.moveDecisionExt;
+const moveDecisionExt = schedulerl.moveDecisionExt;
 
 /// Benchmark function to test the node generation speed in
 /// "real world" settings mainly computing heuristics...

@@ -355,7 +355,6 @@ pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) bool {
 pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool {
     assert(turnToken.len != 0);
     if (turnToken[0] == '-') {
-        //p_state.castling = 0;
         p_state.stat.WCastlingK = false;
         p_state.stat.WCastlingQ = false;
         p_state.stat.BCastlingK = false;
@@ -365,15 +364,11 @@ pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool
             const letter = turnToken[i];
             if (letter == 'K' or letter == 'H') {
                 p_state.stat.WCastlingK = true;
-                //p_state.castling |= 1;
             } else if (letter == 'Q' or letter == 'A') {
-                //p_state.castling |= 2;
                 p_state.stat.WCastlingQ = true;
             } else if (letter == 'k' or letter == 'h') {
-                //p_state.castling |= 4;
                 p_state.stat.BCastlingK = true;
             } else if (letter == 'q' or letter == 'a') {
-                //p_state.castling |= 8;
                 p_state.stat.BCastlingQ = true;
             }
         }
@@ -639,7 +634,6 @@ pub const Board_state = struct {
     turn_count: u64 = 0,
     stat: status = .{},
 
-    stat: status,
     lastMove: IMove = .{},
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,

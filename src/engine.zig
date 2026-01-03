@@ -9,6 +9,7 @@ const hashTablel = @import("hashTable.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
 const speedTestl = @import("speedTest.zig");
+const schedulerl = @import("search/scheduler.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -58,7 +59,7 @@ pub const inputChannel = struct {
     }
     fn acquireLock(p_self: *inputChannel) void {
         while (p_self.lock) {
-            //std.Thread.sleep((1 / TICKRATE) * (std.math.pow(u64, 10, 9)));
+            std.Thread.sleep(configl.WAIT_TICKRATE_NS);
         }
         p_self.lock = true;
     }
@@ -160,7 +161,8 @@ pub const engine = struct {
     workingThreads: std.ArrayList(std.Thread),
     status: engineStatus = .{},
     input: inputChannel,
-    searcher: explorationl.uciSearcher,
+    searcher: schedulerl.uciSearcher,
+
     alloc: std.mem.Allocator,
     uciMode: bool = false,
     id: engineIdentification = .{},
@@ -168,6 +170,7 @@ pub const engine = struct {
 
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
+        ret.alloc = GLOBAL_ALLOC;
         ret.input = try inputChannel.init(alloc);
         ret.status = .{};
         ret.id = .{};
@@ -177,7 +180,6 @@ pub const engine = struct {
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
 
-        ret.alloc = GLOBAL_ALLOC;
         ret.uciMode = false;
         try ret.initOptions();
 
@@ -563,7 +565,7 @@ pub const engine = struct {
         p_self.searcher.config = goArg;
         p_self.searcher.nThreads = p_self.options.nThreads;
         p_self.status.positionProvided = false;
-        return explorationl.dispatchUciGoCmd(p_self, cmdBuffer);
+        return schedulerl.dispatchUciGoCmd(p_self, cmdBuffer);
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         _ = cmdBuffer;
