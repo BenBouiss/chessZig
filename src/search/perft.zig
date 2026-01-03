@@ -36,8 +36,6 @@ const useDebug = build_options.useDebug;
 
 const assert = std.debug.assert;
 
-pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition };
-
 pub fn dispatchUciPerftCmd(p_engine: *enginel.engine) bool {
     const dispatchThread = std.Thread.spawn(.{}, dispatchUciPerftThreads, .{p_engine}) catch {
         return false;

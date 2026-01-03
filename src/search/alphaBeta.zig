@@ -5,12 +5,13 @@ const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
 const explorationl = @import("../exploration.zig");
 const threadingl = @import("threading.zig");
+const schedulerl = @import("scheduler.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const scoreType = heuristicl.scoreType;
 
-const moveDecisionExt = explorationl.moveDecisionExt;
+const moveDecisionExt = schedulerl.moveDecisionExt;
 const threadInfo = threadingl.threadInfo;
 
 pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
