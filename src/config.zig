@@ -27,8 +27,11 @@ pub const MAX_ELO: u32 = 3000;
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
-pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.1;
+pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
+pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
 pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
+pub var SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR: u16 = 3;
+pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 4;

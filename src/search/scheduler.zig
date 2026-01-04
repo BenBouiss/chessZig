@@ -43,7 +43,6 @@ pub const moveDecisionExt = struct {
     move: IMove = .{},
     line: moveLine = .{},
     scoring: scoreType = 0,
-    timeTake: u64 = 0, //seconds
     pub fn invertScore(p_self: *moveDecisionExt) void {
         p_self.scoring = -p_self.scoring;
     }
@@ -52,9 +51,9 @@ pub const moveDecisionExt = struct {
     }
 };
 
-const TIME_BUFFER_SIZE: usize = 10;
+const TIME_BUFFER_SIZE: usize = 20;
 pub const timeManager = struct {
-    timeBuffer: [TIME_BUFFER_SIZE]usize,
+    timeBuffer: [TIME_BUFFER_SIZE]timeDecision = undefined,
     len: usize = 0,
     currentIndex: usize = 0,
     searchStartTime: i64 = 0,
@@ -62,8 +61,11 @@ pub const timeManager = struct {
     pub fn startSearchTick(p_self: *timeManager) void {
         p_self.searchStartTime = std.time.milliTimestamp();
     }
-    pub fn timeSinceStart(p_self: *timeManager) i64 {
+    pub fn timeSinceStartMs(p_self: *timeManager) i64 {
         return std.time.milliTimestamp() - p_self.searchStartTime;
+    }
+    pub fn timeSinceStartSec(p_self: *timeManager) i64 {
+        return p_self.timeSinceStartMs() / std.time.ms_per_s;
     }
     pub fn reset(p_self: *timeManager) void {
         p_self.len = 0;
@@ -85,10 +87,21 @@ pub const timeManager = struct {
         }
         return acc / (p_self.len);
     }
+    pub fn isOvertimeSearching(p_self: *timeManager, remainingMsTime: i64) bool {
+        const _remainTime: f64 = @floatFromInt(remainingMsTime);
+        const maxTime: i64 = @intFromFloat(_remainTime * configl.SCHEDULER_MAX_TIME_FRCT);
+        return (p_self.timeSinceStartMs() > maxTime);
+    }
+    pub fn isOvertimeCritical(p_self: *timeManager, remainingMsTime: i64) bool {
+        const _remainTime: f64 = @floatFromInt(remainingMsTime);
+        const maxTime: i64 = @intFromFloat(_remainTime * configl.SCHEDULER_CRITICAL_TIME_FRCT);
+        return (p_self.timeSinceStartMs() > maxTime);
+    }
 };
 pub const timeDecision = struct {
     time: i64 = 0,
     depth: u16 = 0,
+    checked: bool = false,
 };
 
 // Exploration phase for an engine with d as the default depth
@@ -108,18 +121,21 @@ pub const timeDecision = struct {
 //
 // if during a search the waiting thread of the scheduler notices the time being in the red, the scheduler should be allowed to interrupt the search
 pub const scheduler = struct {
-    timeM: timeManager = undefined,
+    timeM: timeManager = .{},
     p_engine: *enginel.engine = undefined,
     engineSet: bool = false,
     p_threadPack: *threadPackageArray = undefined,
     alloc: std.mem.Allocator = undefined,
     finalChoice: moveDecisionExt = .{},
     searchDepth: u16 = 0,
+    searchIncrement: u16 = 0,
+    turn: bool = true,
 
     pub fn setEngine(p_self: *scheduler, p_engine: *enginel.engine) void {
         p_self.p_engine = p_engine;
         p_self.engineSet = true;
         p_self.alloc = p_engine.alloc;
+        p_self.turn = p_engine.state.whiteToMove();
     }
     pub fn setThreadPack(p_self: *scheduler, p_pack: *threadPackageArray) void {
         p_self.p_threadPack = p_pack;
@@ -130,15 +146,15 @@ pub const scheduler = struct {
         }
         const msg = std.fmt.allocPrint(p_self.alloc, "bestmove {s}", .{p_self.finalChoice.move.getStr()}) catch unreachable;
         defer p_self.alloc.free(msg);
-        if (p_self.p_engine.status.debugMode) {
-            std.debug.print("[DEBUG] sendFinal: final choice {s} with scoring: {d} at depth {d}\n", .{ p_self.finalChoice.move.getStr(), p_self.finalChoice.scoring, p_self.searchDepth });
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] sendFinal: final choice {s} with scoring: {d} at depth {d}\n", .{ p_self.finalChoice.move.getStr(), p_self.finalChoice.scoring, p_self.searchDepth + p_self.searchIncrement });
         }
         p_self.p_engine.respond(utilsl.trimStr(msg));
     }
     pub fn sendUpdate(p_self: *scheduler) void {
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
         const n_nodes: i64 = @intCast(res.n_nodeExplored);
-        const timeDelta = p_self.timeM.timeSinceStart();
+        const timeDelta = p_self.timeM.timeSinceStartMs();
 
         const msg = std.fmt.allocPrint(p_self.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
             return;
@@ -148,11 +164,10 @@ pub const scheduler = struct {
         return;
     }
     pub fn startSearch(p_self: *scheduler, depth: u16) !void {
-        if (p_self.p_engine.status.debugMode) {
+        if (p_self.isDebugMode()) {
             std.debug.print("[DEBUG] startSearch: starting search at depth: {d}\n", .{depth});
         }
         p_self.timeM.startSearchTick();
-        p_self.searchDepth = depth;
 
         for (0..p_self.p_threadPack.len) |thread_id| {
             p_self.p_threadPack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, alphaBetal.searchEntrypoint, .{ &p_self.p_threadPack.items(.chessState)[thread_id], &p_self.p_threadPack.items(.moves)[thread_id], &p_self.p_threadPack.items(._tInfo)[thread_id], depth });
@@ -179,7 +194,12 @@ pub const scheduler = struct {
         threadingl.joinOnThreadPack(p_self.p_threadPack);
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) void {
-        p_self.startSearch(depth) catch {
+        var _depth = depth;
+        if (depth == 0) {
+            _depth = 1;
+        }
+        p_self.searchDepth = _depth - 1;
+        p_self.startSearch(_depth - 1) catch {
             p_self.p_engine.searcher.searching = false;
             std.debug.print("[ERROR] waitingLoop: Cant start search\n", .{});
             return;
@@ -191,6 +211,7 @@ pub const scheduler = struct {
         p_self.finalChoice = res.currentBest;
     }
     pub fn waitingLoop(p_self: *scheduler) void {
+        p_self.searchIncrement = 0;
         while (true) {
             std.Thread.sleep(configl.INFO_TICKRATE_NS);
             p_self.sendUpdate();
@@ -201,15 +222,75 @@ pub const scheduler = struct {
             }
             if (stat == .FINISHED) {
                 // need logic here wether to launch new search if time available
-                p_self.extractBest();
-                p_self.sendFinal();
-                break;
+                p_self.timeM.append(.{ .time = p_self.timeM.timeSinceStartMs(), .checked = p_self.p_engine.state.isLegal(p_self.turn) });
+                if (!p_self.canExtendSearch()) {
+                    p_self.extractBest();
+                    p_self.sendFinal();
+                    p_self.commitNewSearchDepth();
+                    break;
+                }
+                p_self.searchIncrement += 1;
+                if (p_self.isDebugMode()) {
+                    std.debug.print("[DEBUG] waitingLoop: Increasing the search depth\n", .{});
+                }
+                p_self.startSearch(p_self.searchDepth + p_self.searchIncrement) catch {
+                    p_self.extractBest();
+                    p_self.sendFinal();
+                    p_self.commitNewSearchDepth();
+                    break;
+                };
             }
-            if (stat == .CONTINUE) {}
+            if (stat == .CONTINUE) {
+                if (p_self.timeM.isOvertimeCritical(p_self.timeRemaining())) {
+                    p_self.handleInterrupt();
+                    p_self.searchIncrement = 0;
+                    p_self.searchDepth -= 2;
+
+                    if (p_self.isDebugMode()) {
+                        std.debug.print("[DEBUG] waitingLoop: CRITICALY LOW TIME! RE LAUNCHING AT DEPTH - 2\n", .{});
+                    }
+                    p_self.startSearch(p_self.searchDepth) catch {
+                        return;
+                    };
+                }
+            }
         }
         p_self.p_engine.searcher.searching = false;
         // TODO FIX ME: UCI style thingy here
         p_self.engineSet = false;
+    }
+    pub fn commitNewSearchDepth(p_self: *scheduler) void {
+        // saves the new depth for future use, ie make the search deeper and deeper as the game goes on
+        if (p_self.timeM.isOvertimeSearching(p_self.timeRemaining()) and (p_self.p_engine.searcher.config.depth != 0)) {
+            p_self.p_engine.searcher.config.depth += p_self.searchIncrement;
+            p_self.p_engine.options.depthLevel -= 1;
+            if (p_self.isDebugMode()) {
+                std.debug.print("[DEBUG] commitNewSearchDepth: The loop took too long decreasing depth by one for next iter (new depth: {d})\n", .{p_self.p_engine.searcher.config.depth});
+            }
+        } else {
+            p_self.p_engine.options.depthLevel += p_self.searchIncrement;
+        }
+    }
+    pub fn timeRemaining(p_self: *scheduler) i64 {
+        if (p_self.turn) {
+            return p_self.p_engine.searcher.config.wtime;
+        }
+        return p_self.p_engine.searcher.config.btime;
+    }
+    pub fn canExtendSearch(p_self: *scheduler) bool {
+        if (p_self.timeM.isOvertimeSearching(p_self.timeRemaining())) {
+            return false;
+        }
+        const prevTime: i64 = p_self.timeM.timeSinceStartMs();
+        const floatTime: f64 = @floatFromInt(p_self.timeRemaining());
+        const maxTime: i64 = @intFromFloat(floatTime * configl.SCHEDULER_MAX_TIME_FRCT);
+        if (((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime) and (p_self.searchIncrement < configl.SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR)) {
+            return true;
+        }
+        return false;
+    }
+    pub inline fn isDebugMode(p_self: *scheduler) bool {
+        return p_self.p_engine.status.debugMode;
     }
 };
 

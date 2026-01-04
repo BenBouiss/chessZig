@@ -1,5 +1,4 @@
 const chess = @import("chess.zig");
-const exploration = @import("exploration.zig");
 const movel = @import("move.zig");
 const std = @import("std");
 const mainl = @import("main.zig");
