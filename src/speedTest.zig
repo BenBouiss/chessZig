@@ -144,11 +144,11 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
         return heuristicl.simpleStalemateScore;
     }
 
-    const entry = hashl.getEntryFromPerft(p_state.key, @intCast(depth));
+    const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
     if (entry.valid) {
         p_info.n_hashRetrieve += 1;
-        currentLine.scoring = entry.evaluation;
-        return entry.evaluation;
+        currentLine.scoring = entry.eval();
+        return entry.eval();
     }
 
     const fmoves: movel.moveContainer = moveGenl.generateLegalMoves(p_state);

@@ -18,24 +18,36 @@ pub const Key = struct {
     code: u64 = 0,
 };
 
+const entryVal = union { moveAmount: u64, evaluation: scoreType };
+
 pub const Hash_entry = struct {
     key: Key = .{},
 
-    moveAmount: u64 = 0,
-    evaluation: scoreType = 0,
+    val: entryVal = undefined,
+    //moveAmount: u64 = 0,
+    //evaluation: scoreType = 0,
 
     exploredDeph: u8 = 0,
     age: u8 = 0,
 
     valid: bool = false,
     lock: bool = false,
+    pub inline fn moveA(self: Hash_entry) u64 {
+        return self.val.moveAmount;
+    }
+
+    pub inline fn eval(self: Hash_entry) scoreType {
+        return self.val.evaluation;
+    }
 };
 
 pub fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
+    //return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .moveAmount = moveAmount }, .valid = true };
 }
 pub fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
-    return .{ .key = key, .exploredDeph = depth, .valid = true, .evaluation = eval };
+    //return .{ .key = key, .exploredDeph = depth, .valid = true, .evaluation = eval };
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .evaluation = eval }, .valid = true };
 }
 pub const Hash_bucket = struct {
     entries: [configl.ITEM_PER_BUCKET]Hash_entry,
@@ -47,6 +59,7 @@ pub const Hash_bucket = struct {
     pub fn printSize(p_self: *Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
         std.debug.print("[DEBUG] printSize: entries size is {d} bytes\n", .{@sizeOf(Hash_entry)});
+        std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryVal)});
         _ = p_self;
     }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
