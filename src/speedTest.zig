@@ -2,7 +2,6 @@ const configl = @import("config.zig");
 const enginel = @import("engine.zig");
 const movel = @import("move.zig");
 const chessl = @import("chess.zig");
-const explorationl = @import("exploration.zig");
 const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
 const hashl = @import("hashTable.zig");
@@ -29,6 +28,13 @@ const debug_err = chessl.debug_err;
 ///
 pub fn executeEngineBenchmark(p_engine: *engine) bool {
     return dispatchBenchmarkExecutor(p_engine);
+}
+
+pub fn getScoreMaskFromTurn(white: bool) i8 {
+    if (white) {
+        return 1;
+    }
+    return -1;
 }
 
 pub fn dispatchBenchmarkExecutor(p_engine: *engine) bool {
@@ -126,7 +132,7 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
     p_info.running = false;
 }
 pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: u16, currentLine: *moveDecisionExt, alpha: scoreType, beta: scoreType) scoreType {
-    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.whiteToMove());
+    const color_mask: i8 = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);

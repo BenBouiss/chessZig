@@ -6,10 +6,6 @@ const squarel = @import("square.zig");
 const tablel = @import("moveTables.zig");
 const magicl = @import("magic.zig");
 const utilsl = @import("utils.zig");
-const interfacel = @import("interface.zig");
-
-const genTest = @import("extern/chessZig/src/move_generation.zig");
-const chessTest = @import("extern/chessZig/src/chess.zig");
 
 const std = @import("std");
 
@@ -51,7 +47,6 @@ pub fn generateLegalMoves(p_board: *Board_state) moveContainer {
         //    _moves.print();
         //    chess.sanityCheckBoardState(p_board);
         //    @panic("test ");
-        //    //_ = interfacel.getUserStdinput();
         //}
         return moves;
     } else {

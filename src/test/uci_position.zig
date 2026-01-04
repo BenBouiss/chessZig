@@ -2,7 +2,6 @@ const chessl = @import("../chess.zig");
 const moveGenl = @import("../move_generation.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
-const explorationl = @import("../exploration.zig");
 const benchmarkl = @import("../benchmark.zig");
 const mainl = @import("../main.zig");
 
