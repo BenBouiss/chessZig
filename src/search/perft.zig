@@ -155,10 +155,10 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
     if (feats.useHash) {
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
-            p_info.n_hashRetrieve += @intCast(entry.moveAmount);
+            p_info.n_hashRetrieve += @intCast(entry.moveA());
 
-            p_info.n_nodeExplored += entry.moveAmount;
-            return entry.moveAmount;
+            p_info.n_nodeExplored += entry.moveA();
+            return entry.moveA();
         }
     }
 
@@ -223,8 +223,8 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
     if (comptime useHash) {
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
-            p_info.n_hashRetrieve += @intCast(entry.moveAmount);
-            return entry.moveAmount;
+            p_info.n_hashRetrieve += @intCast(entry.moveA());
+            return entry.moveA();
         }
     }
     var count: u64 = 0;
@@ -257,8 +257,8 @@ pub fn perft_debug_loop(p_state: *chess.Board_state, depth: u8, batched: bool, p
     if (comptime useHash) {
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
-            p_res.n_hashRetrieve += @intCast(entry.moveAmount);
-            return entry.moveAmount;
+            p_res.n_hashRetrieve += @intCast(entry.moveA());
+            return entry.moveA();
         }
     }
     var count: u64 = 0;

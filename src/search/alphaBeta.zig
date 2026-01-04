@@ -5,12 +5,15 @@ const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
+const hashl = @import("../hashTable.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const scoreType = heuristicl.scoreType;
 
 const moveDecisionExt = schedulerl.moveDecisionExt;
+const searchFeatures = schedulerl.searchFeatures;
+
 const threadInfo = threadingl.threadInfo;
 
 pub fn getScoreMaskFromTurn(white: bool) i8 {
@@ -20,7 +23,14 @@ pub fn getScoreMaskFromTurn(white: bool) i8 {
     return -1;
 }
 
-pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
+pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feature: searchFeatures) void {
+    if (feature.useHash) {
+        return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, true);
+    }
+    return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, false);
+}
+
+pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool) void {
     p_info.running = true;
 
     const alpha: scoreType = -heuristicl.simpleCheckMateScore;
@@ -30,7 +40,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
         const move = p_startingMoves.items[i];
         _ = p_state.makeMoveUpdate(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta);
+        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash);
 
         _ = p_state.undoMoveRestore();
 
@@ -41,7 +51,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     }
     p_info.running = false;
 }
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType) scoreType {
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool) scoreType {
     const color_mask: i8 = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
@@ -51,6 +61,13 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     if (p_state.isStaleMateRepetition()) {
         return heuristicl.simpleStalemateScore;
     }
+    if (comptime useHash) {
+        const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
+        if (entry.valid) {
+            p_info.n_hashRetrieve += 1;
+            return entry.eval();
+        }
+    }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     var _alpha = alpha;
@@ -59,7 +76,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         const move: IMove = fmoves.moves[i];
         _ = p_state.makeMoveUpdate(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha);
+        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, useHash);
 
         _ = p_state.undoMoveRestore();
 
@@ -79,6 +96,10 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         } else {
             finalScore = heuristicl.simpleStalemateScore;
         }
+    }
+    if (comptime useHash) {
+        const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), finalScore);
+        _ = hashl.hashTable.storeEntry(&s_entry);
     }
     return finalScore;
 }

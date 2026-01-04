@@ -20,6 +20,17 @@ const threadPackageArray = threadingl.threadPackageArray;
 
 pub const searchStatus = enum { CONTINUE, INTERRUPTED, FINISHED };
 
+pub const searchFeatures = struct {
+    useHash: bool = false,
+};
+pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
+    var ret: searchFeatures = .{};
+    if (p_engine.options.useHashTable) {
+        ret.useHash = true;
+    }
+    return ret;
+}
+
 pub const uciSearcher = struct {
     config: enginel.goArgStruct = .{},
     schedul: scheduler = .{},
@@ -168,9 +179,10 @@ pub const scheduler = struct {
             std.debug.print("[DEBUG] startSearch: starting search at depth: {d}\n", .{depth});
         }
         p_self.timeM.startSearchTick();
+        const feat = getSearchFeatures(p_self.p_engine);
 
         for (0..p_self.p_threadPack.len) |thread_id| {
-            p_self.p_threadPack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, alphaBetal.searchEntrypoint, .{ &p_self.p_threadPack.items(.chessState)[thread_id], &p_self.p_threadPack.items(.moves)[thread_id], &p_self.p_threadPack.items(._tInfo)[thread_id], depth });
+            p_self.p_threadPack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, alphaBetal.searchEntrypoint, .{ &p_self.p_threadPack.items(.chessState)[thread_id], &p_self.p_threadPack.items(.moves)[thread_id], &p_self.p_threadPack.items(._tInfo)[thread_id], depth, feat });
         }
     }
     pub fn getSearchStatus(p_self: *scheduler) searchStatus {
