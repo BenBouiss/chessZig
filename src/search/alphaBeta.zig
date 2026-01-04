@@ -3,7 +3,6 @@ const chess = @import("../chess.zig");
 const movel = @import("../move.zig");
 const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
-const explorationl = @import("../exploration.zig");
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 
@@ -13,6 +12,13 @@ const scoreType = heuristicl.scoreType;
 
 const moveDecisionExt = schedulerl.moveDecisionExt;
 const threadInfo = threadingl.threadInfo;
+
+pub fn getScoreMaskFromTurn(white: bool) i8 {
+    if (white) {
+        return 1;
+    }
+    return -1;
+}
 
 pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
     p_info.running = true;
@@ -36,7 +42,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     p_info.running = false;
 }
 fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType) scoreType {
-    const color_mask: i8 = explorationl.getScoreMaskFromTurn(p_state.whiteToMove());
+    const color_mask: i8 = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);

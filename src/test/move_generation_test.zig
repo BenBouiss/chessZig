@@ -2,7 +2,6 @@ const chessl = @import("../chess.zig");
 const moveGenl = @import("../move_generation.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
-const explorationl = @import("../exploration.zig");
 const benchmarkl = @import("../benchmark.zig");
 const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
@@ -35,7 +34,6 @@ test "perft" {
     try std.testing.expect(!hashl.isHashTable_init());
     for (1..perft_MAX_DEPTH + 1) |depth| {
         const _start: i64 = std.time.microTimestamp();
-        //try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 1, &tmp, true);
         const res = try perftl.perftThreadStart(&board, @intCast(depth), perft_THREAD, perft_BATCHED);
         const expect: i64 = @intCast(res.n_nodeExplored);
         try std.testing.expectEqual(expect, benchmarkl.ExpectedBenchmarkResults[depth]);

@@ -6,7 +6,6 @@ const mainl = @import("../main.zig");
 const utilsl = @import("../utils.zig");
 const configl = @import("../config.zig");
 const gconfigl = @import("../gui/config.zig");
-const explorationl = @import("../exploration.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
 const windowl = @import("window.zig");
@@ -15,7 +14,7 @@ const std = @import("std");
 const r = gconfigl.r;
 
 const e_color = chessl.e_color;
-const e_matchFlag = explorationl.e_matchFlag;
+pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition };
 const Board_state = chessl.Board_state;
 const e_square = squarel.e_square;
 const screenCoord = windowl.screenCoord;

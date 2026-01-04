@@ -4,7 +4,6 @@ const utilsl = @import("utils.zig");
 const chess = @import("chess.zig");
 const configl = @import("config.zig");
 const movel = @import("move.zig");
-const explorationl = @import("exploration.zig");
 const hashTablel = @import("hashTable.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
