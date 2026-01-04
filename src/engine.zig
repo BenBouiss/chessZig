@@ -28,10 +28,13 @@ pub const goArgStruct = struct {
     infinite: bool = false,
     type: e_goTypes = .DEFAULT,
     useBatched: bool = false,
+
+    // all times in ms
     wtime: u32 = 0,
     btime: u32 = 0,
     winc: u32 = 0,
     binc: u32 = 0,
+
     movestogo: u32 = 0,
     movetime: u32 = 0,
     nodes: u64 = 0,
@@ -614,23 +617,50 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
             goArgs.type = .PONDER;
             tokenIndex -= 1;
         } else if (utilsl.contains(arg, "wtime", .ignoreCase)) {
-            goArgs.wtime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.wtime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "btime", .ignoreCase)) {
-            goArgs.btime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.btime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "winc", .ignoreCase)) {
-            goArgs.winc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.winc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "binc", .ignoreCase)) {
-            goArgs.binc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.binc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "movestogo", .ignoreCase)) {
-            goArgs.movestogo = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.movestogo = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "depth", .ignoreCase)) {
-            goArgs.depth = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.depth = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "nodes", .ignoreCase)) {
-            goArgs.nodes = std.fmt.parseInt(u64, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.nodes = std.fmt.parseInt(u64, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "mate", .ignoreCase)) {
-            goArgs.mate = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.mate = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "movetime", .ignoreCase)) {
-            goArgs.movetime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch unreachable;
+            goArgs.movetime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
+                tokenIndex += 1;
+                continue;
+            };
         } else if (utilsl.contains(arg, "infinite", .ignoreCase)) {
             goArgs.infinite = true;
         } else {
