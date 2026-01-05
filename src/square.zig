@@ -77,10 +77,9 @@ pub const checkContainer = struct {
 pub fn convertBitBoardtoCheckContainer(bb: u64) checkContainer {
     var ret: checkContainer = .{};
     var _bb = bb;
-    var lsb: i8 = 0;
     while (_bb != 0) {
-        lsb = chess.bitscan(_bb);
-        _bb ^= (chess.ONE << @intCast(lsb));
+        const lsb = chess.bitscan(_bb);
+        _bb ^= chess.xToBitboard(lsb);
         _ = ret.addCheckSquare(squareInfo.init(@enumFromInt(lsb)));
     }
     return ret;

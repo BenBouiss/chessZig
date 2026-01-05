@@ -108,13 +108,13 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
     for (0..p_startingMoves.items.len) |i| {
         p_state.stack.push(&p_state.makeFrame());
         const move = p_startingMoves.items[i];
-        _ = p_state.makeMoveUpdate(move);
+        _ = p_state.makeMove(move);
 
         _ = currentDecision.line.append(move);
 
         const score = -moveSearchLoop(p_state, p_info, depth - 1, &currentDecision, alpha, beta);
 
-        _ = p_state.undoMoveRestore();
+        _ = p_state.undoMove();
 
         const popped = (p_state.stack.pop());
         p_state.loadFrame(&popped);
@@ -158,7 +158,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
         p_state.stack.push(&p_state.makeFrame());
-        _ = p_state.makeMoveUpdate(move);
+        _ = p_state.makeMove(move);
 
         _ = decision.line.append(move);
 
@@ -170,7 +170,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
         }
         decision.line.len -= 1;
 
-        _ = p_state.undoMoveRestore();
+        _ = p_state.undoMove();
         const popped = (p_state.stack.pop());
         p_state.loadFrame(&popped);
 

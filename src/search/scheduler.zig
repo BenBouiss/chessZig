@@ -178,6 +178,7 @@ pub const scheduler = struct {
         if (p_self.isDebugMode()) {
             std.debug.print("[DEBUG] startSearch: starting search at depth: {d}\n", .{depth});
         }
+        threadingl.zeroThreadPackArray(p_self.p_threadPack);
         p_self.timeM.startSearchTick();
         const feat = getSearchFeatures(p_self.p_engine);
 
