@@ -1,7 +1,5 @@
 const build_options = @import("build_options");
 
-pub const fastBitscan = build_options.fastBitscan;
-const ignoreChecks = build_options.fastBitscan;
 const useMagic = build_options.useMagic;
 
 const chess = @import("chess.zig");

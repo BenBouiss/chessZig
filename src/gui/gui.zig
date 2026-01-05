@@ -406,7 +406,7 @@ const guiState = struct {
             return err_gui_bestmove.unknownMove_error;
         }
 
-        p_self.match.chessState.makeMoveUpdate(moveArr.items[0]);
+        p_self.match.chessState.makeMove(moveArr.items[0]);
         return true;
     }
     pub fn executeOptionCmd(p_self: *guiState, cmdBuffer: []const u8) bool {

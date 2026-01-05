@@ -42,7 +42,7 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
 
         const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash);
 
-        _ = p_state.undoMoveRestore();
+        _ = p_state.undoMove();
 
         if (i == 0 or p_info.currentBest.scoring < score) {
             p_info.currentBest.move = move;
@@ -78,7 +78,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 
         const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, useHash);
 
-        _ = p_state.undoMoveRestore();
+        _ = p_state.undoMove();
 
         if (i == 0 or finalScore < score) {
             finalScore = score;

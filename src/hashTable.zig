@@ -18,6 +18,7 @@ pub const Key = struct {
     code: u64 = 0,
 };
 
+// note the gain in space is not visible in the debug build
 const entryVal = union { moveAmount: u64, evaluation: scoreType };
 
 pub const Hash_entry = struct {
@@ -253,7 +254,7 @@ pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
     for (0..(chess.N_PIECES_TYPES) * 2) |i| {
         var bb = p_board.pieceBB[i];
         while (bb != chess.EMPTY) {
-            const sq: u8 = @intCast(chess.bitscan(bb));
+            const sq: u8 = chess.bitscan(bb);
             bb &= bb - 1;
             retKey.code ^= zobristKeys.pieceKeys[i][sq].code;
         }

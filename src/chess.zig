@@ -54,7 +54,6 @@ pub const INVALID_ENPASSANT_FILE: u8 = 8;
 pub const EMPTY: u64 = 0;
 pub const ONE: u64 = 1;
 pub const UNIVERSE: u64 = std.math.maxInt(u64);
-//const UNIVERSE: u64 = -1;
 
 // see calc or src/utils.py
 pub const aFile: u64 = 0x101010101010101;
@@ -180,7 +179,8 @@ pub fn rotate180(bb: u64) u64 {
 // @return index (0..63) of least significant one bit
 //
 
-pub fn bitscan(bb: u64) i8 {
+pub fn bitscan(bb: u64) u8 {
+    // assumes bb is non empty
     if (comptime fastBitscan) {
         var ret: u32 = undefined;
         _ = intrinsicsl._BitScanForward64(&ret, bb);
@@ -189,10 +189,7 @@ pub fn bitscan(bb: u64) i8 {
         return bitscanK(bb);
     }
 }
-pub fn bitscanK(b: u64) i8 {
-    if (b == 0) {
-        return -1;
-    }
+pub fn bitscanK(b: u64) u8 {
     var lsb: u64 = (((b - 1)) ^ b) & b;
     var count: i8 = -1;
     while (lsb != 0) {
@@ -210,7 +207,7 @@ pub fn bitscanK(b: u64) i8 {
 // @return index (0..63) of most significant one bit
 ///
 /// This function and the one above are branchless version of bitScan and r_bitScan, function are from chessprogramming.org
-pub fn r_bitscan(bb: u64) i8 {
+pub fn r_bitscan(bb: u64) u8 {
     if (comptime fastBitscan) {
         var ret: u32 = undefined;
         _ = intrinsicsl._BitScanForwardReverse64(&ret, bb);
@@ -220,12 +217,9 @@ pub fn r_bitscan(bb: u64) i8 {
     }
 }
 
-pub fn r_bitscanK(b: u64) i8 {
-    if (b == 0) {
-        return -1;
-    }
+pub fn r_bitscanK(b: u64) u8 {
     var bb = b;
-    var count: i8 = -1;
+    var count: u8 = 0;
     while (bb != 0) {
         count += 1;
         bb = (bb >> 1);
@@ -416,8 +410,6 @@ pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Boar
 }
 
 pub fn getBoardFromUciFen(uciStr: []const u8, alloc: std.mem.Allocator, debug: bool) !Board_state {
-    // format position <fen> moves
-    //std.debug.print("[DEBUG] getBoardFromUciFen: {s}\n", .{uciStr});
     var ret = getBoardFromFen(alloc, uciStr) catch unreachable;
     try applyUciMoves(&ret, uciStr, alloc, debug);
     return ret;
@@ -435,7 +427,7 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.A
     for (0..moves.len) |i| {
         var move = moves.moves[i];
         fillMoveFromState(p_board, &move);
-        p_board.makeMoveUpdate(move);
+        p_board.makeMove(move);
         if (debug) {
             sanityCheckBoardState(p_board);
         }
@@ -876,14 +868,14 @@ pub const Board_state = struct {
         return true;
     }
 
-    pub fn undoMoveRestore(p_self: *Board_state) bool {
+    pub fn undoMove(p_self: *Board_state) bool {
         if (p_self.whiteToMove()) {
-            return undoMoveRestore_cst(p_self, false);
+            return undoMove_cst(p_self, false);
         } else {
-            return undoMoveRestore_cst(p_self, true);
+            return undoMove_cst(p_self, true);
         }
     }
-    pub fn undoMoveRestore_cst(p_self: *Board_state, comptime white: bool) bool {
+    pub fn undoMove_cst(p_self: *Board_state, comptime white: bool) bool {
         // test to reduce the undoMove load
 
         if (comptime useDebug) {
@@ -893,7 +885,7 @@ pub const Board_state = struct {
         const s_popped = (p_self.s_stack.pop());
         p_self.stat = s_popped;
 
-        const popped_move = p_self.lastMove;
+        const popped_move = p_self.getLastMove();
         const victim = p_self.victim;
 
         const toSq: u8 = popped_move.getTo();
@@ -971,14 +963,14 @@ pub const Board_state = struct {
 
         return true;
     }
-    pub fn makeMoveUpdate(p_self: *Board_state, move: IMove) void {
+    pub fn makeMove(p_self: *Board_state, move: IMove) void {
         if (p_self.whiteToMove()) {
-            p_self.makeMoveUpdate_cst(move, true);
+            p_self.makeMove_cst(move, true);
         } else {
-            p_self.makeMoveUpdate_cst(move, false);
+            p_self.makeMove_cst(move, false);
         }
     }
-    pub fn makeMoveUpdate_cst(p_self: *Board_state, move: IMove, comptime white: bool) void {
+    pub fn makeMove_cst(p_self: *Board_state, move: IMove, comptime white: bool) void {
         // test to reduce the makeMove load
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
@@ -1024,7 +1016,6 @@ pub const Board_state = struct {
 
         if (isKingPiece(fromPiece)) {
             if (toSq == (fromSq + 2)) {
-                //const castleBB = (xToBitboard(toSq - 1) | (xToBitboard(toSq + 1)));
                 p_self.pieceArray[toSq + 1] = .nEmptySquare;
 
                 if (comptime white) {
@@ -1059,7 +1050,6 @@ pub const Board_state = struct {
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq + 1)]);
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq - 2)]);
                 }
-                //
             }
             if (comptime white) {
                 p_self.wKingSq = @enumFromInt(toSq);
@@ -1500,12 +1490,8 @@ pub fn getAttackPositiveRay(occupied: u64, dir: e_direction, square: e_square) u
     if (blocking == 0) {
         return attacks;
     }
-    const sq: i8 = bitscan(blocking);
-    if (sq == -1) {
-        return EMPTY;
-    }
-    const _sq: u8 = @bitCast(sq);
-    return attacks ^ cachedTables.rayAttacks[_sq][@intFromEnum(dir)];
+    const sq: u8 = bitscan(blocking);
+    return attacks ^ cachedTables.rayAttacks[sq][@intFromEnum(dir)];
 }
 
 pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) u64 {
@@ -1514,7 +1500,7 @@ pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) 
     if (blocking == 0) {
         return attacks;
     }
-    var sq: i8 = undefined;
+    var sq: u8 = undefined;
     switch (dir) {
         e_direction.NORTH, e_direction.NORTHEAST, e_direction.NORTHWEST, e_direction.EAST => {
             sq = bitscan(blocking);
@@ -1525,8 +1511,7 @@ pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) 
         },
     }
 
-    const _sq: u8 = @bitCast(sq);
-    return attacks ^ cachedTables.rayAttacks[_sq][@intFromEnum(dir)];
+    return attacks ^ cachedTables.rayAttacks[sq][@intFromEnum(dir)];
 }
 
 pub fn diagonalAttacks(bb: u64, sq: e_square) u64 {
@@ -1650,11 +1635,10 @@ pub inline fn _AllAttackKnightMask(bb_piece: u64) u64 {
 
 pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
     var ret: u64 = EMPTY;
-    var sq: i8 = 0;
     var sq_e: e_square = e_square.a1;
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
-        sq = bitscan(_bb_piece);
+        const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
 
         sq_e = @enumFromInt(sq);
@@ -1665,11 +1649,10 @@ pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
 
 pub fn _AllAttackRookMask(bb_piece: u64, occ_bb: u64) u64 {
     var ret: u64 = EMPTY;
-    var sq: i8 = 0;
     var sq_e: e_square = e_square.a1;
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
-        sq = bitscan(_bb_piece);
+        const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
 
         sq_e = @enumFromInt(sq);
@@ -1680,11 +1663,10 @@ pub fn _AllAttackRookMask(bb_piece: u64, occ_bb: u64) u64 {
 
 pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
     var ret: u64 = EMPTY;
-    var sq: i8 = 0;
     var sq_e: e_square = e_square.a1;
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
-        sq = bitscan(_bb_piece);
+        const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
         sq_e = @enumFromInt(sq);
 
@@ -1696,10 +1678,9 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
 
 pub fn _AllAttackKingMask(bb_piece: u64) u64 {
     var ret: u64 = EMPTY;
-    var sq: i8 = 0;
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
-        sq = bitscan(_bb_piece);
+        const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
         ret |= getKingAttacks(@enumFromInt(sq));
     }

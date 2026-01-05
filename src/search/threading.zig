@@ -102,7 +102,11 @@ pub fn getCombinedFromPack(p_array: *threadPackageArray) threadInfo {
     }
     return ret;
 }
-
+pub fn zeroThreadPackArray(p_array: *threadPackageArray) void {
+    for (0..p_array.len) |i| {
+        p_array.items(._tInfo)[i].n_nodeExplored = 0;
+    }
+}
 pub fn freeThreadPackArray(alloc: std.mem.Allocator, p_array: *threadPackageArray) void {
     for (0..p_array.len) |i| {
         var cell: std.ArrayList(IMove) = p_array.items(.moves)[i];
