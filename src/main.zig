@@ -11,9 +11,14 @@ const benchl = @import("benchmark.zig");
 const speedTestl = @import("speedTest.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
+const evalEngl = @import("evaluateEngine.zig");
+const guil = @import("gui/gui.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
+
+const schedulerl = @import("search/scheduler.zig");
+const moveDecisionExt = schedulerl.moveDecisionExt;
 
 pub fn initAll() void {
     magicl._initMagic(&magicl.magicTable);
@@ -35,19 +40,65 @@ pub fn test_speedTest() !void {
     //engine.uciMode = true;
     engine.executeBuffer("uci");
     engine.executeBuffer("debug on");
-    engine.executeBuffer("setoption name hash value 100");
+    engine.executeBuffer("setoption name hash value 1");
     engine.executeBuffer("isready");
     engine.executeBuffer("benchmark");
 
+    std.Thread.sleep(std.time.ns_per_s);
     while (engine.searcher.searching) {
         std.Thread.sleep(configl.INFO_TICKRATE_NS);
     }
 }
 
+fn initEngine() !enginel.engine {
+    var engine: enginel.engine = try enginel.engine.init(GLOBAL_ALLOC);
+    engine.executeBuffer("uci");
+    engine.executeBuffer("debug on");
+    engine.executeBuffer("isready");
+    return engine;
+}
+fn waitOnEngine(eng: *enginel.engine) void {
+    std.Thread.sleep(std.time.ns_per_s);
+    while (eng.searcher.searching) {
+        std.Thread.sleep(configl.INFO_TICKRATE_NS);
+    }
+}
+inline fn getDecision(eng: *enginel.engine) moveDecisionExt {
+    return eng.searcher.schedul.finalChoice;
+}
+
+const fenListMateOne = [_][]const u8{
+    "position fen Q7/8/8/8/5K1k/8/8/8 w - - 0 0",
+    "position fen q7/8/8/8/5k1K/8/8/8 b - - 0 0",
+};
+
+pub fn test_decision() !void {
+    var eng = try initEngine();
+    defer eng.free();
+    for (0..fenListMateOne.len) |i| {
+        const fenCmd = fenListMateOne[i];
+        eng.executeBuffer(fenCmd);
+        eng.executeBuffer("go depth 4");
+        waitOnEngine(&eng);
+        const dec = getDecision(&eng);
+        try std.testing.expect(dec.scoring > 8000);
+    }
+
+    std.debug.print("[TEST]: Mate in one test passed\n", .{});
+}
+pub fn test_test() !void {
+    initAll();
+    var board = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
+    chessl.print_boardstate(&board);
+}
+
 pub fn main() anyerror!void {
     //magicl.main();
     //try chessl.main();
-    test_bench();
+    //test_bench();
     //try enginel.launch_engine(true);
-    //try test_speedTest();
+    //try test_decision();
+    evalEngl.main();
+    //try test_test();
+    //guil.main();
 }

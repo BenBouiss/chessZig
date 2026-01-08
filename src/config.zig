@@ -10,6 +10,8 @@ pub const MAX_MATCH_STR_LENGTH: u64 = 24 + 4096 * (5 + 1);
 pub const MAX_USER_INPUT: u64 = MAX_MATCH_STR_LENGTH;
 pub const MAX_LINE_LENGTH: usize = 128;
 
+pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
+
 pub const MAX_HASH_BITS = 18;
 pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
@@ -22,6 +24,10 @@ pub const MAX_DEPTH: u16 = 6;
 pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;
 pub const DEFAULT_ELO: u32 = 2500;
+
+pub const _DEFAULT_FIXED_DEPTH = "false";
+pub const DEFAULT_FIXED_DEPTH = false;
+
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
 

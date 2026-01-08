@@ -9,6 +9,7 @@ const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
 const speedTestl = @import("speedTest.zig");
 const schedulerl = @import("search/scheduler.zig");
+const threadingl = @import("search/threading.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -20,8 +21,8 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO };
-pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, INVALID };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, CLEAR_HASH };
+pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
     searchMoves: bool = false,
@@ -30,8 +31,8 @@ pub const goArgStruct = struct {
     useBatched: bool = false,
 
     // all times in ms
-    wtime: u32 = 0,
-    btime: u32 = 0,
+    wtime: u32 = std.math.maxInt(u32),
+    btime: u32 = std.math.maxInt(u32),
     winc: u32 = 0,
     binc: u32 = 0,
 
@@ -68,6 +69,12 @@ pub const inputChannel = struct {
     fn releaseLock(p_self: *inputChannel) void {
         p_self.lock = false;
     }
+    pub fn nonEmpty(p_self: *inputChannel) bool {
+        p_self.acquireLock();
+        const ret = p_self.cmdBuffer.items.len != 0;
+        p_self.releaseLock();
+        return ret;
+    }
     pub fn readBuffer(p_self: *inputChannel) []u8 {
         // caller is responsible for the freeing of the []u8
         p_self.acquireLock();
@@ -88,6 +95,14 @@ pub const inputChannel = struct {
         };
         p_self.releaseLock();
         return true;
+    }
+    pub fn free(p_self: *inputChannel, alloc: std.mem.Allocator) void {
+        p_self.acquireLock();
+        for (0..p_self.cmdBuffer.items.len) |i| {
+            alloc.free(p_self.cmdBuffer.items[i]);
+        }
+        p_self.cmdBuffer.deinit(alloc);
+        p_self.releaseLock();
     }
 };
 
@@ -128,6 +143,8 @@ pub const setOptionEntry = struct {
             msg = try std.fmt.allocPrint(alloc, "option name {s} type combo default {s} var {s}", .{ self.name, self.info.str.default, self.info.str._var });
         } else if (self.argType == .CHECK) {
             msg = try std.fmt.allocPrint(alloc, "option name {s} type check default {s} var {s}", .{ self.name, self.info.str.default, self.info.str._var });
+        } else if (self.argType == .BUTTON) {
+            msg = try std.fmt.allocPrint(alloc, "option name {s} type button ", .{self.name});
         }
         return msg;
     }
@@ -152,6 +169,8 @@ pub const engineOptions = struct {
     useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
+    fixDepth: bool = configl.DEFAULT_FIXED_DEPTH,
+
     engineElo: spinVarType = configl.DEFAULT_ELO,
     setOptions: std.ArrayList(setOptionEntry) = undefined,
     nOptions: u16 = 0,
@@ -172,7 +191,7 @@ pub const engine = struct {
 
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
-        ret.alloc = GLOBAL_ALLOC;
+        ret.alloc = alloc;
         ret.input = try inputChannel.init(alloc);
         ret.status = .{};
         ret.id = .{};
@@ -213,6 +232,9 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
+
+        try p_self.addOption(.{ .name = "fixedDepth", .optionType = .FIXED_DEPTH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_FIXED_DEPTH } } });
+        try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
     }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
@@ -264,12 +286,16 @@ pub const engine = struct {
             p_self.workingThreads.items[i].join();
         }
     }
-    fn executeQuitProcedure(p_self: *engine) void {
+    fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
         p_self.searcher.interrupt = true;
-        p_self.respond("its ovah");
         p_self.waitOnWorkingThreads();
+        //if (p_self.searcher.schedul.engineSet) {
+        //    threadingl.joinOnThreadPack(p_self.searcher.schedul.p_threadPack);
+        //}
+        p_self.respond("its ovah");
         p_self.free();
+        return true;
     }
     pub fn uci_executeCmd(p_self: *engine, cmd: e_engineCmd, cmdBuffer: []const u8) bool {
         switch (cmd) {
@@ -277,8 +303,7 @@ pub const engine = struct {
                 return true;
             },
             .QUIT => {
-                p_self.executeQuitProcedure();
-                return true;
+                return p_self.executeQuitProcedure();
             },
             .STOP => {
                 p_self.searcher.interrupt = true;
@@ -369,7 +394,7 @@ pub const engine = struct {
         }
     }
     pub fn free(p_self: *engine) void {
-        p_self.input.cmdBuffer.deinit(p_self.alloc);
+        p_self.input.free(p_self.alloc);
         p_self.workingThreads.deinit(p_self.alloc);
         p_self.options.setOptions.deinit(p_self.alloc);
         hashTablel.hashTable.free(p_self.alloc);
@@ -420,7 +445,7 @@ pub const engine = struct {
             return false;
         };
         defer tokens.deinit(p_self.alloc);
-        if (tokens.items.len < 3) {
+        if (tokens.items.len < 2) {
             return false;
         }
         const name: e_engineOptions = parseSetOptionTypeCmd(cmdBuffer);
@@ -475,6 +500,20 @@ pub const engine = struct {
                 p_self.options.limitElo = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
+            .FIXED_DEPTH => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.fixDepth = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .CLEAR_HASH => {
+                return p_self.updateHash(p_self.options.hashTableSize);
+            },
+
             .INVALID => {
                 return false;
             },
@@ -555,14 +594,8 @@ pub const engine = struct {
             return false;
         };
         defer tokens.deinit(p_self.alloc);
-        var goArg = parseGoCmd(&tokens);
+        const goArg = parseGoCmd(&tokens);
 
-        if (goArg.depth == 0) {
-            if (p_self.status.debugMode) {
-                std.debug.print("[DEBUG] executeGoCmd: No depth found using the default engine option \n", .{});
-            }
-            goArg.depth = p_self.options.depthLevel;
-        }
         p_self.searcher.reset();
         p_self.searcher.config = goArg;
         p_self.searcher.nThreads = p_self.options.nThreads;
@@ -683,6 +716,10 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .UCI_LIMITSTRENGHT;
     } else if (utilsl.contains(cmdBuffer, " uci_elo", .ignoreCase)) {
         return .UCI_ELO;
+    } else if (utilsl.contains(cmdBuffer, " fixeddepth", .ignoreCase)) {
+        return .FIXED_DEPTH;
+    } else if (utilsl.contains(cmdBuffer, " clearhash", .ignoreCase)) {
+        return .CLEAR_HASH;
     }
 
     return .INVALID;
@@ -784,4 +821,7 @@ pub fn launch_engine_shell(p_engine: *engine) !std.Thread {
     const inputThread = try std.Thread.spawn(.{}, inputThreading, .{p_engine});
     try p_engine.workingThreads.append(p_engine.alloc, inputThread);
     return inputThread;
+}
+pub fn main() anyerror!void {
+    try launch_engine(false);
 }
