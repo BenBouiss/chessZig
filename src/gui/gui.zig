@@ -473,7 +473,7 @@ fn getGuiCmdType(cmd: []const u8) e_guiCmd {
 
 fn mainGuiThread(p_self: *guiState) void {
     // check engine
-
+    mainl.initAll();
     p_self.setBoard(chessl.DEFAULT_FEN);
     var window = windowl.initChessWindow(p_self.alloc, windowl.screenWidth, windowl.screenHeight) catch {
         p_self.close();

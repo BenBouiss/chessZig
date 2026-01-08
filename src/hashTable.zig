@@ -207,10 +207,6 @@ pub fn isHashTable_init() bool {
 pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32) void {
     // size in MB
 
-    if (hashTable.MBsize == sizeHashTable and hashTable.initialized) {
-        return;
-    }
-
     std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
     if (hashTable.initialized) {
         hashTable.free(alloc);

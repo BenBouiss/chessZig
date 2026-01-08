@@ -82,7 +82,7 @@ pub fn build(b: *std.Build) void {
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
             // this package, which is why in this case we don't have to give it a name.
-            .root_source_file = b.path("src/main.zig"),
+            .root_source_file = b.path("src/engine.zig"),
             // Target and optimization levels must be explicitly wired in when
             // defining an executable or library (in the root module), and you
             // can also hardcode a specific target for an executable or library
@@ -101,10 +101,10 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    const gui = b.addExecutable(.{
-        .name = "gui",
+    const chess = b.addExecutable(.{
+        .name = "chess",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main_gui.zig"),
+            .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{
@@ -113,7 +113,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     engine.root_module.addOptions("build_options", build_options);
-    gui.root_module.addOptions("build_options", build_options);
+    chess.root_module.addOptions("build_options", build_options);
 
     const raylib_dep = b.dependency("raylib", .{
         .target = target,
@@ -122,14 +122,14 @@ pub fn build(b: *std.Build) void {
 
     const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
     //
-    gui.linkLibrary(raylib_artifact);
+    chess.linkLibrary(raylib_artifact);
     engine.linkLibrary(raylib_artifact);
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
     // by passing `--prefix` or `-p`.
     b.installArtifact(engine);
-    b.installArtifact(gui);
+    b.installArtifact(chess);
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).
