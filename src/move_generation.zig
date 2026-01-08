@@ -36,8 +36,6 @@ pub fn generateLegalMoves(p_board: *Board_state) moveContainer {
 
         //var _moves: moveContainer = moveGeneration(p_board);
         //const _fmoves = filterMoveLegal(p_board, &_moves) catch unreachable;
-        //var _moves = moveGeneration(p_board);
-        //const _fmoves = filterMoveLegal(p_board, &_moves) catch unreachable;
 
         //if (_fmoves.isDifferent(moves)) {
         //    _fmoves.printDifference(moves);

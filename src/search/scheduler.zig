@@ -60,6 +60,9 @@ pub const moveDecisionExt = struct {
     pub fn isBetter(p_self: *moveDecisionExt, other: *moveDecisionExt) bool {
         return p_self.scoring > other.scoring;
     }
+    pub fn copy(self: moveDecisionExt) moveDecisionExt {
+        return .{ .move = self.move, .line = self.line, .scoring = self.scoring };
+    }
 };
 
 const TIME_BUFFER_SIZE: usize = 20;
@@ -141,6 +144,7 @@ pub const scheduler = struct {
     searchDepth: u16 = 0,
     searchIncrement: u16 = 0,
     turn: bool = true,
+    canIncreaseDepth: bool = false,
 
     pub fn setEngine(p_self: *scheduler, p_engine: *enginel.engine) void {
         p_self.p_engine = p_engine;
@@ -207,12 +211,13 @@ pub const scheduler = struct {
         threadingl.joinOnThreadPack(p_self.p_threadPack);
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) void {
-        var _depth = depth;
-        if (depth == 0) {
-            _depth = 1;
+        if (p_self.canIncreaseDepth) {
+            p_self.searchDepth = depth - 1;
+        } else {
+            p_self.searchDepth = depth;
         }
-        p_self.searchDepth = _depth - 1;
-        p_self.startSearch(_depth - 1) catch {
+
+        p_self.startSearch(p_self.searchDepth) catch {
             p_self.p_engine.searcher.searching = false;
             std.debug.print("[ERROR] waitingLoop: Cant start search\n", .{});
             return;
@@ -221,7 +226,7 @@ pub const scheduler = struct {
     }
     pub fn extractBest(p_self: *scheduler) void {
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
-        p_self.finalChoice = res.currentBest;
+        p_self.finalChoice = res.currentBest.copy();
     }
     pub fn waitingLoop(p_self: *scheduler) void {
         p_self.searchIncrement = 0;
@@ -291,6 +296,9 @@ pub const scheduler = struct {
         return p_self.p_engine.searcher.config.btime;
     }
     pub fn canExtendSearch(p_self: *scheduler) bool {
+        if (!p_self.canIncreaseDepth) {
+            return false;
+        }
         if (p_self.timeM.isOvertimeSearching(p_self.timeRemaining())) {
             return false;
         }
@@ -334,7 +342,7 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8) bool {
     return true;
 }
 pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveContainer) void {
-    var searcher = p_engine.searcher;
+    var searcher = &p_engine.searcher;
 
     const _nThread = @min(searcher.nThreads, moveArray.len);
     if (_nThread == 0) {
@@ -356,8 +364,17 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     if (p_engine.status.debugMode) {
         searcher.printInfo();
     }
-    var sched = searcher.schedul;
+    var sched = &searcher.schedul;
     sched.setThreadPack(&pack);
+    if (searcher.config.depth == 0 or !(p_engine.options.fixDepth)) {
+        if (p_engine.status.debugMode) {
+            std.debug.print("[DEBUG] executeGoCmd: No depth found or variable depth option set(not fixed depth), using the default engine option \n", .{});
+        }
+        searcher.config.depth = p_engine.options.depthLevel;
+        sched.canIncreaseDepth = true;
+    } else {
+        sched.canIncreaseDepth = false;
+    }
 
     //TODO FIX ME
     sched.setEngine(p_engine);

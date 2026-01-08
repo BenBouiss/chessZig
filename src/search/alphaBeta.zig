@@ -38,7 +38,7 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
 
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
-        _ = p_state.makeMoveUpdate(move);
+        _ = p_state.makeMove(move);
 
         const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash);
 
@@ -74,7 +74,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var finalScore: scoreType = 0;
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        _ = p_state.makeMoveUpdate(move);
+        _ = p_state.makeMove(move);
 
         const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, useHash);
 
