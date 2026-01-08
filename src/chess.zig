@@ -133,15 +133,6 @@ pub fn flagPromotionToPiece(flag: u8, white: bool) e_piece {
     return e_piece.nEmptySquare;
 }
 
-pub fn genShift(x: u64, s: i8) u64 {
-    if (s >= 0) {
-        return x << @intCast(s);
-    } else {
-        return x >> @intCast(-s);
-    }
-    return 0;
-}
-
 pub fn sqToBitboard(sq: e_square) u64 {
     return ONE << @intCast(@intFromEnum(sq));
 }
@@ -259,12 +250,16 @@ pub fn print_board(p_board: *Board_state) void {
 pub fn printBoardValidity(p_state: *Board_state) void {
     const valid_w = p_state.isLegal(true);
     const valid_b = p_state.isLegal(false);
+    var v: bool = true;
     if (!valid_w) {
+        v = false;
         std.debug.print("White is checked\n", .{});
     }
     if (!valid_b) {
+        v = false;
         std.debug.print("Black is checked\n", .{});
-    } else {
+    }
+    if (v) {
         std.debug.print("Board is valid\n", .{});
     }
 }
@@ -1342,16 +1337,8 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len });
     std.debug.print("Current evaluation: {d} \n", .{heuristicl.simpleHeuristic(p_board_state)});
 
-    const valid_w = p_board_state.isLegal(true);
-    const valid_b = p_board_state.isLegal(false);
-    if (!valid_w) {
-        std.debug.print("White is checked\n", .{});
-    }
-    if (!valid_b) {
-        std.debug.print("Black is checked\n", .{});
-    } else {
-        std.debug.print("Board is valid\n", .{});
-    }
+    printBoardValidity(p_board_state);
+
     if (p_board_state.turn_count > 0) {
         std.debug.print("Previous move: ", .{});
         p_board_state.lastMove.print();
@@ -1361,10 +1348,10 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.halfMoveClock, p_board_state.move_history.getRepetitions(), p_board_state.move_history.lastIrreversibleMoveIndex });
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
 
-    std.debug.print("All moves: \n", .{});
-    const _moves = moveGenl.generatePseudolegalMoves(p_board_state);
-    _moves.print();
-    std.debug.print("Available moves: \n", .{});
+    //std.debug.print("All moves: \n", .{});
+    //const _moves = moveGenl.generatePseudolegalMoves(p_board_state);
+    //_moves.print();
+    //std.debug.print("Available moves: \n", .{});
     const moves = moveGenl.generateLegalMoves(p_board_state);
     moves.print();
     sanityCheckBoardState(p_board_state);
@@ -1395,25 +1382,6 @@ pub fn print_bitboard(bitboard: u64) void {
     }
 
     return;
-}
-
-pub fn shiftEast(b: u64) u64 {
-    return (b & notHFile) << 1;
-}
-pub fn shiftNortheast(b: u64) u64 {
-    return (b & notHFile) << 9;
-}
-pub fn shiftSoutheast(b: u64) u64 {
-    return (b & notHFile) >> 7;
-}
-pub fn shiftWest(b: u64) u64 {
-    return (b & notAFile) >> 1;
-}
-pub fn shiftSouthwest(b: u64) u64 {
-    return (b & notAFile) >> 9;
-}
-pub fn shiftNorthwest(b: u64) u64 {
-    return (b & notAFile) << 7;
 }
 
 pub fn l_getMsbIdx(x: u64) u8 {

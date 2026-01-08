@@ -50,7 +50,7 @@ pub fn dispatchBenchmarkExecutor(p_engine: *engine) bool {
 pub fn _executeEngineBenchmark(p_engine: *engine) void {
     p_engine.searcher.searching = true;
     defer p_engine.searcher.searching = false;
-    const depth: u16 = 6;
+    const depth: u16 = 7;
     const status = defaultFenBenchmark(p_engine, depth);
     if (p_engine.status.debugMode) {
         std.debug.print("[DEBUG] executeEngineBenchmark: status for benchmark defaultFenBenchmark: {}\n", .{status});
