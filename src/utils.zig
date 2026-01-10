@@ -110,6 +110,32 @@ pub fn find(comptime T: type, a: []const T, e: T) i8 {
     }
     return -1;
 }
+pub fn findM(comptime T: type, a: []const T, e: []const T) i8 {
+    if (e.len > a.len) {
+        return -1;
+    }
+    var ret: i8 = 0;
+    var count: i8 = 0;
+    for (0..a.len) |i| {
+        const a_e = a[i];
+        if (count == e.len) {
+            return ret;
+        }
+
+        if (a_e == e[@intCast(count)]) {
+            if (count == 0) {
+                ret = @intCast(i);
+            }
+            count += 1;
+        } else {
+            count = 0;
+        }
+    }
+    if (count == e.len) {
+        return ret;
+    }
+    return -1;
+}
 
 pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !std.ArrayList([]const T) {
     var ret = try std.ArrayList([]const T).initCapacity(alloc, 4);

@@ -9,12 +9,14 @@ const gconfigl = @import("gui/config.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
 
+const str = @import("string.zig");
 const std = @import("std");
 
 const e_color = chessl.e_color;
 pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition, Flagged, Dnf };
 const Board_state = chessl.Board_state;
 const e_square = squarel.e_square;
+const string = str.string;
 
 const INITIAL_LOGSIZE: u16 = 100;
 const DEFAULT_TIME_MS: i64 = 300 * 1000; // 5 min in ms
@@ -45,13 +47,15 @@ const matchResultsBench = struct {
     flagged: u8 = 0,
     avgTimePerTurn: i64 = 0,
     nMatch: u8 = 0,
+    finalFen: string = undefined,
 };
 const matchResultContainer = struct {
     items: [MAX_ENGINES]matchResultsBench = std.mem.zeroes([MAX_ENGINES]matchResultsBench),
-    pub fn init() matchResultContainer {
-        return .{};
+    fens: std.ArrayList(string) = undefined,
+    pub fn init(alloc: std.mem.Allocator) !matchResultContainer {
+        return .{ .fens = try std.ArrayList(string).initCapacity(alloc, 4) };
     }
-    pub fn addOutCome(p_self: *matchResultContainer, match: *matchStatus) void {
+    pub fn addOutCome(p_self: *matchResultContainer, alloc: std.mem.Allocator, match: *matchStatus) !void {
         const p = match.chessState.whiteToMove();
         const currEngine = match.playerInv[@intFromBool(p)].engineUsed;
         const otherEngine = match.playerInv[@intFromBool(!p)].engineUsed;
@@ -77,13 +81,11 @@ const matchResultContainer = struct {
         for (0..2) |i| {
             const currEng = match.playerInv[i].engineUsed;
             p_self.items[i].nMatch += 1;
-            var sum: i64 = 0;
             // can also do original availabe time div by number of move, would need to store the initial time
-            for (match.playerInv[i].timeTaken.items) |time| {
-                sum += time;
-            }
-            p_self.items[currEng].avgTimePerTurn = @divFloor(sum, @as(i64, @intCast(match.playerInv[i].timeTaken.items.len + 1)));
+            const timeTaken = match.playerInv[i]._time - match.playerInv[i].time;
+            p_self.items[currEng].avgTimePerTurn = @divFloor(timeTaken, @as(i64, @intCast(match.playerInv[i].timeTaken.items.len + 1)));
         }
+        try p_self.fens.append(alloc, try string.initFromSlice(alloc, utilsl.trimStr(&match.chessState.get_fen())));
     }
     pub fn saveLog(p_self: *matchResultContainer, alloc: std.mem.Allocator, match: *matchStatus) !void {
         const fileName = try std.fmt.allocPrint(alloc, "logs/match_logs_{d}.txt", .{std.time.timestamp()});
@@ -98,6 +100,18 @@ const matchResultContainer = struct {
             defer alloc.free(scoreStr);
             _ = try file.write(scoreStr);
         }
+        _ = try file.write("final positions: \n");
+        for (0..p_self.fens.items.len) |i| {
+            const fenStr = try std.fmt.allocPrint(alloc, "\t{s};\n", .{p_self.fens.items[i]._slice()});
+            defer alloc.free(fenStr);
+            _ = try file.write(fenStr);
+        }
+    }
+    pub fn free(p_self: *matchResultContainer, alloc: std.mem.Allocator) void {
+        for (p_self.fens.items) |*fens| {
+            fens.free(alloc);
+        }
+        p_self.fens.deinit(alloc);
     }
 };
 const MAX_ENGINES: u8 = 2;
@@ -107,6 +121,7 @@ const timeFormat = struct {
 };
 const standardTimeFormat: timeFormat = .{ .time = 300000, .inc = 5000 };
 const bulletTimeFormat: timeFormat = .{ .time = 60000, .inc = 0 };
+const testTimeFormat: timeFormat = .{ .time = 30000, .inc = 0 };
 
 const signedCmd = struct {
     str: []const u8,
@@ -337,7 +352,7 @@ const guiState = struct {
         }
         while (p_self.status.running) {
             const n = reader.streamDelimiter(&line.writer, '\n') catch |err| {
-                std.debug.print("[DEBUG] readingThread.gui: caught err {}\n", .{err});
+                std.debug.print("[DEBUG] readingThread.gui (#{d}): caught err {}\n", .{ engineIndex, err });
                 p_self.crash();
             };
             _ = reader.toss(1);
@@ -388,15 +403,15 @@ const guiState = struct {
     pub fn close(p_self: *guiState) void {
         std.debug.print("[CLOSE] saving logs to log file\n", .{});
         p_self.match.status = .Error;
+        p_self.saveLog() catch |err| {
+            std.debug.print("[CLOSE] error while saving: {}\n", .{err});
+        };
+        defer p_self.freeLog();
         p_self.respondAll("QUIT") catch {};
         p_self.status.running = false;
         for (0..p_self.workingThreads.items.len) |i| {
             p_self.workingThreads.items[i].join();
         }
-        p_self.saveLog() catch |err| {
-            std.debug.print("[CLOSE] error while saving: {}\n", .{err});
-        };
-        p_self.freeLog();
     }
     pub fn crash(p_self: *guiState) noreturn {
         std.debug.print("[CRASH] crashing this gui, with no survivors\n", .{});
@@ -561,7 +576,11 @@ const guiState = struct {
         try p_self.respond(msg, p_self.getCurrentPlayer().engineUsed);
     }
     pub fn sendEngineInterrupt(p_self: *guiState, engineIndex: u8) !void {
-        return try p_self.respond("stop", engineIndex);
+        try p_self.respond("stop", engineIndex);
+        // this is needed as we do not want to send critical commands as the engines is cleaning up its internals.
+        // bug fixed with this:
+        // when an engine is flagged, sendInterrupt is invoked and right after a clearHash is sent for the next match to begin. Thus clearing the hashTable while the engine is still potentially searching.
+        try p_self.waitEngine();
     }
     pub fn setPlayerEngine(p_self: *guiState, white: bool, engineIndex: u8) void {
         p_self.match.playerInv[@intFromBool(white)].engineUsed = engineIndex;
@@ -649,15 +668,13 @@ fn getGuiCmdType(cmd: []const u8) e_guiCmd {
     return .NOOP;
 }
 
-fn sendOptions(p_self: *guiState, options: [][]const u8, engineIndex: u8) !void {
-    for (options) |opt| {
-        try p_self.respond(opt, engineIndex);
+fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u8) !void {
+    for (options.items) |opt| {
+        try p_self.respond(opt._slice(), engineIndex);
     }
 }
 
-fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [][][]const u8) void {
-    // check engine
-
+fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLAYER]std.ArrayList(string)) void {
     mainl.initAll();
 
     p_self.respondAll("UCI") catch {};
@@ -675,20 +692,28 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [][][]const u8) vo
         };
     }
 
-    var record: matchResultContainer = .{};
+    var record: matchResultContainer = matchResultContainer.init(p_self.alloc) catch {
+        p_self.close();
+        return;
+    };
     var matchCount: u8 = 0;
     while (matchCount < nMatch) {
         matchRoutine(p_self) catch {
             p_self.close();
             return;
         };
+        chessl.print_boardstate(&p_self.match.chessState);
         matchCount += 1;
-        record.addOutCome(&p_self.match);
+        record.addOutCome(p_self.alloc, &p_self.match) catch {
+            p_self.close();
+            return;
+        };
     }
     record.saveLog(p_self.alloc, &p_self.match) catch |err| {
         std.debug.print("[CLOSE] error {} while saving the match stats\n", .{err});
     };
     p_self.close();
+    record.free(p_self.alloc);
 }
 fn matchRoutine(p_self: *guiState) !void {
     try p_self.respondAll("setoption name clearhash");
@@ -759,35 +784,213 @@ fn entrypointServingThreading(p_self: *guiState) void {
 var stdin_buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
 var stdout_buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
 
-pub fn launch_gui(path1: []const u8, path2: []const u8, nMatch: u8, debugMode: bool, engines_opts: [][][]const u8) !void {
-    var ret: guiState = try guiState.init();
-    _ = try ret.addEngine(path1);
-    _ = try ret.addEngine(path2);
+pub fn launch_gui(infoPath: []const u8) !void {
+    var settings = try parseInfoFile(mainl.GLOBAL_ALLOC, infoPath);
+    defer settings.free(mainl.GLOBAL_ALLOC);
 
-    ret.match.playerInv[0] = try player.init(ret.alloc, bulletTimeFormat, .BLACK, 1, "2");
-    ret.match.playerInv[1] = try player.init(ret.alloc, bulletTimeFormat, .WHITE, 0, "1");
+    var ret: guiState = try guiState.init();
+
+    _ = try ret.addEngine(settings.enginePaths[0]._slice());
+    _ = try ret.addEngine(settings.enginePaths[1]._slice());
+
+    //ret.match.playerInv[0] = try player.init(ret.alloc, bulletTimeFormat, .BLACK, 1, settings.engineNames[1]._slice());
+    //ret.match.playerInv[1] = try player.init(ret.alloc, bulletTimeFormat, .WHITE, 0, settings.engineNames[0]._slice());
+    ret.match.playerInv[0] = try player.init(ret.alloc, testTimeFormat, .BLACK, 1, settings.engineNames[1]._slice());
+    ret.match.playerInv[1] = try player.init(ret.alloc, testTimeFormat, .WHITE, 0, settings.engineNames[0]._slice());
 
     ret.status.running = true;
     ret.status.phase = .MATCH;
-    ret.status.debugMode = debugMode;
+    ret.status.debugMode = settings.debugMode;
     try dispatchReadersThreads(&ret);
     const servingThread = try std.Thread.spawn(.{}, entrypointServingThreading, .{&ret});
     try ret.workingThreads.append(ret.alloc, servingThread);
 
-    mainGuiThread(&ret, nMatch, engines_opts);
+    mainGuiThread(&ret, settings.match.nMatch, settings.engineOptions);
+
     return;
 }
+const configMatch = struct {
+    nMatch: u8 = 0,
+    playerSwitch: bool = false,
+    timeF: timeFormat = standardTimeFormat,
+};
+const guiSetting = struct {
+    match: configMatch = .{},
+    enginePaths: [chessl.NUMBER_PLAYER]string = undefined,
+    engineNames: [chessl.NUMBER_PLAYER]string = undefined,
+    engineOptions: [chessl.NUMBER_PLAYER]std.ArrayList(string) = undefined,
+    nEngines: u8 = 0,
+    debugMode: bool = false,
+    pub fn init(alloc: std.mem.Allocator) !guiSetting {
+        var ret: guiSetting = .{};
+        ret.engineOptions[0] = try std.ArrayList(string).initCapacity(alloc, 2);
+        ret.engineOptions[1] = try std.ArrayList(string).initCapacity(alloc, 2);
+        return ret;
+    }
+    pub fn setEngineName(p_self: *guiSetting, alloc: std.mem.Allocator, engineIndex: u8, engineName: []const u8) !void {
+        p_self.engineNames[engineIndex] = try string.initFromSlice(alloc, engineName);
+    }
+    pub fn setEnginePath(p_self: *guiSetting, alloc: std.mem.Allocator, engineIndex: u8, enginePath: []const u8) !void {
+        p_self.enginePaths[engineIndex] = try string.initFromSlice(alloc, enginePath);
+    }
 
-pub fn main() void {
+    pub fn addEngineOption(p_self: *guiSetting, alloc: std.mem.Allocator, engineIndex: u8, enginePath: []const u8) !void {
+        const strOption = try string.initFromSlice(alloc, enginePath);
+        try p_self.engineOptions[engineIndex].append(alloc, strOption);
+    }
+    pub fn free(p_self: *guiSetting, alloc: std.mem.Allocator) void {
+        for (0..chessl.NUMBER_PLAYER) |i| {
+            p_self.engineNames[i].free(alloc);
+            p_self.enginePaths[i].free(alloc);
+            for (p_self.engineOptions[i].items) |*opt| {
+                opt.free(alloc);
+            }
+        }
+    }
+    pub fn print(p_self: *guiSetting) void {
+        for (0..chessl.NUMBER_PLAYER) |i| {
+            std.debug.print("Engine #{d}\n", .{i});
+            std.debug.print("\t name: {s}\n", .{p_self.engineNames[i]._slice()});
+            std.debug.print("\t path: {s}\n", .{p_self.enginePaths[i]._slice()});
+
+            for (p_self.engineOptions[i].items) |*opt| {
+                std.debug.print("\t option: {s}\n", .{opt.*._slice()});
+            }
+        }
+
+        std.debug.print("Match settings: \n", .{});
+        std.debug.print("\t nMatch: {d}\n", .{p_self.match.nMatch});
+        std.debug.print("\t player switch: {}\n", .{p_self.match.playerSwitch});
+        std.debug.print("\t time format: time {d} inc {d}\n", .{ p_self.match.timeF.time, p_self.match.timeF.inc });
+    }
+};
+
+pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
+    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
+    defer file.close();
+    var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+
+    var f_reader = file.reader(&buffer);
+    const reader = &f_reader.interface;
+    var ret: guiSetting = try guiSetting.init(alloc);
+    var matchSection: bool = false;
+
+    while (true) {
+        var _buffer: [64]u8 = std.mem.zeroes([64]u8);
+        var w: std.io.Writer = .fixed(&_buffer);
+        var s = string.initFromBuffer(&_buffer);
+        const size = reader.streamDelimiter(&w, '\n') catch {
+            break;
+        };
+        reader.toss(1);
+        if (size <= 1) {
+            continue;
+        }
+
+        //std.debug.print("Found {d} bytes in the file '{s}' {d} buffer size, str: {s}\n", .{ size, _buffer, _buffer.len, s._slice() });
+
+        if (s.containsE("[match]", .ignoreCase)) {
+            matchSection = true;
+            continue;
+        }
+        var status: bool = undefined;
+        if (matchSection) {
+            status = handleMatchInfoStrBuffer(&ret, &s);
+        } else {
+            status = handleInfoStrBuffer(alloc, &ret, &s);
+        }
+        if (!status) {
+            std.debug.print("Match handling of {s} failed \n", .{s._slice()});
+        }
+    }
+    ret.print();
+    return ret;
+}
+
+fn handleMatchInfoStrBuffer(settings: *guiSetting, buffer: *string) bool {
+    if (buffer.startsWith("nMatch")) {
+        const nbrStr = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.match.nMatch = std.fmt.parseInt(u8, nbrStr, 10) catch {
+            return false;
+        };
+
+        return true;
+    } else if (buffer.startsWith("playerSwitch")) {
+        const boolStr = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        if (utilsl.equal(u8, boolStr, "true")) {
+            settings.match.playerSwitch = true;
+        } else if (utilsl.equal(u8, boolStr, "false")) {
+            settings.match.playerSwitch = false;
+        } else {
+            return false;
+        }
+
+        return true;
+    } else if (buffer.startsWith("debugMode")) {
+        const boolStr = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        if (utilsl.equal(u8, boolStr, "true")) {
+            settings.debugMode = true;
+        } else if (utilsl.equal(u8, boolStr, "false")) {
+            settings.debugMode = false;
+        } else {
+            return false;
+        }
+    }
+
+    return false;
+}
+
+fn handleInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: *string) bool {
+    if (buffer.startsWith("[")) {
+        if (settings.nEngines == chessl.NUMBER_PLAYER) {
+            return false;
+        }
+        settings.nEngines += 1;
+
+        return true;
+    } else if (buffer.startsWith("name")) {
+        const name = buffer.extractFromBounds("\"", "\"") catch {
+            return false;
+        };
+        settings.setEngineName(alloc, settings.nEngines - 1, name) catch {
+            return false;
+        };
+        return true;
+    } else if (buffer.startsWith("path")) {
+        const path = buffer.extractFromBounds("\"", "\"") catch {
+            return false;
+        };
+        settings.setEnginePath(alloc, settings.nEngines - 1, path) catch {
+            return false;
+        };
+        return true;
+    } else if (buffer.startsWith("\"")) {
+        const opt = buffer.extractFromBounds("\"", "\"") catch {
+            return false;
+        };
+        settings.addEngineOption(alloc, settings.nEngines - 1, opt) catch {
+            return false;
+        };
+        return true;
+    }
+    return false;
+}
+
+pub fn test_test() !void {
+    _ = try parseInfoFile(mainl.GLOBAL_ALLOC, "engines/engine.info");
+}
+pub fn main() !void {
     //
+    try test_test();
 
-    const engine1: []const u8 = "engines/engine1";
-    const engine2: []const u8 = "engines/engine2";
-    var engine2_opt: [1][]const u8 = .{"setoption name UCI_elo 3000"};
-    var engine1_opt: [1][]const u8 = .{"setoption name UCI_elo value 1500"};
-
-    var opts = [_][][]const u8{ &engine1_opt, &engine2_opt };
-    launch_gui(engine1, engine2, 5, false, &opts) catch {
+    const infoFile = "engines/engine.info";
+    launch_gui(infoFile) catch {
         return;
     };
 }

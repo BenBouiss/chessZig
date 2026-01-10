@@ -456,7 +456,7 @@ pub const matchMoveContainer = struct {
         return self.moves[self.len - 1];
     }
     pub fn getLineString(self: matchMoveContainer, alloc: std.mem.Allocator) !string {
-        var lineStr: string = try string.zeroInit(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
+        var lineStr: string = try string.initZero(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
         for (0..self.len) |i| {
             const move = self.moves[i];
             const moveStr = move.getStr();
@@ -527,7 +527,7 @@ pub const moveLine = struct {
         p_self.len = p_other.len;
     }
     pub fn getLineString(self: moveLine, alloc: std.mem.Allocator) !string {
-        var lineStr: string = try string.zeroInit(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
+        var lineStr: string = try string.initZero(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
         for (0..self.len) |i| {
             const move = self.moves[i];
             const moveStr = move.getStr();

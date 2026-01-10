@@ -182,6 +182,7 @@ pub const scheduler = struct {
         if (p_self.isDebugMode()) {
             std.debug.print("[DEBUG] startSearch: starting search at depth: {d}\n", .{depth});
         }
+        std.debug.assert(depth != 0);
         threadingl.zeroThreadPackArray(p_self.p_threadPack);
         p_self.timeM.startSearchTick();
         const feat = getSearchFeatures(p_self.p_engine);
@@ -212,7 +213,7 @@ pub const scheduler = struct {
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) void {
         if (p_self.canIncreaseDepth) {
-            p_self.searchDepth = depth - 1;
+            p_self.searchDepth = @min(depth, depth - 1);
         } else {
             p_self.searchDepth = depth;
         }
@@ -230,6 +231,7 @@ pub const scheduler = struct {
     }
     pub fn waitingLoop(p_self: *scheduler) void {
         p_self.searchIncrement = 0;
+        p_self.p_engine.searcher.searching = true;
         while (true) {
             std.Thread.sleep(configl.INFO_TICKRATE_NS);
             p_self.sendUpdate();
@@ -259,10 +261,12 @@ pub const scheduler = struct {
                 };
             }
             if (stat == .CONTINUE) {
-                if (p_self.timeM.isOvertimeCritical(p_self.timeRemaining())) {
+                if (p_self.timeM.isOvertimeCritical(p_self.timeRemaining()) and p_self.canIncreaseDepth) {
                     p_self.handleInterrupt();
                     p_self.searchIncrement = 0;
-                    p_self.searchDepth -= 2;
+
+                    p_self.searchDepth = @min(p_self.searchDepth, p_self.searchDepth - 2);
+                    p_self.searchDepth = @max(0, p_self.searchDepth);
 
                     if (p_self.isDebugMode()) {
                         std.debug.print("[DEBUG] waitingLoop: CRITICALY LOW TIME! RE LAUNCHING AT DEPTH - 2\n", .{});
@@ -279,9 +283,12 @@ pub const scheduler = struct {
     }
     pub fn commitNewSearchDepth(p_self: *scheduler) void {
         // saves the new depth for future use, ie make the search deeper and deeper as the game goes on
+        if (!p_self.canIncreaseDepth) {
+            return;
+        }
         if (p_self.timeM.isOvertimeSearching(p_self.timeRemaining()) and (p_self.p_engine.searcher.config.depth != 0)) {
             p_self.p_engine.searcher.config.depth += p_self.searchIncrement;
-            p_self.p_engine.options.depthLevel -= 1;
+            p_self.p_engine.options.depthLevel = @max(1, p_self.p_engine.options.depthLevel - 1);
             if (p_self.isDebugMode()) {
                 std.debug.print("[DEBUG] commitNewSearchDepth: The loop took too long decreasing depth by one for next iter (new depth: {d})\n", .{p_self.p_engine.searcher.config.depth});
             }
@@ -366,14 +373,19 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     }
     var sched = &searcher.schedul;
     sched.setThreadPack(&pack);
-    if (searcher.config.depth == 0 or !(p_engine.options.fixDepth)) {
+    if (searcher.config.depth == 0) {
         if (p_engine.status.debugMode) {
-            std.debug.print("[DEBUG] executeGoCmd: No depth found or variable depth option set(not fixed depth), using the default engine option \n", .{});
+            std.debug.print("[DEBUG] executeGoCmd: No depth found  in the cmd string using the default engine option \n", .{});
         }
         searcher.config.depth = p_engine.options.depthLevel;
-        sched.canIncreaseDepth = true;
-    } else {
-        sched.canIncreaseDepth = false;
+    }
+    sched.canIncreaseDepth = !p_engine.options.fixDepth;
+    if (p_engine.status.debugMode) {
+        if (sched.canIncreaseDepth) {
+            std.debug.print("[DEBUG] executeGoCmd: scheduler can modify the depth of search\n", .{});
+        } else {
+            std.debug.print("[DEBUG] executeGoCmd: scheduler cannot modify the depth of search\n", .{});
+        }
     }
 
     //TODO FIX ME
