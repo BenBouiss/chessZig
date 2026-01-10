@@ -152,6 +152,7 @@ pub const setOptionEntry = struct {
 
 pub const engineStatus = struct {
     running: bool = false,
+    // FIX ME useless for now
     searching: bool = false,
     debugMode: bool = false,
     positionProvided: bool = false,
@@ -563,6 +564,13 @@ pub const engine = struct {
         return true;
     }
     fn updateHash(p_self: *engine, hashSize: spinVarType) bool {
+        if (p_self.searcher.searching) {
+            p_self.searcher.interrupt = true;
+            while (p_self.searcher.searching) {
+                std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+            }
+        }
+
         p_self.options.hashTableSize = hashSize;
         hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
         return true;
