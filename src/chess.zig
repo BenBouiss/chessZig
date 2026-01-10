@@ -74,8 +74,8 @@ pub const blackPawnEnpassantRank: u64 = 0xFF0000;
 // 8 pieces per row + 7 '/' = 71
 // turn + 4 castling rights + enPassant sq + 3 spaces = 80
 // round that up to 100? the match score can be ommited?
-const MAX_FEN_LENGTH: u8 = 100;
-pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0";
+pub const MAX_FEN_LENGTH: u8 = 120;
+pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0";
 
 pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite = 13, nBlack = 14 };
 
@@ -728,68 +728,68 @@ pub const Board_state = struct {
     pub fn get_fen(self: *Board_state) [MAX_FEN_LENGTH]u8 {
         var ret = std.mem.zeroes([MAX_FEN_LENGTH]u8);
         var miscOffset: u8 = 0;
-        var emptySpaceOffset: u8 = 0;
         var emptyNumber: u8 = 0;
         var board_offset = N_SQUARES - 8;
         for (0..N_SQUARES) |i| {
-            const _i: u8 = @intCast(i);
             if (i % ROW_SIZE == 0 and i != 0) {
                 if (emptyNumber != 0) {
-                    ret[_i + miscOffset - emptySpaceOffset] = '0' + emptyNumber;
+                    ret[miscOffset] = '0' + emptyNumber;
                     emptyNumber = 0;
                     miscOffset += 1;
                 }
-                ret[_i + miscOffset - emptySpaceOffset] = '/';
+                ret[miscOffset] = '/';
                 miscOffset += 1;
                 board_offset -= 16;
             }
             const piece = self.get_piece(board_offset);
             if (piece != .nEmptySquare) {
                 if (emptyNumber != 0) {
-                    ret[_i + miscOffset - emptySpaceOffset] = '0' + emptyNumber;
+                    ret[miscOffset] = '0' + emptyNumber;
                     emptyNumber = 0;
                     miscOffset += 1;
                 }
                 const pieceStr = getStrFromPiece(piece);
-                ret[_i + miscOffset - emptySpaceOffset] = pieceStr;
+                ret[miscOffset] = pieceStr;
+                miscOffset += 1;
             } else {
-                emptySpaceOffset += 1;
                 emptyNumber += 1;
             }
             board_offset += 1;
         }
-        const endPiece = N_SQUARES - 1 + miscOffset;
-        ret[endPiece + 1] = ' ';
+        //const endPiece = N_SQUARES - (1 + miscOffset);
+        const endPiece = miscOffset;
+        ret[endPiece] = ' ';
         if (self.whiteToMove()) {
-            ret[endPiece + 2] = 'w';
+            ret[endPiece + 1] = 'w';
         } else {
-            ret[endPiece + 2] = 'b';
+            ret[endPiece + 1] = 'b';
         }
-        ret[endPiece + 3] = ' ';
+        ret[endPiece + 2] = ' ';
         var castleOffset: u8 = 0;
         if (self.stat.canKingsideCastle(true)) {
-            ret[endPiece + 4 + castleOffset] = 'H';
+            ret[endPiece + 3 + castleOffset] = 'H';
             castleOffset += 1;
         }
         if (self.stat.canQueensideCastle(true)) {
-            ret[endPiece + 4 + castleOffset] = 'A';
+            ret[endPiece + 3 + castleOffset] = 'A';
             castleOffset += 1;
         }
         if (self.stat.canKingsideCastle(false)) {
-            ret[endPiece + 4 + castleOffset] = 'h';
+            ret[endPiece + 3 + castleOffset] = 'h';
             castleOffset += 1;
         }
         if (self.stat.canQueensideCastle(false)) {
-            ret[endPiece + 4 + castleOffset] = 'a';
+            ret[endPiece + 3 + castleOffset] = 'a';
             castleOffset += 1;
         }
-        var endCastlOffset: u8 = endPiece + 4 + castleOffset;
+        var endCastlOffset: u8 = endPiece + 3 + castleOffset;
         var endEnPassantOffset: u8 = 0;
-        if (castleOffset != 0) {
-            ret[endCastlOffset] = ' ';
-        } else {
-            endCastlOffset -= 1;
+        if (castleOffset == 0) {
+            ret[endCastlOffset] = '-';
+            endCastlOffset += 1;
         }
+        ret[endCastlOffset] = ' ';
+
         if (self.enPassantIdx == 0) {
             ret[endCastlOffset + 1] = '-';
             endEnPassantOffset = endCastlOffset + 1;

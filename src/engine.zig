@@ -47,7 +47,7 @@ pub fn getMsgStdin(reader: *std.io.Reader) ![configl.MAX_USER_INPUT]u8 {
     var buffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
     var w: std.io.Writer = .fixed(&buffer);
     _ = try reader.streamDelimiter(&w, '\n');
-    _ = reader.toss(1);
+    reader.toss(1);
     return buffer;
 }
 pub const inputChannel = struct {
@@ -580,13 +580,13 @@ pub const engine = struct {
         return true;
     }
     pub fn executeIsReady(p_self: *engine) bool {
-        while (p_self.status.searching) {
+        while (p_self.searcher.searching) {
             std.Thread.sleep(configl.WAIT_TICKRATE_NS);
         }
-        p_self.respond("readyok");
         if (!p_self.status.initializedInternals) {
-            return p_self.initInternals();
+            _ = p_self.initInternals();
         }
+        p_self.respond("readyok");
         return true;
     }
     pub fn executeGoCmd(p_self: *engine, cmdBuffer: []const u8) bool {

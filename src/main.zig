@@ -86,11 +86,6 @@ pub fn test_decision() !void {
 
     std.debug.print("[TEST]: Mate in one test passed\n", .{});
 }
-pub fn test_test() !void {
-    initAll();
-    var board = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
-    chessl.print_boardstate(&board);
-}
 
 pub fn main() anyerror!void {
     //magicl.main();
@@ -98,7 +93,7 @@ pub fn main() anyerror!void {
     //test_bench();
     //try enginel.launch_engine(true);
     //try test_decision();
-    evalEngl.main();
+    try evalEngl.main();
     //try test_test();
     //guil.main();
 }
