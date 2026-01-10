@@ -121,7 +121,7 @@ const timeFormat = struct {
 };
 const standardTimeFormat: timeFormat = .{ .time = 300000, .inc = 5000 };
 const bulletTimeFormat: timeFormat = .{ .time = 60000, .inc = 0 };
-const testTimeFormat: timeFormat = .{ .time = 30000, .inc = 0 };
+const ultraBulletTimeFormat: timeFormat = .{ .time = 30000, .inc = 0 };
 
 const signedCmd = struct {
     str: []const u8,
@@ -793,10 +793,8 @@ pub fn launch_gui(infoPath: []const u8) !void {
     _ = try ret.addEngine(settings.enginePaths[0]._slice());
     _ = try ret.addEngine(settings.enginePaths[1]._slice());
 
-    //ret.match.playerInv[0] = try player.init(ret.alloc, bulletTimeFormat, .BLACK, 1, settings.engineNames[1]._slice());
-    //ret.match.playerInv[1] = try player.init(ret.alloc, bulletTimeFormat, .WHITE, 0, settings.engineNames[0]._slice());
-    ret.match.playerInv[0] = try player.init(ret.alloc, testTimeFormat, .BLACK, 1, settings.engineNames[1]._slice());
-    ret.match.playerInv[1] = try player.init(ret.alloc, testTimeFormat, .WHITE, 0, settings.engineNames[0]._slice());
+    ret.match.playerInv[0] = try player.init(ret.alloc, standardTimeFormat, .BLACK, 1, settings.engineNames[1]._slice());
+    ret.match.playerInv[1] = try player.init(ret.alloc, standardTimeFormat, .WHITE, 0, settings.engineNames[0]._slice());
 
     ret.status.running = true;
     ret.status.phase = .MATCH;
@@ -894,6 +892,9 @@ pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
             continue;
         }
         var status: bool = undefined;
+        if (s.startsWith("//")) {
+            continue;
+        }
         if (matchSection) {
             status = handleMatchInfoStrBuffer(&ret, &s);
         } else {
