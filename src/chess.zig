@@ -1010,45 +1010,44 @@ pub const Board_state = struct {
         }
 
         if (isKingPiece(fromPiece)) {
-            if (toSq == (fromSq + 2)) {
-                p_self.pieceArray[toSq + 1] = .nEmptySquare;
-
-                if (comptime white) {
+            if (comptime white) {
+                if (fromSq == 4 and toSq == 6) {
+                    p_self.pieceArray[toSq + 1] = .nEmptySquare;
                     p_self.pieceArray[toSq - 1] = .nWhiteRook;
                     p_self.pieceBB[@intFromEnum(e_piece.nWhiteRook)] ^= board_statusl.wCastleKRookBit;
                     p_self.c_occupiedBB[@intFromBool(true)] ^= board_statusl.wCastleKRookBit;
                     p_self.occupiedBB ^= board_statusl.wCastleKRookBit;
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nWhiteRook)][@intCast(toSq - 1)]);
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nWhiteRook)][@intCast(toSq + 1)]);
-                } else {
-                    p_self.pieceArray[toSq - 1] = .nBlackRook;
-                    p_self.pieceBB[@intFromEnum(e_piece.nBlackRook)] ^= board_statusl.bCastleKRookBit;
-                    p_self.c_occupiedBB[@intFromBool(false)] ^= board_statusl.bCastleKRookBit;
-                    p_self.occupiedBB ^= board_statusl.bCastleKRookBit;
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq - 1)]);
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq + 1)]);
-                }
-            } else if (toSq == (fromSq - 2)) {
-                p_self.pieceArray[toSq - 2] = .nEmptySquare;
-                if (comptime white) {
+                } else if (fromSq == 4 and toSq == 2) {
+                    p_self.pieceArray[toSq - 2] = .nEmptySquare;
                     p_self.pieceArray[toSq + 1] = e_piece.nWhiteRook;
                     p_self.pieceBB[@intFromEnum(e_piece.nWhiteRook)] ^= board_statusl.wCastleQRookBit;
                     p_self.c_occupiedBB[@intFromBool(p_self.whiteToMove())] ^= board_statusl.wCastleQRookBit;
                     p_self.occupiedBB ^= board_statusl.wCastleQRookBit;
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nWhiteRook)][@intCast(toSq + 1)]);
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nWhiteRook)][@intCast(toSq - 2)]);
-                } else {
-                    p_self.pieceArray[toSq + 1] = e_piece.nBlackRook;
+                }
+
+                p_self.wKingSq = @enumFromInt(toSq);
+            } else {
+                if (fromSq == 60 and toSq == 62) {
+                    p_self.pieceArray[@intFromEnum(e_square.h8)] = .nEmptySquare;
+                    p_self.pieceArray[@intFromEnum(e_square.f8)] = .nBlackRook;
+                    p_self.pieceBB[@intFromEnum(e_piece.nBlackRook)] ^= board_statusl.bCastleKRookBit;
+                    p_self.c_occupiedBB[@intFromBool(false)] ^= board_statusl.bCastleKRookBit;
+                    p_self.occupiedBB ^= board_statusl.bCastleKRookBit;
+                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq - 1)]);
+                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq + 1)]);
+                } else if (fromSq == 60 and toSq == 58) {
+                    p_self.pieceArray[@intFromEnum(e_square.a8)] = .nEmptySquare;
+                    p_self.pieceArray[@intFromEnum(e_square.d8)] = e_piece.nBlackRook;
                     p_self.pieceBB[@intFromEnum(e_piece.nBlackRook)] ^= board_statusl.bCastleQRookBit;
-                    p_self.c_occupiedBB[@intFromBool(p_self.whiteToMove())] ^= board_statusl.bCastleQRookBit;
+                    p_self.c_occupiedBB[@intFromBool(false)] ^= board_statusl.bCastleQRookBit;
                     p_self.occupiedBB ^= board_statusl.bCastleQRookBit;
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq + 1)]);
                     hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(e_piece.nBlackRook)][@intCast(toSq - 2)]);
                 }
-            }
-            if (comptime white) {
-                p_self.wKingSq = @enumFromInt(toSq);
-            } else {
                 p_self.bKingSq = @enumFromInt(toSq);
             }
             p_self.stat = p_self.stat.onKingMove();
@@ -1179,6 +1178,19 @@ pub const Board_state = struct {
         // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
         const king_attacks = getAllAttackMaskFromKing(p_self, white);
         return king_attacks == 0;
+    }
+    pub fn isInsufficientMaterial(p_self: *Board_state) bool {
+        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhitePawn)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) != 0) {
+            return false;
+        }
+        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackQueen)]) != 0) {
+            return false;
+        }
+        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackRook)]) != 0) {
+            return false;
+        }
+        // TODO add the cases KBB vs K or others
+        return true;
     }
 
     pub fn isLegalFast(p_self: *Board_state, all_attack: u64, move: IMove, p_kingSq: *const squareInfo, p_checks: *const squarel.checkContainer, diagPieceBB: u64, linePieceBB: u64) bool {
@@ -1567,6 +1579,30 @@ pub inline fn getSqDiag(sq: e_square) i8 {
 pub inline fn getSqAntiDiag(sq: e_square) i8 {
     const _sq: i8 = @intCast(@intFromEnum(sq));
     return 7 - (_sq & 7) - (_sq >> 3);
+}
+
+pub fn fillFile(mask: u64) u64 {
+    return moveGenl.northOne(moveGenl.northOccl(mask, UNIVERSE)) | moveGenl.southOne(moveGenl.southOccl(mask, UNIVERSE)) | mask;
+}
+pub fn isolatedPawns(pawn: u64) u64 {
+    // isolated pawn: pawn without a neighboring pawn
+    // fill the ranks from top to bottom with a fill algo
+    // then ~(shift left | shift right) & pawn
+    // careful of clipping
+    //const cols = moveGenl.northOne(moveGenl.northOccl(pawn, UNIVERSE)) | moveGenl.southOne(moveGenl.southOccl(pawn, UNIVERSE)) | pawn;
+    const cols = fillFile(pawn);
+    const lmask = (cols << 1) & notHFile;
+    const rmask = (cols >> 1) & notAFile;
+    return ~(lmask | rmask) & pawn;
+}
+pub fn stackedPawns(pawn: u64) u64 {
+    // stacked pawns: multiple pawns present on the same file
+    //
+
+    const upPawns = pawn & (moveGenl.northOne(moveGenl.northOccl(pawn, UNIVERSE)));
+    const downPawns = pawn & (moveGenl.southOne(moveGenl.southOccl(pawn, UNIVERSE)));
+    const tripleFiles = (upPawns & downPawns);
+    return upPawns | downPawns | tripleFiles;
 }
 
 pub fn getAllAttackingSquares(sq: e_square) u64 {
@@ -2011,10 +2047,39 @@ pub fn test_avx() !void {
     print_bitboard(state.pinnedBB);
     print_boardstate(&state);
 }
+pub fn test_isolated() !void {
+    std.debug.print("[DEBUG] test_isolated: starting\n", .{});
+    const initBB: u64 = 0xFF00;
+    print_bitboard(initBB);
+    print_bitboard(isolatedPawns(initBB));
+
+    const _initBB: u64 = 0xF500;
+    print_bitboard(_initBB);
+    print_bitboard(isolatedPawns(_initBB));
+
+    const overKill: u64 = 0x44004400D500;
+    print_bitboard(overKill);
+    print_bitboard(isolatedPawns(overKill));
+
+    return;
+}
+pub fn test_stackedPawn() !void {
+    std.debug.print("[DEBUG] test_stackedPawn: starting\n", .{});
+    const initBB: u64 = 0xFF00;
+    print_bitboard(initBB);
+    print_bitboard(stackedPawns(initBB));
+
+    const overKill: u64 = 0x44004402D700;
+    print_bitboard(overKill);
+    print_bitboard(stackedPawns(overKill));
+}
 
 pub fn main() !void {
     mainl.initAll();
-    try test_avx();
+    //try test_avx();
+    try test_isolated();
+
+    try test_stackedPawn();
     //test_scenarios();
     return;
 }

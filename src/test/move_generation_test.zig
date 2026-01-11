@@ -29,7 +29,7 @@ test "perft" {
     mainl.initAll();
     const perft_THREAD = 1;
     const perft_BATCHED = true;
-    const perft_MAX_DEPTH = 6;
+    const perft_MAX_DEPTH = 7;
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
     try std.testing.expect(!hashl.isHashTable_init());
     for (1..perft_MAX_DEPTH + 1) |depth| {
