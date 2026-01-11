@@ -1,20 +1,39 @@
-Uci complient chess engine project to try out the zig programming language. 
+Uci complient chess engine project to try out the zig programming language.Uci complient chess engine project to try out the zig programming language. 
 
 
 Multiple files exist in the build/ directory due to a bug with the zig build command on wsl. The current work around is to set the env variable ZIG_LOCAL_CACHE_DIR to somewhere in the linux filesystem part and the the windows part.
 
 Installation:
-    - make './build/build.sh'
-        - run './zig-out/bin/Chess'
-    - make and run './build/build.sh && ./zig-out/bin/Chess'
+```
+ ./build/build.sh && ./zig-out/bin/engine
+```
+make and run
+
+comptime build arguments:
+- useStaged: Staged move generation or not
+- useMagic: Use magic method for slider pieces move generation
+- fastBiscan: Use of the "intrinsics" file for bitscan and reverseBitscan
+- useDebug: Performs sanityChecks at various stage of the move making / unmaking
+- useHash: (not used) Wether to use the hash table for previous explored move to retrieve the evaluation / nbr of moves
+  - This option is now up to the engine using the setoption name useHash value true
+- useAvx2: (experimental) enable to change the way to get checkers / pinners bitboard during the "staged" move generation
+
+
+build script:
+- build.sh: Standard zig debug build with default comptime arguments
+- fbuild.sh: ReleaseFast zig build with "fastBiscan"
+- fmbuild.sh: ReleaseFast zig build with "fastBiscan" and "magic"
+- fsbuild.sh: ReleaseFast zig build with "fastBiscan", "staged" and "magic"
+...
+
 
 Tasklist:
-    - (?)Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
+- (?)Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
 
 Sources: 
-    - https://www.chessprogramming.org/
-    - https://www.codeproject.com/articles/Worlds-Fastest-Bitboard-Chess-Movegenerator#comments-section
-    - https://github.com/abulmo/hqperft
+- https://www.chessprogramming.org/
+- https://www.codeproject.com/articles/Worlds-Fastest-Bitboard-Chess-Movegenerator#comments-section
+- https://github.com/abulmo/hqperft
 
 Values: 
 
