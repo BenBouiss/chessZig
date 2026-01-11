@@ -49,8 +49,26 @@ pub fn generateLegalMoves(p_board: *Board_state) moveContainer {
         return moves;
     } else {
         var moves: moveContainer = moveGeneration(p_board);
-        const fmoves = filterMoveLegal(p_board, &moves) catch unreachable;
+        const fmoves = filterMoveLegal(p_board, &moves, p_board.whiteToMove());
         return fmoves;
+    }
+}
+pub fn generateContainerLegalMoves(p_board: *Board_state, white: bool) moveContainer {
+    if (white) {
+        var moves = white_moveGeneration(p_board);
+        return filterMoveLegal(p_board, &moves, white);
+    } else {
+        var moves = black_moveGeneration(p_board);
+        return filterMoveLegal(p_board, &moves, white);
+    }
+}
+pub fn generateMoveCountLegalMoves(p_board: *Board_state, white: bool) usize {
+    if (white) {
+        var moves = white_moveGeneration(p_board);
+        return filterCountMoveLegal(p_board, &moves, white);
+    } else {
+        var moves = black_moveGeneration(p_board);
+        return filterCountMoveLegal(p_board, &moves, white);
     }
 }
 pub fn generatePseudolegalMoves(p_board: *Board_state) moveContainer {
@@ -770,23 +788,44 @@ pub fn _moveBitBoardToIMove_pawn(p_board: *Board_state, piece: e_piece, piece_bb
     moveBitBoardToIMove_pawn(p_board, piece, piece_bb, attack_bb, flags | @intFromEnum(e_moveFlags.QUEENPROMO), p_out, white);
 }
 
-pub fn filterMoveLegal(p_state: *Board_state, move_list: *moveContainer) !moveContainer {
+pub fn filterMoveLegal(p_state: *Board_state, move_list: *moveContainer, white: bool) moveContainer {
     // goal compared to filterMoveLegal: try to not use the make/undo Moves methods
     var ret: moveContainer = .{};
-    const cached = getCachedAttackingPiece(p_state, p_state.whiteToMove());
-    const all_attacks = chess.getAllAttackMask(p_state, p_state.occupiedBB, !p_state.whiteToMove());
+    const cached = getCachedAttackingPiece(p_state, white);
+    const all_attacks = chess.getAllAttackMask(p_state, p_state.occupiedBB, !white);
 
-    const kingSqInfo = squareInfo.init(p_state.getKingSq(p_state.whiteToMove()));
-    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackMaskFromKing(p_state, p_state.whiteToMove()));
+    const kingSqInfo = squareInfo.init(p_state.getKingSq(white));
+    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackMaskFromKing(p_state, white));
     const linePieceBB = cached[0];
     const diagPieceBB = cached[1];
     for (0..move_list.len) |i| {
         if (move_list.moves[i].isCastle()) {
-            if (p_state.isCastleLegalPreMove(p_state.whiteToMove(), move_list.moves[i], all_attacks)) {
+            if (p_state.isCastleLegalPreMove(white, move_list.moves[i], all_attacks)) {
                 _ = ret.append(move_list.moves[i]);
             }
         } else if (p_state.isLegalFast(all_attacks, move_list.moves[i], &kingSqInfo, &checks, diagPieceBB, linePieceBB)) {
             _ = ret.append(move_list.moves[i]);
+        }
+    }
+
+    return ret;
+}
+pub fn filterCountMoveLegal(p_state: *Board_state, move_list: *moveContainer, white: bool) usize {
+    const cached = getCachedAttackingPiece(p_state, white);
+    const all_attacks = chess.getAllAttackMask(p_state, p_state.occupiedBB, !white);
+
+    const kingSqInfo = squareInfo.init(p_state.getKingSq(white));
+    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackMaskFromKing(p_state, white));
+    const linePieceBB = cached[0];
+    const diagPieceBB = cached[1];
+    var ret: usize = 0;
+    for (0..move_list.len) |i| {
+        if (move_list.moves[i].isCastle()) {
+            if (p_state.isCastleLegalPreMove(white, move_list.moves[i], all_attacks)) {
+                ret += 1;
+            }
+        } else if (p_state.isLegalFast(all_attacks, move_list.moves[i], &kingSqInfo, &checks, diagPieceBB, linePieceBB)) {
+            ret += 1;
         }
     }
 
@@ -969,6 +1008,12 @@ pub fn moveGenBB(p_board: *Board_state) moveBBState {
     }
     return moveGenBBBlack(p_board);
 }
+pub fn _moveGenBB(p_board: *Board_state, white: bool) moveBBState {
+    if (white) {
+        return moveGenBBWhite(p_board);
+    }
+    return moveGenBBBlack(p_board);
+}
 
 pub fn cstMoveGenBB(p_board: *Board_state, comptime white: bool) moveBBState {
     if (comptime white) {
@@ -991,7 +1036,7 @@ pub fn northOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub fn northOne(bb: u64) u64 {
-    return bb | (bb << 8);
+    return (bb << 8);
 }
 pub fn southOccl(pieceBB: u64, free: u64) u64 {
     var gen: u64 = pieceBB;
@@ -1005,7 +1050,7 @@ pub fn southOccl(pieceBB: u64, free: u64) u64 {
 }
 
 pub fn southOne(bb: u64) u64 {
-    return bb | (bb >> 8);
+    return (bb >> 8);
 }
 
 pub fn eastOccl(pieceBB: u64, free: u64) u64 {
@@ -1020,7 +1065,7 @@ pub fn eastOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub fn eastOne(bb: u64) u64 {
-    return (bb | ((bb & chess.notHFile) << 1));
+    return ((bb & chess.notHFile) << 1);
 }
 
 pub fn westOccl(pieceBB: u64, free: u64) u64 {
@@ -1035,7 +1080,7 @@ pub fn westOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub fn westOne(bb: u64) u64 {
-    return (bb | ((bb & chess.notAFile) >> 1));
+    return ((bb & chess.notAFile) >> 1);
 }
 
 pub fn northEastOccl(pieceBB: u64, free: u64) u64 {
@@ -1050,7 +1095,7 @@ pub fn northEastOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub fn northEastOne(bb: u64) u64 {
-    return (bb | ((bb & chess.notHFile) << 9));
+    return (bb & chess.notHFile) << 9;
 }
 
 pub fn northWestOccl(pieceBB: u64, free: u64) u64 {
@@ -1065,7 +1110,7 @@ pub fn northWestOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub fn northWestOne(bb: u64) u64 {
-    return (bb | ((bb & chess.notHFile) << 7));
+    return (bb & chess.notHFile) << 7;
 }
 
 pub fn southEastOccl(pieceBB: u64, free: u64) u64 {
@@ -1080,7 +1125,7 @@ pub fn southEastOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub fn southEastOne(bb: u64) u64 {
-    return (bb | ((bb & chess.notAFile) >> 7));
+    return ((bb & chess.notAFile) >> 7);
 }
 
 pub fn southWestOccl(pieceBB: u64, free: u64) u64 {
@@ -1095,7 +1140,7 @@ pub fn southWestOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub fn southWestOne(bb: u64) u64 {
-    return (bb | ((bb & chess.notHFile) >> 9));
+    return ((bb & chess.notHFile) >> 9);
 }
 
 // kogge-stone algo

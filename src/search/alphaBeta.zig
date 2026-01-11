@@ -16,7 +16,7 @@ const searchFeatures = schedulerl.searchFeatures;
 
 const threadInfo = threadingl.threadInfo;
 
-pub fn getScoreMaskFromTurn(white: bool) i8 {
+pub fn getScoreMaskFromTurn(white: bool) scoreType {
     if (white) {
         return 1;
     }
@@ -52,7 +52,7 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
     p_info.running = false;
 }
 fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool) scoreType {
-    const color_mask: i8 = getScoreMaskFromTurn(p_state.whiteToMove());
+    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);
@@ -92,7 +92,9 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(p_state.whiteToMove())) {
-            finalScore = -(heuristicl.simpleCheckMateScore + depth);
+            finalScore = -(heuristicl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
+
+            //currentLine.scoring = -(heuristicl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
         } else {
             finalScore = heuristicl.simpleStalemateScore;
         }

@@ -30,7 +30,7 @@ pub fn executeEngineBenchmark(p_engine: *engine) bool {
     return dispatchBenchmarkExecutor(p_engine);
 }
 
-pub fn getScoreMaskFromTurn(white: bool) i8 {
+pub fn getScoreMaskFromTurn(white: bool) scoreType {
     if (white) {
         return 1;
     }
@@ -132,7 +132,7 @@ pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *
     p_info.running = false;
 }
 pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: u16, currentLine: *moveDecisionExt, alpha: scoreType, beta: scoreType) scoreType {
-    const color_mask: i8 = getScoreMaskFromTurn(p_state.whiteToMove());
+    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);
@@ -183,7 +183,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(turn)) {
-            currentLine.scoring = -(heuristicl.simpleCheckMateScore + depth);
+            currentLine.scoring = -(heuristicl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
         } else {
             currentLine.scoring = heuristicl.simpleStalemateScore;
         }

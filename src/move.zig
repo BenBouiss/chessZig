@@ -612,6 +612,10 @@ pub const moveBBState = struct {
         return .{ .pawnMoves = self.pawnMoves | bb, .pawnAttacks = self.pawnAttacks | bb, .doubleMoves = self.doubleMoves | bb, .bishopMoves = self.bishopMoves | bb, .knightMoves = self.knightMoves | bb, .rookMoves = self.rookMoves | bb, .queenMoves = self.queenMoves | bb, .kingMoves = self.kingMoves | bb, .enPassantMoves = self.enPassantMoves | bb, .promotionMoves = self.promotionMoves | bb, .queenSideCastlingMoves = self.queenSideCastlingMoves | bb, .kingSideCastlingMoves = self.kingSideCastlingMoves | bb };
     }
 
+    pub fn collapse(self: moveBBState) u64 {
+        return self.pawnMoves | self.pawnAttacks | self.doubleMoves | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.enPassantMoves | self.promotionMoves | self.queenSideCastlingMoves | self.kingSideCastlingMoves;
+    }
+
     pub fn andEq(p_self: *moveBBState, bb: u64) void {
         p_self.pawnMoves &= bb;
         p_self.pawnAttacks &= bb;
@@ -670,5 +674,23 @@ pub const moveBBState = struct {
         chess.print_bitboard(self.queenMoves);
         std.debug.print("King moves: \n", .{});
         chess.print_bitboard(self.kingMoves);
+    }
+    pub fn count(p_self: *moveBBState) u64 {
+        var ret: u64 = @intCast(chess.l_popcount(p_self.pawnMoves));
+        ret += @intCast(chess.l_popcount(p_self.bishopMoves));
+        ret += @intCast(chess.l_popcount(p_self.doubleMoves));
+        ret += @intCast(chess.l_popcount(p_self.enPassantMoves));
+        ret += @intCast(chess.l_popcount(p_self.kingMoves));
+        ret += @intCast(chess.l_popcount(p_self.kingSideCastlingMoves));
+        ret += @intCast(chess.l_popcount(p_self.knightMoves));
+        ret += @intCast(chess.l_popcount(p_self.pawnAttacks));
+        ret += @intCast(chess.l_popcount(p_self.promotionMoves));
+        ret += @intCast(chess.l_popcount(p_self.queenMoves));
+        ret += @intCast(chess.l_popcount(p_self.queenSideCastlingMoves));
+        ret += @intCast(chess.l_popcount(p_self.rookMoves));
+        return ret;
+    }
+    pub fn rawCount(p_self: *moveBBState) u64 {
+        return @intCast(chess.l_popcount(p_self.collapse()));
     }
 };
