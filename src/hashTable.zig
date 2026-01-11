@@ -4,34 +4,51 @@ const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const configl = @import("config.zig");
+const heuristicl = @import("heuristic.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
 
 const e_piece = chess.e_piece;
-const e_color = chess.e_color;
 const e_square = squarel.e_square;
 const useHash = build_options.useHash;
+const scoreType = heuristicl.scoreType;
 
 pub const Key = struct {
     code: u64 = 0,
-    //?? index: u32 source hqperft
 };
+
+// note the gain in space is not visible in the debug build
+const entryVal = union { moveAmount: u64, evaluation: scoreType };
 
 pub const Hash_entry = struct {
     key: Key = .{},
-    moveAmount: u64 = 0,
 
-    evaluation: i32 = 0,
+    val: entryVal = undefined,
+    //moveAmount: u64 = 0,
+    //evaluation: scoreType = 0,
+
     exploredDeph: u8 = 0,
     age: u8 = 0,
 
     valid: bool = false,
     lock: bool = false,
+    pub inline fn moveA(self: Hash_entry) u64 {
+        return self.val.moveAmount;
+    }
+
+    pub inline fn eval(self: Hash_entry) scoreType {
+        return self.val.evaluation;
+    }
 };
 
 pub fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
+    //return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .moveAmount = moveAmount }, .valid = true };
+}
+pub fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
+    //return .{ .key = key, .exploredDeph = depth, .valid = true, .evaluation = eval };
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .evaluation = eval }, .valid = true };
 }
 pub const Hash_bucket = struct {
     entries: [configl.ITEM_PER_BUCKET]Hash_entry,
@@ -43,26 +60,14 @@ pub const Hash_bucket = struct {
     pub fn printSize(p_self: *Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
         std.debug.print("[DEBUG] printSize: entries size is {d} bytes\n", .{@sizeOf(Hash_entry)});
+        std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryVal)});
         _ = p_self;
     }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
-        //p_self.acquireLock();
         p_self.entries[p_self.len] = p_entry.*;
         p_self.len = ((p_self.len + 1) % configl.ITEM_PER_BUCKET);
-        //if (comptime useDebug) {
-        //    _ = checkHashCollision(p_self, p_entry);
-        //}
-        //p_self.releaseLock();
     }
-    //pub fn checkHashCollision(self: Hash_bucket, p_entry: *const Hash_entry) bool {
-    //    for (0..self.len) |i| {
-    //        if (self.entries[i].key.code != p_entry) {
-    //            self.has_collision = true;
-    //            return true;
-    //        }
-    //    }
-    //    return false;
-    //}
+
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
         //p_self.acquireLock();
         for (0..p_self.len) |i| {
@@ -73,6 +78,15 @@ pub const Hash_bucket = struct {
             }
         }
         //p_self.releaseLock();
+        return .{ .valid = false };
+    }
+    pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
+        for (0..p_self.len) |i| {
+            const entry = p_self.entries[i];
+            if (entry.key.code == hash and entry.exploredDeph >= depth) {
+                return entry;
+            }
+        }
         return .{ .valid = false };
     }
     fn acquireLock(p_self: *Hash_bucket) void {
@@ -153,11 +167,14 @@ pub fn getEntryFromPerft(key: Key, depth: u8) Hash_entry {
     const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
     return p_bucket.getEntryPerft(key.code, depth);
 }
+pub fn getEntryFromMatch(key: Key, depth: u8) Hash_entry {
+    const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
+    return p_bucket.getEntryMatch(key.code, depth);
+}
 
 pub const Zobrist_Keys = struct {
     pieceKeys: [12][64]Key = std.mem.zeroes([12][64]Key),
     turnKey: [chess.NUMBER_PLAYER]Key = std.mem.zeroes([chess.NUMBER_PLAYER]Key),
-    // taken from hqperft
     playKey: Key = .{},
     castlingKeys: [16]Key = std.mem.zeroes([16]Key),
     enPassantKeys: [64]Key = std.mem.zeroes([64]Key),
@@ -184,12 +201,11 @@ pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
     const rng = rngIntGenerator.random();
     initZobristKeys(rng);
 }
+pub fn isHashTable_init() bool {
+    return hashTable.initialized;
+}
 pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32) void {
     // size in MB
-
-    if (hashTable.MBsize == sizeHashTable and hashTable.initialized) {
-        return;
-    }
 
     std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
     if (hashTable.initialized) {
@@ -230,11 +246,11 @@ pub fn initZobristKeys(rng: std.Random) void {
 pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
     // for better perfs look for incremental xor key update using the previous move
 
-    var retKey = zobristKeys.turnKey[@intFromEnum(p_board.turn)];
+    var retKey = zobristKeys.turnKey[@intFromBool(p_board.whiteToMove())];
     for (0..(chess.N_PIECES_TYPES) * 2) |i| {
         var bb = p_board.pieceBB[i];
         while (bb != chess.EMPTY) {
-            const sq: u8 = @intCast(chess.bitscan(bb));
+            const sq: u8 = chess.bitscan(bb);
             bb &= bb - 1;
             retKey.code ^= zobristKeys.pieceKeys[i][sq].code;
         }
@@ -247,74 +263,6 @@ pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
 
 pub fn updateKey(keyDst: *Key, keySrc: *Key) void {
     keyDst.code ^= keySrc.code;
-}
-
-pub fn updateKeyOnMakeMove(p_board: *chess.Board_state, move: *const movel.IMove) void {
-    // This function relies on the move not beeing already made (ie: all bitboard and arrPiece are "old");
-    // most of this method has been grafted to the makeMove funcs as this branches are aleady computed during a move make.
-    //  Thus this function double checks what is already checked.
-    const toSq = move.getTo();
-    const fromSq = move.getFrom();
-    const piece = move.getFromPiece();
-    const victim = move.getCapturePiece();
-    var enPassantIdx: u8 = 0;
-
-    var castlePiece: e_piece = .nWhiteRook;
-
-    if (p_board.turn == .BLACK) {
-        castlePiece = .nBlackRook;
-    }
-
-    //std.debug.print("[DEBUG] updateKeyOnMakeMove: Initial key: {x} re-calculated: {x} for move: {s}-{}-{}-{}\n", .{ p_board.key.code, fullComputeZobristKeys(p_board).code, move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
-
-    if (victim != .nEmptySquare) {
-        updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
-    }
-    if (chess.isKingPiece(piece)) {
-        const kingTo: i8 = @intCast(toSq);
-        const kingFrom: i8 = @intCast(fromSq);
-        if (kingTo == (kingFrom + 2)) {
-            // king side castle
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo - 1)]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo + 1)]);
-        } else if (kingTo == (kingFrom - 2)) {
-            // queen side castle
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo + 1)]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(castlePiece)][@intCast(kingTo - 2)]);
-        }
-    } else if (chess.isPawnPiece(piece)) {
-        if (move.isPromotion()) {
-            const promPiece = chess.flagPromotionToPiece(move.getFlag(), p_board.turn);
-
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(piece)][toSq]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(promPiece)][toSq]);
-        } else if (move.isDoublePush()) {
-            enPassantIdx = (fromSq + toSq) / 2;
-        } else if (move.isEnpassant()) {
-            const victimSq: e_square = chess.getSqFromCoord(chess.getSqIdxRank(fromSq), chess.getSqIdxFile(toSq));
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(victim)][@intFromEnum(victimSq)]);
-            updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
-            //std.debug.print("[DEBUG] updateKeyOnMakeMove: updating on en passant move victim: {}, victimSq: {}, toSq: {d}\n", .{ victim, victimSq, toSq });
-        }
-    }
-
-    //std.debug.print("[DEBUG] updateKeyOnMakeMove: old: {d}, old-c: {d}, new: {d}\n", .{ p_board.enPassantIdx, enP, enPassantIdx });
-
-    // flag type of keys
-
-    updateKey(&p_board.key, &zobristKeys.playKey);
-    updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(piece)][fromSq]);
-    updateKey(&p_board.key, &zobristKeys.pieceKeys[@intFromEnum(piece)][toSq]);
-
-    updateKey(&p_board.key, &zobristKeys.castlingKeys[p_board.castling]);
-    updateKey(&p_board.key, &zobristKeys.castlingKeys[p_board.castling & chess.MASK_CASTLING[@intCast(toSq)] & chess.MASK_CASTLING[@intCast(fromSq)]]);
-
-    updateKey(&p_board.key, &zobristKeys.enPassantKeys[p_board.enPassantIdx]);
-    updateKey(&p_board.key, &zobristKeys.enPassantKeys[enPassantIdx]);
-
-    //updateKey(&p_board.key, &zobristKeys.turnKey[@intFromEnum(nextTurn)]);
-
-    //std.debug.print("[DEBUG] updateKeyOnMakeMove: end key: {x} \n", .{p_board.key.code});
 }
 
 pub fn convertEPIdxBoardToZobrist(enPassantIdx: u8) u8 {

@@ -1,4 +1,4 @@
-pub inline fn _BitScanForward64(index: *u32, Mask: u64) i8 {
+pub inline fn _BitScanForward64(index: *u32, Mask: u64) u8 {
     var Ret: u64 = undefined;
     asm volatile (
         \\bsfq %[Mask], %[Ret]
@@ -12,7 +12,7 @@ pub inline fn _BitScanForward64(index: *u32, Mask: u64) i8 {
     return 1;
 }
 
-pub inline fn _BitScanForwardReverse64(index: *u32, Mask: u64) i8 {
+pub inline fn _BitScanForwardReverse64(index: *u32, Mask: u64) u8 {
     var Ret: u64 = undefined;
     asm volatile ("bsrq %[Mask], %[Ret]"
         : [Ret] "=r" (Ret),

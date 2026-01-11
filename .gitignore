@@ -1,6 +1,7 @@
 *zig-out
 *.zig-cache
 src/extern/*
+secrets/*
 
 logs
 cmd
@@ -9,4 +10,4 @@ cmd
 *.gz
 *pycache*
 
-
+engines

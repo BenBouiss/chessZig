@@ -1,9 +1,9 @@
 const chess = @import("chess.zig");
-const exploration = @import("exploration.zig");
 const movel = @import("move.zig");
 const std = @import("std");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
+const perftl = @import("search/perft.zig");
 
 const build_options = @import("build_options");
 
@@ -31,24 +31,21 @@ pub const benchmarkResult = struct {
     }
     pub fn addNode(p_self: *benchmarkResult, p_move: *const IMove) void {
         p_self.n_nodes += 1;
-        _ = p_move;
-        //if (p_move.isDoublePush()) {
-        //    p_self.n_doublePawn += 1;
-        //    return;
-        //}
-        //if (p_move.isKingSideCastle() or p_move.isQueenSideCastle()) {
-        //    p_self.n_castles += 1;
-        //    return;
-        //}
-        //if (p_move.isCapture()) {
-        //    p_self.n_captures += 1;
-        //}
-        //if (p_move.isEnpassant()) {
-        //    p_self.n_enpassants += 1;
-        //}
-        //if (p_move.isPromotion()) {
-        //    p_self.n_promotions += 1;
-        //}
+        if (p_move.isDoublePush()) {
+            p_self.n_doublePawn += 1;
+        } else if (p_move.isEnpassant()) {
+            p_self.n_enpassants += 1;
+            p_self.n_captures += 1;
+        } else if (p_move.isPromotion()) {
+            p_self.n_promotions += 1;
+            if (p_move.isCapture()) {
+                p_self.n_captures += 1;
+            }
+        } else if (p_move.isCapture()) {
+            p_self.n_captures += 1;
+        } else if (p_move.isCastle()) {
+            p_self.n_castles += 1;
+        }
     }
     pub fn printInfo(self: benchmarkResult) void {
         std.debug.print("\n|Nodes|Capture|Doublepush|Enpassant|castling|promotions|\n", .{});
@@ -112,20 +109,39 @@ pub const ExpectedBenchmarkResults = [_]i64{
 // source: https://github.com/Timmoth/grandchesstree
 
 pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread: u8, batched: bool) void {
-    var bench_res: benchmarkResult = .{};
     var _start: i64 = 0;
     var _end: i64 = 0;
+    for (1..(n_max + 1)) |depth| {
+        _start = std.time.milliTimestamp();
+        std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
+        const res = perftl.perftThreadStart(p_state, @intCast(depth), nThread, batched) catch unreachable;
+        const _node: i64 = @intCast(res.n_nodeExplored);
+        _end = std.time.milliTimestamp();
+        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, res.n_nodeExplored, @divFloor(_node, (_end - _start + 1)) * 1000 });
+        if (res.n_nodeExplored != ExpectedBenchmarkResults[depth]) {
+            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], res.n_nodeExplored, ExpectedBenchmarkResults[depth] - _node });
+        }
+        if (comptime useHash) {
+            std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{res.n_hashRetrieve});
+            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
+        }
+    }
+}
+pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool) void {
+    var _start: i64 = 0;
+    var _end: i64 = 0;
+    var bench_res: benchmarkResult = .{};
     for (1..(n_max + 1)) |depth| {
         bench_res.reset();
         _start = std.time.milliTimestamp();
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
-        exploration.explorationNDepthThreadStart(p_state, @intCast(depth), nThread, &bench_res, batched) catch unreachable;
-        _end = std.time.milliTimestamp();
+        _ = perftl.perft_debug_loop(p_state, @intCast(depth), batched, &bench_res);
         const _node: i64 = @intCast(bench_res.n_nodes);
-        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, bench_res.n_nodes, @divFloor(_node, (_end - _start + 1)) * 1000 });
+        _end = std.time.milliTimestamp();
+        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, _node, @divFloor(_node, (_end - _start + 1)) * 1000 });
         bench_res.printInfo();
-        if (bench_res.n_nodes != ExpectedBenchmarkResults[depth]) {
-            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], bench_res.n_nodes, ExpectedBenchmarkResults[depth] - _node });
+        if (_node != ExpectedBenchmarkResults[depth]) {
+            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], _node, ExpectedBenchmarkResults[depth] - _node });
         }
         if (comptime useHash) {
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{bench_res.n_hashRetrieve});
@@ -134,12 +150,14 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
         //        std.debug.assert(bench_res.n_nodes == ExpectedBenchmarkResults[depth]);
     }
 }
+
 pub fn test_benchmark() void {
     var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch unreachable;
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 7, 0, false);
+    nodeExplorationBenchmark(&game_state, 7, 1, false);
+    //nodeBenchmark_debug(&game_state, 7, false);
 }
 
 pub fn main() !void {

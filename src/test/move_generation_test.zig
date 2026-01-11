@@ -2,9 +2,10 @@ const chessl = @import("../chess.zig");
 const moveGenl = @import("../move_generation.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
-const explorationl = @import("../exploration.zig");
 const benchmarkl = @import("../benchmark.zig");
+const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
+const perftl = @import("../search/perft.zig");
 
 const std = @import("std");
 
@@ -26,16 +27,18 @@ test "en passant checking" {
 }
 test "perft" {
     mainl.initAll();
+    const perft_THREAD = 1;
+    const perft_BATCHED = true;
+    const perft_MAX_DEPTH = 6;
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
-    var tmp: benchmarkl.benchmarkResult = .{};
-    for (1..7) |depth| {
+    try std.testing.expect(!hashl.isHashTable_init());
+    for (1..perft_MAX_DEPTH + 1) |depth| {
         const _start: i64 = std.time.microTimestamp();
-        try explorationl.explorationNDepthThreadStart(&board, @intCast(depth), 1, &tmp, true);
-        const expect: i64 = @intCast(tmp.n_nodes);
+        const res = try perftl.perftThreadStart(&board, @intCast(depth), perft_THREAD, perft_BATCHED);
+        const expect: i64 = @intCast(res.n_nodeExplored);
         try std.testing.expectEqual(expect, benchmarkl.ExpectedBenchmarkResults[depth]);
         const _stop = std.time.microTimestamp();
         std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(_stop - _start, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, 1 + (_stop - _start)) });
-        tmp.reset();
     }
 
     std.debug.print("[TEST]: Perft checks passed\n", .{});

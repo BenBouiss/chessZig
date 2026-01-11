@@ -6,11 +6,39 @@ pub const NAME = "Ben";
 pub const AUTHOR = "Ben";
 pub const VERSION = "0.0.1";
 pub const SEED: u64 = 42;
+pub const MAX_MATCH_STR_LENGTH: u64 = 24 + 4096 * (5 + 1);
+pub const MAX_USER_INPUT: u64 = MAX_MATCH_STR_LENGTH;
+pub const MAX_LINE_LENGTH: usize = 128;
+
+pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
 
 pub const MAX_HASH_BITS = 18;
 pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
 pub const DEFAULT_USEHASHTABLE = true;
+
+pub const DEFAULT_DEPTH: u16 = 4;
+pub const MIN_DEPTH: u16 = 1;
+pub const MAX_DEPTH: u16 = 6;
+
+pub const _DEFAULT_LIMIT_ELO = "false";
+pub const DEFAULT_LIMIT_ELO = false;
+pub const DEFAULT_ELO: u32 = 2500;
+
+pub const _DEFAULT_FIXED_DEPTH = "false";
+pub const DEFAULT_FIXED_DEPTH = false;
+
+pub const MIN_ELO: u32 = 1000;
+pub const MAX_ELO: u32 = 3000;
+
+// scheduler options
+// maximum allocated time in fraction of the remaining time
+pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
+pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
+pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
+pub var SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR: u16 = 3;
+// estimate of the time increase when increasing the depth by 1
+pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 4;
