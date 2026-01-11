@@ -37,6 +37,7 @@ pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
 pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
 pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
 pub var SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR: u16 = 3;
+// estimate of the time increase when increasing the depth by 1
 pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
 
 // hashTable constants
