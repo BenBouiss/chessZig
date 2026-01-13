@@ -20,19 +20,19 @@ const useDebug = build_options.useDebug;
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
 
-pub fn initAll() void {
-    magicl._initMagic(&magicl.magicTable);
+pub fn initAll(verbose: bool) void {
+    magicl._initMagic(&magicl.magicTable, verbose);
 
     hashl._initZobrist(GLOBAL_ALLOC, 42);
     //hashl._initOrReallocHashTable(GLOBAL_ALLOC, 2000);
 
-    moveTablel._initTables();
+    moveTablel._initTables(verbose);
     if (comptime useDebug) {
         std.debug.print("[PRE] Building using the useDebug flag\n", .{});
     }
 }
 pub fn test_bench() void {
-    initAll();
+    initAll(true);
     benchl.test_benchmark();
 }
 pub fn test_speedTest() !void {

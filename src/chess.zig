@@ -2075,7 +2075,7 @@ pub fn test_stackedPawn() !void {
 }
 
 pub fn main() !void {
-    mainl.initAll();
+    mainl.initAll(true);
     //try test_avx();
     try test_isolated();
 

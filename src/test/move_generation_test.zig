@@ -15,7 +15,7 @@ var GPA = std.heap.GeneralPurposeAllocator(.{}){};
 pub const GLOBAL_ALLOC = GPA.allocator();
 
 test "en passant checking" {
-    mainl.initAll();
+    mainl.initAll(false);
     var tmp: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, "5bnr/5ppp/1Q6/2Bkp3/3pP3/3P4/5PPP/4KBNR b H e3 0 39");
     const allMoves = moveGenl.generateLegalMoves(&tmp);
     try std.testing.expectEqual(allMoves.len, 1);
@@ -26,7 +26,7 @@ test "en passant checking" {
     std.debug.print("[TEST]: En passant checking passed\n", .{});
 }
 test "perft" {
-    mainl.initAll();
+    mainl.initAll(false);
     const perft_THREAD = 1;
     const perft_BATCHED = true;
     const perft_MAX_DEPTH = 6;

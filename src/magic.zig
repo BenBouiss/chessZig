@@ -56,19 +56,25 @@ pub const magicRecord = struct {
         return .{ .isInitialized = true, .rookMoves = undefined, .bishopMoves = undefined };
     }
 };
-pub fn _initMagic(p_magic: *magicRecord) void {
+pub fn _initMagic(p_magic: *magicRecord, verbose: bool) void {
     if (comptime useMagic) {
-        std.debug.print("Building using magic move gen!\n", .{});
+        if (verbose) {
+            std.debug.print("Building using magic move gen!\n", .{});
+        }
     }
     const _start = std.time.milliTimestamp();
-    std.debug.print("[PRE] Starting the search for magic keys \n", .{});
+
+    if (verbose) {
+        std.debug.print("[PRE] Starting the search for magic keys \n", .{});
+    }
     p_magic.* = magicRecord.init();
 
-    //initRookBishopMagic(&ret);
     initRookBishopMagicCached(p_magic);
     initRookBishopMoves(p_magic);
 
-    std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
+    if (verbose) {
+        std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
+    }
     return;
 }
 

@@ -10,7 +10,7 @@ var GPA = std.heap.GeneralPurposeAllocator(.{}){};
 pub const GLOBAL_ALLOC = GPA.allocator();
 
 test "in between" {
-    moveTablel._initTables();
+    moveTablel._initTables(false);
     try std.testing.expectEqual(chessl.inBetween(.a1, .a8), 0x1010101010100);
     try std.testing.expectEqual(chessl.inBetween(.f1, .f8), 0x20202020202000);
     try std.testing.expectEqual(chessl.inBetween(.h4, .a4), 0x7e000000);

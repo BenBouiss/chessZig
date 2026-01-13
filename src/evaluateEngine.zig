@@ -694,7 +694,7 @@ fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u
 }
 
 fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLAYER]std.ArrayList(string)) void {
-    mainl.initAll();
+    mainl.initAll(p_self.status.debugMode);
 
     p_self.respondAll("UCI") catch {};
 
