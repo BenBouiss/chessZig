@@ -1,0 +1,22 @@
+[engine1]
+//path="engines/engine_11_01_26";
+path="engines/engine";
+name="Variable depth";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value false";
+"debug on";
+
+[engine2]
+path="engines/engine";
+//path="zig-out/bin/engine";
+name="Fixed depth";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value true";
+"debug on";
+
+[match]
+nMatch=1;
+playerSwitch=true;
+debugMode=true;
+
+

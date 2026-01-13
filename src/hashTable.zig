@@ -133,7 +133,6 @@ pub const Hash_table = struct {
         }
     }
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
-        //return hash >> @intCast(64 - self.nBits);
         return hash % self.entries.len;
     }
     pub fn getBucketFromFullHashIndex(self: Hash_table, hash: u64) *Hash_bucket {

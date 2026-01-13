@@ -18,10 +18,15 @@ pub const cachedKingTable: kingTable = kingTable.init();
 // https://www.chessprogramming.org/Square_Attacked_By#Obstructed
 pub var arrRectangular: [64][64]u64 = undefined;
 
-pub fn _initTables() void {
-    std.debug.print("[PRE] Starting the table move build\n", .{});
+pub fn _initTables(verbose: bool) void {
+    if (verbose) {
+        std.debug.print("[PRE] Starting the table move build\n", .{});
+    }
     initInbetween(&arrRectangular);
-    std.debug.print("[PRE] Finished\n", .{});
+
+    if (verbose) {
+        std.debug.print("[PRE] Finished\n", .{});
+    }
 }
 
 pub const AttackTable = struct {

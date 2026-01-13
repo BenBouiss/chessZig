@@ -554,9 +554,9 @@ pub const engine = struct {
 
     fn initInternals(p_self: *engine) bool {
         p_self.status.initializedInternals = true;
-        magicl._initMagic(&magicl.magicTable);
+        magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
 
-        moveTablel._initTables();
+        moveTablel._initTables(p_self.status.debugMode);
         hashTablel._initZobrist(p_self.alloc, configl.SEED);
         hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
 
