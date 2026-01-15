@@ -6,6 +6,8 @@ const benchmarkl = @import("../benchmark.zig");
 const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
 const perftl = @import("../search/perft.zig");
+const stringl = @import("../string.zig");
+const bookl = @import("../book.zig");
 
 const std = @import("std");
 
@@ -42,6 +44,17 @@ test "perft" {
     }
 
     std.debug.print("[TEST]: Perft checks passed\n", .{});
+}
+
+test "book algebraic" {
+    //
+    mainl.initAll(false);
+
+    const path = "opening/8moves_v3.pgn";
+    var s = try stringl.string.initFromSlice(GLOBAL_ALLOC, path);
+    defer s.free(GLOBAL_ALLOC);
+    try bookl.test_db(&s);
+    std.debug.print("[TEST]: Reading random algebraic position passed\n", .{});
 }
 
 pub fn main() void {

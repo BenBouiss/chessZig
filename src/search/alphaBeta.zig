@@ -59,13 +59,18 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         return score;
     }
     if (p_state.isStaleMateRepetition()) {
+        if (comptime useHash) {
+            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), heuristicl.simpleStalemateScore);
+            _ = hashl.hashTable.storeEntry(&s_entry);
+            //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
+        }
         return heuristicl.simpleStalemateScore;
     }
     if (comptime useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
         if (entry.valid) {
             p_info.n_hashRetrieve += 1;
-            return entry.eval();
+            return color_mask * entry.eval();
         }
     }
 
@@ -93,14 +98,12 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     if (fmoves.len == 0) {
         if (!p_state.isLegal(p_state.whiteToMove())) {
             finalScore = -(heuristicl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
-
-            //currentLine.scoring = -(heuristicl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
         } else {
             finalScore = heuristicl.simpleStalemateScore;
         }
     }
     if (comptime useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), finalScore);
+        const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), color_mask * finalScore);
         _ = hashl.hashTable.storeEntry(&s_entry);
     }
     return finalScore;
