@@ -62,6 +62,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         if (comptime useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), heuristicl.simpleStalemateScore);
             _ = hashl.hashTable.storeEntry(&s_entry);
+            // might be useful for late game
             //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
         }
         return heuristicl.simpleStalemateScore;

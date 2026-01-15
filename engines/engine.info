@@ -11,7 +11,7 @@ path="engines/bin/engine_scoreMask";
 name="Variable depth use hash";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
-"setoption name hash value 100";
+"setoption name hash value 1000";
 "debug on";
 
 [match]
