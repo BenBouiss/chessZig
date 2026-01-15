@@ -227,7 +227,6 @@ pub const engine = struct {
     pub fn initOptions(p_self: *engine) !void {
         //p_self.addOption(.THREADS, .SPIN,
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_THREAD, .default = 1 } } });
-        //try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_THREAD, .default = 1 } } });
 
         try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
@@ -291,9 +290,6 @@ pub const engine = struct {
         p_self.status.running = false;
         p_self.searcher.interrupt = true;
         p_self.waitOnWorkingThreads();
-        //if (p_self.searcher.schedul.engineSet) {
-        //    threadingl.joinOnThreadPack(p_self.searcher.schedul.p_threadPack);
-        //}
         p_self.respond("its ovah");
         p_self.free();
         return true;

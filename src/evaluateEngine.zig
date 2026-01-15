@@ -748,7 +748,7 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
         _nMatch = _nMatch * 2;
     }
     while (matchCount < _nMatch) {
-        if ((matchCount % 2) != 0 and p_self.config.match.playerSwitch) {
+        if (matchCount != 0 and p_self.config.match.playerSwitch) {
             const tmp = p_self.match.playerInv[0].engineUsed;
             p_self.match.playerInv[0].engineUsed = p_self.match.playerInv[1].engineUsed;
             p_self.match.playerInv[1].engineUsed = tmp;
