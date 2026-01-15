@@ -272,3 +272,10 @@ pub fn askContinue() void {
     std.debug.print("\n", .{});
     return;
 }
+
+pub fn fileExists(path: []const u8) bool {
+    std.fs.cwd().access(path, .{}) catch {
+        return false;
+    };
+    return true;
+}

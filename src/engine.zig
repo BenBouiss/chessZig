@@ -403,6 +403,7 @@ pub const engine = struct {
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
         p_self.status.positionProvided = false;
+        _ = p_self.updateElo(p_self.options.engineElo);
         return true;
     }
     pub fn executeDebugCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -574,8 +575,6 @@ pub const engine = struct {
         p_self.options.hashTableSize = hashSize;
         hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
 
-        //TODO: Dirty fix when launching multiple matches one after the other, this prevents launching a big fat depth 13 search as first move
-        _ = p_self.updateElo(p_self.options.engineElo);
         return true;
     }
     fn updateElo(p_self: *engine, elo: spinVarType) bool {

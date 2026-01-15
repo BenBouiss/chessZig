@@ -1,22 +1,23 @@
 [engine1]
-//path="engines/engine_11_01_26";
-path="engines/engine";
-name="Variable depth";
+path="engines/bin/engine_scoreMask";
+name="Variable depth no use hash";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
+"setoption name useHash value false";
 "debug on";
 
 [engine2]
-path="engines/engine";
-//path="zig-out/bin/engine";
-name="Fixed depth";
+path="engines/bin/engine_scoreMask";
+name="Variable depth use hash";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value true";
+"setoption name fixedDepth value false";
+"setoption name hash value 100";
 "debug on";
 
 [match]
-nMatch=1;
+nMatch=3;
 playerSwitch=true;
 debugMode=true;
-
+useOpeningBook=true;
+openingBookPath="opening/8moves_v3.pgn"
 

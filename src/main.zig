@@ -12,7 +12,8 @@ const speedTestl = @import("speedTest.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
 const evalEngl = @import("evaluateEngine.zig");
-const guil = @import("gui/gui.zig");
+const bookl = @import("book.zig");
+const stringl = @import("string.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -87,6 +88,13 @@ pub fn test_decision() !void {
     std.debug.print("[TEST]: Mate in one test passed\n", .{});
 }
 
+pub fn test_db() !void {
+    initAll(true);
+    const path = "opening/8moves_v3.pgn";
+    var s = try stringl.string.initFromSlice(GLOBAL_ALLOC, path);
+    defer s.free(GLOBAL_ALLOC);
+    try bookl.test_db(&s);
+}
 pub fn main() anyerror!void {
     //magicl.main();
     //try chessl.main();
@@ -95,4 +103,5 @@ pub fn main() anyerror!void {
     //try test_decision();
     try evalEngl.main();
     //try test_test();
+    //try test_db();
 }

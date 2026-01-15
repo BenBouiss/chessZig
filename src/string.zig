@@ -9,14 +9,14 @@ pub const string_err = error{
 
 pub const string = struct {
     len: usize,
-    capactity: usize,
+    capacity: usize,
     data: []u8,
     //freed: bool = false,
     pub fn initFromSlice(alloc: std.mem.Allocator, slice: []const u8) !string {
         var ret: string = undefined;
         ret.len = slice.len;
-        ret.capactity = slice.len;
-        ret.data = try alloc.alloc(u8, ret.capactity);
+        ret.capacity = slice.len;
+        ret.data = try alloc.alloc(u8, ret.capacity);
         try ret.copyFromSlice(slice);
         return ret;
     }
@@ -24,17 +24,17 @@ pub const string = struct {
     pub fn initZero(alloc: std.mem.Allocator, cap: usize) !string {
         var ret: string = undefined;
         ret.data = try alloc.alloc(u8, cap);
-        ret.capactity = cap;
+        ret.capacity = cap;
         ret.len = 0;
         return ret;
     }
     pub inline fn initFromBuffer(buffer: []u8) string {
         // this str does not take ownership of the data use carefully
-        return .{ .len = buffer.len, .data = buffer, .capactity = buffer.len };
+        return .{ .len = buffer.len, .data = buffer, .capacity = buffer.len };
     }
 
     pub fn copyFromSlice(p_self: *string, slice: []const u8) string_err!void {
-        if (slice.len > p_self.capactity) {
+        if (slice.len > p_self.capacity) {
             return string_err.nei_error;
         }
         for (0..slice.len) |i| {
@@ -42,7 +42,7 @@ pub const string = struct {
         }
     }
     pub fn put(p_self: *string, letter: u8) bool {
-        if ((p_self.len + 1) > p_self.capactity) {
+        if ((p_self.len + 1) > p_self.capacity) {
             return false;
         }
         p_self.data[p_self.len] = letter;
@@ -50,13 +50,21 @@ pub const string = struct {
         return true;
     }
     pub fn extend(p_self: *string, slice: []const u8) bool {
-        if ((slice.len + p_self.len) > p_self.capactity) {
+        if ((slice.len + p_self.len) > p_self.capacity) {
             return false;
         }
         for (slice) |letter| {
             _ = p_self.put(letter);
         }
         return true;
+    }
+    pub fn extendWithResize(p_self: *string, alloc: std.mem.Allocator, slice: []const u8) !void {
+        if ((slice.len + p_self.len) > p_self.capacity) {
+            p_self.data = try alloc.realloc(p_self.data, (slice.len + p_self.len));
+        }
+        for (slice) |letter| {
+            _ = p_self.put(letter);
+        }
     }
     pub fn _slice(self: string) []const u8 {
         return self.data[0..self.len];
@@ -78,7 +86,23 @@ pub const string = struct {
     pub inline fn startsWithStr(p_self: *string, other: *string) bool {
         return p_self.startsWith(other.data[0..other.len]);
     }
-    pub inline fn copy(p_self: *string, alloc: std.mem.Allocator) string {
+    pub fn endsWith(p_self: *string, other: []const u8) bool {
+        if (other.len > p_self.len) {
+            return false;
+        }
+        for (0..other.len) |i| {
+            const idx1 = p_self.len - 1 - i;
+            const idx2 = other.len - 1 - i;
+            if (p_self.data[idx1] != other[idx2]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    pub inline fn endsWithStr(p_self: *string, other: *string) bool {
+        return p_self.endsWith(other.data[0..other.len]);
+    }
+    pub inline fn copy(p_self: *string, alloc: std.mem.Allocator) !string {
         return string.initFromSlice(alloc, p_self._slice());
     }
     pub fn contains(p_self: *string, substr: *string, token: utilsl.strTokens) bool {
@@ -121,5 +145,11 @@ pub const string = struct {
             return string_err.itemNotFound_error;
         }
         return p_self._slice()[(startIndex + 1) .. (@as(usize, @intCast(endIndex)) + startIndex) + 1];
+    }
+    pub fn split(self: *string, alloc: std.mem.Allocator, e: u8) !std.ArrayList([]const u8) {
+        return try utilsl.split(u8, alloc, self._slice(), e);
+    }
+    pub fn clearRetainingCapacity(self: *string) void {
+        self.len = 0;
     }
 };

@@ -1,8 +1,4 @@
 const chessl = @import("../chess.zig");
-const moveGenl = @import("../move_generation.zig");
-const movel = @import("../move.zig");
-const squarel = @import("../square.zig");
-const benchmarkl = @import("../benchmark.zig");
 const utilsl = @import("../utils.zig");
 const mainl = @import("../main.zig");
 
@@ -30,7 +26,6 @@ test "fen" {
     try std.testing.expect(true);
     var str = tmp.get_fen();
     var comp = utilsl.trimStr(&str);
-    //std.debug.print("[TEST] {s} original({d}), reconstructed({d}) {s}\n", .{ chessl.DEFAULT_FEN, chessl.DEFAULT_FEN.len, comp.len, comp });
     try std.testing.expect(utilsl.equal(u8, comp, chessl.DEFAULT_FEN));
 
     const def_noCastle = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 0";
@@ -38,10 +33,7 @@ test "fen" {
     str = tmp.get_fen();
     comp = utilsl.trimStr(&str);
 
-    //std.debug.print("[TEST] {s} original({d}), reconstructed({d}) {s}\n", .{ def_noCastle, def_noCastle.len, comp.len, comp });
     try std.testing.expect(utilsl.equal(u8, comp, def_noCastle));
 }
 
-pub fn main() void {
-    //std.debug.print("[TEST]: Running the move generation checks\n", .{});
-}
+pub fn main() void {}

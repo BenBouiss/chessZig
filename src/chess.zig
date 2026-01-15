@@ -22,6 +22,7 @@ const magicl = @import("magic.zig");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const board_statusl = @import("board_status.zig");
+const stringl = @import("string.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
@@ -29,6 +30,7 @@ const moveContainer = movel.moveContainer;
 const matchMoveContainer = movel.matchMoveContainer;
 const cachedTables = tablel.cachedTables;
 const status = board_statusl.status;
+const string = stringl.string;
 
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
@@ -625,7 +627,7 @@ pub const Board_state = struct {
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,
     seed: u64 = 42,
-    isInit: bool = false,
+    //isInit: bool = false,
 
     pub fn init(alloc: std.mem.Allocator) !Board_state {
         var ret: Board_state = undefined;
@@ -1956,7 +1958,152 @@ pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square
     }
     return ret_flag;
 }
+pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 {
+    var ret: u64 = EMPTY;
 
+    const destBB = sqToBitboard(X);
+    if (!white) {
+        ret |= _AllAttackKnightMask(destBB) & p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)];
+        ret |= _AllAttackBishopMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+        ret |= _AllAttackRookMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare) {
+            ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)]));
+        }
+        ret |= _AllAttackKingMask(destBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)]);
+
+        const piece_idx: u8 = @intFromEnum(e_piece.nBlackPawn);
+        ret |= (destBB << 8) & (p_board.pieceBB[piece_idx]);
+        ret |= (((destBB << 8) & (~p_board.occupiedBB)) << 8) & ((p_board.pieceBB[piece_idx] & blackPawnDoubleRank));
+    } else {
+        ret |= _AllAttackKnightMask(destBB) & p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)];
+        ret |= _AllAttackBishopMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
+        ret |= _AllAttackRookMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
+
+        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare) {
+            ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]));
+        }
+        //ret |= _AllAttackPawnMask(destBB, white) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
+        ret |= _AllAttackKingMask(destBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)]);
+
+        const piece_idx: u8 = @intFromEnum(e_piece.nWhitePawn);
+        ret |= (destBB >> 8) & (p_board.pieceBB[piece_idx]);
+        ret |= (((destBB >> 8) & (~p_board.occupiedBB)) >> 8) & ((p_board.pieceBB[piece_idx] & whitePawnDoubleRank));
+    }
+    return ret;
+}
+
+pub fn algebraicIsLetterPiece(letter: u8) bool {
+    // P, B, N, R, Q, K
+    return letter == 'P' or letter == 'B' or letter == 'N' or letter == 'R' or letter == 'Q' or letter == 'K';
+}
+pub fn algebraicIsLetterFile(letter: u8) bool {
+    return letter >= 'a' and letter <= 'h';
+}
+
+pub fn algebraicIsLetterRank(letter: u8) bool {
+    return letter >= '1' and letter <= '8';
+}
+pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
+    // exemple of match "1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6"
+    // O-O: castling kingside
+    // O-O-O: castling queenside
+    // promotions: =
+    // induces a check: + at the end (useless)
+    const white = p_state.whiteToMove();
+    if (moveStr.containsE("O-O-O", .ignoreCase)) {
+        if (white) {
+            return movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.c1), @intFromEnum(e_moveFlags.QUEENCASTLE), .nWhiteKing);
+        } else {
+            return movel.build_move(@intFromEnum(e_square.e8), @intFromEnum(e_square.c8), @intFromEnum(e_moveFlags.QUEENCASTLE), .nBlackKing);
+        }
+    } else if (moveStr.containsE("O-O", .ignoreCase)) {
+        if (white) {
+            return movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.g1), @intFromEnum(e_moveFlags.KINGCASTLE), .nWhiteKing);
+        } else {
+            return movel.build_move(@intFromEnum(e_square.e8), @intFromEnum(e_square.g8), @intFromEnum(e_moveFlags.KINGCASTLE), .nBlackKing);
+        }
+    } else if (moveStr.containsE("-", .ignoreCase)) {
+        return .{};
+    }
+    std.debug.assert(moveStr.len > 1);
+    var startXPos = moveStr.len - 2;
+    while (startXPos >= 0) {
+        const posSq = moveStr._slice()[startXPos .. startXPos + 2];
+        if (cst_stringToLERF(posSq[0..2]) != .invalid) {
+            break;
+        }
+        startXPos -= 1;
+    }
+    const posSq = moveStr._slice()[startXPos .. startXPos + 2];
+    const xSq = cst_stringToLERF(posSq[0..2]);
+    if (xSq == .invalid) {
+        return .{};
+    }
+
+    var potentialFromBB = p_state.occupiedBB;
+    var color_offset: u8 = 0;
+    if (!white) {
+        color_offset = 6;
+    }
+
+    for (0..startXPos) |letterIdx| {
+        const letter = moveStr._slice()[letterIdx];
+        if (algebraicIsLetterPiece(letter)) {
+            const piece = getPieceFromStr(letter);
+            potentialFromBB &= (p_state.pieceBB[@intFromEnum(piece) + color_offset]);
+        } else if (algebraicIsLetterFile(letter)) {
+            const fileNbr: u8 = letter - 'a';
+            potentialFromBB &= fileMaskFromFileN(fileNbr);
+        } else if (algebraicIsLetterRank(letter)) {
+            const rankNbr = letter - '1';
+            potentialFromBB &= rankMaskFromRankN(rankNbr);
+        }
+    }
+    potentialFromBB &= getAllMoveMaskFromX(p_state, white, xSq);
+    if (l_popcount(potentialFromBB) != 1) {
+        // possibly only a pawn move
+        potentialFromBB &= (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]);
+
+        if (l_popcount(potentialFromBB) != 1) {
+            std.debug.print("[PANIC] algebraicToIMove: potentialFromBB contains 0 or multiple possible source square for token: '{s}'\n", .{moveStr._slice()});
+            std.debug.print("[PANIC] algebraicToIMove: startXPos: {d} white: {}\n", .{ startXPos, p_state.whiteToMove() });
+            p_state.move_history.print();
+
+            print_bitboard(potentialFromBB);
+            @panic("???");
+        }
+    }
+    const fromSq = bitscan(potentialFromBB);
+    var ret: IMove = movel.build_move(fromSq, @intFromEnum(xSq), 0, .nEmptySquare);
+
+    const fPiece = p_state.get_piece(fromSq);
+    const cPiece = p_state.get_piece(@intFromEnum(xSq));
+    ret.setFromPiece(fPiece);
+    ret.setCapture(cPiece);
+    fillMoveFromState(p_state, &ret);
+    if (moveStr.containsE("=", .ignoreCase)) {
+        const eqIdx = moveStr.findE('=') catch {
+            return ret;
+        };
+        const prom = moveStr._slice()[eqIdx + 1];
+        var flag = ret.getFlag();
+        if (prom == 'n') {
+            flag |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
+        } else if (prom == 'b') {
+            flag |= @intFromEnum(e_moveFlags.BISHOPPROMO);
+        } else if (prom == 'r') {
+            flag |= @intFromEnum(e_moveFlags.ROOKPROMO);
+        } else if (prom == 'q') {
+            flag |= @intFromEnum(e_moveFlags.QUEENPROMO);
+        } else {
+            @panic("Unknown promotion piece found");
+        }
+        ret.setFlag(flag);
+    }
+
+    return ret;
+}
+//pub fn processAlgebraicLine(p_board: *Board_state)
 pub fn _pin_scenario() void {
     std.debug.print("[DEBUG] pin scenario: \n", .{});
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
@@ -2074,12 +2221,68 @@ pub fn test_stackedPawn() !void {
     print_bitboard(stackedPawns(overKill));
 }
 
+pub fn algebraicLineToIMoveMatch(line: *string) !matchMoveContainer {
+    var tmpBoard = try getBoardFromFen(get_global_alloc(), DEFAULT_FEN);
+    var tokens = try line.split(get_global_alloc(), ' ');
+    defer tokens.deinit(get_global_alloc());
+    var ret: matchMoveContainer = .{};
+    for (tokens.items) |str| {
+        var offset: usize = 0;
+        if (utils.contains(str, ".", .ignoreCase)) {
+            if (str.len == 2) {
+                continue;
+            }
+            // needed because sometimes the #turnCount. is next to the move bug on my part
+            offset = 2;
+        }
+
+        var moveStr = try string.initFromSlice(get_global_alloc(), str[offset..str.len]);
+        defer moveStr.free(get_global_alloc());
+        const move = algebraicToIMove(&tmpBoard, &moveStr);
+        if (move.isValid()) {
+            tmpBoard.makeMove(move);
+            _ = ret.append(move, .{});
+        }
+    }
+    return ret;
+}
+pub fn algebraicToFen(alloc: std.mem.Allocator, line: *string) ![MAX_FEN_LENGTH]u8 {
+    const moves = try algebraicLineToIMoveMatch(line);
+    var tmp: Board_state = try getBoardFromFen(alloc, DEFAULT_FEN);
+    for (0..moves.len) |i| {
+        const move = moves.moves[i];
+        tmp.makeMove(move);
+        sanityCheckBoardState(&tmp);
+    }
+    defer tmp.free(alloc);
+    return tmp.get_fen();
+}
+pub fn test_single_algebraic() !void {
+    var state = try getBoardFromFen(get_global_alloc(), DEFAULT_FEN);
+    // 1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6
+    const algFen = "d4";
+    var _algFen: string = try string.initFromSlice(get_global_alloc(), algFen);
+    defer _algFen.free(get_global_alloc());
+    const move = algebraicToIMove(&state, &_algFen);
+    std.debug.print("[DEBUG] test_single_algebraic: from {d} to {d} flag {d} fpiece {}\n", .{ move.getFrom(), move.getTo(), move.getFlag(), move.getFromPiece() });
+}
+pub fn test_line_algebraic() !void {
+    const algFen = "1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6";
+    var _algFen: string = try string.initFromSlice(get_global_alloc(), algFen);
+    defer _algFen.free(get_global_alloc());
+    var moves = try algebraicLineToIMoveMatch(&_algFen);
+
+    std.debug.print("[DEBUG] test_line_algebraic: original: {s}, reconstructed: \n", .{algFen});
+    moves.print();
+}
+
 pub fn main() !void {
     mainl.initAll(true);
     //try test_avx();
-    try test_isolated();
-
-    try test_stackedPawn();
+    //try test_isolated();
+    //try test_stackedPawn();
     //test_scenarios();
+    try test_single_algebraic();
+    try test_line_algebraic();
     return;
 }

@@ -119,21 +119,17 @@ pub fn initRookBishopMoves(p_record: *magicRecord) void {
     return;
 }
 
-//pub fn magicIndex(entry: magic_entry, blockers: u64) usize {
-//    const _blockers = blockers & entry.mask;
-//    const hash = _blockers *% entry.magic;
-//    return @intCast(hash >> @intCast(64 - entry.index_bit));
-//}
-
 pub fn rookMagicIndex(entry: magic_entry, blockers: u64) u64 {
     const _blockers = blockers & entry.mask;
     const hash = _blockers *% entry.magic;
-    return (hash >> (64 - ROOK_FIXED_BIT));
+    //return (hash >> (64 - ROOK_FIXED_BIT));
+    return (hash >> 52);
 }
 pub fn bishopMagicIndex(entry: magic_entry, blockers: u64) u64 {
     const _blockers = blockers & entry.mask;
     const hash = _blockers *% entry.magic;
-    return (hash >> @intCast(64 - BISHOP_FIXED_BIT));
+    //return (hash >> (64 - BISHOP_FIXED_BIT));
+    return (hash >> 55);
 }
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {

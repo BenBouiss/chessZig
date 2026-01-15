@@ -143,6 +143,16 @@ pub const Hash_table = struct {
         return &self.entries[offset];
     }
 
+    pub fn overwriteEvaluationEntries(p_self: *Hash_table, p_entry: *const Hash_entry, score: scoreType) void {
+        const index = p_entry.key.code;
+        var p_bucket = p_self.getBucketFromFullHashIndex(index);
+        for (0..p_bucket.len) |i| {
+            var ent = &p_bucket.entries[i];
+            if (ent.key.code == p_entry.key.code) {
+                ent.val.evaluation = score;
+            }
+        }
+    }
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry) bool {
         const index = p_entry.key.code;
         p_self.n_insertion += 1;
