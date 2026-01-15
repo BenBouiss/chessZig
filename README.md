@@ -24,6 +24,7 @@ build script:
 - fbuild.sh: ReleaseFast zig build with "fastBiscan"
 - fmbuild.sh: ReleaseFast zig build with "fastBiscan" and "magic"
 - fsbuild.sh: ReleaseFast zig build with "fastBiscan", "staged" and "magic"
+- test.sh: Runs the tests
 ...
 
 
@@ -62,3 +63,32 @@ depth = 4: 8 ms for 197281 nodes (21920000 nodes/s)
 depth = 5: 182 ms for 4865609 nodes (26588000 nodes/s)
 depth = 6: 4127 ms for 119060324 nodes (28842000 nodes/s)
 depth = 7: 118382 ms for 3195901860 nodes (26996000 nodes/s)
+
+Supported UCI commands:
+- uci
+- isready
+- position
+- go
+    - searchmoves
+    - <>
+    - perft 
+- stop
+- quit
+- ucinewgame
+- setoption
+- debug: [on | off]
+
+
+Extra commands:
+- print: prints the currently set position
+- benchmark: launches a benchmark
+
+UCI setoption options:
+- threads: [spin] number of threads to be used during the search
+- usehash: [check] enables or disables the use of the hashTable
+- hash: [spin] size of the hashTable in MB
+- uci_limitstrength: [check] enables or disables the limitation of the engine's strength
+- UCI_Elo: [spin] engine's elo
+- fixedDepth: [check] fixes the depth during a normal go cmd to the depth prescribed by the engine's elo
+- clearHash: [button] clears the hashTable's entries
+
