@@ -336,6 +336,7 @@ pub const matchMoveContainer = struct {
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     keyCodes: [MAX_MATCH_LENGTH]u32 = undefined,
     lastIrreversibleMoveIndex: u16 = 0,
+    //lastMove: IMove = .{},
     len: usize = 0,
 
     pub fn print(p_self: *matchMoveContainer) void {
@@ -356,6 +357,7 @@ pub const matchMoveContainer = struct {
         if (move.isIrreversible()) {
             p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
         }
+        //p_self.lastMove = move;
         p_self.moves[p_self.len] = move;
         p_self.keyCodes[p_self.len] = @intCast(key.code >> 32);
         p_self.len += 1;
@@ -370,6 +372,7 @@ pub const matchMoveContainer = struct {
         if (move.isIrreversible()) {
             p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
         }
+        //p_self.lastMove = move;
         p_self.moves[p_self.len] = move;
         p_self.keyCodes[p_self.len] = key;
         p_self.len += 1;
@@ -427,6 +430,7 @@ pub const matchMoveContainer = struct {
             p_self.lastIrreversibleMoveIndex = index;
         }
         p_self.len -= 1;
+        //p_self.lastMove = p_self.moves[p_self.len - 1];
         return;
     }
     pub fn popMove(p_self: *matchMoveContainer) IMove {
@@ -447,11 +451,14 @@ pub const matchMoveContainer = struct {
             p_self.lastIrreversibleMoveIndex = index;
         }
         p_self.len -= 1;
+        //p_self.lastMove = p_self.moves[p_self.len - 1];
         return p_self.moves[p_self.len];
     }
     pub fn getLastMove(self: matchMoveContainer) IMove {
-        if (self.len == 0) {
-            return .{};
+        if (comptime useDebug) {
+            if (self.len == 0) {
+                return .{};
+            }
         }
         return self.moves[self.len - 1];
     }

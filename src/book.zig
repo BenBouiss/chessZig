@@ -4,6 +4,7 @@ const stringl = @import("string.zig");
 const utilsl = @import("utils.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
+const filel = @import("file.zig");
 
 const _alloc = mainl.GLOBAL_ALLOC;
 const string = stringl.string;
@@ -218,7 +219,7 @@ pub fn test_db(path: *string) !void {
 
 pub fn main(path: *string) !void {
     //
-    if (!utilsl.fileExists(path._slice())) {
+    if (!filel.fileExists(path._slice())) {
         std.debug.print("File {s} does not exists \n", .{path._slice()});
         return;
     }

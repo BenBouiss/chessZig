@@ -56,13 +56,13 @@ Values:
 
 |3195901860|108329926|644115108|319617|883453|0|
 
-depth = 1: 0 ms for 20 nodes (20000 nodes/s)
-depth = 2: 0 ms for 400 nodes (400000 nodes/s)
-depth = 3: 1 ms for 8902 nodes (4451000 nodes/s)
-depth = 4: 8 ms for 197281 nodes (21920000 nodes/s)
-depth = 5: 182 ms for 4865609 nodes (26588000 nodes/s)
-depth = 6: 4127 ms for 119060324 nodes (28842000 nodes/s)
-depth = 7: 118382 ms for 3195901860 nodes (26996000 nodes/s)
+- depth = 1: 0 ms for 20 nodes (20000 nodes/s)
+- depth = 2: 0 ms for 400 nodes (400000 nodes/s)
+- depth = 3: 1 ms for 8902 nodes (4451000 nodes/s)
+- depth = 4: 8 ms for 197281 nodes (21920000 nodes/s)
+- depth = 5: 182 ms for 4865609 nodes (26588000 nodes/s)
+- depth = 6: 4127 ms for 119060324 nodes (28842000 nodes/s)
+- depth = 7: 118382 ms for 3195901860 nodes (26996000 nodes/s)
 
 Supported UCI commands:
 - uci

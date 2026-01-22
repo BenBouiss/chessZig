@@ -33,13 +33,6 @@ pub fn build(b: *std.Build) void {
 
     build_options.addOption(bool, "useAVX2", b.option(bool, "useAVX2", "Use avx2 for checkers bitboard generation") orelse false);
 
-    // doesnt work still get cache error thingy on WSL
-    //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    //const alloc = gpa.allocator();
-    //const user = std.process.getEnvVarOwned(alloc, "USER") catch unreachable;
-    //const cache_path = std.fmt.allocPrint(alloc, "/home/{s}/.zig-tmp", .{user}) catch unreachable;
-    //b.cache_root = .{ .path = cache_path, .handle = std.fs.openDirAbsolute("I:/", .{}) catch unreachable };
-
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
     // Zig modules are the preferred way of making Zig code available to consumers.
@@ -112,8 +105,20 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    const evaluate = b.addExecutable(.{
+        .name = "evaluate",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/evaluateEngine.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "evaluate_l", .module = mod },
+            },
+        }),
+    });
     engine.root_module.addOptions("build_options", build_options);
     chess.root_module.addOptions("build_options", build_options);
+    evaluate.root_module.addOptions("build_options", build_options);
 
     const raylib_dep = b.dependency("raylib", .{
         .target = target,
@@ -124,12 +129,14 @@ pub fn build(b: *std.Build) void {
     //
     chess.linkLibrary(raylib_artifact);
     engine.linkLibrary(raylib_artifact);
+    evaluate.linkLibrary(raylib_artifact);
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
     // by passing `--prefix` or `-p`.
     b.installArtifact(engine);
     b.installArtifact(chess);
+    b.installArtifact(evaluate);
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).

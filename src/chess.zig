@@ -45,7 +45,8 @@ pub const ROW_SIZE: u8 = 8;
 pub const COL_SIZE: u8 = 8;
 pub const N_SQUARES: u8 = ROW_SIZE * COL_SIZE;
 pub const MAX_POSSIBLE_MOVE: u8 = 218;
-pub const N_PIECES = 15;
+// prev 15 due to 6 * 2 + w + b + empt
+pub const N_PIECES = 12;
 pub const N_PIECES_TYPES = 6;
 pub const QUEENSIDECASTLEID = 0;
 pub const KINGCASTLEID = 1;
@@ -333,9 +334,9 @@ pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) bool {
     assert(turnToken.len == 1);
     const turnLetter = utils.lowerLetter(turnToken[0]);
     if (turnLetter == 'w') {
-        p_state.stat.whiteToMove = true;
+        p_state.stat.setTurn(true);
     } else if (turnLetter == 'b') {
-        p_state.stat.whiteToMove = false;
+        p_state.stat.setTurn(false);
     } else {
         std.debug.print("[PANIC] getBoardFromFen_turn: turn letter found: letter: {c} token: {s}\n", .{ turnLetter, turnToken });
         @panic("Unknown turn found");
@@ -599,11 +600,6 @@ pub const Board_state = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
 
-    //wPinnedBB: u64 = 0,
-    //wCheckersBB: u64 = 0,
-    //bPinnedBB: u64 = 0,
-    //bCheckersBB: u64 = 0,
-
     occupiedBB: u64 = 0,
     key: hashl.Key = .{},
     halfMoveClock: u8 = 0,
@@ -666,6 +662,8 @@ pub const Board_state = struct {
         if (useDebug) {
             std.debug.print("[DEBUG] from Board_state.init: size of board state: {d} bytes\n", .{@sizeOf(Board_state)});
             std.debug.print("[DEBUG] from Board_state.init: size of stack : {d} bytes\n", .{@sizeOf(boardStack)});
+            std.debug.print("[DEBUG] from Board_state.init: size of status stack: {d} bytes\n", .{@sizeOf(board_statusl.statusStack)});
+            std.debug.print("[DEBUG] from Board_state.init: size of move history: {d} bytes\n", .{@sizeOf(matchMoveContainer)});
         }
 
         ret.rngIntGenerator = std.Random.DefaultPrng.init(ret.seed);
@@ -684,7 +682,7 @@ pub const Board_state = struct {
         //}
     }
     pub inline fn whiteToMove(self: Board_state) bool {
-        return self.stat.whiteToMove;
+        return self.stat.whiteToMove();
     }
     pub fn makeFrame(self: Board_state) boardFrame {
         return .{ .pinnedBB = self.pinnedBB, .victim = self.victim, .checkersBB = self.checkersBB, .enPassantIdx = self.enPassantIdx, .lastMove = self.lastMove, .key = self.key, .halfMoveClock = self.halfMoveClock };
@@ -823,12 +821,12 @@ pub const Board_state = struct {
         }
         return ret;
     }
-    pub fn get_piece(p_self: *Board_state, sq: u8) e_piece {
+    pub inline fn get_piece(p_self: *Board_state, sq: u8) e_piece {
         return p_self.pieceArray[sq];
     }
 
     pub inline fn invert_turn(p_self: *Board_state) void {
-        p_self.stat.whiteToMove = !p_self.stat.whiteToMove;
+        p_self.stat.invertTurn();
     }
 
     pub fn next_turn(p_self: *Board_state) void {
@@ -842,7 +840,6 @@ pub const Board_state = struct {
     }
 
     pub fn placePiece(p_self: *Board_state, piece: e_piece, square: e_square) bool {
-        //std.debug.print("[DEBUG] placePiece: Placing piece {} {square}\n", .{piece});
         const one_mask: u64 = sqToBitboard(square);
         if (p_self.occupiedBB & one_mask != 0) {
             return false;
@@ -850,7 +847,6 @@ pub const Board_state = struct {
 
         p_self.pieceBB[@intFromEnum(piece)] |= one_mask;
         p_self.occupiedBB |= one_mask;
-        p_self.pieceBB[@intFromEnum(e_piece.nEmptySquare)] ^= one_mask;
         p_self.pieceArray[@intFromEnum(square)] = piece;
         if (@intFromEnum(piece) < N_PIECES_TYPES) {
             p_self.c_occupiedBB[@intFromEnum(e_color.WHITE)] |= one_mask;
@@ -949,15 +945,12 @@ pub const Board_state = struct {
                 p_self.occupiedBB ^= castleBB;
             }
         }
-
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
         _ = p_self.move_history.popMove();
-
         const popped = (p_self.stack.pop());
         p_self.loadFrame(&popped);
-
         return true;
     }
     pub fn makeMove(p_self: *Board_state, move: IMove) void {
@@ -1082,11 +1075,11 @@ pub const Board_state = struct {
                 hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
             }
 
-            p_self.stat.whiteToMove = !p_self.stat.whiteToMove;
+            p_self.invert_turn();
         } else if (isRookPiece(fromPiece)) {
             p_self.stat = p_self.stat.onRookMove(fromBB, white);
         } else {
-            p_self.stat.whiteToMove = !p_self.stat.whiteToMove;
+            p_self.invert_turn();
         }
 
         hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][fromSq]);
@@ -1192,6 +1185,7 @@ pub const Board_state = struct {
             return false;
         }
         // TODO add the cases KBB vs K or others
+        // or a better way
         return true;
     }
 
@@ -1464,18 +1458,6 @@ pub inline fn rankMaskFromRankN(rank: u8) u64 {
     return firstRank << @intCast(8 * rank);
 }
 
-// pre init sliding moves
-
-pub fn getAttackPositiveRay(occupied: u64, dir: e_direction, square: e_square) u64 {
-    const attacks = cachedTables.rayAttacks[@intFromEnum(square)][@intFromEnum(dir)];
-    const blocking: u64 = occupied & attacks;
-    if (blocking == 0) {
-        return attacks;
-    }
-    const sq: u8 = bitscan(blocking);
-    return attacks ^ cachedTables.rayAttacks[sq][@intFromEnum(dir)];
-}
-
 pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) u64 {
     const attacks = cachedTables.rayAttacks[@intFromEnum(square)][@intFromEnum(dir)];
     const blocking: u64 = occupied & attacks;
@@ -1556,17 +1538,17 @@ pub fn xrayBishopAttacks(occ: u64, blockers: u64, bishopSq: e_square) u64 {
 }
 
 pub inline fn getSqRank(sq: e_square) u8 {
-    return @intFromEnum(sq) / ROW_SIZE;
+    return @intFromEnum(sq) >> 3;
 }
 pub inline fn getSqIdxRank(sq: u8) u8 {
-    return (sq) / ROW_SIZE;
+    return (sq) >> 3;
 }
 
 pub inline fn getSqFile(sq: e_square) u8 {
-    return @intFromEnum(sq) % ROW_SIZE;
+    return @intFromEnum(sq) & 7;
 }
 pub inline fn getSqIdxFile(sq: u8) u8 {
-    return (sq) % ROW_SIZE;
+    return (sq) & 7;
 }
 
 pub inline fn getSqFromCoord(rank: u8, file: u8) e_square {
@@ -1762,7 +1744,7 @@ pub fn cst_getAllAttackMaskFromKing(p_board: *Board_state, comptime white: bool)
     return ret;
 }
 pub fn getCheckers(p_board: *Board_state, white: bool) void {
-    // this method is responsible for ~30-40% of the compute cost of perft
+    // this method is responsible for ~30-40% of the compute cost of perft when using staged move generation
     // plan when loading a fen do a "full" get checkers
     // when making a move: do a "partial" get checkers using the previous state
     if (white) {
@@ -2103,7 +2085,7 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
 
     return ret;
 }
-//pub fn processAlgebraicLine(p_board: *Board_state)
+
 pub fn _pin_scenario() void {
     std.debug.print("[DEBUG] pin scenario: \n", .{});
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
