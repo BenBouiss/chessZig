@@ -1,9 +1,13 @@
 const chess = @import("chess.zig");
 const moveGenl = @import("move_generation.zig");
+const filel = @import("file.zig");
+const stringl = @import("string.zig");
+const utilsl = @import("utils.zig");
 
 const std = @import("std");
 
 const e_piece = chess.e_piece;
+const string = stringl.string;
 pub const scoreType: type = f64;
 
 // values from https://www.chessprogramming.org/Evaluation for now
@@ -31,7 +35,7 @@ pub const e_heuristicType = enum(u8) { Simple = 0, Bitmap };
 //    0,     0,    0,    0,     0,     0,     0,    0,
 //};
 
-const pawnScoreArr = [chess.N_SQUARES]scoreType{
+var pawnScoreArr = [chess.N_SQUARES]scoreType{
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.31, 0.08, -0.07, -0.37, -0.36, -0.14, 0.03, -0.31, -0.22, 0.09, 0.05, -0.11, -0.1, -0.02, 0.03, -0.19, -0.26, 0.03, 0.1, 0.09, 0.06, 0.01, 0.0, -0.23, -0.17, 0.16, -0.02, 0.15, 0.14, 0.0, 0.15, -0.13, 0.07, 0.29, 0.21, 0.44, 0.4, 0.31, 0.44, 0.07, 0.78, 0.8300000000000001, 0.86, 0.73, 1.02, 0.8200000000000001, 0.85, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 };
 
@@ -45,7 +49,7 @@ const pawnScoreArr = [chess.N_SQUARES]scoreType{
 //    -0.03, -0.06, 0.900, -0.36, 0.04,  0.2,   -0.4,  -0.14,
 //    -0.66, -0.53, -0.75, -0.75, -0.10, -0.55, -0.58, -0.70,
 //};
-const knightScoreArr = [chess.N_SQUARES]scoreType{
+var knightScoreArr = [chess.N_SQUARES]scoreType{
     -0.0525, 0.015, -0.11249999999999999, -0.09, -0.105, -0.11249999999999999, -0.075, -0.075, 0.1425, 0.15, 0.08249999999999999, 0.045, 0.0525, 0.045, 0.15, 0.12, 0.105, 0.1875, 0.18, 0.11249999999999999, 0.06, 0.1875, 0.15, 0.11249999999999999, 0.0975, 0.075, 0.1275, 0.1725, 0.1275, 0.12, 0.0, 0.0525, 0.1875, 0.1275, 0.15, 0.255, 0.195, 0.1875, 0.11249999999999999, 0.075, -0.0675, 0.2925, -0.24, 0.3075, 0.39, -0.075, 0.21, -0.105, -0.08249999999999999, 0.15, 0.2625, -0.315, -0.2925, 0.23249999999999998, 0.015, -0.16499999999999998, -0.4425, -0.585, -0.615, -0.57, -0.1725, -0.8025, -0.27749999999999997, -0.375,
 };
 
@@ -59,7 +63,7 @@ const knightScoreArr = [chess.N_SQUARES]scoreType{
 //    -0.11, 0.20,  0.35,  -0.42, -0.39, 0.31,   0.02,  -0.22,
 //    -0.59, -0.78, -0.82, -0.76, -0.23, -0.907, -0.37, -0.50,
 //};
-const bishopScoreArr = [chess.N_SQUARES]scoreType{
+var bishopScoreArr = [chess.N_SQUARES]scoreType{
     -0.0525, 0.015, -0.11249999999999999, -0.09, -0.105, -0.11249999999999999, -0.075, -0.075, 0.1425, 0.15, 0.08249999999999999, 0.045, 0.0525, 0.045, 0.15, 0.12, 0.105, 0.1875, 0.18, 0.11249999999999999, 0.06, 0.1875, 0.15, 0.11249999999999999, 0.0975, 0.075, 0.1275, 0.1725, 0.1275, 0.12, 0.0, 0.0525, 0.1875, 0.1275, 0.15, 0.255, 0.195, 0.1875, 0.11249999999999999, 0.075, -0.0675, 0.2925, -0.24, 0.3075, 0.39, -0.075, 0.21, -0.105, -0.08249999999999999, 0.15, 0.2625, -0.315, -0.2925, 0.23249999999999998, 0.015, -0.16499999999999998, -0.4425, -0.585, -0.615, -0.57, -0.1725, -0.8025, -0.27749999999999997, -0.375,
 };
 
@@ -74,7 +78,7 @@ const bishopScoreArr = [chess.N_SQUARES]scoreType{
 //    0.35,  0.29,  0.33,  0.4,   0.37,  0.33,  0.56,  0.50,
 //};
 
-const rookScoreArr = [chess.N_SQUARES]scoreType{
+var rookScoreArr = [chess.N_SQUARES]scoreType{
     -0.25, -0.2, -0.15, 0.041666666666666664, -0.016666666666666666, -0.15, -0.2583333333333333, -0.26666666666666666, -0.44166666666666665, -0.31666666666666665, -0.2583333333333333, -0.21666666666666667, -0.24166666666666667, -0.35833333333333334, -0.36666666666666664, -0.44166666666666665, -0.35, -0.23333333333333334, -0.35, -0.20833333333333334, -0.20833333333333334, -0.2916666666666667, -0.21666666666666667, -0.3833333333333333, -0.23333333333333334, -0.2916666666666667, -0.13333333333333333, -0.175, -0.10833333333333334, -0.24166666666666667, -0.3833333333333333, -0.25, 0.0, 0.041666666666666664, 0.13333333333333333, 0.10833333333333334, 0.15, -0.03333333333333333, -0.075, -0.05, 0.15833333333333333, 0.2916666666666667, 0.23333333333333334, 0.275, 0.375, 0.225, 0.20833333333333334, 0.125, 0.4583333333333333, 0.24166666666666667, 0.4666666666666667, 0.5583333333333333, 0.4583333333333333, 0.5166666666666666, 0.2833333333333333, 0.5, 0.2916666666666667, 0.24166666666666667, 0.275, 0.03333333333333333, 0.30833333333333335, 0.275, 0.4666666666666667, 0.4166666666666667,
 };
 //const queenScoreArr = [chess.N_SQUARES]scoreType{
@@ -87,7 +91,7 @@ const rookScoreArr = [chess.N_SQUARES]scoreType{
 //    0.14,  0.32,  0.60,  -0.10,  0.20,  0.76,  0.57,  0.24,
 //    0.06,  0.01,  -0.08, -0.904, 0.69,  0.24,  0.88,  0.26,
 //};
-const queenScoreArr = [chess.N_SQUARES]scoreType{
+var queenScoreArr = [chess.N_SQUARES]scoreType{
     -0.2925, -0.22499999999999998, -0.23249999999999998, -0.0975, -0.23249999999999998, -0.27, -0.255, -0.315, -0.27, -0.135, 0.0, -0.1425, -0.11249999999999999, -0.11249999999999999, -0.1575, -0.285, -0.22499999999999998, -0.045, -0.0975, -0.08249999999999999, -0.12, -0.08249999999999999, -0.12, -0.20249999999999999, -0.105, -0.11249999999999999, -0.015, -0.0375, -0.0075, -0.075, -0.15, -0.16499999999999998, 0.0075, -0.12, 0.16499999999999998, 0.1275, 0.1875, 0.15, -0.0975, -0.045, -0.015, 0.3225, 0.24, 0.44999999999999996, 0.54, 0.4725, 0.3225, 0.015, 0.105, 0.24, 0.44999999999999996, -0.075, 0.15, 0.57, 0.4275, 0.18, 0.045, 0.0075, -0.06, -0.78, 0.5175, 0.18, 0.6599999999999999, 0.195,
 };
 
@@ -101,7 +105,7 @@ const queenScoreArr = [chess.N_SQUARES]scoreType{
 //    -0.32, 0.10,  0.55,  0.56,  0.56,  0.55,  0.10,  0.03,
 //    0.4,   0.54,  0.47,  -0.99, -0.99, 0.60,  0.83,  -0.62,
 //};
-const kingScoreArr = [chess.N_SQUARES]scoreType{
+var kingScoreArr = [chess.N_SQUARES]scoreType{
     0.17, 0.3, -0.03, -0.14, 0.06, -0.01, 0.4, 0.18, -0.04, 0.03, -0.14, -0.5, -0.5700000000000001, -0.18, 0.13, 0.04, -0.47000000000000003, -0.42, -0.43, -0.79, -0.64, -0.32, -0.29, -0.32, -0.55, -0.43, -0.52, -0.28, -0.51, -0.47000000000000003, -0.08, -0.5, -0.55, 0.5, 0.11, -0.04, -0.19, 0.13, 0.0, -0.49, -0.62, 0.12, -0.5700000000000001, 0.44, -0.67, 0.28, 0.37, -0.31, -0.32, 0.1, 0.55, 0.56, 0.56, 0.55, 0.1, 0.03, 0.04, 0.54, 0.47000000000000003, -0.99, -0.99, 0.6, 0.8300000000000001, -0.62,
 };
 
@@ -224,4 +228,54 @@ pub fn getMaskFromBB(bb: u64) [chess.N_SQUARES]scoreType {
         ret[i] = @bitCast(val);
     }
     return ret;
+}
+pub fn modifyHeuristicWeight(alloc: std.mem.Allocator, path: []const u8, debug: bool) !void {
+    // format
+    var tokens = try filel.getTokensFromFile(alloc, path, ';');
+    //var tokens = try filel.getTokensFromFile(alloc, path, ']');
+    defer stringl.freeArrayList_string(alloc, &tokens);
+    for (0..tokens.items.len) |j| {
+        var s = tokens.items[j];
+        //try s.extendWithResize(alloc, "]");
+        const valuesStr: []const u8 = s.extractFromBounds("[", "]") catch {
+            continue;
+        };
+
+        var tmp = try string.initFromSlice(alloc, valuesStr);
+        defer tmp.free(alloc);
+
+        var values = try tmp.split(alloc, ',');
+        defer values.deinit(alloc);
+        if (values.items.len != chess.N_SQUARES) {
+            continue;
+        }
+        var buffer: [chess.N_SQUARES]scoreType = undefined;
+        for (0..chess.N_SQUARES) |i| {
+            buffer[i] = std.fmt.parseFloat(scoreType, utilsl.stripStr(values.items[i])) catch {
+                std.debug.print("[ERROR] modifyHeuristicWeight: invalid conversion continuing ({s}) {s}\n", .{ utilsl.stripStr(values.items[i]), values.items[i] });
+                continue;
+            };
+        }
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: modifying buffer with following values: \n[", .{});
+            for (0..chess.N_SQUARES - 1) |i| {
+                const val: scoreType = buffer[i];
+                std.debug.print("{d}, ", .{val});
+            }
+            std.debug.print("{d}]\n", .{buffer[chess.N_SQUARES - 1]});
+        }
+        if (s.containsE("pawnWeights", .ignoreCase)) {
+            pawnScoreArr = buffer;
+        } else if (s.containsE("knightWeights", .ignoreCase)) {
+            knightScoreArr = buffer;
+        } else if (s.containsE("bishopWeights", .ignoreCase)) {
+            bishopScoreArr = buffer;
+        } else if (s.containsE("rookWeights", .ignoreCase)) {
+            rookScoreArr = buffer;
+        } else if (s.containsE("queenWeights", .ignoreCase)) {
+            queenScoreArr = buffer;
+        } else if (s.containsE("kingWeights", .ignoreCase)) {
+            kingScoreArr = buffer;
+        }
+    }
 }

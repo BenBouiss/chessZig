@@ -47,9 +47,7 @@ test "perft" {
 }
 
 test "book algebraic" {
-    //
     mainl.initAll(false);
-
     const path = "opening/8moves_v3.pgn";
     var s = try stringl.string.initFromSlice(GLOBAL_ALLOC, path);
     defer s.free(GLOBAL_ALLOC);

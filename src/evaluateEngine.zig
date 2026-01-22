@@ -9,6 +9,8 @@ const gconfigl = @import("gui/config.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const bookl = @import("book.zig");
+const filel = @import("file.zig");
+const heuristicl = @import("heuristic.zig");
 
 const stringl = @import("string.zig");
 const std = @import("std");
@@ -18,6 +20,7 @@ pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleM
 const Board_state = chessl.Board_state;
 const e_square = squarel.e_square;
 const string = stringl.string;
+const scoreType = heuristicl.scoreType;
 
 const INITIAL_LOGSIZE: u16 = 100;
 const DEFAULT_TIME_MS: i64 = 300 * 1000; // 5 min in ms
@@ -49,6 +52,11 @@ const matchResultsBench = struct {
     avgTimePerTurn: i64 = 0,
     nMatch: u8 = 0,
     finalFen: string = undefined,
+    pub fn getScore(self: *matchResultsBench) scoreType {
+        var ret: scoreType = @intCast(self.win);
+        ret += @as(scoreType, @floatFromInt(self.draw)) / 2;
+        return ret;
+    }
 };
 const matchResultContainer = struct {
     items: [MAX_ENGINES]matchResultsBench = std.mem.zeroes([MAX_ENGINES]matchResultsBench),
@@ -98,7 +106,15 @@ const matchResultContainer = struct {
         try p_self.fens.append(alloc, lineString);
     }
     pub fn saveLog(p_self: *matchResultContainer, alloc: std.mem.Allocator, match: *matchStatus, settings: *guiSetting) !void {
-        const fileName = try std.fmt.allocPrint(alloc, "logs/match_logs_{d}.txt", .{std.time.timestamp()});
+        if (!settings.match.saveLogs) {
+            return;
+        }
+        var fileName: []u8 = undefined;
+        if (settings.match.logPathProvided) {
+            fileName = try std.fmt.allocPrint(alloc, "{s}/match_logs_{d}.txt", .{ settings.match.logPath._slice(), std.time.timestamp() });
+        } else {
+            fileName = try std.fmt.allocPrint(alloc, "logs/match_logs_{d}.txt", .{std.time.timestamp()});
+        }
         const file = try std.fs.cwd().createFile(fileName, .{ .read = true });
         defer alloc.free(fileName);
         defer file.close();
@@ -119,6 +135,18 @@ const matchResultContainer = struct {
             const fenStr = try std.fmt.allocPrint(alloc, "\t{s};\n", .{p_self.fens.items[i]._slice()});
             defer alloc.free(fenStr);
             _ = try file.write(fenStr);
+        }
+    }
+    pub fn printResults(p_self: *matchResultContainer, alloc: std.mem.Allocator) !void {
+        var buffer: [configl.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
+        var writer = std.fs.File.stdout().writer(&buffer);
+        const interface = &writer.interface;
+        for (0..p_self.items.len) |i| {
+            const res = p_self.items[i];
+            const respmsg = try std.fmt.allocPrint(alloc, "{d} {d} {d} \n", .{ res.win, res.lose, res.draw });
+            defer alloc.free(respmsg);
+            try interface.writeAll(respmsg);
+            try interface.flush();
         }
     }
     pub fn free(p_self: *matchResultContainer, alloc: std.mem.Allocator) void {
@@ -416,7 +444,15 @@ const guiState = struct {
         }
     }
     pub fn saveLog(self: *guiState) !void {
-        const fileName = try std.fmt.allocPrint(self.alloc, "logs/logs_{d}.txt", .{std.time.timestamp()});
+        if (!self.config.match.saveLogs) {
+            return;
+        }
+        var fileName: []u8 = undefined;
+        if (self.config.match.logPathProvided) {
+            fileName = try std.fmt.allocPrint(self.alloc, "{s}/logs_{d}.txt", .{ self.config.match.logPath._slice(), std.time.timestamp() });
+        } else {
+            fileName = try std.fmt.allocPrint(self.alloc, "logs/logs_{d}.txt", .{std.time.timestamp()});
+        }
         defer self.alloc.free(fileName);
         const file = try std.fs.cwd().createFile(fileName, .{ .read = true });
         defer file.close();
@@ -485,6 +521,7 @@ const guiState = struct {
                 return true;
             },
             .OPTION => {
+                // not really usefull from the point of view of the gui
                 return p_self.executeOptionCmd(cmdBuffer);
             },
         }
@@ -767,6 +804,7 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
             return;
         };
     }
+    record.printResults(p_self.alloc) catch {};
     record.saveLog(p_self.alloc, &p_self.match, p_self.config) catch |err| {
         std.debug.print("[CLOSE] error {} while saving the match stats\n", .{err});
     };
@@ -884,18 +922,33 @@ const configMatch = struct {
     openingBookPath: string = undefined,
     openingBookPathProvided: bool = false,
 
+    saveLogs: bool = true,
+    logPath: string = undefined,
+    logPathProvided: bool = false,
+
     openingDb: bookl.openingDatabase = undefined,
     pub fn setOpeningBookPath(p_self: *configMatch, alloc: std.mem.Allocator, path: []const u8) anyerror!void {
         if (p_self.openingBookPathProvided) {
             p_self.openingBookPath.free(alloc);
         }
-        if (!utilsl.fileExists(path)) {
+        if (!filel.fileExists(path)) {
             return stringl.string_err.itemNotFound_error;
         }
         p_self.openingBookPathProvided = true;
         p_self.openingBookPath = try string.initFromSlice(alloc, path);
     }
+    pub fn setLoggingLocationPath(p_self: *configMatch, alloc: std.mem.Allocator, path: []const u8) anyerror!void {
+        if (p_self.logPathProvided) {
+            p_self.logPath.free(alloc);
+        }
+        if (!filel.dirExists(path)) {
+            try filel.makedirR(path);
+        }
+        p_self.logPathProvided = true;
+        p_self.logPath = try string.initFromSlice(alloc, path);
+    }
 };
+
 const guiSetting = struct {
     match: configMatch = .{},
     enginePaths: [chessl.NUMBER_PLAYER]string = undefined,
@@ -946,8 +999,10 @@ const guiSetting = struct {
         std.debug.print("\t time format: time {d} inc {d}\n", .{ p_self.match.timeF.time, p_self.match.timeF.inc });
 
         std.debug.print("\t use opening book {}\n", .{p_self.match.useOpeningBook});
-
         std.debug.print("\t opening book path {s}\n", .{p_self.match.openingBookPath._slice()});
+
+        std.debug.print("\t save logs {}\n", .{p_self.match.saveLogs});
+        std.debug.print("\t logs path {s}\n", .{p_self.match.logPath._slice()});
     }
     pub fn writeSummary(p_self: *guiSetting, fd: *const std.fs.File) !void {
         var strBuffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
@@ -985,39 +1040,23 @@ const guiSetting = struct {
         _ = try fd.write(openingBookPath);
     }
 };
-
 pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-    defer file.close();
-    var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-
-    var f_reader = file.reader(&buffer);
-    const reader = &f_reader.interface;
+    var tokens = try filel.getTokensFromFile(alloc, path, '\n');
+    defer stringl.freeArrayList_string(alloc, &tokens);
     var ret: guiSetting = try guiSetting.init(alloc);
     var matchSection: bool = false;
 
-    while (true) {
-        var _buffer: [64]u8 = std.mem.zeroes([64]u8);
-        var w: std.io.Writer = .fixed(&_buffer);
-        var s = string.initFromBuffer(&_buffer);
-        const size = reader.streamDelimiter(&w, '\n') catch {
-            break;
-        };
-        reader.toss(1);
-        if (size <= 1) {
+    for (0..tokens.items.len) |i| {
+        var s = tokens.items[i];
+        if (s.startsWith("//")) {
             continue;
         }
-
-        //std.debug.print("Found {d} bytes in the file '{s}' {d} buffer size, str: {s}\n", .{ size, _buffer, _buffer.len, s._slice() });
-
         if (s.containsE("[match]", .ignoreCase)) {
             matchSection = true;
             continue;
         }
         var status: bool = undefined;
-        if (s.startsWith("//")) {
-            continue;
-        }
+
         if (matchSection) {
             status = handleMatchInfoStrBuffer(alloc, &ret, &s);
         } else {
@@ -1030,6 +1069,48 @@ pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
     ret.print();
     return ret;
 }
+//pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
+//    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
+//    defer file.close();
+//    var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+//
+//    var f_reader = file.reader(&buffer);
+//    const reader = &f_reader.interface;
+//    var ret: guiSetting = try guiSetting.init(alloc);
+//    var matchSection: bool = false;
+//
+//    while (true) {
+//        var _buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+//        var w: std.io.Writer = .fixed(&_buffer);
+//        var s = string.initFromBuffer(&_buffer);
+//        const size = reader.streamDelimiter(&w, '\n') catch {
+//            break;
+//        };
+//        reader.toss(1);
+//        if (size <= 1) {
+//            continue;
+//        }
+//        if (s.startsWith("//")) {
+//            continue;
+//        }
+//        if (s.containsE("[match]", .ignoreCase)) {
+//            matchSection = true;
+//            continue;
+//        }
+//        var status: bool = undefined;
+//
+//        if (matchSection) {
+//            status = handleMatchInfoStrBuffer(alloc, &ret, &s);
+//        } else {
+//            status = handleInfoStrBuffer(alloc, &ret, &s);
+//        }
+//        if (!status) {
+//            std.debug.print("Match handling of {s} failed \n", .{s._slice()});
+//        }
+//    }
+//    ret.print();
+//    return ret;
+//}
 
 fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: *string) bool {
     if (buffer.startsWith("nMatch")) {
@@ -1065,6 +1146,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         } else {
             return false;
         }
+        return true;
     } else if (buffer.startsWith("useOpeningBook")) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
@@ -1076,11 +1158,32 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         } else {
             return false;
         }
+        return true;
     } else if (buffer.startsWith("openingBookPath")) {
         const path = buffer.extractFromBounds("\"", "\"") catch {
             return false;
         };
         settings.match.setOpeningBookPath(alloc, path) catch {
+            return false;
+        };
+        return true;
+    } else if (buffer.startsWith("saveLogs")) {
+        const boolStr = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        if (utilsl.equal(u8, boolStr, "true")) {
+            settings.match.saveLogs = true;
+        } else if (utilsl.equal(u8, boolStr, "false")) {
+            settings.match.saveLogs = false;
+        } else {
+            return false;
+        }
+        return true;
+    } else if (buffer.startsWith("logsLocation")) {
+        const path = buffer.extractFromBounds("\"", "\"") catch {
+            return false;
+        };
+        settings.match.setLoggingLocationPath(alloc, path) catch {
             return false;
         };
         return true;
@@ -1125,10 +1228,17 @@ fn handleInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: 
     return false;
 }
 
-pub fn main() !void {
-    //
+pub fn _main() !void {
     const infoFile = "engines/engine.info";
     launch_gui(infoFile) catch {
         return;
     };
+}
+
+pub fn main() !void {
+    // 1st arg is the zig file, 2nd is the .info file for the evaluation
+    std.debug.assert(std.os.argv.len > 1);
+    const path_null: [*:0]u8 = std.os.argv[1];
+    const path = std.mem.span(path_null);
+    try launch_gui(path);
 }

@@ -8,8 +8,10 @@ const hashTablel = @import("hashTable.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
 const speedTestl = @import("speedTest.zig");
+const heuristicl = @import("heuristic.zig");
 const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
+const filel = @import("file.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -21,7 +23,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, CLEAR_HASH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, CLEAR_HASH, HEUR_WEIGHTS_PATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -106,9 +108,6 @@ pub const inputChannel = struct {
     }
 };
 
-const MAX_THREAD: u32 = 64;
-const MAX_HASHSIZE = 1000; // in MB => 1 GB
-
 const spinVarType: type = u32;
 const optionInfo_spin = struct {
     min: spinVarType,
@@ -145,7 +144,10 @@ pub const setOptionEntry = struct {
             msg = try std.fmt.allocPrint(alloc, "option name {s} type check default {s} var {s}", .{ self.name, self.info.str.default, self.info.str._var });
         } else if (self.argType == .BUTTON) {
             msg = try std.fmt.allocPrint(alloc, "option name {s} type button ", .{self.name});
+        } else if (self.argType == .STRING) {
+            msg = try std.fmt.allocPrint(alloc, "option name {s} type string", .{self.name});
         }
+
         return msg;
     }
 };
@@ -153,6 +155,7 @@ pub const setOptionEntry = struct {
 pub const engineStatus = struct {
     running: bool = false,
     // FIX ME useless for now
+    // searching vvv
     searching: bool = false,
     debugMode: bool = false,
     positionProvided: bool = false,
@@ -226,15 +229,17 @@ pub const engine = struct {
     }
     pub fn initOptions(p_self: *engine) !void {
         //p_self.addOption(.THREADS, .SPIN,
-        try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_THREAD, .default = 1 } } });
+        try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
 
-        try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
+        try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
         try p_self.addOption(.{ .name = "fixedDepth", .optionType = .FIXED_DEPTH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_FIXED_DEPTH } } });
         try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
+
+        try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
     }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
@@ -511,7 +516,15 @@ pub const engine = struct {
             .CLEAR_HASH => {
                 return p_self.updateHash(p_self.options.hashTableSize);
             },
-
+            .HEUR_WEIGHTS_PATH => {
+                const path = getStringValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!filel.fileExists(path)) {
+                    return false;
+                }
+                return p_self.updateHeuristicWeights(path);
+            },
             .INVALID => {
                 return false;
             },
@@ -560,6 +573,12 @@ pub const engine = struct {
         _ = p_self.updateElo(p_self.options.engineElo);
         return true;
     }
+    fn updateHeuristicWeights(p_self: *engine, path: []const u8) bool {
+        heuristicl.modifyHeuristicWeight(p_self.alloc, path, p_self.status.debugMode) catch {
+            return false;
+        };
+        return true;
+    }
     fn updateHash(p_self: *engine, hashSize: spinVarType) bool {
         if (p_self.searcher.searching) {
             p_self.searcher.interrupt = true;
@@ -570,7 +589,6 @@ pub const engine = struct {
 
         p_self.options.hashTableSize = hashSize;
         hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
-
         return true;
     }
     fn updateElo(p_self: *engine, elo: spinVarType) bool {
@@ -726,6 +744,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .FIXED_DEPTH;
     } else if (utilsl.contains(cmdBuffer, " clearhash", .ignoreCase)) {
         return .CLEAR_HASH;
+    } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {
+        return .HEUR_WEIGHTS_PATH;
     }
 
     return .INVALID;
@@ -745,6 +765,18 @@ pub fn getSpinValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) !spinVarTyp
     return debug_err.valueErr;
 }
 pub fn getCheckValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) ![]const u8 {
+    for (0..tokens.items.len) |i| {
+        const token = tokens.items[i];
+
+        if (utilsl.contains(token, "value", .ignoreCase)) {
+            if (i != tokens.items.len - 1) {
+                return tokens.items[i + 1];
+            }
+        }
+    }
+    return debug_err.valueErr;
+}
+pub fn getStringValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) ![]const u8 {
     for (0..tokens.items.len) |i| {
         const token = tokens.items[i];
 

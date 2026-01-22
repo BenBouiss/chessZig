@@ -14,6 +14,7 @@ const chessl = @import("chess.zig");
 const evalEngl = @import("evaluateEngine.zig");
 const bookl = @import("book.zig");
 const stringl = @import("string.zig");
+const filel = @import("file.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -95,7 +96,14 @@ pub fn test_db() !void {
     defer s.free(GLOBAL_ALLOC);
     try bookl.test_db(&s);
 }
+pub fn test_file() !void {
+    const infoFile = "engines/engine.info";
+    try filel.main(GLOBAL_ALLOC, infoFile);
+    return;
+}
 pub fn main() anyerror!void {
+    var buf: [1024]u8 = undefined;
+    std.debug.print("[test] main: {s}", .{try std.fs.cwd().realpath(".", &buf)});
     //magicl.main();
     //try chessl.main();
     //test_bench();
@@ -104,4 +112,5 @@ pub fn main() anyerror!void {
     try evalEngl.main();
     //try test_test();
     //try test_db();
+    //try test_file();
 }

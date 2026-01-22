@@ -11,4 +11,6 @@ cmd
 *pycache*
 
 engines/bin/*
+engines/heuristics/*
+engines/tmp/*
 opening

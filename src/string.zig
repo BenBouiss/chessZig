@@ -66,6 +66,9 @@ pub const string = struct {
             _ = p_self.put(letter);
         }
     }
+    pub fn extendWithResizeStr(p_self: *string, alloc: std.mem.Allocator, other: *string) !void {
+        try p_self.extendWithResize(alloc, other._slice());
+    }
     pub fn _slice(self: string) []const u8 {
         return self.data[0..self.len];
     }
@@ -84,7 +87,7 @@ pub const string = struct {
         return true;
     }
     pub inline fn startsWithStr(p_self: *string, other: *string) bool {
-        return p_self.startsWith(other.data[0..other.len]);
+        return p_self.startsWith(other._slice());
     }
     pub fn endsWith(p_self: *string, other: []const u8) bool {
         if (other.len > p_self.len) {
@@ -153,3 +156,29 @@ pub const string = struct {
         self.len = 0;
     }
 };
+pub fn freeArrayList_string(alloc: std.mem.Allocator, arr: *std.ArrayList(string)) void {
+    for (0..arr.items.len) |i| {
+        arr.items[i].free(alloc);
+    }
+    arr.deinit(alloc);
+}
+
+pub fn mergePaths(alloc: std.mem.Allocator, s1: *string, s2: *string) !string {
+    const slashCount: usize = @intFromBool(s1.endsWith("/")) + @intFromBool(s2.startsWith("/"));
+    var ret: string = undefined;
+    if (slashCount == 0) {
+        const merged = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ s1._slice(), s2._slice() });
+        ret = string.initFromBuffer(&merged);
+        return ret;
+    }
+    if (slashCount == 1) {
+        const merged = try std.fmt.allocPrint(alloc, "{s}{s}", .{ s1._slice(), s2._slice() });
+        ret = string.initFromBuffer(&merged);
+        return ret;
+    }
+    if (slashCount == 2) {
+        const merged = try std.fmt.allocPrint(alloc, "{s}{s}", .{ s1._slice(), s2._slice()[1..s2.len] });
+        ret = string.initFromBuffer(&merged);
+        return ret;
+    }
+}
