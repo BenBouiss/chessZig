@@ -223,7 +223,8 @@ pub const moveContainer = struct {
     pub fn extend(p_self: *moveContainer, p_other: *const moveContainer) bool {
         if (comptime useDebug) {
             if ((p_self.len + p_other.len) > chess.MAX_POSSIBLE_MOVE) {
-                return false;
+                @panic("lists too full ");
+                //return false;
             }
         }
         for (0..p_other.len) |i| {
@@ -249,15 +250,15 @@ pub const moveContainer = struct {
         p_self.len = p_other.len;
     }
     pub fn isDifferent(self: moveContainer, other: moveContainer) bool {
-        var biggerContainer = self;
-        var smallerContainer = other;
-        if (other.len > self.len) {
-            biggerContainer = other;
-            smallerContainer = self;
+        for (0..self.len) |i| {
+            const move = self.moves[i];
+            if (!move.isIn(other)) {
+                return true;
+            }
         }
-        for (0..biggerContainer.len) |i| {
-            const move = biggerContainer.moves[i];
-            if (!move.isIn(smallerContainer)) {
+        for (0..other.len) |i| {
+            const move = other.moves[i];
+            if (!move.isIn(self)) {
                 return true;
             }
         }
@@ -334,7 +335,7 @@ pub const MAX_MATCH_LENGTH: usize = 4096;
 pub const matchMoveContainer = struct {
     // replace the std.mem.zeros with undefined for faster init(?)
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
-    keyCodes: [MAX_MATCH_LENGTH]u32 = undefined,
+    keyCodes: [MAX_MATCH_LENGTH]u64 = undefined,
     lastIrreversibleMoveIndex: u16 = 0,
     //lastMove: IMove = .{},
     len: usize = 0,
@@ -351,7 +352,8 @@ pub const matchMoveContainer = struct {
     pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
         if (comptime useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
-                return false;
+                @panic("list is full");
+                //return false;
             }
         }
         if (move.isIrreversible()) {
@@ -359,14 +361,16 @@ pub const matchMoveContainer = struct {
         }
         //p_self.lastMove = move;
         p_self.moves[p_self.len] = move;
-        p_self.keyCodes[p_self.len] = @intCast(key.code >> 32);
+        //p_self.keyCodes[p_self.len] = @intCast(key.code >> 32);
+        p_self.keyCodes[p_self.len] = key.code;
         p_self.len += 1;
         return true;
     }
     pub fn _append(p_self: *matchMoveContainer, move: IMove, key: u32) bool {
         if (comptime useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
-                return false;
+                @panic("list is full");
+                //return false;
             }
         }
         if (move.isIrreversible()) {
@@ -418,6 +422,8 @@ pub const matchMoveContainer = struct {
         if (p_self.len == 0) {
             return;
         }
+
+        p_self.len -= 1;
         if (p_self.lastIrreversibleMoveIndex == p_self.len) {
             var index: u16 = @intCast(p_self.len - 1);
             while (index > 0) {
@@ -434,11 +440,13 @@ pub const matchMoveContainer = struct {
         return;
     }
     pub fn popMove(p_self: *matchMoveContainer) IMove {
-        if (comptime !useDebug) {
+        if (comptime useDebug) {
             if (p_self.len == 0) {
-                return .{};
+                @panic("list is empty");
+                //return .{};
             }
         }
+        p_self.len -= 1;
         if (p_self.lastIrreversibleMoveIndex == p_self.len) {
             var index: u16 = @intCast(p_self.len - 1);
             while (index > 0) {
@@ -450,14 +458,14 @@ pub const matchMoveContainer = struct {
             }
             p_self.lastIrreversibleMoveIndex = index;
         }
-        p_self.len -= 1;
         //p_self.lastMove = p_self.moves[p_self.len - 1];
         return p_self.moves[p_self.len];
     }
     pub fn getLastMove(self: matchMoveContainer) IMove {
         if (comptime useDebug) {
             if (self.len == 0) {
-                return .{};
+                @panic("list is empty");
+                //return .{};
             }
         }
         return self.moves[self.len - 1];
