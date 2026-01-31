@@ -264,18 +264,22 @@ pub fn modifyHeuristicWeight(alloc: std.mem.Allocator, path: []const u8, debug: 
             }
             std.debug.print("{d}]\n", .{buffer[chess.N_SQUARES - 1]});
         }
-        if (s.containsE("pawnWeights", .ignoreCase)) {
+        if (s.containsE("pawn", .ignoreCase)) {
             pawnScoreArr = buffer;
-        } else if (s.containsE("knightWeights", .ignoreCase)) {
+        } else if (s.containsE("knight", .ignoreCase)) {
             knightScoreArr = buffer;
-        } else if (s.containsE("bishopWeights", .ignoreCase)) {
+        } else if (s.containsE("bishop", .ignoreCase)) {
             bishopScoreArr = buffer;
-        } else if (s.containsE("rookWeights", .ignoreCase)) {
+        } else if (s.containsE("rook", .ignoreCase)) {
             rookScoreArr = buffer;
-        } else if (s.containsE("queenWeights", .ignoreCase)) {
+        } else if (s.containsE("queen", .ignoreCase)) {
             queenScoreArr = buffer;
-        } else if (s.containsE("kingWeights", .ignoreCase)) {
+        } else if (s.containsE("king", .ignoreCase)) {
             kingScoreArr = buffer;
+        } else {
+            if (debug) {
+                std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token \n[", .{});
+            }
         }
     }
 }

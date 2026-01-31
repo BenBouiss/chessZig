@@ -9,4 +9,4 @@ echo "Creating temporary folder at: $tmp_folder"
 export ZIG_LOCAL_CACHE_DIR="$tmp_folder/.zig-cache"
 export ZIG_GLOBAL_CACHE_DIR="$tmp_folder/.zig-cache"
 
-zig build -Doptimize=ReleaseFast -DfastBitscan=true -DuseMagic=true -DuseDebug=true
+zig build -Doptimize=ReleaseFast -DfastBitscan=true -DuseMagic=true -DuseDebug=true 

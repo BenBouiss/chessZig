@@ -1,31 +1,229 @@
+from __future__ import annotations
+
+from abc import ABC
+from enum import Enum
 from dataclasses import dataclass
+
 import numpy as np 
 import numpy.typing as npt 
-import typing
+import yaml
+
+import os, sys, time, typing, copy
+sys.path.append(os.path.dirname(__file__))
+
+import objective 
 
 @dataclass
-class engineParams:
-    def getPosition(self) -> list[npt.ArrayLike]:
-        raise NotImplementedError("this function needs to be implemented")
+class individual:
+    position: npt.NDArray[np.float64] 
+    uid: int
+    score: float = 0
+    def __repr__(self) -> str:
+        return f"uid: {self.uid}, score: {self.score}, position: {self.position}"
+
+    def saveFrame(self) -> list[float]:
+        return [self.position.tolist(), self.uid, float(self.score)]
+
 
 @dataclass
-class individual(object):
-    scoring: float = 0
-    position: engineParams = engineParams()
+class saveOptions:
+    logDir: str = "."
+    prefix: str = "result"
 
-class individualContainer(object):
-    def __init__(self, popsize: int, positions: list[engineParams]):
-        assert popsize == len(positions)
-        self.len = popsize
-        self.indivList: list[individual] = []
-        for pos in positions:
-            self.indivList.append(individual(position = pos))
-
-
+DEFAULT_SEED = 42
+DEFAULT_INT = 1
+DEFAULT_PREVAL = False
 class templateSelectionAlgo(object):
-    def __init__(self, popsize: int, positions: list[engineParams]):
-        self.popsize = popsize
-        self.indivs: individualContainer = individualContainer(popsize, positions)
+    def __init__(self, popsize: int, maxiter: int, seed: int = DEFAULT_SEED, preEval: bool = DEFAULT_PREVAL, cbs: list[callback] | None = None, saveLog: bool = False, saveOpt: saveOptions = saveOptions()):
+        self.objective: objective.objective | None = None
 
-    def reproduce(self):
+        self.running = False
+        self.preEval: bool = preEval
+
+        self.maxiter: int = maxiter
+        self.iter: int = 0
+        self.uid = int(time.time())
+
+        self.seed = seed
+        self.numpyRandomGenerator = np.random.default_rng(seed)
+
+        self.popsize: int = popsize
+        self.population: list[individual] = []
+        # TODO clean up and remove redundant info
+        self.populationHistory: list[list[individual]] = []
+        self.best_indiv_list: list[individual] = []
+        self.callbacks: list[callback] = []
+        if cbs is not None:
+            for cb in cbs:
+                self.addCallback(cb)
+        self.saveLog: bool = saveLog
+        self.saveOpt: saveOptions = saveOpt
+
+    def addCallback(self, cb: callback) -> None:
+        cb.setMh(self)
+        self.callbacks.append(cb)
+
+    def setObjective(self, obj: objective.objective):
+        self.objective = obj
+
+    def generatePopulation(self) -> None:
+        assert self.objective is not None
+        self.population = []       
+        delta = self.objective.bounds[:, 1] - self.objective.bounds[:, 0]
+
+        # TODO: v???v
+        initScore = float('-inf') if self.objective.maximize else float('-inf')
+
+        for i in range(self.popsize):
+            randMask = self.numpyRandomGenerator.random(size = self.objective.nDims)
+            indiv = individual( position = self.snapToCorrectGrid(delta * randMask), uid = i, score = initScore)
+            self.population.append(indiv)
+
+    def snapToSteps(self, position: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        assert self.objective is not None
+        return self.objective.steps * np.rint(position / self.objective.steps)
+
+    def snapToCorrectGrid(self, position: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        assert self.objective is not None
+        ret = self.snapToSteps(position)
+        ret = np.min([ret, self.objective.bounds[:, 1]], axis = 0)
+        ret = np.max([ret, self.objective.bounds[:, 0]], axis = 0)
+        return ret
+
+
+    def optimize(self) -> None:
+        assert self.objective is not None
+        assert len(self.population) != 0 
+        self.running = True
+        
+        if (self.preEval and (self.iter == 0)):
+            # can be used in algo to have a already evaluated
+            # random population 
+            scores = self.objective.evaluate(self.getCurrentPositions())
+            for i in range(self.popsize):
+                self.population[i].score = scores[i]
+
+        while self.running and self.iter < self.maxiter:
+
+            self.step()
+
+            print(f"[DEBUG] template.optimize: best indiv: {self.best_indiv_list[-1]}")
+
+            self.iter += 1
+
+            self.on_iter_end()
+            
+        self.on_optim_end()
+
+
+    def step(self) -> None:
         raise NotImplementedError("this function needs to be implemented")
+
+    def on_iter_start(self): 
+        for cb in self.callbacks:
+            cb.on_iter_start()
+
+    def on_iter_end(self): 
+        for cb in self.callbacks:
+            cb.on_iter_end()
+        if self.saveLog:
+            self.populationHistory.append(copy.deepcopy(self.population))
+            #TODO for now we overwrite the existing file everytime "nasty"
+            path = os.path.join(self.saveOpt.logDir, f"{self.saveOpt.prefix}_{self.uid}.yaml")
+            self.saveToFile(path)
+
+
+    def on_optim_start(self): 
+        for cb in self.callbacks:
+            cb.on_optim_start()
+
+    def on_optim_end(self): 
+        for cb in self.callbacks:
+            cb.on_optim_end()
+
+    def getCurrentPositions(self) -> list[npt.NDArray[np.float64]]:
+        return [x.position for x in self.population]
+
+    def printPopulation(self) -> None:
+        for i in range(self.popsize):
+            print(self.population[i])
+
+    def addInvididual(self, indiv: individual) -> None:
+        if (indiv.uid == -1):
+            indiv.uid = self.popsize
+        self.population.append(indiv)
+        self.popsize += 1
+
+    def loadYaml(self, path: str) -> None:
+        assert os.path.exists(path)
+        with open(path, 'r') as file:
+            valDict = yaml.safe_load(file)
+
+        self.iter = valDict.get("iter", DEFAULT_INT) 
+        self.maxiter = valDict.get("maxiter", DEFAULT_INT) 
+        self.popsize = valDict.get("popsize", DEFAULT_INT) 
+        self.preEval = valDict.get("preEval", DEFAULT_PREVAL) 
+        self.seed = valDict.get("seed", DEFAULT_SEED) 
+
+        # steps/bounds section dont know how to orchestrate it with the objective thingy
+        #self.maxiter = valDict.get("maxiter", 1) 
+        #self.maxiter = valDict.get("maxiter", 1) 
+        
+        lastFrame = valDict.get("populationHistory", [])
+        #print(lastFrame)
+        if (len(lastFrame) == 0):
+            return
+        lastFrame = lastFrame[-1]
+        for i in range(len(lastFrame[0])):
+            currentIndiv = individual(position = lastFrame[0][i], uid = lastFrame[1][i], score = lastFrame[2][i])
+            self.population.append(currentIndiv)
+    def saveToFile(self, path: str) -> None:
+        # can be overloaded by other algo to save more things
+        savingDict: dict = {}
+        savingDict["populationHistory"] = []
+        savingDict["iter"] = self.iter
+        savingDict["maxiter"] = self.maxiter
+        savingDict["popsize"] = self.popsize
+        savingDict["preEval"] = self.preEval
+        savingDict["seed"] = self.seed
+        if (self.objective is not None):
+            # check fmt if not good need to convert to list of list
+            savingDict["bounds"] = self.objective.bounds.tolist()
+            savingDict["steps"] = self.objective.steps.tolist()
+
+        savingDict["fmtCode"] = list(self.population[0].position.shape)
+        for itr, iterList in enumerate(self.populationHistory):
+            iterBuffer = [[], [], []]
+            for indiv in iterList:
+                frame = indiv.saveFrame()
+                iterBuffer[0].append(frame[0])
+                iterBuffer[1].append(frame[1])
+                iterBuffer[2].append(frame[2])
+            if (len(iterList) != 0):
+                savingDict["populationHistory"].append(iterBuffer)
+    
+        print(f"Saving dict {savingDict} to file: {path}")
+        with open(path, "w") as file:
+            yaml.dump(savingDict, file)
+
+
+class callback(ABC):
+    def __init__(self):
+        self.mh: templateSelectionAlgo | None = None
+    
+    def setMh(self, mh: templateSelectionAlgo) -> None:
+        self.mh = mh
+
+    def on_iter_start(self): 
+        pass
+
+    def on_iter_end(self): 
+        pass
+
+    def on_optim_start(self): 
+        pass
+
+    def on_optim_end(self): 
+        pass
+
+

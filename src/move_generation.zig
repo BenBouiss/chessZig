@@ -28,28 +28,45 @@ const fastBitscan = build_options.fastBitscan;
 const ignoreChecks = build_options.fastBitscan;
 const useMagic = build_options.useMagic;
 const useStaged = build_options.useStaged;
+const useDebug = build_options.useDebug;
 
 pub fn generateLegalMoves(p_board: *Board_state) moveContainer {
     if (comptime useStaged) {
         var bbMoves = moveGenBB(p_board);
         const moves = moveGenBBToMoveContainer(p_board, &bbMoves);
 
-        //var _moves: moveContainer = moveGeneration(p_board);
-        //const _fmoves = filterMoveLegal(p_board, &_moves) catch unreachable;
-
-        //if (_fmoves.isDifferent(moves)) {
-        //    _fmoves.printDifference(moves);
-        //    chess.print_board(p_board);
-        //    chess.printBoardValidity(p_board);
-        //    chess.print_bitboard(p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
-        //    _moves.print();
-        //    chess.sanityCheckBoardState(p_board);
-        //    @panic("test ");
+        //if (comptime useDebug) {
+        //    var _moves: moveContainer = moveGeneration(p_board);
+        //    const _fmoves = filterMoveLegal(p_board, &_moves, p_board.whiteToMove());
+        //    if (_fmoves.isDifferent(moves)) {
+        //        _fmoves.printDifference(moves);
+        //        chess.print_board(p_board);
+        //        chess.printBoardValidity(p_board);
+        //        chess.print_bitboard(p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
+        //        _moves.print();
+        //        chess.sanityCheckBoardState(p_board);
+        //        @panic("test ");
+        //    }
         //}
         return moves;
     } else {
         var moves: moveContainer = moveGeneration(p_board);
         const fmoves = filterMoveLegal(p_board, &moves, p_board.whiteToMove());
+
+        //if (comptime useDebug) {
+        //    chess.getCheckers(p_board, p_board.whiteToMove());
+        //    var bbMoves = moveGenBB(p_board);
+        //    const bbmoves = moveGenBBToMoveContainer(p_board, &bbMoves);
+        //    if (bbmoves.isDifferent(fmoves)) {
+        //        fmoves.printDifference(bbmoves);
+        //        chess.print_board(p_board);
+        //        chess.printBoardValidity(p_board);
+        //        chess.print_bitboard(p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
+        //        bbmoves.print();
+        //        chess.sanityCheckBoardState(p_board);
+        //        @panic("test ");
+        //    }
+        //}
         return fmoves;
     }
 }

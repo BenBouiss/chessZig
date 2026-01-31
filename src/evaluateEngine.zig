@@ -745,6 +745,11 @@ fn getGuiCmdType(cmd: []const u8) e_guiCmd {
 }
 
 fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u8) !void {
+    if (p_self.status.debugMode) {
+        try p_self.respond("DEBUG on", engineIndex);
+    } else {
+        try p_self.respond("DEBUG off", engineIndex);
+    }
     for (options.items) |opt| {
         try p_self.respond(opt._slice(), engineIndex);
     }
@@ -1069,49 +1074,6 @@ pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
     ret.print();
     return ret;
 }
-//pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
-//    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-//    defer file.close();
-//    var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-//
-//    var f_reader = file.reader(&buffer);
-//    const reader = &f_reader.interface;
-//    var ret: guiSetting = try guiSetting.init(alloc);
-//    var matchSection: bool = false;
-//
-//    while (true) {
-//        var _buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-//        var w: std.io.Writer = .fixed(&_buffer);
-//        var s = string.initFromBuffer(&_buffer);
-//        const size = reader.streamDelimiter(&w, '\n') catch {
-//            break;
-//        };
-//        reader.toss(1);
-//        if (size <= 1) {
-//            continue;
-//        }
-//        if (s.startsWith("//")) {
-//            continue;
-//        }
-//        if (s.containsE("[match]", .ignoreCase)) {
-//            matchSection = true;
-//            continue;
-//        }
-//        var status: bool = undefined;
-//
-//        if (matchSection) {
-//            status = handleMatchInfoStrBuffer(alloc, &ret, &s);
-//        } else {
-//            status = handleInfoStrBuffer(alloc, &ret, &s);
-//        }
-//        if (!status) {
-//            std.debug.print("Match handling of {s} failed \n", .{s._slice()});
-//        }
-//    }
-//    ret.print();
-//    return ret;
-//}
-
 fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: *string) bool {
     if (buffer.startsWith("nMatch")) {
         const nbrStr = buffer.extractFromBounds("=", ";") catch {

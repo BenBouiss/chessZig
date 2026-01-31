@@ -430,6 +430,10 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.A
             sanityCheckBoardState(p_board);
         }
     }
+
+    if (comptime useStaged) {
+        getCheckers(p_board, p_board.whiteToMove());
+    }
 }
 pub fn getEmptyMoveListFromStr(strBuffer: []const u8, alloc: std.mem.Allocator) !movel.matchMoveContainer {
     var cmd_split = try utils.split(u8, alloc, strBuffer, ' ');
@@ -1228,13 +1232,13 @@ pub const Board_state = struct {
         return (isNotPinned and isToSecure);
     }
 
-    pub fn isFiftyMoveRepetition(self: *Board_state) bool {
+    pub inline fn isFiftyMoveRepetition(self: *Board_state) bool {
         return self.halfMoveClock >= 50;
     }
-    pub fn isStaleThreeFold(self: *Board_state) bool {
+    pub inline fn isStaleThreeFold(self: *Board_state) bool {
         return self.move_history.checkRepetitions();
     }
-    pub fn isStaleMateRepetition(p_self: *Board_state) bool {
+    pub inline fn isStaleMateRepetition(p_self: *Board_state) bool {
         return p_self.isFiftyMoveRepetition() or p_self.isStaleThreeFold();
     }
 

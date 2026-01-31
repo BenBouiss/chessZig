@@ -21,3 +21,55 @@ Idea:
 - Execute a tournament, takes the top n best, perform crossOver / MH optim step 
 - Execute previous step until good enough 
 
+feature:
+    - Checkpoint system:
+        - Every round(?)
+        - Save the state of the tournament object to a .pkl file
+        - Load possibility to continue a previously started tuning
+    - ?
+Refactor:
+    - Make MH algo with a maximisation objective where the scoring func launches the tourney in single/multiThreaded
+        -  
+
+Callback saving section:
+
+Save the evolution of the population from one iter to the next
+save mh params for loading and tuning continuation
+2 possibilities:
+    - save population + mh params 
+    - only save population, let the mh do its thing then run
+        - could possibly do a set_iter to let the mh correctly set its internals and such
+
+save chess population fmt (example): 
+    pawnScoreArr, (float, 64)
+    bishopScoreArr, (float, 64)
+    knightScoreArr, (float, 64)
+    rookScoreArr , (float, 64)
+    queenScoreArr, (float, 64)
+    kingScoreArr, (float, 64)
+
+with this info we can convert MH population => chess population
+for each iter save the MH population fmt (example):
+    positions(float,  64 * 6)
+    scores(float)
+    uid(float)
+
+when loading in order to relaunch optim only the current population is actually needed not the complete history, plus the MH params or smthin see below
+file format: yaml for better python integration probably
+
+save format?
+    - date: {s}; // not necessary
+    - iter: {d};
+    - maxiter: {d};
+    - popsize: {d};
+    - bounds: [[{f}, {f}], ..., [{f}, {f}]];
+    - steps: [[{f}], ..., [{f}]];
+    - fmtCode: {s}; // to be used to diffenrentiate in the MH population => chess population
+        - ex: f64_f64_f64_f64_f64_f64
+    - populationHistory: [[indiv1, ..., indivN](0) .... [indiv1, ..., indivN](iter)];
+        - Indiv fmt: [position: [{f}, {f}, ..., {f}], uid: {d}, score: {f}]
+        - Same layout as in template.py, name of the keys not included
+            - position
+            - uid
+            - score
+    - ???

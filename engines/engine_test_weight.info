@@ -2,21 +2,23 @@
 path="engines/bin/engine_24_01_26";
 name="Standard heuristic";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+"setoption name fixedDepth value true";
 "setoption name useHash value false";
 "debug on";
+"setoption name heuristicWeightsPath value engines/heuristics/baseOldWeights.info";
 
 [engine2]
 path="engines/bin/engine_24_01_26";
 name="Zeroes heuristic";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+"setoption name fixedDepth value true";
+"setoption name useHash value false";
 "debug on";
-"setoption name heuristicWeightsPath value engines/heuristics/zeroWeights.info"
+"setoption name heuristicWeightsPath value engines/heuristics/4_iter_4_popsize.winfo";
 
 [match]
 nMatch=1;
-playerSwitch=false;
+playerSwitch=true;
 debugMode=true;
 useOpeningBook=false;
 openingBookPath="opening/8moves_v3.pgn";
