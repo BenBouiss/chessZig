@@ -9,8 +9,10 @@ cmd
 *.c
 *.gz
 *pycache*
+*.vscode/
 
 engines/bin/*
 engines/heuristics/*
 engines/tmp/*
+test/*
 opening
