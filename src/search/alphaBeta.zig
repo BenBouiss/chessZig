@@ -6,6 +6,7 @@ const heuristicl = @import("../heuristic.zig");
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const hashl = @import("../hashTable.zig");
+const utilsl = @import("../utils.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
@@ -38,7 +39,8 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
 
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
-        _ = p_state.makeMove(move);
+
+        p_state.makeMove(move);
 
         const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash);
 
@@ -54,11 +56,16 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
 fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
+        if (depth != 0) {
+            std.debug.print("[DEBUG] searchLoop: early return\n", .{});
+            chess.print_boardstate(p_state);
+        }
         p_info.n_nodeExplored += 1;
         const score = color_mask * heuristicl.pastHeuristic(p_state);
         return score;
     }
     if (p_state.isStaleMateRepetition()) {
+        std.debug.print("[DEBUG] searchLoop: Found stalemate for last move: {s} returning: {d}\n", .{ p_state.getLastMove().getStr(), heuristicl.simpleStalemateScore });
         if (comptime useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), heuristicl.simpleStalemateScore);
             _ = hashl.hashTable.storeEntry(&s_entry);

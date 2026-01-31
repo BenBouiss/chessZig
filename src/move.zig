@@ -418,45 +418,26 @@ pub const matchMoveContainer = struct {
         const count = self.getRepetitions();
         return count >= 2;
     }
-    pub fn popMoveInplace(p_self: *matchMoveContainer) void {
-        if (p_self.len == 0) {
-            return;
-        }
 
-        p_self.len -= 1;
-        if (p_self.lastIrreversibleMoveIndex == p_self.len) {
-            var index: u16 = @intCast(p_self.len - 1);
-            while (index > 0) {
-                const move = p_self.moves[index];
-                if (move.isIrreversible()) {
-                    break;
-                }
-                index -= 1;
-            }
-            p_self.lastIrreversibleMoveIndex = index;
-        }
-        p_self.len -= 1;
-        //p_self.lastMove = p_self.moves[p_self.len - 1];
-        return;
-    }
     pub fn popMove(p_self: *matchMoveContainer) IMove {
         if (comptime useDebug) {
-            if (p_self.len == 0) {
-                @panic("list is empty");
-                //return .{};
+            if (p_self.len <= 1) {
+                //@panic("list is empty");
+                p_self.len = 0;
+                return .{};
             }
         }
         p_self.len -= 1;
-        if (p_self.lastIrreversibleMoveIndex == p_self.len) {
-            var index: u16 = @intCast(p_self.len - 1);
-            while (index > 0) {
-                const move = p_self.moves[index];
+        if (p_self.len == 0) {
+            p_self.lastIrreversibleMoveIndex = 0;
+        } else if (p_self.lastIrreversibleMoveIndex == p_self.len) {
+            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len - 1);
+            while (p_self.lastIrreversibleMoveIndex > 0) : (p_self.lastIrreversibleMoveIndex -= 1) {
+                const move = p_self.moves[p_self.lastIrreversibleMoveIndex];
                 if (move.isIrreversible()) {
                     break;
                 }
-                index -= 1;
             }
-            p_self.lastIrreversibleMoveIndex = index;
         }
         //p_self.lastMove = p_self.moves[p_self.len - 1];
         return p_self.moves[p_self.len];

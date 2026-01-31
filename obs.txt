@@ -9,3 +9,52 @@ en passant check capturing:
  
  invalid position: 
 position startpos moves a2a4 a7a5 b2b4 a5b4 c2c4 b4c3 d2c3 a8a4 a1a4 b7b5
+
+strange behavior:
+	the black engine(#1) makes a move awaiting a favorable position ~-3 however, the state is stalemate right afterwards
+	[DEBUG] respond.gui(#1): sent msg: OUT: position startpos e2e3 e7e5 d1f3 c7c6 d2d4 d8e7 c1d2 e5d4 f1d3 e7e5 f3g3 e5g3 h2g3 d4e3 d2e3 f8b4 e3d2 b4d2 b1d2 g8f6 d2c4 d7d5 c4d6 e8e7 d6c8 h8c8 f2f4 e7e6 g1f3 c6c5 f3g5 e6e7 c2c3 h7h6 g5f3 b8c6 d3b5 a7a6 b5a4 c6a5 f3e5 e7e6 g3g4 a5c4 e5c4 d5c4 e1c1 e6e7 g4g5 h6g5 f4g5 f6g4 d1d7 e7e6 d7b7 c8d8 h1f1 d8d6 f1f7 e6d5 a4d1 g4e5 d1f3 e5f3 g2f3 g7g6 b7e7 a8h8 f7h7 h8h7 e7h7 d5e5 h7f7 d6b6 c1b1 b6c6 b1c1 c6b6 c1b1 b6c6 b1c1
+
+[DEBUG] readingThread.engine: got 'position startpos e2e3 e7e5 d1f3 c7c6 d2d4 d8e7 c1d2 e5d4 f1d3 e7e5 f3g3 e5g3 h2g3 d4e3 d2e3 f8b4 e3d2 b4d2 b1d2 g8f6 d2c4 d7d5 c4d6 e8e7 d6c8 h8c8 f2f4 e7e6 g1f3 c6c5 f3g5 e6e7 c2c3 h7h6 g5f3 b8c6 d3b5 a7a6 b5a4 c6a5 f3e5 e7e6 g3g4 a5c4 e5c4 d5c4 e1c1 e6e7 g4g5 h6g5 f4g5 f6g4 d1d7 e7e6 d7b7 c8d8 h1f1 d8d6 f1f7 e6d5 a4d1 g4e5 d1f3 e5f3 g2f3 g7g6 b7e7 a8h8 f7h7 h8h7 e7h7 d5e5 h7f7 d6b6 c1b1 b6c6 b1c1 c6b6 c1b1 b6c6 b1c1 ' (423 bytes)
+
+[DEBUG] applyUciMoves: Moves found in str: e2e3 e7e5 d1f3 c7c6 d2d4 d8e7 c1d2 e5d4 f1d3 e7e5 f3g3 e5g3 h2g3 d4e3 d2e3 f8b4 e3d2 b4d2 b1d2 g8f6 d2c4 d7d5 c4d6 e8e7 d6c8 h8c8 f2f4 e7e6 g1f3 c6c5 f3g5 e6e7 c2c3 h7h6 g5f3 b8c6 d3b5 a7a6 b5a4 c6a5 f3e5 e7e6 g3g4 a5c4 e5c4 d5c4 e1c1 e6e7 g4g5 h6g5 f4g5 f6g4 d1d7 e7e6 d7b7 c8d8 h1f1 d8d6 f1f7 e6d5 a4d1 g4e5 d1f3 e5f3 g2f3 g7g6 b7e7 a8h8 f7h7 h8h7 e7h7 d5e5 h7f7 d6b6 c1b1 b6c6 b1c1 c6b6 c1b1 b6c6 b1c1
+[DEBUG] executeBuffer: found command type .POSITION status: true
+[DEBUG] respond.gui(#1): sent msg: OUT: ISREADY
+
+[DEBUG] readingThread.engine: got 'ISREADY' (7 bytes)
+
+[DEBUG] respond.engine: sending msg: 'readyok'
+[DEBUG] executeBuffer: found command type .ISREADY status: true
+[DEBUG]  readingThread.gui (#1): found 8 bytes, message: readyok
+[DEBUG] handleCmd: executed command .READYOK, status: true
+[DEBUG] respond.gui(#1): sent msg: OUT: go wtime 280908 btime 323381 winc 5000 binc 5000
+[DEBUG] readingThread.engine: got 'go wtime 280908 btime 323381 winc 5000 binc 5000
+' (49 bytes)
+
+[DEBUG] executeBuffer: found command type .GO status: true
+[DEBUG] dispatchUciGoThreads: nthread info: searcher: 1, movearray: 10
+searcher thread: 1
+[DEBUG] executeGoCmd: No depth found  in the cmd string using the default engine option
+[DEBUG] executeGoCmd: scheduler cannot modify the depth of search
+[DEBUG] startSearch: starting search at depth: 6
+   _______________
+8| _ _ _ _ _ _ _ _ |
+7| _ _ _ _ _ R _ _ |
+6| p _ r _ _ _ p _ |
+5| _ _ p _ k _ P _ |
+4| _ _ p _ _ _ _ _ |
+3| _ _ P _ _ P _ _ |
+2| P P _ _ _ _ _ _ |
+1| _ _ K _ _ _ _ _ |
+   _______________
+   a b c d e f g h
+
+wtime 280908 btime 322978 winc 5000 binc 5000
+
+[DEBUG] respond.engine: sending msg: 'info nps: 299000 nodes 300298 retrieved: 0 stored: 0'
+[DEBUG] sendFinal: final choice c6b6 with scoring: -3.8100000000000005 at depth 6
+[DEBUG]  readingThread.gui (#1): found 53 bytes, message: info nps: 299000 nodes 300298 retrieved: 0 stored: 0
+[DEBUG] respond.engine: sending msg: 'bestmove c6b6'
+[DEBUG]  readingThread.gui (#1): found 14 bytes, message: bestmove c6b6
+[DEBUG] handleCmd: executed command .INFO, status: true
+[DEBUG] handleCmd: executed command .BESTMOVE, status: true
+[DEBUG] matchRoutine: Exiting match with status: .StaleMateRepetition

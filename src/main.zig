@@ -15,6 +15,7 @@ const evalEngl = @import("evaluateEngine.zig");
 const bookl = @import("book.zig");
 const stringl = @import("string.zig");
 const filel = @import("file.zig");
+const perftl = @import("search/perft.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -31,24 +32,6 @@ pub fn initAll(verbose: bool) void {
     moveTablel._initTables(verbose);
     if (comptime useDebug) {
         std.debug.print("[PRE] Building using the useDebug flag\n", .{});
-    }
-}
-pub fn test_bench() void {
-    initAll(true);
-    benchl.test_benchmark();
-}
-pub fn test_speedTest() !void {
-    var engine: enginel.engine = try enginel.engine.init(GLOBAL_ALLOC);
-    //engine.uciMode = true;
-    engine.executeBuffer("uci");
-    engine.executeBuffer("debug on");
-    engine.executeBuffer("setoption name hash value 1");
-    engine.executeBuffer("isready");
-    engine.executeBuffer("benchmark");
-
-    std.Thread.sleep(std.time.ns_per_s);
-    while (engine.searcher.searching) {
-        std.Thread.sleep(configl.INFO_TICKRATE_NS);
     }
 }
 
@@ -85,32 +68,11 @@ pub fn test_decision() !void {
         const dec = getDecision(&eng);
         try std.testing.expect(dec.scoring > 8000);
     }
-
     std.debug.print("[TEST]: Mate in one test passed\n", .{});
 }
 
-pub fn test_db() !void {
-    initAll(true);
-    const path = "opening/8moves_v3.pgn";
-    var s = try stringl.string.initFromSlice(GLOBAL_ALLOC, path);
-    defer s.free(GLOBAL_ALLOC);
-    try bookl.test_db(&s);
-}
-pub fn test_file() !void {
-    const infoFile = "engines/engine.info";
-    try filel.main(GLOBAL_ALLOC, infoFile);
-    return;
-}
 pub fn main() anyerror!void {
     var buf: [1024]u8 = undefined;
-    std.debug.print("[test] main: {s}", .{try std.fs.cwd().realpath(".", &buf)});
-    //magicl.main();
-    //try chessl.main();
-    //test_bench();
-    //try enginel.launch_engine(true);
-    //try test_decision();
+    std.debug.print("[test] main: {s}\n", .{try std.fs.cwd().realpath(".", &buf)});
     try evalEngl.main();
-    //try test_test();
-    //try test_db();
-    //try test_file();
 }

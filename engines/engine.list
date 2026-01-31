@@ -1,3 +1,6 @@
 engine_9_01_26: original "past" heuristic
 
 engine_11_01_26: original "past" with float heuristic + mobility score
+
+engine before 24_01_26: bug in the heuristic load weights where wrong token name was used, now line only needs to contain the piece name
+	- symptom: weights not loaded correctly
