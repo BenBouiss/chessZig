@@ -1347,7 +1347,7 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
     std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len });
-    std.debug.print("Current evaluation: {d} \n", .{heuristicl.simpleHeuristic(p_board_state)});
+    std.debug.print("Current evaluation: {d} \n", .{heuristicl.evaluate(p_board_state, &heuristicl.globalHeuristic)});
 
     printBoardValidity(p_board_state);
 

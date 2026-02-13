@@ -161,5 +161,6 @@ pub fn test_benchmark() void {
 }
 
 pub fn main() !void {
+    mainl.initAll(true);
     test_benchmark();
 }

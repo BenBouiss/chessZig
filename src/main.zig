@@ -16,6 +16,7 @@ const bookl = @import("book.zig");
 const stringl = @import("string.zig");
 const filel = @import("file.zig");
 const perftl = @import("search/perft.zig");
+const heuristicl = @import("heuristic.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -70,9 +71,16 @@ pub fn test_decision() !void {
     }
     std.debug.print("[TEST]: Mate in one test passed\n", .{});
 }
+pub fn test_speed() !void {
+    var eng = try initEngine();
+    defer eng.free();
+    eng.executeBuffer("setoption name useTexel value true");
+    eng.executeBuffer("position startpos");
+    eng.executeBuffer("go depth 6");
+    waitOnEngine(&eng);
+}
 
 pub fn main() anyerror!void {
-    var buf: [1024]u8 = undefined;
-    std.debug.print("[test] main: {s}\n", .{try std.fs.cwd().realpath(".", &buf)});
-    try evalEngl.main();
+    //try test_speed();
+    try heuristicl.main();
 }

@@ -69,13 +69,13 @@ pub const string = struct {
     pub fn extendWithResizeStr(p_self: *string, alloc: std.mem.Allocator, other: *string) !void {
         try p_self.extendWithResize(alloc, other._slice());
     }
-    pub fn _slice(self: string) []const u8 {
-        return self.data[0..self.len];
+    pub fn _slice(p_self: *const string) []const u8 {
+        return p_self.data[0..p_self.len];
     }
     pub fn free(p_self: *string, alloc: std.mem.Allocator) void {
         alloc.free(p_self.data);
     }
-    pub fn startsWith(p_self: *string, other: []const u8) bool {
+    pub fn startsWith(p_self: *const string, other: []const u8) bool {
         if (other.len > p_self.len) {
             return false;
         }
@@ -86,10 +86,10 @@ pub const string = struct {
         }
         return true;
     }
-    pub inline fn startsWithStr(p_self: *string, other: *string) bool {
+    pub inline fn startsWithStr(p_self: *const string, other: *string) bool {
         return p_self.startsWith(other._slice());
     }
-    pub fn endsWith(p_self: *string, other: []const u8) bool {
+    pub fn endsWith(p_self: *const string, other: []const u8) bool {
         if (other.len > p_self.len) {
             return false;
         }
@@ -102,39 +102,39 @@ pub const string = struct {
         }
         return true;
     }
-    pub inline fn endsWithStr(p_self: *string, other: *string) bool {
-        return p_self.endsWith(other.data[0..other.len]);
+    pub inline fn endsWithStr(p_self: *const string, other: *string) bool {
+        return p_self.endsWith(other._slice());
     }
-    pub inline fn copy(p_self: *string, alloc: std.mem.Allocator) !string {
+    pub inline fn copy(p_self: *const string, alloc: std.mem.Allocator) !string {
         return string.initFromSlice(alloc, p_self._slice());
     }
-    pub fn contains(p_self: *string, substr: *string, token: utilsl.strTokens) bool {
+    pub fn contains(p_self: *const string, substr: *string, token: utilsl.strTokens) bool {
         if (p_self.len < substr.len) {
             return false;
         }
         return utilsl.contains(p_self._slice(), substr._slice(), token);
     }
-    pub fn containsE(p_self: *string, substr: []const u8, comptime token: utilsl.strTokens) bool {
+    pub fn containsE(p_self: *const string, substr: []const u8, comptime token: utilsl.strTokens) bool {
         if (p_self.len < substr.len) {
             return false;
         }
         return utilsl.contains(p_self._slice(), substr, token);
     }
-    pub fn find(p_self: *string, e: []const u8) string_err!usize {
+    pub fn find(p_self: *const string, e: []const u8) string_err!usize {
         const ret = utilsl.findM(u8, p_self._slice(), e);
         if (ret < 0) {
             return string_err.itemNotFound_error;
         }
         return @intCast(ret);
     }
-    pub fn findE(p_self: *string, e: u8) string_err!usize {
+    pub fn findE(p_self: *const string, e: u8) string_err!usize {
         const ret = utilsl.find(u8, p_self._slice(), e);
         if (ret < 0) {
             return string_err.itemNotFound_error;
         }
         return @intCast(ret);
     }
-    pub fn extractFromBounds(p_self: *string, lBound: []const u8, rBound: []const u8) string_err![]const u8 {
+    pub fn extractFromBounds(p_self: *const string, lBound: []const u8, rBound: []const u8) string_err![]const u8 {
         if (!p_self.containsE(lBound, .ignoreCase)) {
             return string_err.itemNotFound_error;
         }
@@ -149,7 +149,7 @@ pub const string = struct {
         }
         return p_self._slice()[(startIndex + 1) .. (@as(usize, @intCast(endIndex)) + startIndex) + 1];
     }
-    pub fn split(self: *string, alloc: std.mem.Allocator, e: u8) !std.ArrayList([]const u8) {
+    pub fn split(self: *const string, alloc: std.mem.Allocator, e: u8) !std.ArrayList([]const u8) {
         return try utilsl.split(u8, alloc, self._slice(), e);
     }
     pub fn clearRetainingCapacity(self: *string) void {

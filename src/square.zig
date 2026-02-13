@@ -34,16 +34,16 @@ pub const squareInfo = struct {
     pub inline fn getRankBB(self: squareInfo) u64 {
         return chess.rankMaskFromRankN(self.rank);
     }
-    pub fn getAllAttackingSquares(self: squareInfo) u64 {
+    pub inline fn getAllAttackingSquares(self: squareInfo) u64 {
         return self.getDiagBB() | self.getAntiDiagBB() | self.getRankBB() | self.getFileBB() | chess.knightAttacks(self.getBB());
     }
-    pub fn visibilitySquares(self: squareInfo) u64 {
+    pub inline fn visibilitySquares(self: squareInfo) u64 {
         return self.getDiagBB() | self.getAntiDiagBB() | self.getRankBB() | self.getFileBB();
     }
-    pub fn getHorizontalBB(self: squareInfo) u64 {
+    pub inline fn getHorizontalBB(self: squareInfo) u64 {
         return self.getRankBB() | self.getFileBB();
     }
-    pub fn getDiagonalsBB(self: squareInfo) u64 {
+    pub inline fn getDiagonalsBB(self: squareInfo) u64 {
         return self.getDiagBB() | self.getAntiDiagBB();
     }
 };

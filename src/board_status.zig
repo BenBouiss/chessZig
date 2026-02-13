@@ -22,7 +22,7 @@ pub const bCastleKRookBit: u64 = 0xA000000000000000;
 pub const bCastleQKingBit: u64 = 0x1400000000000000;
 pub const bCastleQRookBit: u64 = 0x900000000000000;
 
-pub const e_turn = enum(bool) { BLACK = false, WHITE = true };
+pub const e_turn = enum(u2) { BLACK = 0, WHITE = 1 };
 pub const statusStack = struct {
     // status: 5 bools
     // size: 5 bytes

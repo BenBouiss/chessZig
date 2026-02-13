@@ -58,3 +58,4 @@ wtime 280908 btime 322978 winc 5000 binc 5000
 [DEBUG] handleCmd: executed command .INFO, status: true
 [DEBUG] handleCmd: executed command .BESTMOVE, status: true
 [DEBUG] matchRoutine: Exiting match with status: .StaleMateRepetition
+

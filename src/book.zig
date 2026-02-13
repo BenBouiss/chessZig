@@ -193,8 +193,7 @@ pub fn test_read(path: *string) !void {
     }
 }
 
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-pub const GLOBAL_ALLOC = GPA.allocator();
+pub const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 pub fn test_db(path: *string) !void {
     var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);

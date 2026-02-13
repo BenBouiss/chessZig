@@ -13,7 +13,7 @@ class DE(template.templateSelectionAlgo):
 
     def step(self):
         assert self.objective is not None
-        scores = self.objective.evaluate(self.population)
+        scores = self.evaluate(self.getCurrentPositions())
         self.population.sort(key = lambda x: x.score, reverse = True)
         self.best_indiv_list.append(self.population[0])
 

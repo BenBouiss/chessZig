@@ -73,3 +73,13 @@ save format?
             - uid
             - score
     - ???
+
+# Texel tuning
+source: https://github.com/AndyGrant/Ethereal/blob/master/Tuning.pdf
+plan is to use a pre computed csv files containing all the relevant coefficient computed from a given "book" file 
+outcomes: 0: black win, 0.5: draw, 1: white win
+csv content:
+    - Coeff_0_w, Coeff_1_b, ...., Coeff_n_w, Coeff_n_b, Phase, Outcome
+    
+
+

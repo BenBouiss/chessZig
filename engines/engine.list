@@ -4,3 +4,8 @@ engine_11_01_26: original "past" with float heuristic + mobility score
 
 engine before 24_01_26: bug in the heuristic load weights where wrong token name was used, now line only needs to contain the piece name
 	- symptom: weights not loaded correctly
+
+engine before 01_02_26: bug in the undoing of irreversible moves leading to improper draw detection, see obs.txt and added test for draw detection
+	- symptom: engine making moves thinking the move will not lead to a draw
+
+engine_11_02_26: introduction of texel evaluation mode in a "fast" way where the speed is comparable to the past approach.
