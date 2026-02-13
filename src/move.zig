@@ -671,19 +671,19 @@ pub const moveBBState = struct {
         std.debug.print("King moves: \n", .{});
         chess.print_bitboard(self.kingMoves);
     }
-    pub fn count(p_self: *moveBBState) u64 {
-        var ret: u64 = @intCast(chess.l_popcount(p_self.pawnMoves));
-        ret += @intCast(chess.l_popcount(p_self.bishopMoves));
-        ret += @intCast(chess.l_popcount(p_self.doubleMoves));
-        ret += @intCast(chess.l_popcount(p_self.enPassantMoves));
-        ret += @intCast(chess.l_popcount(p_self.kingMoves));
-        ret += @intCast(chess.l_popcount(p_self.kingSideCastlingMoves));
-        ret += @intCast(chess.l_popcount(p_self.knightMoves));
-        ret += @intCast(chess.l_popcount(p_self.pawnAttacks));
-        ret += @intCast(chess.l_popcount(p_self.promotionMoves));
-        ret += @intCast(chess.l_popcount(p_self.queenMoves));
-        ret += @intCast(chess.l_popcount(p_self.queenSideCastlingMoves));
-        ret += @intCast(chess.l_popcount(p_self.rookMoves));
+    pub fn count(self: moveBBState) u64 {
+        var ret: u64 = @intCast(chess.l_popcount(self.pawnMoves));
+        ret += @intCast(chess.l_popcount(self.bishopMoves));
+        ret += @intCast(chess.l_popcount(self.doubleMoves));
+        ret += @intCast(chess.l_popcount(self.enPassantMoves));
+        ret += @intCast(chess.l_popcount(self.kingMoves));
+        ret += @intCast(chess.l_popcount(self.kingSideCastlingMoves));
+        ret += @intCast(chess.l_popcount(self.knightMoves));
+        ret += @intCast(chess.l_popcount(self.pawnAttacks));
+        ret += @intCast(chess.l_popcount(self.promotionMoves));
+        ret += @intCast(chess.l_popcount(self.queenMoves));
+        ret += @intCast(chess.l_popcount(self.queenSideCastlingMoves));
+        ret += @intCast(chess.l_popcount(self.rookMoves));
         return ret;
     }
     pub fn rawCount(p_self: *moveBBState) u64 {

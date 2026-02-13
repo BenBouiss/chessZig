@@ -135,7 +135,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
-        const score = color_mask * heuristicl.pastHeuristic(p_state);
+        const score = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
         currentLine.line.merge_match(&p_state.move_history, 0);
         return score;
     }

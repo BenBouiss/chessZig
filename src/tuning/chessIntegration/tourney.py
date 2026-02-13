@@ -365,7 +365,7 @@ if __name__ == "__main__":
     os.makedirs(tmpFolder, exist_ok=True)
 
     popsize = 4
-    maxiter = 4
+    maxiter = 8
     saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix = "ben")
     mh = gw.GW(popsize = popsize, maxiter = maxiter, saveLog = True, preEval = True, saveOpt = saveOpt)
     tourn = tournament(standardTimeFormat, templatePath = path, evalBin = evaluationBinPath, debugMode = True, logDir = tmpFolder, nThread=6)
@@ -374,7 +374,7 @@ if __name__ == "__main__":
     mh.generatePopulation()
     
     basePos = chessSpec.weightFileToHeuristicEntry(baseWeightPath).get1DArray()
-    mh.addInvididual(individual(position = basePos, uid = -1, score = float('-inf')))
+    mh.addInvididual(individual(position = basePos, uid = -1, score = float('-inf'), frozen = True))
     mh.optimize()
 
     

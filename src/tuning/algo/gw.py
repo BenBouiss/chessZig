@@ -9,32 +9,33 @@ import template
 import objective
 
 import numpy as np
+import numpy.typing as npt 
 from chessIntegration.chessSpec import callbackSave
 
+# https://www.geeksforgeeks.org/machine-learning/grey-wolf-optimization-introduction/
 class GW(template.templateSelectionAlgo):
     def __init__(self, **parentKwargs):
         super().__init__(**parentKwargs)
         assert self.popsize > 3, "GW needs atleast 3"
 
-        # https://www.geeksforgeeks.org/machine-learning/grey-wolf-optimization-introduction/
         # value decreasing with iterations from 2 to 0
         self.a: float = 2
 
 
     def step(self):
-        assert self.objective is not None
-        new_pos = self.computeNewPositions()
-        scores = self.objective.evaluate(new_pos)
+        new_pos = self.applyFrozenToNewPos(self.computeNewPositions())
+
+        scores = self.evaluate(new_pos)
 
         for i in range(self.popsize):
-            if scores[i] > self.population[i].score:
+            if (scores[i] > self.population[i].score):
                 self.population[i].position = new_pos[i]
                 self.population[i].score = scores[i]
 
         self.population.sort(key = lambda x: x.score, reverse = True)
         self.best_indiv_list.append(self.population[0])
 
-    def computeNewPositions(self):
+    def computeNewPositions(self) -> npt.NDArray[np.float64]:
         """
         Sort population
         Take the 3 best
@@ -65,6 +66,14 @@ class GW(template.templateSelectionAlgo):
     def updateCoefficient(self):
         self.a = 2 * (1 - self.iter / self.maxiter)
 
+    def applyFrozenToNewPos(self, positions: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]: 
+        assert self.popsize == len(positions)
+        for i in range(self.popsize):
+            if (self.population[i].frozen):
+                positions[i] = np.array(self.population[i].position)
+        return positions
+
+
 
 if __name__ == "__main__":
 
@@ -79,6 +88,7 @@ if __name__ == "__main__":
     mh.setObjective(test)
     #mh.addCallback(callbackSave(logDir, prefix="ben"))
     mh.generatePopulation()
+    mh.population[0].frozen = True
     mh.optimize()
     
     mh.printPopulation()

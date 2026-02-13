@@ -21,13 +21,13 @@ const threadPackageArray = threadingl.threadPackageArray;
 pub const searchStatus = enum { CONTINUE, INTERRUPTED, FINISHED };
 
 pub const searchFeatures = struct {
-    useHash: bool = false,
+    useHash: bool = configl.DEFAULT_USEHASHTABLE,
+    useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
-    if (p_engine.options.useHashTable) {
-        ret.useHash = true;
-    }
+    ret.useHash = p_engine.options.useHashTable;
+    ret.useTexelEvaluation = p_engine.options.useTexelEvaluation;
     return ret;
 }
 

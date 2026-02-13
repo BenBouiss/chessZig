@@ -18,13 +18,17 @@ class individual:
     position: npt.NDArray[np.float64] 
     uid: int
     score: float = 0
+    frozen: bool = False
     def __repr__(self) -> str:
-        return f"uid: {self.uid}, score: {self.score}, position: {self.position}"
+        return f"uid: {self.uid}, score: {self.score}, position: {self.position}, frozen: {self.frozen}"
 
     def saveFrame(self) -> list[float]:
-        return [self.position.tolist(), self.uid, float(self.score)]
+        return [self.position.tolist(), self.uid, float(self.score), self.frozen]
 
-
+FRAME_POSITION_IDX = 0
+FRAME_UID_IDX = 1
+FRAME_SCORE_IDX = 2
+FRAME_FROZEN_IDX = 3
 @dataclass
 class saveOptions:
     logDir: str = "."
@@ -92,14 +96,13 @@ class templateSelectionAlgo(object):
 
 
     def optimize(self) -> None:
-        assert self.objective is not None
         assert len(self.population) != 0 
         self.running = True
         
         if (self.preEval and (self.iter == 0)):
             # can be used in algo to have a already evaluated
             # random population 
-            scores = self.objective.evaluate(self.getCurrentPositions())
+            scores = self.evaluate(self.getCurrentPositions())
             for i in range(self.popsize):
                 self.population[i].score = scores[i]
 
@@ -118,6 +121,14 @@ class templateSelectionAlgo(object):
 
     def step(self) -> None:
         raise NotImplementedError("this function needs to be implemented")
+
+    def evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
+        assert self.objective is not None
+        return self.objective.evaluate(positions)
+
+    #def applyFrozenToNewPos(self, positions: npt.NDArray[np.float64]): 
+    #    # algo defined if supported
+    #    pass
 
     def on_iter_start(self): 
         for cb in self.callbacks:
@@ -175,8 +186,13 @@ class templateSelectionAlgo(object):
             return
         lastFrame = lastFrame[-1]
         for i in range(len(lastFrame[0])):
-            currentIndiv = individual(position = lastFrame[0][i], uid = lastFrame[1][i], score = lastFrame[2][i])
-            self.population.append(currentIndiv)
+            if (len(lastFrame) == FRAME_FROZEN_IDX + 1):
+                currentIndiv = individual(position = lastFrame[FRAME_POSITION_IDX][i], uid = lastFrame[FRAME_UID_IDX][i], score = lastFrame[FRAME_SCORE_IDX][i], frozen = lastFrame[FRAME_FROZEN_IDX][i])
+                self.population.append(currentIndiv)
+            elif (len(lastFrame) == FRAME_SCORE_IDX + 1):
+                currentIndiv = individual(position = lastFrame[FRAME_POSITION_IDX][i], uid = lastFrame[FRAME_UID_IDX][i], score = lastFrame[FRAME_SCORE_IDX][i])
+                self.population.append(currentIndiv)
+
     def saveToFile(self, path: str) -> None:
         # can be overloaded by other algo to save more things
         savingDict: dict = {}
@@ -193,12 +209,13 @@ class templateSelectionAlgo(object):
 
         savingDict["fmtCode"] = list(self.population[0].position.shape)
         for itr, iterList in enumerate(self.populationHistory):
-            iterBuffer = [[], [], []]
+            iterBuffer = [[], [], [], []]
             for indiv in iterList:
                 frame = indiv.saveFrame()
-                iterBuffer[0].append(frame[0])
-                iterBuffer[1].append(frame[1])
-                iterBuffer[2].append(frame[2])
+                iterBuffer[FRAME_POSITION_IDX].append(frame[FRAME_POSITION_IDX])
+                iterBuffer[FRAME_UID_IDX].append(frame[FRAME_UID_IDX])
+                iterBuffer[FRAME_SCORE_IDX].append(frame[FRAME_SCORE_IDX])
+                iterBuffer[FRAME_FROZEN_IDX].append(frame[FRAME_FROZEN_IDX])
             if (len(iterList) != 0):
                 savingDict["populationHistory"].append(iterBuffer)
     
@@ -225,5 +242,11 @@ class callback(ABC):
 
     def on_optim_end(self): 
         pass
+
+
+class freezeCallback(callback):
+    def __init__(self, uid_list: list[int]):
+        super().__init__()
+        self.uids = uid_list
 
 

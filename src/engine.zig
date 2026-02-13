@@ -23,7 +23,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, CLEAR_HASH, HEUR_WEIGHTS_PATH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USETEXEL };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -171,6 +171,7 @@ pub const engineIdentification = struct {
 pub const engineOptions = struct {
     nThreads: spinVarType = configl.DEFAULT_THREAD,
     useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
+    useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
     fixDepth: bool = configl.DEFAULT_FIXED_DEPTH,
@@ -233,6 +234,8 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
+        try p_self.addOption(.{ .name = "useTexel", .optionType = .USETEXEL, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_FIXED_DEPTH } } });
+
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
@@ -475,6 +478,17 @@ pub const engine = struct {
                 p_self.options.useHashTable = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
+            .USETEXEL => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useTexelEvaluation = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+
             .HASHTABLESIZE => {
                 const val = getSpinValFromSetOptionCmd(tokens) catch {
                     return false;
@@ -746,6 +760,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .CLEAR_HASH;
     } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {
         return .HEUR_WEIGHTS_PATH;
+    } else if (utilsl.contains(cmdBuffer, " useTexel", .ignoreCase)) {
+        return .USETEXEL;
     }
 
     return .INVALID;
