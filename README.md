@@ -12,7 +12,7 @@ make and run
 comptime build arguments:
 - useStaged: Staged move generation or not
 - useMagic: Use magic method for slider pieces move generation
-- fastBiscan: Use of the "intrinsics" file for bitscan and reverseBitscan
+- fastBitscan: Use of the "intrinsics" file for bitscan and reverseBitscan
 - useDebug: Performs sanityChecks at various stage of the move making / unmaking
 - useHash: (not used) Wether to use the hash table for previous explored move to retrieve the evaluation / nbr of moves
   - This option is now up to the engine using the setoption name useHash value true
@@ -30,11 +30,17 @@ build script:
 
 Tasklist:
 - (?)Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
+    - Still on the fence on this one
+- Convert evaluation to use centiPawn represention(use larger int instead of lower floats?)
+- Heuristic to add to evaluation
+    - King safety (use the one present in the texel coeffs see .zig file)
+    - Add complexity
 
 Sources: 
 - https://www.chessprogramming.org/
 - https://www.codeproject.com/articles/Worlds-Fastest-Bitboard-Chess-Movegenerator#comments-section
 - https://github.com/abulmo/hqperft
+- https://github.com/AndyGrant/Ethereal/tree/master for the texel paper
 
 Values: 
 
@@ -88,7 +94,36 @@ UCI setoption options:
 - usehash: [check] enables or disables the use of the hashTable
 - hash: [spin] size of the hashTable in MB
 - uci_limitstrength: [check] enables or disables the limitation of the engine's strength
-- UCI_Elo: [spin] engine's elo
+- UCI_Elo: [spin] engine's elo(not real elo only used to linear interp between depth 1(elo = 1000) and depth 6(elo = 3000))
 - fixedDepth: [check] fixes the depth during a normal go cmd to the depth prescribed by the engine's elo
 - clearHash: [button] clears the hashTable's entries
+- useTexel: [check] enable the texel evaluation method
+- heuristicWeightsPath: [string] path to the file containing the weights to be used
+
+
+File structures:
+A running theme here, a line will be ignored if it is malformed and/or doest correspond to the wanted format. Same behavior as the uci engine when in a similar position
+
+##.info: Primarely used to configure matches between engines, everything is case-insensitive (should be atleast)
+sections:
+- engine sections [engine1], [engine2]
+    - path, cmd = 'path="{s}";' path to the engine binary
+    - name, cmd = 'name="{s}";' name to register the engine by, will be used when saving the logs of the match(es)
+    - engine cmd, cmd = "{s}" the string will be sent as is to the engine, can be used to setoptions, enable debug or more...
+        - Anything starting with '"' will we considered, it also is the fallback cases for cmd parsing(last possible option when picking the type) I think
+
+- match section [match]:
+    - nMatch, cmd = 'nMatch={d};' number of match to be played between the engines
+    - playerSwitch, cmd = 'playerSwitch={s};' either 'true' or 'false', when enabled each match will be composed of 2 matches where the player will play both sides (engine1 vs engine2, engine2 vs engine1). Is usual to test if an engine is good as white and black
+    - debugMode, cmd = 'debugMode={s};' either 'true' or 'false', is used to toggle more debug prints
+    - useOpeningBook, cmd = 'useOpeningBook={s};' either 'true' or 'false', if an opening book is provided then each matches will be played starting from a drawn match entry from the opening book. This is useful to get multiple different matches to compare engine's strength, as currently this engine will produce the exact same match everytime when played against itself(heuristic function always the same for a given fen code) 
+    - openingBookPath, cmd = 'openingBookPath={s};' path to the opening book to be used
+    - saveLogs, cmd = 'saveLogs={s};' either 'true' or 'false' bool to enable the saving of internal logs and match logs
+    - logsLocation, cmd = 'logsLocation={s};' directory to save the logs files, if not provided will use the default location the parent directory
+
+
+##.winfo: Primarely used to pass weights to the engine throught the heuristicWeightsPath option,  
+    - {piece}ScoreArr, cmd = '{piece}ScoreArr = [{d}, {d}, ..., {d}];' where piece is a chess piece, the content here is an array of 64 float values separeted by ',' to be used in the evaluation function. If the number of elements isnt 64, the line will be ignored
+    - {piece}value, WIP way to set the individual piece heuristic values, primarely used in the piece counting phase of the evaluation function
+    - more to come as the evaluation gets more complex
 

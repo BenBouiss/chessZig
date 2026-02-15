@@ -4,6 +4,7 @@ const movel = @import("move.zig");
 const chessl = @import("chess.zig");
 const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
+const weightl = @import("weights.zig");
 const hashl = @import("hashTable.zig");
 const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
@@ -101,8 +102,8 @@ pub fn dispatchBenchmark(p_engine: *engine, p_threadPack: *threadPackageArray, d
 pub fn entrypointMoveSearchLoop(p_state: *chessl.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16) void {
     p_info.running = true;
 
-    const alpha: scoreType = -heuristicl.simpleCheckMateScore;
-    const beta: scoreType = heuristicl.simpleCheckMateScore;
+    const alpha: scoreType = -weightl.simpleCheckMateScore;
+    const beta: scoreType = weightl.simpleCheckMateScore;
 
     var currentDecision: moveDecisionExt = .{};
     for (0..p_startingMoves.items.len) |i| {
@@ -141,7 +142,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     }
     if (p_state.isStaleMateRepetition()) {
         currentLine.line.merge_match(&p_state.move_history, 0);
-        return heuristicl.simpleStalemateScore;
+        return weightl.simpleStalemateScore;
     }
 
     const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
@@ -183,9 +184,9 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(turn)) {
-            currentLine.scoring = -(heuristicl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
+            currentLine.scoring = -(weightl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
         } else {
-            currentLine.scoring = heuristicl.simpleStalemateScore;
+            currentLine.scoring = weightl.simpleStalemateScore;
         }
     }
 

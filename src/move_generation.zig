@@ -9,7 +9,6 @@ const utilsl = @import("utils.zig");
 
 const std = @import("std");
 
-const typedMoveContainer = movel.typedMoveContainer;
 const moveContainer = movel.moveContainer;
 const IMove = movel.IMove;
 const moveBBState = movel.moveBBState;

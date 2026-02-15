@@ -867,6 +867,10 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
     const times = try p_self.match.getGoStr(p_self.alloc);
     defer (p_self.alloc.free(times));
     std.debug.print("{s}\n", .{times});
+
+    const eval = heuristicl.evaluate_debug(&p_self.match.chessState, &heuristicl.globalHeuristic);
+    std.debug.print("Current evaluation: \n", .{});
+    eval.print();
 }
 
 fn onNextTurnTrigger(p_self: *guiState) !bool {

@@ -516,12 +516,15 @@ pub inline fn isKingPiece(piece: e_piece) bool {
     return (piece == .nWhiteKing or piece == .nBlackKing);
 }
 
-pub fn canMove(from: e_square, to: e_square, occ: u64) bool {
+pub inline fn canMove(from: e_square, to: e_square, occ: u64) bool {
     return (inBetween(from, to) & occ) == 0;
 }
 
-pub fn inBetween(from: e_square, to: e_square) u64 {
+pub inline fn inBetween(from: e_square, to: e_square) u64 {
     return tablel.arrRectangular[@intFromEnum(from)][@intFromEnum(to)];
+}
+pub inline fn safetyArea(sq: e_square) u64 {
+    return tablel.safetyArea[@intFromEnum(sq)];
 }
 
 pub fn invertColor(color: e_color) e_color {
@@ -1167,10 +1170,10 @@ pub const Board_state = struct {
     }
 
     pub fn getPieceCount(self: Board_state, piece: e_piece) i8 {
-        return l_popcount(self.pieceBB[@intFromEnum(piece)]);
+        return il_popcount(self.pieceBB[@intFromEnum(piece)]);
     }
     pub fn getSidePieceCount(self: Board_state, color: e_color) i8 {
-        return l_popcount(self.c_occupiedBB[@intFromEnum(color)]);
+        return il_popcount(self.c_occupiedBB[@intFromEnum(color)]);
     }
 
     pub fn isLegal(p_self: *Board_state, white: bool) bool {
@@ -1347,7 +1350,9 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
     std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len });
-    std.debug.print("Current evaluation: {d} \n", .{heuristicl.evaluate(p_board_state, &heuristicl.globalHeuristic)});
+    const eval = heuristicl.evaluate_debug(p_board_state, &heuristicl.globalHeuristic);
+    std.debug.print("Current evaluation: \n", .{});
+    eval.print();
 
     printBoardValidity(p_board_state);
 
@@ -1405,18 +1410,21 @@ pub fn l_getMsbIdx(x: u64) u8 {
     }
     return count;
 }
-pub fn l_popcount(x: u64) i8 {
+pub fn l_popcount(x: u64) u8 {
     // Kernighan's way
     // x &= (x - 1)
     // (x - 1)  resets every bit before(and including)the LSB
     // x & (x-1) removes the LSB
-    var count: i8 = 0;
+    var count: u8 = 0;
     var _x: u64 = x;
     while (_x != 0) {
         _x &= (_x - 1);
         count += 1;
     }
     return count;
+}
+pub inline fn il_popcount(x: u64) i8 {
+    return @intCast(l_popcount(x));
 }
 
 pub fn knightAttacks(knights: u64) u64 {
@@ -1572,21 +1580,36 @@ pub inline fn getSqAntiDiag(sq: e_square) i8 {
 pub fn fillFile(mask: u64) u64 {
     return moveGenl.northOne(moveGenl.northOccl(mask, UNIVERSE)) | moveGenl.southOne(moveGenl.southOccl(mask, UNIVERSE)) | mask;
 }
+pub fn genShift(bb: u64, shift: i8) u64 {
+    if (shift < 0) {
+        return bb >> @intCast(-shift);
+    }
+    return bb << @intCast(shift);
+}
+
+pub fn passedPawns(pawn: u64, opp: u64) u64 {
+    // passed pawn: pawn without a neighboring enemy pawn
+    // fill the ranks from top to bottom with a fill algo
+    // then ~(shift left | shift right) & pawn
+    // careful of clipping
+    const cols = fillFile(opp);
+    const lmask = (cols << 1) & notAFile;
+    const rmask = (cols >> 1) & notHFile;
+    return ~(lmask | rmask) & pawn;
+}
+
 pub fn isolatedPawns(pawn: u64) u64 {
     // isolated pawn: pawn without a neighboring pawn
     // fill the ranks from top to bottom with a fill algo
     // then ~(shift left | shift right) & pawn
     // careful of clipping
-    //const cols = moveGenl.northOne(moveGenl.northOccl(pawn, UNIVERSE)) | moveGenl.southOne(moveGenl.southOccl(pawn, UNIVERSE)) | pawn;
     const cols = fillFile(pawn);
-    const lmask = (cols << 1) & notHFile;
-    const rmask = (cols >> 1) & notAFile;
+    const lmask = (cols << 1) & notAFile;
+    const rmask = (cols >> 1) & notHFile;
     return ~(lmask | rmask) & pawn;
 }
 pub fn stackedPawns(pawn: u64) u64 {
     // stacked pawns: multiple pawns present on the same file
-    //
-
     const upPawns = pawn & (moveGenl.northOne(moveGenl.northOccl(pawn, UNIVERSE)));
     const downPawns = pawn & (moveGenl.southOne(moveGenl.southOccl(pawn, UNIVERSE)));
     const tripleFiles = (upPawns & downPawns);
@@ -2180,6 +2203,19 @@ pub fn test_avx() !void {
     print_bitboard(state.pinnedBB);
     print_boardstate(&state);
 }
+pub fn test_passed() !void {
+    std.debug.print("[DEBUG] test_passed: starting\n", .{});
+    const initBBw: u64 = 0xFF00;
+    const initBBb: u64 = 0xFF000000000000;
+    print_bitboard(initBBw | initBBb);
+    print_bitboard(passedPawns(initBBw, initBBb));
+
+    const initBB_side_clearw: u64 = 0xFF00;
+    const initBB_side_clearb: u64 = 0x3C000000000000;
+    print_bitboard(initBB_side_clearw | initBB_side_clearb);
+    print_bitboard(passedPawns(initBB_side_clearw, initBB_side_clearb));
+    return;
+}
 pub fn test_isolated() !void {
     std.debug.print("[DEBUG] test_isolated: starting\n", .{});
     const initBB: u64 = 0xFF00;
@@ -2261,14 +2297,23 @@ pub fn test_line_algebraic() !void {
     std.debug.print("[DEBUG] test_line_algebraic: original: {s}, reconstructed: \n", .{algFen});
     moves.print();
 }
+pub fn test_safety() !void {
+    print_bitboard(safetyArea(e_square.e4));
+    print_bitboard(safetyArea(e_square.a1));
+    print_bitboard(safetyArea(e_square.a4));
+    print_bitboard(safetyArea(e_square.a8));
+    print_bitboard(safetyArea(e_square.e8));
+}
 
 pub fn main() !void {
     mainl.initAll(true);
     //try test_avx();
     //try test_isolated();
+    //try test_passed();
+    try test_safety();
     //try test_stackedPawn();
     //test_scenarios();
-    try test_single_algebraic();
-    try test_line_algebraic();
+    //try test_single_algebraic();
+    //try test_line_algebraic();
     return;
 }
