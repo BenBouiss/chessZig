@@ -82,5 +82,6 @@ pub fn test_speed() !void {
 
 pub fn main() anyerror!void {
     //try test_speed();
-    try heuristicl.main();
+    //try heuristicl.main();
+    try chessl.main();
 }

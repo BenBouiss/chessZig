@@ -8,7 +8,7 @@ pub const VERSION = "0.0.1";
 pub const SEED: u64 = 42;
 pub const MAX_MATCH_STR_LENGTH: u64 = 24 + 4096 * (5 + 1);
 pub const MAX_USER_INPUT: u64 = MAX_MATCH_STR_LENGTH;
-pub const MAX_LINE_LENGTH: usize = 128;
+pub const MAX_LINE_LENGTH: usize = 32;
 
 pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
 

@@ -536,6 +536,16 @@ pub const moveLine = struct {
         }
         return lineStr;
     }
+    pub fn apply(self: moveLine, p_board: *chess.Board_state) void {
+        for (0..self.len) |i| {
+            p_board.makeMove(self.moves[i]);
+        }
+    }
+    pub fn undo(self: moveLine, p_board: *chess.Board_state) void {
+        for (0..self.len) |_| {
+            p_board.undoMove();
+        }
+    }
     pub fn print(p_self: *moveLine) void {
         // FOR DEBUG ONLY
         var line_str = p_self.getLineString(GLOBAL_ALLOC) catch {

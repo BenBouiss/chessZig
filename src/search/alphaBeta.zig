@@ -3,6 +3,7 @@ const chess = @import("../chess.zig");
 const movel = @import("../move.zig");
 const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
+const weightl = @import("../weights.zig");
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const hashl = @import("../hashTable.zig");
@@ -40,8 +41,8 @@ pub fn texelTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves
 pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool) void {
     p_info.running = true;
 
-    const alpha: scoreType = -heuristicl.simpleCheckMateScore;
-    const beta: scoreType = heuristicl.simpleCheckMateScore;
+    const alpha: scoreType = -weightl.simpleCheckMateScore;
+    const beta: scoreType = weightl.simpleCheckMateScore;
 
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
@@ -67,19 +68,18 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             const score = color_mask * heuristicl.texelEvaluation(p_state);
             return score;
         } else {
-            //const score = color_mask * heuristicl.pastHeuristic(p_state);
             const score = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
             return score;
         }
     }
     if (p_state.isStaleMateRepetition()) {
         if (comptime useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), heuristicl.simpleStalemateScore);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
             _ = hashl.hashTable.storeEntry(&s_entry);
             // might be useful for late game
             //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
         }
-        return heuristicl.simpleStalemateScore;
+        return weightl.simpleStalemateScore;
     }
     if (comptime useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
@@ -112,9 +112,9 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(p_state.whiteToMove())) {
-            finalScore = -(heuristicl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
+            finalScore = -(weightl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
         } else {
-            finalScore = heuristicl.simpleStalemateScore;
+            finalScore = weightl.simpleStalemateScore;
         }
     }
     if (comptime useHash) {

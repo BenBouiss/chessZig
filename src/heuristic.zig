@@ -17,26 +17,27 @@ const string = stringl.string;
 pub const scoreType: type = f32;
 pub const weightType: type = f32;
 
-// values from https://www.chessprogramming.org/Evaluation for now
-pub const simplePawnScore: scoreType = 1;
-pub const simpleBishopScore: scoreType = 3;
-pub const simpleKnightScore: scoreType = 3;
-pub const simpleRookScore: scoreType = 5;
-pub const simpleQueenScore: scoreType = 9;
-pub const simpleCheckMateScore: scoreType = 9999;
-pub const simpleStalemateScore: scoreType = 0;
-pub const simpleMobilityScore: scoreType = 0.1;
-pub const simpleIsolatedPawnScore: scoreType = 0.2;
-pub const simpleStackedPawnScore: scoreType = 0.2;
-
-pub const e_heuristicType = enum(u8) { Simple = 0, Bitmap };
-
 pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
     var score: scoreType = 0;
     score += evaluate_PSQT(p_state, values);
     score += evaluate_mobility(p_state, values.MobilityValue);
-    score += evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue);
+    score += evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue, values.PassedPawnValue);
     return score;
+}
+
+pub const heuristicComponents = struct {
+    PSQT: scoreType = 0,
+    Mobility: scoreType = 0,
+    PawnStruct: scoreType = 0,
+    pub fn total(self: *const heuristicComponents) scoreType {
+        return self.PSQT + self.Mobility + self.PawnStruct;
+    }
+    pub fn print(self: *const heuristicComponents) void {
+        std.debug.print("Score: PQST = {d}, Mobility = {d}, PawnStruct = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.total() });
+    }
+};
+pub fn evaluate_debug(p_state: *chess.Board_state, values: *heuristicValues) heuristicComponents {
+    return .{ .PSQT = evaluate_PSQT(p_state, values), .Mobility = evaluate_mobility(p_state, values.MobilityValue), .PawnStruct = evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue, values.PassedPawnValue) };
 }
 
 pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
@@ -66,39 +67,92 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scor
             },
 
             .nBlackPawn => {
-                score -= values.Pawn_PSQT[chess.N_SQUARES - 1 - sq] + values.PawnValue;
+                score -= (values.Pawn_PSQT[sq ^ 56] + values.PawnValue);
             },
             .nBlackBishop => {
-                score -= values.Bishop_PSQT[chess.N_SQUARES - 1 - sq] + values.BishopValue;
+                score -= (values.Bishop_PSQT[sq ^ 56] + values.BishopValue);
             },
             .nBlackKnight => {
-                score -= values.Knight_PSQT[chess.N_SQUARES - 1 - sq] + values.KnightValue;
+                score -= (values.Knight_PSQT[sq ^ 56] + values.KnightValue);
             },
             .nBlackRook => {
-                score -= values.Rook_PSQT[chess.N_SQUARES - 1 - sq] + values.RookValue;
+                score -= (values.Rook_PSQT[sq ^ 56] + values.RookValue);
             },
             .nBlackQueen => {
-                score -= values.Queen_PSQT[chess.N_SQUARES - 1 - sq] + values.QueenValue;
+                score -= (values.Queen_PSQT[sq ^ 56] + values.QueenValue);
             },
             .nBlackKing => {
-                score -= values.King_PSQT[chess.N_SQUARES - 1 - sq];
+                score -= (values.King_PSQT[sq ^ 56]);
             },
         }
     }
     return score;
 }
 
-pub fn evaluate_pawnStructure(p_state: *chess.Board_state, isolatedCoef: scoreType, stackedCoef: scoreType) scoreType {
-    const isolatedScore = (-isolatedCoef) * @as(scoreType, @floatFromInt(chess.l_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.l_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
-    const doubledPawn = (-stackedCoef) * @as(scoreType, @floatFromInt(chess.l_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.l_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
-    return doubledPawn + isolatedScore;
+pub fn evaluate_pawnStructure(p_state: *chess.Board_state, isolatedCoef: scoreType, stackedCoef: scoreType, passedCoef: scoreType) scoreType {
+    const wp = p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
+    const bp = p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
+
+    const nWhiteIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(wp)));
+    const nBlackIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(bp)));
+    const isolatedScore = isolatedCoef * @as(scoreType, @floatFromInt(nWhiteIsolated - nBlackIsolated));
+
+    const nWhiteDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(wp)));
+    const nBlackDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(bp)));
+    const doubledPawnScore = stackedCoef * @as(scoreType, @floatFromInt(nWhiteDoubled - nBlackDoubled));
+
+    const nWhitePassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(wp, bp)));
+    const nBlackPassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(bp, wp)));
+    const passedPawnScore = passedCoef * @as(scoreType, @floatFromInt(nWhitePassed - nBlackPassed));
+    return doubledPawnScore + isolatedScore + passedPawnScore;
 }
 pub fn evaluate_mobility(p_state: *chess.Board_state, mobilityCoef: scoreType) scoreType {
     // going to use "raw" mobility only taking board coverage
     // now trying with only legals
-    const moveW: i64 = @intCast(moveGenl._moveGenBB(p_state, true).count());
-    const moveB: i64 = @intCast(moveGenl._moveGenBB(p_state, false).count());
-    return mobilityCoef * @as(scoreType, @floatFromInt(moveW - moveB));
+    const whiteMoveAggr = moveGenl._moveGenBB(p_state, true);
+    const moveW: i64 = @intCast(whiteMoveAggr.count());
+
+    const blackMoveAggr = moveGenl._moveGenBB(p_state, false);
+    const moveB: i64 = @intCast(blackMoveAggr.count());
+
+    const kingWSafety = chess.safetyArea(p_state.wKingSq);
+    const kingBSafety = chess.safetyArea(p_state.bKingSq);
+
+    var ret: scoreType = mobilityCoef * @as(scoreType, @floatFromInt(moveW - moveB));
+
+    // counting negative for white as the best safety is not attackers => 0 heuristic
+    var retSaf: i32 = 0;
+    const bKnightAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.knightMoves));
+    const bBishopAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.bishopMoves));
+    const bRookAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.rookMoves));
+    const bQueenAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.queenMoves));
+
+    const wKnightAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.knightMoves));
+    const wBishopAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.bishopMoves));
+    const wRookAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.rookMoves));
+    const wQueenAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.queenMoves));
+
+    retSaf -= @intCast(SAFETY_KNIGHT * bKnightAtt + SAFETY_BISHOP * bBishopAtt + SAFETY_ROOK * bRookAtt + SAFETY_QUEEN * bQueenAtt);
+    retSaf -= @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt)]);
+
+    retSaf += @intCast(SAFETY_KNIGHT * wKnightAtt + SAFETY_BISHOP * wBishopAtt + SAFETY_ROOK * wRookAtt + SAFETY_QUEEN * wQueenAtt);
+    retSaf += @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt)]);
+    //if (retSaf > 100 or retSaf < -100) {
+    //    std.debug.print("[PANIC] evaluate_Mobility: {d} \n", .{retSaf});
+    //    std.debug.print("[PANIC] w: {d}, b: {d} \n", .{ wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt });
+    //    chess.print_bitboard(kingBSafety);
+    //    std.debug.print("[PANIC] {d} {d} {d} {d} \n", .{ wKnightAtt, wBishopAtt, wRookAtt, wQueenAtt });
+    //    chess.print_bitboard(whiteMoveAggr.bishopMoves);
+    //    chess.print_bitboard(whiteMoveAggr.queenMoves);
+    //    chess.print_board(p_state);
+    //    const moves = moveGenl.generateLegalMoves(p_state);
+    //    moves.print();
+
+    //    @panic("");
+    //}
+    ret += @as(scoreType, @floatFromInt(retSaf)) / 1000.0;
+
+    return ret;
 
     // these are insanely expensive
     //const moveW = moveGenl.generateMoveCountLegalMoves(p_state, true);
@@ -124,10 +178,10 @@ pub fn texelEvaluation_mobility(p_state: *chess.Board_state, w: *coeffTuple, pfa
     return (@as(scoreType, @floatFromInt(moveW - moveB))) * (w.val[MG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[EG]);
 }
 pub fn texelEvaluation_pawnStructure(p_state: *chess.Board_state, w: *coeffTuple, pfactors: *const [N_PHASES]scoreType) scoreType {
-    const isolatedQt = @as(scoreType, @floatFromInt(chess.l_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.l_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
+    const isolatedQt = @as(scoreType, @floatFromInt(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
     const isolatedScore = isolatedQt * (w.val[MG].val[configl.TEXEL_PAWN_ISOL_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_PAWN_ISOL_IDX] * pfactors[EG]);
 
-    const doubledPawnQt = @as(scoreType, @floatFromInt(chess.l_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.l_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
+    const doubledPawnQt = @as(scoreType, @floatFromInt(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
     const doublePawnScore = doubledPawnQt * (w.val[MG].val[configl.TEXEL_PAWN_STACKED_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_PAWN_STACKED_IDX] * pfactors[EG]);
     return isolatedScore + doublePawnScore;
 }
@@ -137,15 +191,15 @@ pub fn texelEvaluation_safety(p_state: *chess.Board_state, w: *coeffTuple, pfact
     const maskW = kingW.getAllAttackingSquares();
     const maskB = kingB.getAllAttackingSquares();
 
-    const pawnSafety = @as(weightType, @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) - chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[EG]));
+    const pawnSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[EG]));
 
-    const bishopSafety = @as(weightType, @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)]) - chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[EG]));
+    const bishopSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[EG]));
 
-    const knightSafety = @as(weightType, @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)]) - chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[EG]));
+    const knightSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[EG]));
 
-    const rookSafety = @as(weightType, @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)]) - chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[EG]));
+    const rookSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[EG]));
 
-    const queenSafety = @as(weightType, @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]) - chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[EG]));
+    const queenSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[EG]));
     return pawnSafety + bishopSafety + knightSafety + rookSafety + queenSafety;
 }
 
@@ -322,14 +376,15 @@ pub fn modifyHeuristicWeight_array(alloc: std.mem.Allocator, s: *string, debug: 
 
 pub const heuristicValues = struct {
     // container storing every heuristics/ weights to evaluate a given board
-    PawnValue: scoreType = simplePawnScore,
-    BishopValue: scoreType = simpleBishopScore,
-    KnightValue: scoreType = simpleKnightScore,
-    RookValue: scoreType = simpleRookScore,
-    QueenValue: scoreType = simpleQueenScore,
-    MobilityValue: scoreType = simpleMobilityScore,
-    IsolatedPawnValue: scoreType = simpleIsolatedPawnScore,
-    StackedPawnValue: scoreType = simpleStackedPawnScore,
+    PawnValue: scoreType = weightl.simplePawnScore,
+    BishopValue: scoreType = weightl.simpleBishopScore,
+    KnightValue: scoreType = weightl.simpleKnightScore,
+    RookValue: scoreType = weightl.simpleRookScore,
+    QueenValue: scoreType = weightl.simpleQueenScore,
+    MobilityValue: scoreType = weightl.simpleMobilityScore,
+    IsolatedPawnValue: scoreType = weightl.simpleIsolatedPawnScore,
+    StackedPawnValue: scoreType = weightl.simpleStackedPawnScore,
+    PassedPawnValue: scoreType = weightl.simplePassedPawnScore,
 
     Pawn_PSQT: [chess.N_SQUARES]scoreType = weightl.pawnScoreArr,
     Bishop_PSQT: [chess.N_SQUARES]scoreType = weightl.bishopScoreArr,
@@ -340,6 +395,13 @@ pub const heuristicValues = struct {
 
     // other more complex values may be inserted below
 };
+
+// source: https://www.chessprogramming.org/King_Safety
+const SAFETY_KNIGHT: usize = 20;
+const SAFETY_BISHOP: usize = 20;
+const SAFETY_ROOK: usize = 40;
+const SAFETY_QUEEN: usize = 80;
+const SAFETY_ARR: [8]usize = [8]usize{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
 const N_PHASES: usize = 2;
 const N_WEIGHTS: usize = 256;
@@ -475,10 +537,10 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         idx += 1;
 
         // pawn structure
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.l_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @floatFromInt(chess.l_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @floatFromInt(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.l_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @floatFromInt(chess.l_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @floatFromInt(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
         idx += 1;
 
         p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), &idx);
@@ -499,19 +561,19 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         const maskW = kingW.getAllAttackingSquares();
         const maskB = kingB.getAllAttackingSquares();
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @floatFromInt(chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), .bcoeff = @floatFromInt(chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), .bcoeff = @floatFromInt(chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), .bcoeff = @floatFromInt(chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.l_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @floatFromInt(chess.l_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
         idx += 1;
     }
 
