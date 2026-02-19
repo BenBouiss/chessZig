@@ -160,7 +160,6 @@ pub fn rotate180(bb: u64) u64 {
     x = (x >> 32) | (x << 32);
     return x;
 }
-
 //
 // bitScanForward
 // @author Martin Läuter (1997)
@@ -1365,10 +1364,6 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.halfMoveClock, p_board_state.move_history.getRepetitions(), p_board_state.move_history.lastIrreversibleMoveIndex });
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
 
-    //std.debug.print("All moves: \n", .{});
-    //const _moves = moveGenl.generatePseudolegalMoves(p_board_state);
-    //_moves.print();
-    //std.debug.print("Available moves: \n", .{});
     const moves = moveGenl.generateLegalMoves(p_board_state);
     moves.print();
     sanityCheckBoardState(p_board_state);
