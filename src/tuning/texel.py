@@ -7,9 +7,9 @@ import numpy.typing as npt
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-def loadTexelWeight(path: str, n_pos: int, pos_offset: int = 0) -> pd.DataFrame:
+def loadTexelWeight(path: str, n_pos: int, pos_offset: int = 0, dtype: npt.DTypeLike = np.float16) -> pd.DataFrame:
     assert os.path.exists(path)
-    ret = pd.read_csv(path, sep = ",", dtype = np.float16, header = 0, nrows=n_pos, skiprows=pos_offset)
+    ret = pd.read_csv(path, sep = ",", dtype = dtype, header = 0, nrows=n_pos, skiprows=pos_offset)
     assert len(ret) == n_pos, f"expected {n_pos} positions found {len(ret)}"
     return ret
 

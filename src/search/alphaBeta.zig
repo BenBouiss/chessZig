@@ -112,7 +112,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(p_state.whiteToMove())) {
-            finalScore = -(weightl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
+            finalScore = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(depth)));
         } else {
             finalScore = weightl.simpleStalemateScore;
         }

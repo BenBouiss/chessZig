@@ -14,8 +14,8 @@ const std = @import("std");
 const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
 const string = stringl.string;
-pub const scoreType: type = f32;
-pub const weightType: type = f32;
+pub const scoreType: type = i32;
+pub const weightType: type = i32;
 
 pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
     var score: scoreType = 0;
@@ -95,62 +95,48 @@ pub fn evaluate_pawnStructure(p_state: *chess.Board_state, isolatedCoef: scoreTy
 
     const nWhiteIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(wp)));
     const nBlackIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(bp)));
-    const isolatedScore = isolatedCoef * @as(scoreType, @floatFromInt(nWhiteIsolated - nBlackIsolated));
+    const isolatedScore = isolatedCoef * @as(scoreType, @intCast(nWhiteIsolated - nBlackIsolated));
 
     const nWhiteDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(wp)));
     const nBlackDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(bp)));
-    const doubledPawnScore = stackedCoef * @as(scoreType, @floatFromInt(nWhiteDoubled - nBlackDoubled));
+    const doubledPawnScore = stackedCoef * @as(scoreType, @intCast(nWhiteDoubled - nBlackDoubled));
 
     const nWhitePassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(wp, bp)));
     const nBlackPassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(bp, wp)));
-    const passedPawnScore = passedCoef * @as(scoreType, @floatFromInt(nWhitePassed - nBlackPassed));
+    const passedPawnScore = passedCoef * @as(scoreType, @intCast(nWhitePassed - nBlackPassed));
     return doubledPawnScore + isolatedScore + passedPawnScore;
 }
 pub fn evaluate_mobility(p_state: *chess.Board_state, mobilityCoef: scoreType) scoreType {
     // going to use "raw" mobility only taking board coverage
     // now trying with only legals
-    const whiteMoveAggr = moveGenl._moveGenBB(p_state, true);
+    const whiteMoveAggr = moveGenl.cst_moveGenBB(p_state, true);
     const moveW: i64 = @intCast(whiteMoveAggr.count());
 
-    const blackMoveAggr = moveGenl._moveGenBB(p_state, false);
+    const blackMoveAggr = moveGenl.cst_moveGenBB(p_state, false);
     const moveB: i64 = @intCast(blackMoveAggr.count());
 
-    const kingWSafety = chess.safetyArea(p_state.wKingSq);
-    const kingBSafety = chess.safetyArea(p_state.bKingSq);
-
-    var ret: scoreType = mobilityCoef * @as(scoreType, @floatFromInt(moveW - moveB));
+    const ret: scoreType = mobilityCoef * @as(scoreType, @intCast(moveW - moveB));
 
     // counting negative for white as the best safety is not attackers => 0 heuristic
-    var retSaf: i32 = 0;
-    const bKnightAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.knightMoves));
-    const bBishopAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.bishopMoves));
-    const bRookAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.rookMoves));
-    const bQueenAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.queenMoves));
+    //var retSaf: i32 = 0;
+    //const kingWSafety = chess.safetyArea(p_state.wKingSq);
+    //const kingBSafety = chess.safetyArea(p_state.bKingSq);
+    //const bKnightAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.knightMoves));
+    //const bBishopAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.bishopMoves));
+    //const bRookAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.rookMoves));
+    //const bQueenAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.queenMoves));
 
-    const wKnightAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.knightMoves));
-    const wBishopAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.bishopMoves));
-    const wRookAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.rookMoves));
-    const wQueenAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.queenMoves));
+    //const wKnightAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.knightMoves));
+    //const wBishopAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.bishopMoves));
+    //const wRookAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.rookMoves));
+    //const wQueenAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.queenMoves));
 
-    retSaf -= @intCast(SAFETY_KNIGHT * bKnightAtt + SAFETY_BISHOP * bBishopAtt + SAFETY_ROOK * bRookAtt + SAFETY_QUEEN * bQueenAtt);
-    retSaf -= @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt)]);
+    //retSaf -= @intCast(SAFETY_KNIGHT * bKnightAtt + SAFETY_BISHOP * bBishopAtt + SAFETY_ROOK * bRookAtt + SAFETY_QUEEN * bQueenAtt);
+    //retSaf -= @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt)]);
 
-    retSaf += @intCast(SAFETY_KNIGHT * wKnightAtt + SAFETY_BISHOP * wBishopAtt + SAFETY_ROOK * wRookAtt + SAFETY_QUEEN * wQueenAtt);
-    retSaf += @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt)]);
-    //if (retSaf > 100 or retSaf < -100) {
-    //    std.debug.print("[PANIC] evaluate_Mobility: {d} \n", .{retSaf});
-    //    std.debug.print("[PANIC] w: {d}, b: {d} \n", .{ wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt });
-    //    chess.print_bitboard(kingBSafety);
-    //    std.debug.print("[PANIC] {d} {d} {d} {d} \n", .{ wKnightAtt, wBishopAtt, wRookAtt, wQueenAtt });
-    //    chess.print_bitboard(whiteMoveAggr.bishopMoves);
-    //    chess.print_bitboard(whiteMoveAggr.queenMoves);
-    //    chess.print_board(p_state);
-    //    const moves = moveGenl.generateLegalMoves(p_state);
-    //    moves.print();
-
-    //    @panic("");
-    //}
-    ret += @as(scoreType, @floatFromInt(retSaf)) / 1000.0;
+    //retSaf += @intCast(SAFETY_KNIGHT * wKnightAtt + SAFETY_BISHOP * wBishopAtt + SAFETY_ROOK * wRookAtt + SAFETY_QUEEN * wQueenAtt);
+    //retSaf += @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt)]);
+    //ret += @as(scoreType, @intCast(retSaf));
 
     return ret;
 
@@ -173,15 +159,15 @@ pub fn texelEvaluationSlow(p_state: *chess.Board_state) scoreType {
     return entry.get_eval(&weightl.weights);
 }
 pub fn texelEvaluation_mobility(p_state: *chess.Board_state, w: *coeffTuple, pfactors: *const [N_PHASES]scoreType) scoreType {
-    const moveW: i64 = @intCast(moveGenl._moveGenBB(p_state, true).count());
-    const moveB: i64 = @intCast(moveGenl._moveGenBB(p_state, false).count());
-    return (@as(scoreType, @floatFromInt(moveW - moveB))) * (w.val[MG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[EG]);
+    const moveW: i64 = @intCast(moveGenl.cst_moveGenBB(p_state, true).count());
+    const moveB: i64 = @intCast(moveGenl.cst_moveGenBB(p_state, false).count());
+    return (@as(scoreType, @intCast(moveW - moveB))) * (w.val[MG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[EG]);
 }
 pub fn texelEvaluation_pawnStructure(p_state: *chess.Board_state, w: *coeffTuple, pfactors: *const [N_PHASES]scoreType) scoreType {
-    const isolatedQt = @as(scoreType, @floatFromInt(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
+    const isolatedQt = @as(scoreType, @intCast(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
     const isolatedScore = isolatedQt * (w.val[MG].val[configl.TEXEL_PAWN_ISOL_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_PAWN_ISOL_IDX] * pfactors[EG]);
 
-    const doubledPawnQt = @as(scoreType, @floatFromInt(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
+    const doubledPawnQt = @as(scoreType, @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
     const doublePawnScore = doubledPawnQt * (w.val[MG].val[configl.TEXEL_PAWN_STACKED_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_PAWN_STACKED_IDX] * pfactors[EG]);
     return isolatedScore + doublePawnScore;
 }
@@ -191,15 +177,15 @@ pub fn texelEvaluation_safety(p_state: *chess.Board_state, w: *coeffTuple, pfact
     const maskW = kingW.getAllAttackingSquares();
     const maskB = kingB.getAllAttackingSquares();
 
-    const pawnSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[EG]));
+    const pawnSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[EG]));
 
-    const bishopSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[EG]));
+    const bishopSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[EG]));
 
-    const knightSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[EG]));
+    const knightSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[EG]));
 
-    const rookSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[EG]));
+    const rookSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[EG]));
 
-    const queenSafety = @as(weightType, @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[EG]));
+    const queenSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[EG]));
     return pawnSafety + bishopSafety + knightSafety + rookSafety + queenSafety;
 }
 
@@ -275,7 +261,7 @@ pub fn getMaskFromBB(bb: u64) [chess.N_SQUARES]scoreType {
     var ret: [chess.N_SQUARES]scoreType = std.mem.zeroes([chess.N_SQUARES]scoreType);
     for (0..chess.N_SQUARES) |i| {
         const val: u64 = (bb >> @intCast(i)) & chess.ONE;
-        ret[i] = @floatFromInt(val);
+        ret[i] = @intCast(val);
     }
     return ret;
 }
@@ -310,7 +296,7 @@ pub fn modifyHeuristicWeight_array(alloc: std.mem.Allocator, s: *string, debug: 
     }
     var buffer: [chess.N_SQUARES]scoreType = undefined;
     for (0..chess.N_SQUARES) |i| {
-        buffer[i] = std.fmt.parseFloat(scoreType, utilsl.stripStr(values.items[i])) catch {
+        buffer[i] = std.fmt.parseInt(scoreType, utilsl.stripStr(values.items[i]), 10) catch {
             std.debug.print("[ERROR] modifyHeuristicWeight: invalid conversion continuing ({s}) {s}\n", .{ utilsl.stripStr(values.items[i]), values.items[i] });
             continue;
         };
@@ -409,15 +395,15 @@ const NTERMS: usize = 1024;
 pub var globalHeuristic: heuristicValues = .{};
 
 // value between 0 and 1
-const TUNE_K: f16 = 5;
+const TUNE_K: scoreType = 5;
 
 pub const MG: usize = 0;
 pub const EG: usize = 1;
 
 pub fn computePhase(p_board: *chess.Board_state) scoreType {
     const phase: i32 = 24 - 4 * (p_board.getPieceCount(.nWhiteQueen) + p_board.getPieceCount(.nBlackQueen)) - 2 * (p_board.getPieceCount(.nWhiteRook) + p_board.getPieceCount(.nBlackRook)) - (p_board.getPieceCount(.nWhiteBishop) + p_board.getPieceCount(.nBlackBishop)) - (p_board.getPieceCount(.nWhiteKnight) + p_board.getPieceCount(.nBlackKnight));
-    const _phase: scoreType = @floatFromInt(phase);
-    return (256 * (24 - _phase)) / 24;
+    const _phase: scoreType = @intCast(phase);
+    return @divFloor(256 * (24 - _phase), 24);
 }
 pub const texelEntry = struct {
     //
@@ -435,7 +421,7 @@ pub const texelEntry = struct {
     //safety: [chess.NUMBER_PLAYER]i32,
 
     // 0.0 black win, 0.5 draw, 1.0 white win
-    result: scoreType = -1,
+    result: f32 = -1,
     //
     //sfactor: scoreType = -1,
     pFactors: [N_PHASES]scoreType = std.mem.zeroes([N_PHASES]scoreType),
@@ -447,8 +433,8 @@ pub const texelEntry = struct {
     pub fn initFromBoard(p_state: *chess.Board_state) texelEntry {
         var ret: texelEntry = .{};
         ret.phase = computePhase(p_state);
-        ret.pFactors[MG] = (256.0 - ret.phase) / 256.0;
-        ret.pFactors[EG] = (1 * ret.phase) / 256.0;
+        ret.pFactors[MG] = @divFloor(256 - ret.phase, 256);
+        ret.pFactors[EG] = @divFloor(1 * ret.phase, 256);
         ret.turn = p_state.whiteToMove();
         try getCoeffsFromBoard(p_state, &ret.tuples);
         return ret;
@@ -456,12 +442,12 @@ pub const texelEntry = struct {
     pub fn initFromBoardFast(p_state: *chess.Board_state) texelEntry {
         var ret: texelEntry = .{};
         ret.phase = computePhase(p_state);
-        ret.pFactors[MG] = (256.0 - ret.phase) / 256.0;
-        ret.pFactors[EG] = (1 * ret.phase) / 256.0;
+        ret.pFactors[MG] = @divFloor(256 - ret.phase, 256);
+        ret.pFactors[EG] = @divFloor(1 * ret.phase, 256);
         return ret;
     }
 
-    pub fn set_fen(p_self: *texelEntry, alloc: std.mem.Allocator, fen: []const u8, result: scoreType) !void {
+    pub fn set_fen(p_self: *texelEntry, alloc: std.mem.Allocator, fen: []const u8, result: f32) !void {
         p_self.tuples = .{};
         p_self.result = result;
         var board = chess.getBoardFromFen(alloc, fen) catch {
@@ -470,12 +456,12 @@ pub const texelEntry = struct {
         };
         defer board.free(alloc);
         const phase: i32 = 24 - 4 * (board.getPieceCount(.nWhiteQueen) + board.getPieceCount(.nBlackQueen)) - 2 * (board.getPieceCount(.nWhiteRook) + board.getPieceCount(.nBlackRook)) - (board.getPieceCount(.nWhiteBishop) + board.getPieceCount(.nBlackBishop)) - (board.getPieceCount(.nWhiteKnight) + board.getPieceCount(.nBlackKnight));
-        const _phase: scoreType = @floatFromInt(phase);
+        const _phase: scoreType = @intCast(phase);
 
-        p_self.phase = (256 * (24 - _phase)) / 24;
+        p_self.phase = @divFloor((256 * (24 - _phase)), 24);
 
-        p_self.pFactors[MG] = (256.0 - p_self.phase) / 256.0;
-        p_self.pFactors[EG] = (1 * p_self.phase) / 256.0;
+        p_self.pFactors[MG] = @divFloor(256 - p_self.phase, 256);
+        p_self.pFactors[EG] = @divFloor(1 * p_self.phase, 256);
 
         p_self.turn = board.whiteToMove();
         //p_self.seval = @intFromFloat(pastHeuristic(&board));
@@ -505,8 +491,8 @@ pub const texelEntry = struct {
     }
 };
 
-pub fn sigmoid(comptime T: type, x: T) scoreType {
-    return (1.0 / (1.0 + std.math.exp(-TUNE_K * x)));
+pub fn sigmoid(comptime T: type, x: T) f32 {
+    return (1.0 / (1.0 + std.math.exp(@as(f32, @floatFromInt(-TUNE_K * x)))));
 }
 
 pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !void {
@@ -514,33 +500,33 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
     var idx: usize = 0;
     if (configl.TUNE_NORMAL) {
         // piece counts
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(p_state.getPieceCount(.nWhitePawn)), .bcoeff = @floatFromInt(p_state.getPieceCount(.nBlackPawn)) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhitePawn)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackPawn)) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(p_state.getPieceCount(.nWhiteBishop)), .bcoeff = @floatFromInt(p_state.getPieceCount(.nBlackBishop)) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteBishop)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackBishop)) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(p_state.getPieceCount(.nWhiteKnight)), .bcoeff = @floatFromInt(p_state.getPieceCount(.nBlackKnight)) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteKnight)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackKnight)) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(p_state.getPieceCount(.nWhiteRook)), .bcoeff = @floatFromInt(p_state.getPieceCount(.nBlackRook)) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteRook)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackRook)) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(p_state.getPieceCount(.nWhiteQueen)), .bcoeff = @floatFromInt(p_state.getPieceCount(.nBlackQueen)) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteQueen)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackQueen)) });
         idx += 1;
 
         // mobility
-        var moveW = moveGenl._moveGenBB(p_state, true);
-        var moveB = moveGenl._moveGenBB(p_state, false);
+        var moveW = moveGenl.cst_moveGenBB(p_state, true);
+        var moveB = moveGenl.cst_moveGenBB(p_state, false);
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(moveW.count()), .bcoeff = @floatFromInt(moveB.count()) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(moveW.count()), .bcoeff = @intCast(moveB.count()) });
         idx += 1;
 
         // pawn structure
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @floatFromInt(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @floatFromInt(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
         idx += 1;
 
         p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), &idx);
@@ -561,19 +547,19 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         const maskW = kingW.getAllAttackingSquares();
         const maskB = kingB.getAllAttackingSquares();
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)])) });
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @floatFromInt(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @floatFromInt(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
         idx += 1;
     }
 
@@ -688,7 +674,7 @@ pub const coeffTuple = struct {
         var ret: coeffTuple = .{};
         for (0..N_PHASES) |p| {
             for (0..NTERMS) |i| {
-                const r: scoreType = @floatFromInt(randGen.intRangeAtMost(i64, configl.WEIGHT_MIN, configl.WEIGHT_MAX));
+                const r: scoreType = @intCast(randGen.intRangeAtMost(i64, configl.WEIGHT_MIN, configl.WEIGHT_MAX));
                 ret.val[p].val[i] = r;
             }
         }
@@ -800,7 +786,7 @@ pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string) ![]texelEntry 
         //const fen = tok.items[0];
         //const outcome = tok.items[1];
         const outcome = try s.extractFromBounds("[", "]");
-        var foutcome: scoreType = 0;
+        var foutcome: f32 = 0;
         if (utilsl.contains(outcome, "0.5", .ignoreCase)) {
             foutcome = 0.5;
         } else if (utilsl.contains(outcome, "1.0", .ignoreCase)) {
@@ -904,11 +890,12 @@ pub fn optimization_std(alloc: std.mem.Allocator, entries: []const texelEntry) !
         // I hate this
         context.on_epoch_start();
         weights = weightUpdate(&context, entries, &weights);
-        var err: scoreType = 0;
+        var err: f32 = 0;
         for (0..entries.len) |i| {
             var ent = entries[i];
             // MSE by default
-            err += std.math.pow(scoreType, ent.result - sigmoid(scoreType, ent.get_eval(&weights)), 2);
+            const eval: f32 = sigmoid(scoreType, ent.get_eval(&weights));
+            err += std.math.pow(f32, @as(f32, @floatFromInt(ent.result)) - eval, 2);
         }
         if (err < bestScore or bestScore == -1) {
             bestScore = err;
@@ -1027,8 +1014,8 @@ pub fn computeGradient(batch_entries: []const texelEntry, weights: *coeffTuple) 
         eg_tmp.multiplyEq(X * ent.pFactors[EG]);
         ret.val[EG].addVectEq(&eg_tmp);
     }
-    ret.val[MG].multiplyEq((-2.0) / @as(scoreType, @floatFromInt(batch_entries.len)));
-    ret.val[EG].multiplyEq((-2.0) / @as(scoreType, @floatFromInt(batch_entries.len)));
+    ret.val[MG].multiplyEq(@as(scoreType, @divFloor(-2, batch_entries.len)));
+    ret.val[EG].multiplyEq(@as(scoreType, @divFloor(-2, batch_entries.len)));
 
     return ret;
 }
@@ -1043,20 +1030,23 @@ pub fn sanityCheck() !void {
 
     var tokens = try filel.getTokensFromFileAlloc(mainl.GLOBAL_ALLOC, path._slice(), '\n', configl.N_POSITIONS);
     defer stringl.freeArrayList_string(mainl.GLOBAL_ALLOC, &tokens);
-    var err: scoreType = 0;
+    var err: f32 = 0;
     for (tokens.items) |fen| {
-        var foutcome: scoreType = 0;
+        var foutcome: f32 = 0;
         if (fen.containsE("0.5", .ignoreCase)) {
             foutcome = 0.5;
         } else if (fen.containsE("1.0", .ignoreCase)) {
             foutcome = 1;
         }
         var board = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, fen._slice());
-        err += std.math.pow(scoreType, (sigmoid(scoreType, texelEvaluation(&board)) - foutcome), 2);
+        //err += std.math.pow(scoreType, (sigmoid(scoreType, texelEvaluation(&board)) - foutcome), 2);
+
+        const eval: f32 = sigmoid(scoreType, texelEvaluation(&board));
+        err += std.math.pow(f32, foutcome - eval, 2);
         defer board.free(mainl.GLOBAL_ALLOC);
     }
 
-    std.debug.print("[RESULT] sanityCheck: error {d} ({d})\n", .{ err / @as(scoreType, @floatFromInt(tokens.items.len)), err });
+    std.debug.print("[RESULT] sanityCheck: error {d} ({d})\n", .{ err / @as(f32, @floatFromInt(tokens.items.len)), err });
 
     var board = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, chess.DEFAULT_FEN);
     const raw_eval = texelEvaluation(&board);
@@ -1073,7 +1063,7 @@ pub fn main() !void {
     try sanityCheck();
     //try test_main();
     var path: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "opening/E12.33-1M-D12-Resolved.book");
-    var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights.csv");
+    var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights_int.csv");
     defer path.free(mainl.GLOBAL_ALLOC);
     defer savePath.free(mainl.GLOBAL_ALLOC);
 

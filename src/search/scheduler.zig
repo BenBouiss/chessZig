@@ -23,6 +23,7 @@ pub const searchStatus = enum { CONTINUE, INTERRUPTED, FINISHED };
 pub const searchFeatures = struct {
     useHash: bool = configl.DEFAULT_USEHASHTABLE,
     useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
+    useQuiescence: bool = configl.DEFAULT_USEQUIESC,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};

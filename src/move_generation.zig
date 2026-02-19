@@ -33,51 +33,14 @@ pub fn generateLegalMoves(p_board: *Board_state) moveContainer {
     if (comptime useStaged) {
         var bbMoves = moveGenBB(p_board);
         const moves = moveGenBBToMoveContainer(p_board, &bbMoves);
-
-        //if (comptime useDebug) {
-        //    var _moves: moveContainer = moveGeneration(p_board);
-        //    const _fmoves = filterMoveLegal(p_board, &_moves, p_board.whiteToMove());
-        //    if (_fmoves.isDifferent(moves)) {
-        //        _fmoves.printDifference(moves);
-        //        chess.print_board(p_board);
-        //        chess.printBoardValidity(p_board);
-        //        chess.print_bitboard(p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
-        //        _moves.print();
-        //        chess.sanityCheckBoardState(p_board);
-        //        @panic("test ");
-        //    }
-        //}
         return moves;
     } else {
         var moves: moveContainer = moveGeneration(p_board);
         const fmoves = filterMoveLegal(p_board, &moves, p_board.whiteToMove());
-
-        //if (comptime useDebug) {
-        //    chess.getCheckers(p_board, p_board.whiteToMove());
-        //    var bbMoves = moveGenBB(p_board);
-        //    const bbmoves = moveGenBBToMoveContainer(p_board, &bbMoves);
-        //    if (bbmoves.isDifferent(fmoves)) {
-        //        fmoves.printDifference(bbmoves);
-        //        chess.print_board(p_board);
-        //        chess.printBoardValidity(p_board);
-        //        chess.print_bitboard(p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
-        //        bbmoves.print();
-        //        chess.sanityCheckBoardState(p_board);
-        //        @panic("test ");
-        //    }
-        //}
         return fmoves;
     }
 }
-pub fn generateContainerLegalMoves(p_board: *Board_state, white: bool) moveContainer {
-    if (white) {
-        var moves = white_moveGeneration(p_board);
-        return filterMoveLegal(p_board, &moves, white);
-    } else {
-        var moves = black_moveGeneration(p_board);
-        return filterMoveLegal(p_board, &moves, white);
-    }
-}
+
 pub fn generateMoveCountLegalMoves(p_board: *Board_state, white: bool) usize {
     if (white) {
         var moves = white_moveGeneration(p_board);
@@ -86,9 +49,6 @@ pub fn generateMoveCountLegalMoves(p_board: *Board_state, white: bool) usize {
         var moves = black_moveGeneration(p_board);
         return filterCountMoveLegal(p_board, &moves, white);
     }
-}
-pub fn generatePseudolegalMoves(p_board: *Board_state) moveContainer {
-    return moveGeneration(p_board);
 }
 
 pub fn push_promotion(from: u8, to: u8, piece: e_piece, p_out: *moveContainer) void {
@@ -102,6 +62,7 @@ pub fn push_promotion(from: u8, to: u8, piece: e_piece, p_out: *moveContainer) v
     move.setFlag(@intFromEnum(e_moveFlags.QUEENPROMO));
     _ = p_out.append(move);
 }
+
 pub fn push_promotion_capture(from: u8, to: u8, piece: e_piece, cPiece: e_piece, p_out: *moveContainer) void {
     var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.CAPTURE), piece);
     move.setCapture(cPiece);
@@ -994,48 +955,35 @@ pub fn moveGenQueenBB(p_board: *Board_state, comptime white: bool, emptyOrEnemy:
     }
 }
 
-pub fn moveGenBBWhite(p_board: *Board_state) moveBBState {
-    var ret: moveBBState = .{};
-    const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(true)];
-    moveGenPawnBB(p_board, true, EmptyOrEnemy, &ret);
-    moveGenKnightBB(p_board, true, EmptyOrEnemy, &ret);
-    moveGenBishopBB(p_board, true, EmptyOrEnemy, &ret);
-    moveGenRookBB(p_board, true, EmptyOrEnemy, &ret);
-    moveGenQueenBB(p_board, true, EmptyOrEnemy, &ret);
-    moveGenKingBB(p_board, true, EmptyOrEnemy, &ret);
-    return ret;
-}
-
-pub fn moveGenBBBlack(p_board: *Board_state) moveBBState {
-    var ret: moveBBState = .{};
-    const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(false)];
-    moveGenPawnBB(p_board, false, EmptyOrEnemy, &ret);
-    moveGenKnightBB(p_board, false, EmptyOrEnemy, &ret);
-    moveGenBishopBB(p_board, false, EmptyOrEnemy, &ret);
-    moveGenRookBB(p_board, false, EmptyOrEnemy, &ret);
-    moveGenQueenBB(p_board, false, EmptyOrEnemy, &ret);
-    moveGenKingBB(p_board, false, EmptyOrEnemy, &ret);
-    return ret;
+pub fn cst_moveGenBB(p_board: *Board_state, comptime white: bool) moveBBState {
+    if (white) {
+        var ret: moveBBState = .{};
+        const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(true)];
+        moveGenPawnBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenKnightBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenBishopBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenRookBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenQueenBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenKingBB(p_board, true, EmptyOrEnemy, &ret);
+        return ret;
+    } else {
+        var ret: moveBBState = .{};
+        const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(false)];
+        moveGenPawnBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenKnightBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenBishopBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenRookBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenQueenBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenKingBB(p_board, false, EmptyOrEnemy, &ret);
+        return ret;
+    }
 }
 
 pub fn moveGenBB(p_board: *Board_state) moveBBState {
     if (p_board.whiteToMove()) {
-        return moveGenBBWhite(p_board);
+        return cst_moveGenBB(p_board, true);
     }
-    return moveGenBBBlack(p_board);
-}
-pub fn _moveGenBB(p_board: *Board_state, white: bool) moveBBState {
-    if (white) {
-        return moveGenBBWhite(p_board);
-    }
-    return moveGenBBBlack(p_board);
-}
-
-pub fn cstMoveGenBB(p_board: *Board_state, comptime white: bool) moveBBState {
-    if (comptime white) {
-        return moveGenBBWhite(p_board);
-    }
-    return moveGenBBBlack(p_board);
+    return cst_moveGenBB(p_board, false);
 }
 
 // Kogge-stone algo section
@@ -1363,4 +1311,25 @@ pub fn getPinned_(p_state: *Board_state, comptime white: bool, king_E: e_square,
         pinned |= chess.inBetween(@enumFromInt(pinsq), king_E);
     }
     return pinned;
+}
+// move ordering section?
+pub fn generateLegalMoves_ordered(p_board: *Board_state, capture: bool) moveContainer {
+    //
+    if (capture) {
+        return _generateLegalMoves_ordered(p_board, true);
+    }
+    return _generateLegalMoves_ordered(p_board, false);
+}
+pub fn _generateLegalMoves_ordered(p_board: *Board_state, comptime capture: bool) moveContainer {
+    //
+    if (p_board.whiteToMove()) {
+        return cst_generateLegalMoves_ordered(p_board, capture, true);
+    }
+    return cst_generateLegalMoves_ordered(p_board, capture, false);
+}
+pub fn cst_generateLegalMoves_ordered(p_board: *Board_state, comptime capture: bool, comptime white: bool) moveContainer {
+    //
+    _ = capture;
+    _ = white;
+    _ = p_board;
 }

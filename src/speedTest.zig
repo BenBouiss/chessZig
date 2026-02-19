@@ -184,7 +184,7 @@ pub fn moveSearchLoop(p_state: *chessl.Board_state, p_info: *threadInfo, depth: 
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(turn)) {
-            currentLine.scoring = -(weightl.simpleCheckMateScore + @as(scoreType, @floatFromInt(depth)));
+            currentLine.scoring = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(depth)));
         } else {
             currentLine.scoring = weightl.simpleStalemateScore;
         }
