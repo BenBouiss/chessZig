@@ -1092,24 +1092,44 @@ pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !
 // move heuristic "sections"
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
 pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
-pub fn eval_move_heuristic(move: IMove) scoreType {
+
+// indexes: ply, idx (either 1st or 2nd)
+pub var killerMoves: [64][2]IMove = undefined;
+
+// indexes: sideToMove, piece, fromSq, toSq
+// https://www.chessprogramming.org/History_Heuristic#Update
+pub var historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]scoreType);
+
+pub fn _initMoveOrdering() void {
+    historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
+    killerMoves = undefined;
+}
+
+pub fn eval_move_heuristic(move: IMove, ply: u16) scoreType {
     if (move.isCapture()) {
-        //
         return mvv_lva[@intFromEnum(move.getFromPiece())][@intFromEnum(move.getCapturePiece())];
     } else {
         //
+        if (move.equal(killerMoves[ply][0])) {
+            return 90;
+        } else if (move.equal(killerMoves[ply][1])) {
+            return 80;
+        } else {
+            //const w = @intFromEnum(move.getFromPiece()) <= @intFromEnum(e_piece.nWhiteKing);
+            //return historyHeuristic[@intFromBool(w)][move.getFrom()][move.getTo()];
+        }
     }
     return 0;
 }
 pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer) [chess.MAX_POSSIBLE_MOVE]usize {
+pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16) [chess.MAX_POSSIBLE_MOVE]usize {
     var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     for (0..p_moves.len) |i| {
         ret[i] = i;
-        scores[i] = eval_move_heuristic(p_moves.moves[i]);
+        scores[i] = eval_move_heuristic(p_moves.moves[i], ply);
     }
     std.mem.sort(usize, ret[0..p_moves.len], scores, cmp_eval_move);
     return ret;

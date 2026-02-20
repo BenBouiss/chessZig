@@ -6,6 +6,7 @@ const chessl = @import("../chess.zig");
 const moveGenl = @import("../move_generation.zig");
 const perftl = @import("perft.zig");
 const alphaBetal = @import("alphaBeta.zig");
+const alphaBetaLl = @import("alphaBetaL.zig");
 const threadingl = @import("threading.zig");
 const heuristicl = @import("../heuristic.zig");
 const hashl = @import("../hashTable.zig");
@@ -14,7 +15,6 @@ const configl = @import("../config.zig");
 
 const moveContainer = movel.moveContainer;
 const IMove = movel.IMove;
-const moveLine = movel.moveLine;
 const scoreType = heuristicl.scoreType;
 const threadPackageArray = threadingl.threadPackageArray;
 
@@ -54,8 +54,8 @@ pub const uciSearcher = struct {
 };
 pub const moveDecisionExt = struct {
     move: IMove = .{},
-    line: moveLine = .{},
     scoring: scoreType = 0,
+    line: movel.lineContainer = .{},
     pub fn invertScore(p_self: *moveDecisionExt) void {
         p_self.scoring = -p_self.scoring;
     }
@@ -161,12 +161,17 @@ pub const scheduler = struct {
         if (!p_self.engineSet) {
             @panic("engine not set");
         }
+
+        const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
+        const n_nodes: i64 = @intCast(res.n_nodeExplored);
+
+        const final_info = std.fmt.allocPrint(p_self.alloc, "info depth {d} score cp {d} nodes {d} currmove {s}", .{ p_self.searchDepth + p_self.searchIncrement, p_self.finalChoice.scoring, n_nodes, p_self.finalChoice.move.getStr() }) catch unreachable;
+        defer p_self.alloc.free(final_info);
+        p_self.p_engine.respond(utilsl.trimStr(final_info));
+
         const msg = std.fmt.allocPrint(p_self.alloc, "bestmove {s}", .{p_self.finalChoice.move.getStr()}) catch unreachable;
-        defer p_self.alloc.free(msg);
-        if (p_self.isDebugMode()) {
-            std.debug.print("[DEBUG] sendFinal: final choice {s} with scoring: {d} at depth {d}\n", .{ p_self.finalChoice.move.getStr(), p_self.finalChoice.scoring, p_self.searchDepth + p_self.searchIncrement });
-        }
         p_self.p_engine.respond(utilsl.trimStr(msg));
+        defer p_self.alloc.free(msg);
     }
     pub fn sendUpdate(p_self: *scheduler) void {
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);

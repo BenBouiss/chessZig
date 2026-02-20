@@ -410,7 +410,7 @@ pub const engine = struct {
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
         p_self.status.positionProvided = false;
-        _ = p_self.updateElo(p_self.options.engineElo);
+        p_self.refreshInternals();
         return true;
     }
     pub fn executeDebugCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -603,6 +603,10 @@ pub const engine = struct {
         _ = p_self.updateElo(p_self.options.engineElo);
         return true;
     }
+    fn refreshInternals(p_self: *engine) void {
+        _ = p_self.updateElo(p_self.options.engineElo);
+        heuristicl._initMoveOrdering();
+    }
     fn updateHeuristicWeights(p_self: *engine, path: []const u8) bool {
         heuristicl.modifyHeuristicWeight(p_self.alloc, path, p_self.status.debugMode) catch {
             return false;
@@ -661,7 +665,7 @@ pub const engine = struct {
         if (p_self.searcher.searching) {
             return false;
         }
-        return speedTestl.executeEngineBenchmark(p_self);
+        @panic("speedtest missing");
     }
 };
 pub fn getLastMoveFromUci(p_board: *Board_state, cmdBuffer: []const u8, alloc: std.mem.Allocator) !IMove {

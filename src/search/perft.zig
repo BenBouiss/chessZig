@@ -21,7 +21,6 @@ const moveContainer = movel.moveContainer;
 const typedMoveContainer = movel.typedMoveContainer;
 const e_square = squarel.e_square;
 const scoreType = heuristicl.scoreType;
-const moveLine = movel.moveLine;
 const engine = enginel.engine;
 const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
