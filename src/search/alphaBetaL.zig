@@ -1,3 +1,4 @@
+// line version of the alpha beta algo
 const std = @import("std");
 const chess = @import("../chess.zig");
 const movel = @import("../move.zig");
@@ -12,6 +13,7 @@ const configl = @import("../config.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
+const lineContainer = movel.lineContainer;
 const scoreType = heuristicl.scoreType;
 
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -50,13 +52,15 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
 
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
+    var pv_array = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove);
+    var pv_length = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH]usize);
 
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
 
         p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash, useTexel, useQuiescence, 0);
+        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash, useTexel, useQuiescence, 0, &pv_array, &pv_length);
 
         _ = p_state.undoMove();
 
@@ -64,10 +68,21 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
             p_info.currentBest.move = move;
             p_info.currentBest.scoring = score;
         }
+        std.debug.print("{s} Line obtained: ", .{move.getStr()});
+        for (0..configl.MAXIMUM_SEARCH_DEPTH) |n| {
+            const m = pv_array[n][n];
+            if (!m.isValid()) {
+                std.debug.print("cutting'{s}', ", .{m.getStr()});
+                break;
+            }
+            std.debug.print("{s}, ", .{m.getStr()});
+        }
+        std.debug.print("\n", .{});
     }
     p_info.running = false;
 }
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool, comptime useTexel: bool, comptime useQuiescence: bool, ply: u16) scoreType {
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool, comptime useTexel: bool, comptime useQuiescence: bool, ply: u16, pv_arr: *[configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove, pv_len: *[configl.MAXIMUM_SEARCH_DEPTH]usize) scoreType {
+    pv_len[ply] = ply;
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
@@ -112,7 +127,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 
         _ = p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, useHash, useTexel, useQuiescence, ply + 1);
+        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, useHash, useTexel, useQuiescence, ply + 1, pv_arr, pv_len);
 
         _ = p_state.undoMove();
 
@@ -121,8 +136,15 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
         if (finalScore > _alpha) {
             _alpha = finalScore;
+
+            pv_arr[ply][ply] = move;
+            for (ply + 1..pv_len[ply + 1]) |next_p| {
+                pv_arr[ply][next_p] = pv_arr[ply + 1][next_p];
+            }
+            pv_len[ply] = pv_len[ply + 1];
+
             if (!move.isCapture()) {
-                //heuristicl.historyHeuristic[@intFromBool(p_state.whiteToMove())][move.getFrom()][move.getTo()] += depth;
+                heuristicl.historyHeuristic[@intFromBool(p_state.whiteToMove())][move.getFrom()][move.getTo()] += depth;
             }
         }
         if (_alpha >= beta) {

@@ -328,11 +328,6 @@ pub const moveContainer = struct {
         defer arr.deinit(alloc);
         return try utilsl.cutArrayListEvenly(IMove, alloc, arr, size);
     }
-
-    //pub fn MVV_LVA(self: moveContainer) [chess.MAX_POSSIBLE_MOVE]usize {
-    //
-
-    //}
 };
 
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
@@ -358,15 +353,12 @@ pub const matchMoveContainer = struct {
         if (comptime useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
                 @panic("list is full");
-                //return false;
             }
         }
         if (move.isIrreversible()) {
             p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
         }
-        //p_self.lastMove = move;
         p_self.moves[p_self.len] = move;
-        //p_self.keyCodes[p_self.len] = @intCast(key.code >> 32);
         p_self.keyCodes[p_self.len] = key.code;
         p_self.len += 1;
         return true;
@@ -375,13 +367,11 @@ pub const matchMoveContainer = struct {
         if (comptime useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
                 @panic("list is full");
-                //return false;
             }
         }
         if (move.isIrreversible()) {
             p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
         }
-        //p_self.lastMove = move;
         p_self.moves[p_self.len] = move;
         p_self.keyCodes[p_self.len] = key;
         p_self.len += 1;
@@ -451,7 +441,6 @@ pub const matchMoveContainer = struct {
         if (comptime useDebug) {
             if (self.len == 0) {
                 @panic("list is empty");
-                //return .{};
             }
         }
         return self.moves[self.len - 1];
@@ -472,96 +461,6 @@ pub const matchMoveContainer = struct {
     }
 };
 
-pub const moveLine = struct {
-    moves: [configl.MAX_LINE_LENGTH]IMove = undefined,
-    len: usize = 0,
-
-    pub fn init() moveLine {
-        return .{};
-    }
-    pub fn append(p_self: *moveLine, move: IMove) bool {
-        if (p_self.len == configl.MAX_LINE_LENGTH) {
-            return false;
-        }
-        p_self.moves[p_self.len] = move;
-        p_self.len += 1;
-        return true;
-    }
-    pub fn popVoid(p_self: *moveLine) void {
-        if (p_self.len == 0) {
-            return;
-        }
-        p_self.len -= 1;
-    }
-    pub fn merge(p_self: *moveLine, p_other: *moveLine, selfOffset: usize) void {
-        //
-        var currentIndex: usize = selfOffset;
-        for (0..p_other.len) |i| {
-            const move: IMove = p_other.moves[i];
-            if (currentIndex == p_self.len) {
-                _ = p_self.append(move);
-                continue;
-            }
-            if (!p_self.moves[currentIndex].equal(move)) {
-                p_self.moves[currentIndex] = move;
-            }
-            currentIndex += 1;
-        }
-
-        p_self.len = p_other.len;
-    }
-    pub fn merge_match(p_self: *moveLine, p_other: *matchMoveContainer, selfOffset: usize) void {
-        //
-        var currentIndex: usize = selfOffset;
-        for (0..p_other.len) |i| {
-            const move: IMove = p_other.moves[i];
-            if (currentIndex == p_self.len) {
-                _ = p_self.append(move);
-                continue;
-            }
-            if (!p_self.moves[currentIndex].equal(move)) {
-                p_self.moves[currentIndex] = move;
-            }
-            currentIndex += 1;
-        }
-
-        p_self.len = p_other.len;
-    }
-    pub fn getLineString(self: moveLine, alloc: std.mem.Allocator) !string {
-        var lineStr: string = try string.initZero(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
-        for (0..self.len) |i| {
-            const move = self.moves[i];
-            const moveStr = move.getStr();
-            if (moveStr[4] == 0) {
-                _ = lineStr.extend(moveStr[0..4]);
-            } else {
-                _ = lineStr.extend(&moveStr);
-            }
-            _ = lineStr.put(' ');
-        }
-        return lineStr;
-    }
-    pub fn apply(self: moveLine, p_board: *chess.Board_state) void {
-        for (0..self.len) |i| {
-            p_board.makeMove(self.moves[i]);
-        }
-    }
-    pub fn undo(self: moveLine, p_board: *chess.Board_state) void {
-        for (0..self.len) |_| {
-            p_board.undoMove();
-        }
-    }
-    pub fn print(p_self: *moveLine) void {
-        // FOR DEBUG ONLY
-        var line_str = p_self.getLineString(GLOBAL_ALLOC) catch {
-            return;
-        };
-        defer line_str.free(GLOBAL_ALLOC);
-        std.debug.print("{s}\n", .{line_str._slice()});
-        return;
-    }
-};
-
 pub const moveBBState = struct {
     pawnMoves: u64 = 0,
     pawnAttacks: u64 = 0,
@@ -579,8 +478,7 @@ pub const moveBBState = struct {
     kingSideCastlingMoves: u64 = 0,
 
     pub fn resetAll(p_self: *moveBBState) void {
-        const newVal: moveBBState = .{};
-        p_self.* = newVal;
+        p_self.* = .{};
     }
     pub fn resetPiece(p_self: *moveBBState, piece: e_piece) void {
         switch (piece) {
@@ -704,4 +602,9 @@ pub const moveBBState = struct {
     pub fn rawCount(p_self: *moveBBState) u64 {
         return @intCast(chess.l_popcount(p_self.collapse()));
     }
+};
+
+pub const lineContainer = struct {
+    moves: [configl.MAXIMUM_SEARCH_DEPTH]IMove = undefined,
+    len: usize = 0,
 };

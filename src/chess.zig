@@ -2305,14 +2305,14 @@ pub fn test_move_heur() !void {
     const moves = moveGenl.generateLegalMoves(&tmp);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
-        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move) });
+        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move, 0) });
     }
     std.debug.print("ben\n", .{});
-    const indexes = heuristicl.eval_move_sorting_mask(&moves);
+    const indexes = heuristicl.eval_move_sorting_mask(&moves, 0);
     for (0..moves.len) |i| {
         const idx = indexes[i];
         const move = moves.moves[idx];
-        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move) });
+        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move, 0) });
     }
 }
 
