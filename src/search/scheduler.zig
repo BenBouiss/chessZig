@@ -29,6 +29,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
     ret.useHash = p_engine.options.useHashTable;
     ret.useTexelEvaluation = p_engine.options.useTexelEvaluation;
+    ret.useQuiescence = p_engine.options.useQuiescence;
     return ret;
 }
 

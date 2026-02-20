@@ -8,6 +8,7 @@ const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const hashl = @import("../hashTable.zig");
 const utilsl = @import("../utils.zig");
+const configl = @import("../config.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
@@ -27,18 +28,24 @@ pub fn getScoreMaskFromTurn(white: bool) scoreType {
 
 pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feature: searchFeatures) void {
     if (feature.useHash) {
-        return texelTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, true, feature.useTexelEvaluation);
+        return texelTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, true, feature.useTexelEvaluation, feature.useQuiescence);
     }
-    return texelTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, false, feature.useTexelEvaluation);
+    return texelTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, false, feature.useTexelEvaluation, feature.useQuiescence);
 }
-pub fn texelTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, useTexel: bool) void {
+pub fn texelTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, useTexel: bool, useQuiescence: bool) void {
     if (useTexel) {
-        return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, true);
+        return quiescTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, true, useQuiescence);
     }
-    return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, false);
+    return quiescTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, false, useQuiescence);
+}
+pub fn quiescTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool, useQuiescence: bool) void {
+    if (useQuiescence) {
+        return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, useTexel, true);
+    }
+    return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, useTexel, false);
 }
 
-pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool) void {
+pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool, comptime useQuiescence: bool) void {
     p_info.running = true;
 
     const alpha: scoreType = -weightl.simpleCheckMateScore;
@@ -49,7 +56,7 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
 
         p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash, useTexel);
+        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, useHash, useTexel, useQuiescence);
 
         _ = p_state.undoMove();
 
@@ -60,10 +67,16 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
     }
     p_info.running = false;
 }
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool, comptime useTexel: bool) scoreType {
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool, comptime useTexel: bool, comptime useQuiescence: bool) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (depth <= 0 or !p_info.running) {
         p_info.n_nodeExplored += 1;
+        if (comptime useQuiescence) {
+            if (p_state.getLastMove().isCapture()) {
+                // perform quiesc
+                return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta);
+            }
+        }
         if (comptime useTexel) {
             const score = color_mask * heuristicl.texelEvaluation(p_state);
             return score;
@@ -90,13 +103,16 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    const indexes = heuristicl.eval_move_sorting_mask(&fmoves);
     var _alpha = alpha;
     var finalScore: scoreType = 0;
     for (0..fmoves.len) |i| {
-        const move: IMove = fmoves.moves[i];
+        const idx = indexes[i];
+        const move: IMove = fmoves.moves[idx];
+
         _ = p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, useHash, useTexel);
+        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, useHash, useTexel, useQuiescence);
 
         _ = p_state.undoMove();
 
@@ -123,3 +139,45 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
     return finalScore;
 }
+pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType) scoreType {
+    // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
+    var _alpha = alpha;
+    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
+    const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+    if (depth == 0 or !p_info.running) {
+        p_info.n_nodeExplored += 1;
+        return static_eval;
+    }
+    var best_value = static_eval;
+    if (best_value >= beta) {
+        return best_value;
+    }
+    if (best_value > _alpha) {
+        _alpha = best_value;
+    }
+    const fmoves: moveContainer = moveGenl.generateLegalMoves_ordered(p_state, true);
+    const indexes = heuristicl.eval_move_sorting_mask(&fmoves);
+    for (0..fmoves.len) |i| {
+        const idx = indexes[i];
+        const move: IMove = fmoves.moves[idx];
+        p_state.makeMove(move);
+
+        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha);
+
+        _ = p_state.undoMove();
+
+        if (score >= beta) {
+            return score;
+        }
+        if (score > _alpha) {
+            _alpha = score;
+        }
+        if (score > best_value) {
+            best_value = score;
+        }
+    }
+    return best_value;
+}
+//pub fn seeCapture(p_board: *chess.Board_state, from: u8, to: u8, white: bool) scoreType {
+//    var value: scoreType = 0;
+//}

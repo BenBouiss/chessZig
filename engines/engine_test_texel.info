@@ -1,6 +1,5 @@
 [engine1]
-//path="engines/bin/engine_11_02_26";
-path="zig-out/bin/engine";
+path="engines/bin/engine_11_02_26";
 name="normal";
 "debug on";
 "setoption name UCI_elo value 3000";

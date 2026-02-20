@@ -59,3 +59,21 @@ wtime 280908 btime 322978 winc 5000 binc 5000
 [DEBUG] handleCmd: executed command .BESTMOVE, status: true
 [DEBUG] matchRoutine: Exiting match with status: .StaleMateRepetition
 
+
+move ordering and alpha beta pruning performance:
+	- implemented a standard mvv_lva system using the chessProgramming exemple with only prio for capture moves.
+	- from:
+	engine: normal, 2 matches, win: 0, lose: 1, draw: 1, flagged: 0, speed: 2924 ms/move;
+	engine: quiescence, 2 matches, win: 1, lose: 0, draw: 1, flagged: 0, speed: 5053 ms/move;
+	final positions: 
+	d2d4 d7d5 e2e3 e7e6 c1d2 c7c6 d1h5 g8f6 h5e5 f8d6 e5g5 h7h6 g5h4 d8b6 d2c1 g7g5 h4h3 g5g4 h3h4 b8d7 h2h3 c6c5 c2c3 g4h3 g1h3 e6e5 d4c5 d6c5 a2a4 f6h7 h4g3 b6g6 f1b5 g6g3 f2g3 a7a6 b5e2 h8g8 b2b4 c5e7 h3f2 d7f6 g3g4 c8g4 e2g4 f6g4 f2g4 g8g4 h1h6 g4h4 e3e4 d5e4 c1e3 h4h6 e3h6 f7f5 g2g3 a8d8 a1a2 d8d3 a2g2 e8f7 b4b5 a6b5 a4b5 b7b6 h6c1 f7g7 g2g1 g7g8 g1g2 g8g7 g2g1 g7g8 g1g2 h7f8 c1h6 f8g6 h6c1 g6f8 c1h6 f8g6 h6c1 e7c5 g2a2 d3g3 b1d2 g3e3 e1f1 e3c3 c1b2 c3c2 f1e1 c5b4 a2a8 g8f7 b2a3 b4d2 e1d1 c2a2 a8a7 f7e6 a7c7 d2e3 a3b4 f5f4 c7g7 e6f6 g7d7 f4f3 b4e1 a2a1 d1c2 a1e1 d7d6 f6g5 d6d7 f3f2 d7f7 e3f4 f7a7 f2f1q a7g7 e1b1 g7g6 g5g6 c2c3 f1c1 ;
+	d2d4 d7d5 e2e3 c8f5 g2g4 f5e4 f2f3 e4g6 f1b5 c7c6 b5d3 e7e6 h2h4 f8b4 c2c3 b4d6 h4h5 d6g3 e1f1 g6d3 d1d3 d8a5 f1g2 g3d6 e3e4 a5b5 d3b5 c6b5 e4e5 d6e7 g1h3 b8c6 c1f4 a7a5 a2a4 b5b4 h1e1 h7h6 f4g3 g7g6 b1d2 b4c3 b2c3 g6h5 g4h5 e8c8 a1b1 c6a7 b1b2 c8b8 e1b1 d8d7 b2b6 e7d8 b6d6 d7d6 e5d6 g8f6 h3f4 h8g8 g2h2 f6d7 f4d3 d8f6 d2b3 a7c6 b3c5 d7c5 d3c5 b8a8 g3f4 e6e5 d4e5 c6e5 b1b7 e5f3 h2h3 f3g1 h3h2 g1f3 h2h3 f3g1 h3h2 g1f3 ;
+
+	- to:
+	engine: normal, 2 matches, win: 0, lose: 1, draw: 1, flagged: 0, speed: 1515 ms/move;
+	engine: quiescence, 2 matches, win: 1, lose: 0, draw: 1, flagged: 0, speed: 1734 ms/move;
+	final positions: 
+	d2d4 d7d5 e2e3 e7e6 c1d2 c7c6 d1h5 g8f6 h5e5 f8d6 e5g5 h7h6 g5h4 d8b6 d2c1 g7g5 h4h3 g5g4 h3h4 b8d7 h2h3 c6c5 c2c3 g4h3 g1h3 e6e5 d4c5 d6c5 a2a4 f6h7 h4g3 b6g6 f1b5 g6g3 f2g3 a7a6 b5e2 h8g8 b2b4 c5e7 h3f2 d7f6 g3g4 c8g4 e2g4 f6g4 f2g4 g8g4 h1h6 g4h4 e3e4 d5e4 c1e3 h4h6 e3h6 f7f5 g2g3 a8d8 a1a2 d8d3 a2g2 e8f7 b4b5 a6b5 a4b5 b7b6 h6c1 f7g7 g2g1 g7g8 g1g2 g8g7 g2g1 g7g8 g1g2 h7f8 c1h6 f8g6 h6c1 g6f8 c1h6 f8g6 h6c1 e7c5 g2a2 d3g3 b1d2 g3e3 e1f1 e3c3 c1b2 c3c2 f1e1 c5b4 a2a8 g8f7 b2a3 b4d2 e1d1 c2a2 a8a7 f7e6 a7c7 d2e3 a3b4 f5f4 c7g7 e6f6 g7d7 f4f3 b4e1 a2a1 d1c2 a1e1 d7d6 f6g5 d6d7 f3f2 d7f7 e3f4 f7a7 f2f1q a7g7 e1b1 g7g6 g5g6 c2c3 f1c1 ;
+	d2d4 d7d5 e2e3 c8f5 g2g4 f5e4 f2f3 e4g6 f1b5 c7c6 b5d3 e7e6 h2h4 f8b4 c2c3 b4d6 h4h5 d6g3 e1f1 g6d3 d1d3 d8a5 f1g2 g3d6 e3e4 a5b5 d3b5 c6b5 e4e5 d6e7 g1h3 b8c6 c1f4 a7a5 a2a4 b5b4 h1e1 h7h6 f4g3 g7g6 b1d2 b4c3 b2c3 g6h5 g4h5 e8c8 a1b1 c6a7 b1b2 c8b8 e1b1 d8d7 b2b6 e7d8 b6d6 d7d6 e5d6 g8f6 h3f4 h8g8 g2h2 f6d7 f4d3 d8f6 d2b3 a7c6 b3c5 d7c5 d3c5 b8a8 g3f4 e6e5 d4e5 c6e5 b1b7 e5f3 h2h3 f3g1 h3h2 g1f3 h2h3 f3g1 h3h2 g1f3 ;
+
+	- very good!, note: quiescence depth = 2;
