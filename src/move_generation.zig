@@ -1313,23 +1313,46 @@ pub fn getPinned_(p_state: *Board_state, comptime white: bool, king_E: e_square,
     return pinned;
 }
 // move ordering section?
-pub fn generateLegalMoves_ordered(p_board: *Board_state, capture: bool) moveContainer {
+pub fn generateLegalMoves_ordered(p_board: *Board_state, captureOnly: bool) moveContainer {
     //
-    if (capture) {
+    if (captureOnly) {
         return _generateLegalMoves_ordered(p_board, true);
     }
     return _generateLegalMoves_ordered(p_board, false);
 }
-pub fn _generateLegalMoves_ordered(p_board: *Board_state, comptime capture: bool) moveContainer {
+pub fn _generateLegalMoves_ordered(p_board: *Board_state, comptime captureOnly: bool) moveContainer {
     //
     if (p_board.whiteToMove()) {
-        return cst_generateLegalMoves_ordered(p_board, capture, true);
+        return cst_generateLegalMoves_ordered(p_board, captureOnly, true);
     }
-    return cst_generateLegalMoves_ordered(p_board, capture, false);
+    return cst_generateLegalMoves_ordered(p_board, captureOnly, false);
 }
-pub fn cst_generateLegalMoves_ordered(p_board: *Board_state, comptime capture: bool, comptime white: bool) moveContainer {
+pub fn cst_generateLegalMoves_ordered(p_board: *Board_state, comptime captureOnly: bool, comptime white: bool) moveContainer {
     //
-    _ = capture;
-    _ = white;
-    _ = p_board;
+    var ret: moveBBState = .{};
+    if (comptime white) {
+        var EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(true)];
+        if (comptime captureOnly) {
+            EmptyOrEnemy = p_board.c_occupiedBB[@intFromBool(false)];
+        }
+        moveGenPawnBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenKnightBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenBishopBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenRookBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenQueenBB(p_board, true, EmptyOrEnemy, &ret);
+        moveGenKingBB(p_board, true, EmptyOrEnemy, &ret);
+    } else {
+        var EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(false)];
+        if (comptime captureOnly) {
+            EmptyOrEnemy = p_board.c_occupiedBB[@intFromBool(true)];
+        }
+        moveGenPawnBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenKnightBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenBishopBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenRookBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenQueenBB(p_board, false, EmptyOrEnemy, &ret);
+        moveGenKingBB(p_board, false, EmptyOrEnemy, &ret);
+    }
+
+    return moveGenBBToMoveContainer(p_board, &ret);
 }

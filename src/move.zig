@@ -328,6 +328,11 @@ pub const moveContainer = struct {
         defer arr.deinit(alloc);
         return try utilsl.cutArrayListEvenly(IMove, alloc, arr, size);
     }
+
+    //pub fn MVV_LVA(self: moveContainer) [chess.MAX_POSSIBLE_MOVE]usize {
+    //
+
+    //}
 };
 
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum

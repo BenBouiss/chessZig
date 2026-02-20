@@ -2299,6 +2299,22 @@ pub fn test_safety() !void {
     print_bitboard(safetyArea(e_square.a8));
     print_bitboard(safetyArea(e_square.e8));
 }
+pub fn test_move_heur() !void {
+    var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "1nbqkbnr/2pppppp/8/1p6/Rp6/2P5/4PPPP/1NBQKBNR b Hh b6 0 10");
+    print_boardstate(&tmp);
+    const moves = moveGenl.generateLegalMoves(&tmp);
+    for (0..moves.len) |i| {
+        const move = moves.moves[i];
+        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move) });
+    }
+    std.debug.print("ben\n", .{});
+    const indexes = heuristicl.eval_move_sorting_mask(&moves);
+    for (0..moves.len) |i| {
+        const idx = indexes[i];
+        const move = moves.moves[idx];
+        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move) });
+    }
+}
 
 pub fn main() !void {
     mainl.initAll(true);
@@ -2310,5 +2326,6 @@ pub fn main() !void {
     //test_scenarios();
     //try test_single_algebraic();
     //try test_line_algebraic();
+    try test_move_heur();
     return;
 }

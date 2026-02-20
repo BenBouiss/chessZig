@@ -20,11 +20,15 @@ pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
 pub const DEFAULT_USEHASHTABLE = true;
 pub const DEFAULT_USETEXEL = false;
+pub const _DEFAULT_USETEXEL = "false";
+
 pub const DEFAULT_USEQUIESC = false;
+pub const _DEFAULT_USEQUIESC = "false";
 
 pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
 pub const MAX_DEPTH: u16 = 6;
+pub const MAX_QUIESC_DEPTH: u16 = 2;
 
 pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;

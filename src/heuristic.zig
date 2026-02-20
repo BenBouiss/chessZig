@@ -8,12 +8,14 @@ const statusl = @import("board_status.zig");
 const weightl = @import("weights.zig");
 const squarel = @import("square.zig");
 const mainl = @import("main.zig");
+const movel = @import("move.zig");
 
 const std = @import("std");
 
 const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
 const string = stringl.string;
+const IMove = movel.IMove;
 pub const scoreType: type = i32;
 pub const weightType: type = i32;
 
@@ -145,6 +147,34 @@ pub fn evaluate_mobility(p_state: *chess.Board_state, mobilityCoef: scoreType) s
     //const moveB = moveGenl.generateMoveCountLegalMoves(p_state, false);
     //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
 }
+pub fn epieceToHeuristic(piece: e_piece, values: *heuristicValues) scoreType {
+    switch (piece) {
+        .nEmptySquare, .nWhite, .nBlack, .nWhiteKing, .nBlackKing => {
+            return 0;
+        },
+        .nWhitePawn, .nBlackPawn => {
+            return values.PawnValue;
+        },
+        .nWhiteBishop, .nBlackBishop => {
+            return values.BishopValue;
+        },
+        .nWhiteKnight, .nBlackKnight => {
+            return values.KnightValue;
+        },
+        .nWhiteRook, .nBlackRook => {
+            return values.RookValue;
+        },
+        .nWhiteQueen, .nBlackQueen => {
+            return values.QueenValue;
+        },
+    }
+}
+//pub const m= struct {
+//    index: usize,
+//    fromPiece: scoreType,
+//    toPiece: scoreType,
+//};
+
 pub fn texelEvaluation(p_state: *chess.Board_state) scoreType {
     // need to evaluate the pqst more efficiently ie with same method from past heuristic
     const entry = texelEntry.initFromBoardFast(p_state);
@@ -1057,6 +1087,32 @@ pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !
     const entries = try getEntriesFromFile(alloc, dataPath);
     defer alloc.free(entries);
     try saveCoefficientToFile(alloc, entries, savePath);
+}
+
+// move heuristic "sections"
+// https://github.com/maksimKorzh/chess_programming MVA_lva table
+pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
+pub fn eval_move_heuristic(move: IMove) scoreType {
+    if (move.isCapture()) {
+        //
+        return mvv_lva[@intFromEnum(move.getFromPiece())][@intFromEnum(move.getCapturePiece())];
+    } else {
+        //
+    }
+    return 0;
+}
+pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
+    return context[a] > context[b];
+}
+pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer) [chess.MAX_POSSIBLE_MOVE]usize {
+    var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
+    var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
+    for (0..p_moves.len) |i| {
+        ret[i] = i;
+        scores[i] = eval_move_heuristic(p_moves.moves[i]);
+    }
+    std.mem.sort(usize, ret[0..p_moves.len], scores, cmp_eval_move);
+    return ret;
 }
 
 pub fn main() !void {
