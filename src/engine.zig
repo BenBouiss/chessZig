@@ -322,6 +322,9 @@ pub const engine = struct {
             },
             .GO => {
                 if (!p_self.status.positionProvided or p_self.searcher.searching) {
+                    if (p_self.status.debugMode) {
+                        std.debug.print("[DEBUG]uci_executeCmd: failed go cmd, position not provided or searcher still searching\n", .{});
+                    }
                     return false;
                 }
                 if (!p_self.status.initializedInternals) {

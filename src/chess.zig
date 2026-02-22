@@ -1190,7 +1190,7 @@ pub const Board_state = struct {
         if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackRook)]) != 0) {
             return false;
         }
-        // TODO add the cases KBB vs K or others
+        // TODO: add the cases KBB vs K or others
         // or a better way
         return true;
     }

@@ -1,12 +1,8 @@
-const configl = @import("../config.zig");
 const enginel = @import("../engine.zig");
 const movel = @import("../move.zig");
 const chessl = @import("../chess.zig");
-const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
-const hashl = @import("../hashTable.zig");
 const schedulerl = @import("scheduler.zig");
-const mailn = @import("../main.zig");
 
 const std = @import("std");
 
@@ -27,7 +23,8 @@ pub const threadInfo = struct {
     n_nodeExplored: u64 = 0,
     n_hashRetrieve: u64 = 0,
     depth: u8 = 0,
-    running: bool = false,
+    working: bool = false,
+    alive: bool = false,
 };
 pub const threadInfo_container = struct {
     len: u16,
@@ -50,7 +47,7 @@ pub const threadInfo_container = struct {
             const info = self.items[i];
             ret.n_nodeExplored += info.n_nodeExplored;
             ret.n_hashRetrieve += info.n_hashRetrieve;
-            self.n_active += @intFromBool(info.running);
+            self.n_active += @intFromBool(info.working);
         }
         return ret;
     }
@@ -69,7 +66,7 @@ pub const threadInfo_container = struct {
     }
 };
 
-const threadPackageFrame = struct {
+pub const threadPackageFrame = struct {
     chessState: Board_state,
     moves: std.ArrayList(IMove),
     threadHandle: std.Thread,
@@ -120,54 +117,4 @@ pub fn joinOnThreadPack(p_array: *threadPackageArray) void {
     for (0..p_array.len) |i| {
         p_array.items(.threadHandle)[i].join();
     }
-}
-
-pub fn waitBenchmarkThread(p_engine: *engine, p_threadPack: *threadPackageArray) void {
-    var searcher = &p_engine.searcher;
-    while (!searcher.interrupt and (searcher.endCounter != p_threadPack.items(._tInfo).len)) {
-        std.Thread.sleep(configl.INFO_TICKRATE_NS);
-        searcher.endCounter = 0;
-        for (p_threadPack.items(._tInfo)) |*info| {
-            if (!info.running) {
-                searcher.endCounter += 1;
-            }
-        }
-    }
-    searcher.searching = false;
-    if (searcher.endCounter != p_threadPack.len) {
-        for (0..p_threadPack.len) |i| {
-            p_threadPack.items(._tInfo)[i].running = false;
-        }
-        for (0..p_threadPack.len) |i| {
-            if (p_engine.status.debugMode) {
-                std.debug.print("[DEBUG] waitBenchmarkThread: Waiting on thread {d}  to finish\n", .{i});
-            }
-            p_threadPack.items(.threadHandle)[i].join();
-        }
-    }
-
-    if (p_engine.status.debugMode) {
-        std.debug.print("[DEBUG] waitBenchmarkThread: finished waiting on results\n", .{});
-    }
-}
-pub fn waitThreadFinish_NpsReport(p_engine: *enginel.engine, p_arr: *threadPackageArray) !bool {
-    const _start: u64 = @intCast(std.time.milliTimestamp());
-    while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
-        std.Thread.sleep(configl.INFO_TICKRATE_NS);
-
-        p_engine.searcher.endCounter = 0;
-        for (0..p_arr.len) |i| {
-            p_engine.searcher.endCounter += @intFromBool(!p_arr.items(._tInfo)[i].running);
-        }
-
-        const res = getCombinedFromPack(p_arr);
-        const _end: u64 = @intCast(std.time.milliTimestamp());
-        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.n_nodeExplored, (_end - _start + 1)) * 1000, res.n_nodeExplored, res.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
-            continue;
-        };
-        defer p_engine.alloc.free(msg);
-        p_engine.respond(msg);
-    }
-    p_engine.searcher.searching = false;
-    return true;
 }

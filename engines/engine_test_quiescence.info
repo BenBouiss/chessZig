@@ -1,7 +1,7 @@
 [engine1]
 path="zig-out/bin/engine";
 name="normal";
-"debug on";
+//"debug on";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value true";
 "setoption name useHash value false";
@@ -10,7 +10,7 @@ name="normal";
 [engine2]
 path="zig-out/bin/engine";
 name="quiescence";
-"debug on";
+//"debug on";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value true";
 "setoption name useHash value false";
@@ -20,7 +20,7 @@ name="quiescence";
 [match]
 nMatch=1;
 playerSwitch=true;
-debugMode=true;
+//debugMode=true;
 useOpeningBook=false;
 openingBookPath="opening/8moves_v3.pgn";
 
