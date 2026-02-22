@@ -49,6 +49,8 @@ pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
 pub var SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR: u16 = 3;
 // estimate of the time increase when increasing the depth by 1
 pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
+pub const SCHEDULER_TICKRATE_NS = (std.math.pow(u64, 10, 6));
+pub const WR_TICKRATE_NS = (std.math.pow(u64, 10, 5));
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 4;

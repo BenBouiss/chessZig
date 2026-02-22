@@ -25,29 +25,94 @@ pub fn getScoreMaskFromTurn(white: bool) scoreType {
     }
     return -1;
 }
+pub const depthCommunication = struct {
+    depth: u16 = 0,
+    depthSet: bool = false,
+    lock: bool = false,
+    pub inline fn acquireLock(p_self: *depthCommunication) void {
+        var cumulTime: u64 = 0;
+        while (p_self.lock) {
+            if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
+                std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
+                cumulTime = 0;
+            }
+        }
+        p_self.lock = true;
+    }
+    pub inline fn releaseLock(p_self: *depthCommunication) void {
+        p_self.lock = false;
+    }
+    pub fn setDepth(p_self: *depthCommunication, depth: u16) void {
+        p_self.acquireLock();
+        if (p_self.depthSet) {
+            @panic("???");
+        }
+        p_self.depth = depth;
+        p_self.depthSet = true;
+        p_self.releaseLock();
+    }
+};
 
-pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feature: searchFeatures) void {
+pub fn _alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depthCom: *depthCommunication, feat: searchFeatures) void {
+    var startTime = std.time.nanoTimestamp();
+    while (p_info.alive) {
+        const cumulTime = std.time.nanoTimestamp() - startTime;
+        if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
+            std.debug.print("[INACTIVITY] alphaBetaWaitingRoom: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
+            startTime = std.time.nanoTimestamp();
+        }
+        // wait for a depth to be submitted
+        if (!depthCom.depthSet) {
+            continue;
+        }
+        depthCom.depthSet = false;
+
+        if (searchEntrypoint(p_state, p_startingMoves, p_info, depthCom.depth, feat) == 1) {
+            startTime = std.time.nanoTimestamp();
+            break;
+        }
+    }
+}
+pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depthCom: *depthCommunication, feat: searchFeatures) void {
+    while (p_info.alive) {
+        // for some reason if this function gets updated too fast the scheduler gets bricked in the handleInterrupt method
+        // trying to join on a thread with p_info.alive = false?
+        //
+        // FIXME: ???
+        std.Thread.sleep(configl.WR_TICKRATE_NS);
+        // wait for a depth to be submitted
+        if (!depthCom.depthSet) {
+            continue;
+        }
+        depthCom.depthSet = false;
+        if (searchEntrypoint(p_state, p_startingMoves, p_info, depthCom.depth, feat) == 1) {
+            break;
+        }
+    }
+}
+
+pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feature: searchFeatures) i8 {
     if (feature.useHash) {
         return texelTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, true, feature.useTexelEvaluation, feature.useQuiescence);
     }
     return texelTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, false, feature.useTexelEvaluation, feature.useQuiescence);
 }
-pub fn texelTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, useTexel: bool, useQuiescence: bool) void {
+pub fn texelTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, useTexel: bool, useQuiescence: bool) i8 {
     if (useTexel) {
         return quiescTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, true, useQuiescence);
     }
     return quiescTransf_searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, false, useQuiescence);
 }
-pub fn quiescTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool, useQuiescence: bool) void {
+pub fn quiescTransf_searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool, useQuiescence: bool) i8 {
     if (useQuiescence) {
         return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, useTexel, true);
     }
     return _searchEntrypoint(p_state, p_startingMoves, p_info, depth, useHash, useTexel, false);
 }
 
-pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool, comptime useQuiescence: bool) void {
-    p_info.running = true;
-
+pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, comptime useHash: bool, comptime useTexel: bool, comptime useQuiescence: bool) i8 {
+    p_info.working = true;
+    defer p_info.working = false;
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
 
@@ -65,11 +130,15 @@ pub fn _searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arra
             p_info.currentBest.scoring = score;
         }
     }
-    p_info.running = false;
+    if (p_info.alive) {
+        return 0;
+    }
+    // 1 is error
+    return 1;
 }
 fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, comptime useHash: bool, comptime useTexel: bool, comptime useQuiescence: bool, ply: u16) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
-    if (depth <= 0 or !p_info.running) {
+    if (depth <= 0 or !p_info.alive) {
         p_info.n_nodeExplored += 1;
         if (comptime useQuiescence) {
             if (p_state.getLastMove().isCapture()) {
@@ -152,7 +221,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     var _alpha = alpha;
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
-    if (depth == 0 or !p_info.running) {
+    if (depth == 0 or !p_info.alive) {
         p_info.n_nodeExplored += 1;
         return static_eval;
     }
