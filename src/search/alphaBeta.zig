@@ -12,6 +12,8 @@ const configl = @import("../config.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
+const pvContainer = movel.pvContainer;
+
 const scoreType = heuristicl.scoreType;
 
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -53,27 +55,6 @@ pub const depthCommunication = struct {
     }
 };
 
-pub fn _alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depthCom: *depthCommunication, feat: searchFeatures) void {
-    var startTime = std.time.nanoTimestamp();
-    while (p_info.alive) {
-        const cumulTime = std.time.nanoTimestamp() - startTime;
-        if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
-            std.debug.print("[INACTIVITY] alphaBetaWaitingRoom: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
-            startTime = std.time.nanoTimestamp();
-        }
-        // wait for a depth to be submitted
-        if (!depthCom.depthSet) {
-            continue;
-        }
-        depthCom.depthSet = false;
-
-        if (searchEntrypoint(p_state, p_startingMoves, p_info, depthCom.depth, feat) == 1) {
-            std.debug.print("[ERROR] alphaBetaWaitingRoom: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
-
-            break;
-        }
-    }
-}
 pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depthCom: *depthCommunication, feat: searchFeatures) void {
     while (p_info.alive) {
         // for some reason if this function gets updated too fast the scheduler gets bricked in the handleInterrupt method
@@ -102,18 +83,22 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
 
+    var pv: pvContainer = .{};
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
 
         p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, p_feature, 0);
+        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, p_feature, 1, &pv);
 
         _ = p_state.undoMove();
 
         if (i == 0 or p_info.currentBest.scoring < score) {
             p_info.currentBest.move = move;
             p_info.currentBest.scoring = score;
+            pv.onBestMove(move, 0);
+            p_info.currentBest.line.setLineFromPV(&pv);
+            //std.debug.print("[DEBUG] searchEntrypoint: new best line found {f} cp {d}\n", .{ p_info.currentBest.line, score });
         }
     }
     if (p_info.alive) {
@@ -122,7 +107,8 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     // 1 is error
     return 1;
 }
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_feature: *const searchFeatures, ply: u16) scoreType {
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_feature: *const searchFeatures, ply: u16, pv: *pvContainer) scoreType {
+    pv.setLen(ply);
     if (p_state.isStaleMateRepetition()) {
         if (p_feature.useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
@@ -183,7 +169,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 
         _ = p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_feature, ply + 1);
+        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_feature, ply + 1, pv);
 
         _ = p_state.undoMove();
 
@@ -195,6 +181,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             if (!move.isCapture()) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
             }
+            pv.onBestMove(move, ply);
         }
         if (_alpha >= beta) {
             // save here the killer moves
@@ -249,7 +236,6 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
             _ = p_state.undoMove();
             continue;
         }
-
         const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1);
 
         _ = p_state.undoMove();

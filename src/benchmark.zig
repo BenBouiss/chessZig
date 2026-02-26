@@ -163,19 +163,11 @@ pub fn test_benchmark() void {
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    //nodeExplorationBenchmark(&game_state, 6, 1, false);
-    nodeBenchmark_debug(&game_state, 6, false);
+    nodeExplorationBenchmark(&game_state, 6, 1, true);
+    //nodeBenchmark_debug(&game_state, 6, false);
 }
 
 pub fn main() !void {
     mainl.initAll(true);
-    chess.print_bitboard(chess.inBetween(.e8, .b8));
-    chess.print_bitboard(chess.inBetween(.e1, .b1));
-
-    chess.print_bitboard(chess.inBetween(.e1, .h1));
-    chess.print_bitboard(chess.inBetween(.e8, .h8));
-    if (true) {
-        return;
-    }
     test_benchmark();
 }
