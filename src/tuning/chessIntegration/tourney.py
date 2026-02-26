@@ -21,36 +21,7 @@ sys.path.append(os.path.dirname(__file__))
 from chessSpec import heuristicEntry, score, chessIndividual
 import chessSpec
 
-simpleMobilityScore = 0.1
-simpleIsolatedPawnScore = 0.2
-simpleStackedPawnScore = 0.2
-
 baseWeightPath = "engines/heuristics/baseOldWeights.info"
-
-def getRandomHeuristicEntry(rand: np.random.Generator, fraction_diff: float, baseEntry: heuristicEntry) -> heuristicEntry:
-    ret = heuristicEntry()
-    ret.simpleMobilityScore = 0.1 * (1 + fraction_diff * (rand.random() - 0.5) * 2)
-    ret.simpleIsolatedPawnScore = 0.2 * (1 + fraction_diff * (rand.random() - 0.5) * 2)
-    ret.simpleStackedPawnScore = 0.2 * (1 + fraction_diff * (rand.random() - 0.5) * 2)
-
-    ret.pawnScoreArr = baseEntry.pawnScoreArr * (1 + fraction_diff * (rand.random(baseEntry.pawnScoreArr.size) - 0.5) * 2)
-    ret.knightScoreArr = baseEntry.knightScoreArr * (1 + fraction_diff * (rand.random(baseEntry.knightScoreArr.size) - 0.5) * 2)
-    ret.bishopScoreArr = baseEntry.bishopScoreArr * (1 + fraction_diff * (rand.random(baseEntry.bishopScoreArr.size) - 0.5) * 2)
-    ret.rookScoreArr = baseEntry.rookScoreArr * (1 + fraction_diff * (rand.random(baseEntry.rookScoreArr.size) - 0.5) * 2)
-    ret.queenScoreArr = baseEntry.queenScoreArr * (1 + fraction_diff * (rand.random(baseEntry.queenScoreArr.size) - 0.5) * 2)
-    ret.kingScoreArr = baseEntry.kingScoreArr * (1 + fraction_diff * (rand.random(baseEntry.kingScoreArr.size) - 0.5) * 2)
-
-    ret.simpleMobilityScore = round(ret.simpleMobilityScore, 2)
-    ret.simpleIsolatedPawnScore= round(ret.simpleIsolatedPawnScore, 2)
-    ret.simpleStackedPawnScore= round(ret.simpleStackedPawnScore, 2)
-
-    ret.pawnScoreArr = ret.pawnScoreArr.round(2)
-    ret.knightScoreArr = ret.knightScoreArr.round(2)
-    ret.bishopScoreArr = ret.bishopScoreArr.round(2)
-    ret.rookScoreArr = ret.rookScoreArr.round(2)
-    ret.queenScoreArr = ret.queenScoreArr.round(2)
-    ret.kingScoreArr = ret.kingScoreArr.round(2)
-    return ret
 
 SLEEP_LOCK_S = 0.01
 SLEEP_STDOUT_S = 1
@@ -280,7 +251,7 @@ class tournament(object):
             self.matchInv.status[i] = matchStatus.IN_PROGRESS
             global_scoreBoard.updateScoreBoard(self)
 
-            currentMatch: match = match(conf1 = opp1, conf2 = opp2, infoFilePath=self.templatePath, extra = f"T{threadId}")
+            currentMatch: match = match(conf1 = opp1, conf2 = opp2, infoFilePath=self.templatePath, extra = f"T{threadId}", debugMode = self.debugMode)
             scoreList = currentMatch.launchAndWaitResults(self.evalBin, self.logDir)
 
             self.matchInv.status[i] = matchStatus.FINISHED
@@ -320,13 +291,16 @@ class chessObjective(obj.objective):
 
 def entryFrom1dArray(arr: npt.NDArray[np.float64]) -> heuristicEntry:
     ret = heuristicEntry()
-    listNp = np.array_split(arr, 6)
-    ret.pawnScoreArr = listNp[0]
-    ret.bishopScoreArr = listNp[1]
-    ret.knightScoreArr = listNp[2]
-    ret.rookScoreArr = listNp[3]
-    ret.queenScoreArr = listNp[4]
-    ret.kingScoreArr = listNp[5]
+    ret.mobilityScore = arr[0];
+    ret.isolatedPawnScore = arr[1];
+    ret.stackedPawnScore = arr[2];
+    ret.passedPawnScore = arr[3];
+
+    ret.safetyKnight = arr[4];
+    ret.safetyBishop = arr[5];
+    ret.safetyRook = arr[6];
+    ret.safetyQueen = arr[7];
+
     return ret
 
 # since all the current positions are "similar" enough might
@@ -351,10 +325,11 @@ def dummyStep(step: float, nDim: int) -> npt.NDArray[np.float64]:
     """
     return np.repeat(np.array([step]), nDim)
 
-UPPER_BOUND_WEIGHT = 1
+UPPER_BOUND_WEIGHT = 100
 LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
+STEP_WEIGTH = 1
 N_WEIGHT_MAP = 6
-STEP_WEIGTH = 0.01
+N_PARAMS = 8
 def clear() -> None:
     print("\x1B[2J\x1B[H", end = "\r")
 
@@ -364,17 +339,16 @@ if __name__ == "__main__":
     evaluationBinPath = "zig-out/bin/evaluate"
     os.makedirs(tmpFolder, exist_ok=True)
 
-    popsize = 4
-    maxiter = 8
+    popsize = 8
+    maxiter = 16
     saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix = "ben")
     mh = gw.GW(popsize = popsize, maxiter = maxiter, saveLog = True, preEval = True, saveOpt = saveOpt)
-    tourn = tournament(standardTimeFormat, templatePath = path, evalBin = evaluationBinPath, debugMode = True, logDir = tmpFolder, nThread=6)
+    tourn = tournament(standardTimeFormat, templatePath = path, evalBin = evaluationBinPath, debugMode = True, logDir = tmpFolder, nThread=4)
 
-    mh.setObjective(chessObjective(maximize=True, tourney=tourn, bounds = dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim = 64 * N_WEIGHT_MAP), steps = dummyStep(STEP_WEIGTH, nDim = 64 * N_WEIGHT_MAP)))
+    mh.setObjective(chessObjective(maximize=True, tourney=tourn, bounds = dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim = N_PARAMS), steps = dummyStep(STEP_WEIGTH, nDim = N_PARAMS)))
     mh.generatePopulation()
+    mh.printPopulation()
     
-    basePos = chessSpec.weightFileToHeuristicEntry(baseWeightPath).get1DArray()
-    mh.addInvididual(individual(position = basePos, uid = -1, score = float('-inf'), frozen = True))
     mh.optimize()
 
     

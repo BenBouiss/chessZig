@@ -117,28 +117,28 @@ pub fn evaluate_mobility(p_state: *chess.Board_state, mobilityCoef: scoreType) s
     const blackMoveAggr = moveGenl.cst_moveGenBB(p_state, false);
     const moveB: i64 = @intCast(blackMoveAggr.count());
 
-    const ret: scoreType = mobilityCoef * @as(scoreType, @intCast(moveW - moveB));
+    var ret: scoreType = mobilityCoef * @as(scoreType, @intCast(moveW - moveB));
 
     // counting negative for white as the best safety is not attackers => 0 heuristic
-    //var retSaf: i32 = 0;
-    //const kingWSafety = chess.safetyArea(p_state.wKingSq);
-    //const kingBSafety = chess.safetyArea(p_state.bKingSq);
-    //const bKnightAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.knightMoves));
-    //const bBishopAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.bishopMoves));
-    //const bRookAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.rookMoves));
-    //const bQueenAtt: usize = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.queenMoves));
+    var retSaf: i32 = 0;
+    const kingWSafety = chess.safetyArea(p_state.wKingSq);
+    const kingBSafety = chess.safetyArea(p_state.bKingSq);
+    const bKnightAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.knightMoves));
+    const bBishopAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.bishopMoves));
+    const bRookAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.rookMoves));
+    const bQueenAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.queenMoves));
 
-    //const wKnightAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.knightMoves));
-    //const wBishopAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.bishopMoves));
-    //const wRookAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.rookMoves));
-    //const wQueenAtt: usize = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.queenMoves));
+    const wKnightAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.knightMoves));
+    const wBishopAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.bishopMoves));
+    const wRookAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.rookMoves));
+    const wQueenAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.queenMoves));
 
-    //retSaf -= @intCast(SAFETY_KNIGHT * bKnightAtt + SAFETY_BISHOP * bBishopAtt + SAFETY_ROOK * bRookAtt + SAFETY_QUEEN * bQueenAtt);
-    //retSaf -= @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt)]);
+    retSaf -= @intCast(SAFETY_KNIGHT * bKnightAtt + SAFETY_BISHOP * bBishopAtt + SAFETY_ROOK * bRookAtt + SAFETY_QUEEN * bQueenAtt);
+    retSaf -= @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt))]);
 
-    //retSaf += @intCast(SAFETY_KNIGHT * wKnightAtt + SAFETY_BISHOP * wBishopAtt + SAFETY_ROOK * wRookAtt + SAFETY_QUEEN * wQueenAtt);
-    //retSaf += @intCast(SAFETY_ARR[@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt)]);
-    //ret += @as(scoreType, @intCast(retSaf));
+    retSaf += @intCast(SAFETY_KNIGHT * wKnightAtt + SAFETY_BISHOP * wBishopAtt + SAFETY_ROOK * wRookAtt + SAFETY_QUEEN * wQueenAtt);
+    retSaf += @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt))]);
+    ret += @as(scoreType, @intCast(retSaf));
 
     return ret;
 
@@ -306,8 +306,7 @@ pub fn modifyHeuristicWeight(alloc: std.mem.Allocator, path: []const u8, debug: 
                 continue;
             };
         } else {
-            @panic("");
-            //modifyHeuristicWeight_number(alloc, &s, debug);
+            modifyHeuristicWeight_number(alloc, &s, debug);
         }
     }
 }
@@ -357,38 +356,44 @@ pub fn modifyHeuristicWeight_array(alloc: std.mem.Allocator, s: *string, debug: 
         }
     }
 }
-//pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug: bool) void {
-//    const valuesStr: []const u8 = s.extractFromBounds("=", ";") catch {
-//        return;
-//    };
-//
-//    const val = std.fmt.parseFloat(scoreType, utilsl.stripStr(valuesStr)) catch {
-//        std.debug.print("[ERROR] modifyHeuristicWeight: invalid conversion continuing ({s}) {s}\n", .{ utilsl.stripStr(valuesStr), valuesStr });
-//        return;
-//    };
-//
-//    if (debug) {
-//        std.debug.print("[DEBUG] modifyHeuristicWeight: modifying buffer with following value {d} \n[", .{val});
-//    }
-//
-//    if (s.containsE("pawn", .ignoreCase)) {
-//        pawnScoreArr = buffer;
-//    } else if (s.containsE("knight", .ignoreCase)) {
-//        knightScoreArr = buffer;
-//    } else if (s.containsE("bishop", .ignoreCase)) {
-//        bishopScoreArr = buffer;
-//    } else if (s.containsE("rook", .ignoreCase)) {
-//        rookScoreArr = buffer;
-//    } else if (s.containsE("queen", .ignoreCase)) {
-//        queenScoreArr = buffer;
-//    } else if (s.containsE("king", .ignoreCase)) {
-//        kingScoreArr = buffer;
-//    } else {
-//        if (debug) {
-//            std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token \n[", .{});
-//        }
-//    }
-//}
+pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug: bool) void {
+    const equalIdx = s.findE('=') catch {
+        std.debug.print("[ERROR] modifyHeuristicWeight: could not find = from '{s}'\n", .{s._slice()});
+        return;
+    };
+    const valuesStr = s._slice()[(equalIdx + 1)..];
+    _ = alloc;
+
+    const val = std.fmt.parseFloat(f32, utilsl.stripStr(valuesStr)) catch |err| {
+        std.debug.print("[ERROR] modifyHeuristicWeight {}: invalid conversion continuing ({s}){any} ({s}){any}\n", .{ err, utilsl.stripStr(valuesStr), utilsl.stripStr(valuesStr), valuesStr, valuesStr });
+        return;
+    };
+    const _val: scoreType = @intFromFloat(val);
+
+    if (debug) {
+        std.debug.print("[DEBUG] modifyHeuristicWeight: modifying buffer with following value {d} \n[", .{_val});
+    }
+
+    if (s.containsE("isolatedPawnScore", .ignoreCase)) {
+        globalHeuristic.IsolatedPawnValue = _val;
+    } else if (s.containsE("mobilityScore", .ignoreCase)) {
+        globalHeuristic.MobilityValue = _val;
+    } else if (s.containsE("stackedPawnScore", .ignoreCase)) {
+        globalHeuristic.StackedPawnValue = _val;
+    } else if (s.containsE("safetyKnight", .ignoreCase)) {
+        SAFETY_KNIGHT = _val;
+    } else if (s.containsE("safetyBishop", .ignoreCase)) {
+        SAFETY_BISHOP = _val;
+    } else if (s.containsE("safetyRook", .ignoreCase)) {
+        SAFETY_ROOK = _val;
+    } else if (s.containsE("safetyQueen", .ignoreCase)) {
+        SAFETY_QUEEN = _val;
+    } else {
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token {s}\n", .{s._slice()});
+        }
+    }
+}
 
 pub const heuristicValues = struct {
     // container storing every heuristics/ weights to evaluate a given board
@@ -413,11 +418,11 @@ pub const heuristicValues = struct {
 };
 
 // source: https://www.chessprogramming.org/King_Safety
-const SAFETY_KNIGHT: usize = 20;
-const SAFETY_BISHOP: usize = 20;
-const SAFETY_ROOK: usize = 40;
-const SAFETY_QUEEN: usize = 80;
-const SAFETY_ARR: [8]usize = [8]usize{ 0, 0, 50, 75, 88, 94, 97, 99 };
+var SAFETY_KNIGHT: scoreType = 20;
+var SAFETY_BISHOP: scoreType = 20;
+var SAFETY_ROOK: scoreType = 40;
+var SAFETY_QUEEN: scoreType = 80;
+const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
 const N_PHASES: usize = 2;
 const N_WEIGHTS: usize = 256;
@@ -1115,11 +1120,20 @@ pub fn eval_move_heuristic(move: IMove, ply: u16) scoreType {
         } else if (move.equal(killerMoves[ply][1])) {
             return 80;
         } else {
-            //const w = @intFromEnum(move.getFromPiece()) <= @intFromEnum(e_piece.nWhiteKing);
-            //return historyHeuristic[@intFromBool(w)][move.getFrom()][move.getTo()];
+            if (comptime configl.DEFAULT_USE_HISTORY) {
+                const w = @intFromEnum(move.getFromPiece()) <= @intFromEnum(e_piece.nWhiteKing);
+                return historyHeuristic[@intFromBool(w)][move.getFrom()][move.getTo()];
+            }
         }
     }
     return 0;
+}
+pub fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) void {
+    const _bonus = @max(-configl.MAX_HIST_HEURISTIC_VALUE, @min(configl.MAX_HIST_HEURISTIC_VALUE, bonus));
+    historyHeuristic[@intFromBool(white)][from][to] += _bonus - @divFloor(historyHeuristic[@intFromBool(white)][from][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
+}
+pub inline fn computeHistoryBonus(depth: u16) scoreType {
+    return @intCast(depth * 10);
 }
 pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];

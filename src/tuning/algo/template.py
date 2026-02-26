@@ -80,7 +80,7 @@ class templateSelectionAlgo(object):
 
         for i in range(self.popsize):
             randMask = self.numpyRandomGenerator.random(size = self.objective.nDims)
-            indiv = individual( position = self.snapToCorrectGrid(delta * randMask), uid = i, score = initScore)
+            indiv = individual( position = self.snapToCorrectGrid(self.objective.bounds[:, 0] + delta * randMask), uid = i, score = initScore)
             self.population.append(indiv)
 
     def snapToSteps(self, position: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -181,7 +181,8 @@ class templateSelectionAlgo(object):
         #self.maxiter = valDict.get("maxiter", 1) 
         
         lastFrame = valDict.get("populationHistory", [])
-        #print(lastFrame)
+        self.populationHistory = valDict.get("populationHistory", [])        
+
         if (len(lastFrame) == 0):
             return
         lastFrame = lastFrame[-1]

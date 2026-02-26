@@ -22,6 +22,10 @@ pub const DEFAULT_USEHASHTABLE = true;
 pub const DEFAULT_USETEXEL = false;
 pub const _DEFAULT_USETEXEL = "false";
 
+pub const DEFAULT_USE_NULLPRUNE = false;
+pub const DEFAULT_USE_HISTORY = false;
+pub const MAX_HIST_HEURISTIC_VALUE = 70;
+
 pub const DEFAULT_USEQUIESC = false;
 pub const _DEFAULT_USEQUIESC = "false";
 

@@ -119,7 +119,7 @@ pub fn cst_stringToLERF(sq: *const [2]u8) e_square {
     return @enumFromInt((sq[0] - 'a') + ((sq[1] - '1') * ROW_SIZE));
 }
 pub fn flagPromotionToPiece(flag: u8, white: bool) e_piece {
-    const color_offset = _getColorPieceOffset(white);
+    const color_offset = getColorPieceOffset(white);
     if ((flag == @intFromEnum(e_moveFlags.KNIGHTPROMO)) or (flag == @intFromEnum(e_moveFlags.KNIGHTPROMOCAPTURE))) {
         const piece: u8 = @intFromEnum(e_piece.nWhiteKnight) + color_offset;
         return @enumFromInt(piece);
@@ -279,10 +279,8 @@ pub fn getStrFromPiece(piece: e_piece) u8 {
     return arr_piece_str[@intFromEnum(piece)];
 }
 
-pub fn getBoardFromFen_pieces(alloc: std.mem.Allocator, fen: []const u8) debug_err!Board_state {
-    var ret = getEmptyBoardState(alloc) catch {
-        return debug_err.memErr;
-    };
+pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
+    var ret = getEmptyBoardState();
     var offset: i8 = 0;
     var board_offset = N_SQUARES - 8;
     var commitedRowSize: u8 = 0;
@@ -393,8 +391,7 @@ pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Boar
     if (tokens.items.len < 6) {
         return debug_err.fenErr;
     }
-    //utils.printArrayListTasStr([]const u8, tokens);
-    var board = try getBoardFromFen_pieces(alloc, tokens.items[0]);
+    var board = try getBoardFromFen_pieces(tokens.items[0]);
     _ = getBoardFromFen_turn(&board, tokens.items[1]);
     _ = getBoardFromFen_castle(&board, tokens.items[2]);
     _ = getBoardFromFen_enPassant(&board, tokens.items[3]);
@@ -526,19 +523,7 @@ pub inline fn safetyArea(sq: e_square) u64 {
     return tablel.safetyArea[@intFromEnum(sq)];
 }
 
-pub fn invertColor(color: e_color) e_color {
-    if (color == .WHITE) {
-        return .BLACK;
-    }
-    return .WHITE;
-}
-pub fn getColorPieceOffset(color: e_color) u8 {
-    if (color == .WHITE) {
-        return 0;
-    }
-    return N_PIECES_TYPES;
-}
-pub fn _getColorPieceOffset(white: bool) u8 {
+pub fn getColorPieceOffset(white: bool) u8 {
     if (white) {
         return 0;
     }
@@ -556,15 +541,14 @@ pub const Board_stateContainer = struct {
     }
 };
 
-pub fn getEmptyBoardState(alloc: std.mem.Allocator) !Board_state {
-    return try Board_state.init(alloc);
+pub fn getEmptyBoardState() Board_state {
+    return Board_state.init();
 }
 
 pub const boardFrame = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
     key: hashl.Key = .{},
-
     lastMove: IMove = .{},
     enPassantIdx: u8 = 0,
     halfMoveClock: u8 = 0,
@@ -631,7 +615,7 @@ pub const Board_state = struct {
     seed: u64 = 42,
     //isInit: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator) !Board_state {
+    pub fn init() Board_state {
         var ret: Board_state = undefined;
         @memset(&ret.pieceBB, 0);
         @memset(&ret.c_occupiedBB, 0);
@@ -656,7 +640,6 @@ pub const Board_state = struct {
         ret.stack = .{};
         ret.s_stack = .{};
 
-        _ = alloc;
         // stack vs heap
         //ret.move_history = try alloc.create(matchMoveContainer);
         //ret.stack = try alloc.create(boardStack);
@@ -665,7 +648,7 @@ pub const Board_state = struct {
         //ret.stack.* = .{};
         //ret.s_stack.* = .{};
         //ret.isInit = true;
-        if (useDebug) {
+        if (comptime useDebug) {
             std.debug.print("[DEBUG] from Board_state.init: size of board state: {d} bytes\n", .{@sizeOf(Board_state)});
             std.debug.print("[DEBUG] from Board_state.init: size of stack : {d} bytes\n", .{@sizeOf(boardStack)});
             std.debug.print("[DEBUG] from Board_state.init: size of status stack: {d} bytes\n", .{@sizeOf(board_statusl.statusStack)});
@@ -959,6 +942,46 @@ pub const Board_state = struct {
         p_self.loadFrame(&popped);
         return true;
     }
+    pub fn undoNullMove(p_self: *Board_state) void {
+        if (p_self.whiteToMove()) {
+            p_self.undoNullMove_cst(true);
+        } else {
+            p_self.undoNullMove_cst(false);
+        }
+    }
+    pub fn undoNullMove_cst(p_self: *Board_state, comptime white: bool) void {
+        //
+        p_self.turn_count -= 1;
+        p_self.stat = p_self.s_stack.pop();
+        p_self.loadFrame(&p_self.stack.pop());
+        _ = white;
+    }
+    pub fn makeNullMove(p_self: *Board_state) void {
+        if (p_self.whiteToMove()) {
+            p_self.makeNullMove_cst(true);
+        } else {
+            p_self.makeNullMove_cst(false);
+        }
+    }
+    pub fn makeNullMove_cst(p_self: *Board_state, comptime white: bool) void {
+        //
+        p_self.stack.push(&p_self.makeFrame());
+        p_self.s_stack.push(p_self.stat);
+
+        p_self.victim = .nEmptySquare;
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.playKey);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
+
+        p_self.enPassantIdx = 0;
+        p_self.halfMoveClock = 0;
+
+        p_self.invert_turn();
+        p_self.turn_count += 1;
+        if (comptime useStaged) {
+            getCheckers_cst(p_self, !white);
+        }
+    }
     pub fn makeMove(p_self: *Board_state, move: IMove) void {
         if (p_self.whiteToMove()) {
             p_self.makeMove_cst(move, true);
@@ -1163,9 +1186,9 @@ pub const Board_state = struct {
     }
     pub fn canQueenSideCastleAtt(self: Board_state, white: bool, attackedSquares: u64) bool {
         if (white) {
-            return self.stat.canQueensideCastle(true) and canMove(.e1, .a1, self.occupiedBB) and ((attackedSquares & inBetween(.e1, .a1)) == EMPTY);
+            return self.stat.canQueensideCastle(true) and canMove(.e1, .a1, self.occupiedBB) and ((attackedSquares & inBetween(.e1, .b1)) == EMPTY);
         }
-        return self.stat.canQueensideCastle(false) and canMove(.e8, .a8, self.occupiedBB) and ((attackedSquares & inBetween(.e8, .a8)) == EMPTY);
+        return self.stat.canQueensideCastle(false) and canMove(.e8, .a8, self.occupiedBB) and ((attackedSquares & inBetween(.e8, .b8)) == EMPTY);
     }
 
     pub fn getPieceCount(self: Board_state, piece: e_piece) i8 {
@@ -1179,6 +1202,12 @@ pub const Board_state = struct {
         // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
         const king_attacks = getAllAttackMaskFromKing(p_self, white);
         return king_attacks == 0;
+    }
+    pub fn isChecked(p_self: *Board_state) bool {
+        if (comptime useStaged) {
+            return p_self.checkersBB != 0;
+        }
+        return p_self.isLegal(p_self.whiteToMove());
     }
     pub fn isInsufficientMaterial(p_self: *Board_state) bool {
         if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhitePawn)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) != 0) {

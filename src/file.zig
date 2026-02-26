@@ -91,7 +91,7 @@ pub fn getTokensFromFile(alloc: std.mem.Allocator, path: []const u8, sep: u8) an
         if (size <= 1) {
             continue;
         }
-        const s = string.initFromSlice(alloc, &_buffer) catch {
+        const s = string.initFromSlice(alloc, _buffer[0..size]) catch {
             ret.deinit(alloc);
             return file_err.mem_error;
         };

@@ -33,7 +33,6 @@ pub const openingDatabase = struct {
     size: usize = 0,
 
     rngIntGenerator: std.Random.DefaultPrng = undefined,
-    randInt: std.Random = undefined,
     seed: u64 = 42,
     pub fn init(alloc: std.mem.Allocator, path: *string, seed: u64) !openingDatabase {
         // exemple of an entry
@@ -78,7 +77,6 @@ pub const openingDatabase = struct {
     pub fn setSeed(p_self: *openingDatabase, seed: u64) void {
         p_self.seed = seed;
         p_self.rngIntGenerator.seed(seed);
-        p_self.randInt = p_self.rngIntGenerator.random();
     }
     pub fn free(p_self: *openingDatabase, alloc: std.mem.Allocator) void {
         if (!p_self.initialized) {
@@ -99,6 +97,7 @@ pub const openingDatabase = struct {
         p_self.initialized = false;
     }
     pub fn sample(p_self: *openingDatabase, alloc: std.mem.Allocator, size: usize, flag: outcomeFlag) !std.ArrayList(string) {
+        std.debug.assert(p_self.initialized);
         var drawing: std.ArrayList(string) = undefined;
         switch (flag) {
             .draw => {
@@ -112,9 +111,13 @@ pub const openingDatabase = struct {
             },
         }
         var ret: std.ArrayList(string) = .{};
-        for (0..size) |_| {
-            const randIdx = p_self.randInt.intRangeAtMost(usize, 0, drawing.items.len);
+        std.debug.print("[DEBUG] sample: starting loop\n", .{});
+        var randInt = p_self.rngIntGenerator.random();
+        for (0..size) |i| {
+            const randIdx = randInt.intRangeAtMost(usize, 0, drawing.items.len);
+            //std.debug.print("[DEBUG] sample: index: {d}\n", .{randIdx});
             try ret.append(alloc, drawing.items[randIdx]);
+            _ = i;
         }
         return ret;
     }
@@ -215,6 +218,16 @@ pub fn test_db(path: *string) !void {
         //std.debug.print("{s}\n", .{str._slice()});
     }
 }
+pub fn test_draw(path: *string) !void {
+    var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
+    var openings_1 = try db.sample(GLOBAL_ALLOC, 1, .draw);
+    defer openings_1.deinit(GLOBAL_ALLOC);
+
+    var openings_2 = try db.sample(GLOBAL_ALLOC, 1, .draw);
+    defer openings_2.deinit(GLOBAL_ALLOC);
+    std.debug.print("{s}\n", .{openings_1.items[0]._slice()});
+    std.debug.print("{s}\n", .{openings_2.items[0]._slice()});
+}
 
 pub fn main(path: *string) !void {
     //
@@ -224,11 +237,12 @@ pub fn main(path: *string) !void {
     }
     //try test_read(path);
 
-    var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
-    var openings = try db.sample(GLOBAL_ALLOC, 5, .draw);
-    defer openings.deinit(GLOBAL_ALLOC);
-    for (openings.items) |*str| {
-        defer str.free(GLOBAL_ALLOC);
-        std.debug.print("{s}\n", .{str._slice()});
-    }
+    try test_draw(path);
+    //var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
+    //var openings = try db.sample(GLOBAL_ALLOC, 5, .draw);
+    //defer openings.deinit(GLOBAL_ALLOC);
+    //for (openings.items) |*str| {
+    //    defer str.free(GLOBAL_ALLOC);
+    //    std.debug.print("{s}\n", .{str._slice()});
+    //}
 }

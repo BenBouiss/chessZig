@@ -1,24 +1,27 @@
 [engine1]
-path="engines/bin/engine_22_02_26_tourney";
-name="1";
+path="zig-out/bin/engine";
+name="hist off";
+//"debug on";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value true";
 "setoption name useHash value false";
-"setoption name useTexel value false";
+"setoption name useQuiescence value true";
 
 [engine2]
-path="engines/bin/engine_22_02_26_tourney";
-name="2";
+path="zig-out/bin/engine";
+name="hist on";
+//"debug on";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value true";
 "setoption name useHash value false";
-"setoption name useTexel value false";
 
 [match]
-nMatch=1;
+nMatch=2;
 playerSwitch=true;
 debugMode=false;
-useOpeningBook=false;
+useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-logsLocation="logs/tourney";
+
+logsLocation="logs/ben/ben";
+//saveLogs=true;
 
