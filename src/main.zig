@@ -98,10 +98,10 @@ pub fn main() anyerror!void {
     //try test_speed();
     //try heuristicl.main();
     //try chessl.main();
-    try test_bug();
+    //try test_bug();
     //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
     //Jdefer path.free(GLOBAL_ALLOC);
     //Jtry bookl.main(&path);
 
-    //try benchl.main();
+    try benchl.main();
 }

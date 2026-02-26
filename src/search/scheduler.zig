@@ -56,7 +56,7 @@ pub const uciSearcher = struct {
 pub const moveDecisionExt = struct {
     move: IMove = .{},
     scoring: scoreType = 0,
-    line: movel.lineContainer = .{},
+    line: movel.line = .{},
     pub fn invertScore(p_self: *moveDecisionExt) void {
         p_self.scoring = -p_self.scoring;
     }
@@ -189,7 +189,7 @@ pub const scheduler = struct {
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
         const n_nodes: i64 = @intCast(res.n_nodeExplored);
 
-        const final_info = std.fmt.allocPrint(p_self.alloc, "info depth {d} score cp {d} nodes {d} currmove {s}", .{ p_self.searchDepth, decision.scoring, n_nodes, decision.move.getStr() }) catch unreachable;
+        const final_info = std.fmt.allocPrint(p_self.alloc, "info depth {d} score cp {d} nodes {d} currmove {s} pv {f}", .{ p_self.searchDepth, decision.scoring, n_nodes, utilsl.trimStr(&decision.move.getStr()), decision.line }) catch unreachable;
         defer p_self.alloc.free(final_info);
         p_self.p_engine.respond(utilsl.trimStr(final_info));
     }
