@@ -79,9 +79,29 @@ pub fn test_speed() !void {
     eng.executeBuffer("go depth 6");
     waitOnEngine(&eng);
 }
+pub fn test_bug() !void {
+    initAll(false);
+    var eng = try initEngine();
+    defer eng.free();
+    eng.executeBuffer("setoption name UCI_elo value 3000");
+    eng.executeBuffer("setoption name fixedDepth value true");
+    eng.executeBuffer("setoption name useHash value false");
+    //eng.executeBuffer("setoption name useQuiescence value true");
+    eng.executeBuffer("ucinewgame");
+    eng.executeBuffer("position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0");
+    eng.executeBuffer("isready");
+    eng.executeBuffer("go wtime 300000 btime 300000 winc 5000 binc 5000");
+    waitOnEngine(&eng);
+}
 
 pub fn main() anyerror!void {
     //try test_speed();
     //try heuristicl.main();
-    try chessl.main();
+    //try chessl.main();
+    try test_bug();
+    //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
+    //Jdefer path.free(GLOBAL_ALLOC);
+    //Jtry bookl.main(&path);
+
+    //try benchl.main();
 }

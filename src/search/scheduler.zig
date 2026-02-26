@@ -212,8 +212,13 @@ pub const scheduler = struct {
         }
         std.debug.assert(depth != 0);
         p_self.timeM.startSearchTick();
-        for (depthComs.*) |*com| {
-            com.setDepth(depth);
+
+        //for (depthComs.*) |*com| {
+        //    com.setDepth(depth);
+        //}
+        for (0..p_self.p_threadPack.len) |i| {
+            p_self.p_threadPack.items(._tInfo)[i].working = true;
+            depthComs.*[i].setDepth(depth);
         }
     }
     pub fn getSearchStatus(p_self: *scheduler) searchStatus {
@@ -223,7 +228,8 @@ pub const scheduler = struct {
         }
         searcher.endCounter = 0;
         for (0..p_self.p_threadPack.len) |i| {
-            searcher.endCounter += @intFromBool(!p_self.p_threadPack.items(._tInfo)[i].working);
+            const info: threadingl.threadInfo = p_self.p_threadPack.items(._tInfo)[i];
+            searcher.endCounter += @intFromBool(!info.working);
         }
         if (searcher.endCounter == p_self.p_threadPack.len) {
             return .FINISHED;
@@ -238,6 +244,9 @@ pub const scheduler = struct {
             p_self.p_threadPack.items(._tInfo)[i].alive = false;
         }
         threadingl.joinOnThreadPack(p_self.p_threadPack);
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] handleInterrupt: finished\n", .{});
+        }
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) void {
         if (p_self.canIncreaseDepth) {
@@ -258,6 +267,7 @@ pub const scheduler = struct {
         };
         defer p_self.alloc.free(coms);
 
+        p_self.searchDepth = depth;
         p_self.startSearch(depth, &coms);
 
         var decision: moveDecisionExt = .{};
@@ -274,17 +284,13 @@ pub const scheduler = struct {
             count += 1;
             const stat = p_self.getSearchStatus();
 
+            //std.debug.print("{}\n", .{stat});
+
             if (stat == .INTERRUPTED) {
                 p_self.handleInterrupt();
                 break;
             } else if (stat == .FINISHED) {
-                const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
-                const n_nodes: i64 = @intCast(res.n_nodeExplored);
-                if (n_nodes == 0) {
-                    continue;
-                }
                 decision = p_self.extractBest();
-
                 p_self.handleInterrupt();
                 break;
             } else if (stat == .CONTINUE) {

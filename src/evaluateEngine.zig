@@ -11,6 +11,7 @@ const squarel = @import("square.zig");
 const bookl = @import("book.zig");
 const filel = @import("file.zig");
 const heuristicl = @import("heuristic.zig");
+const mathl = @import("math.zig");
 
 const stringl = @import("string.zig");
 const std = @import("std");
@@ -50,6 +51,7 @@ const matchResultsBench = struct {
     draw: u8 = 0,
     flagged: u8 = 0,
     avgTimePerTurn: i64 = 0,
+    stdTimePerTurn: i64 = 0,
     nMatch: u8 = 0,
     finalFen: string = undefined,
     pub fn getScore(self: *matchResultsBench) scoreType {
@@ -98,7 +100,7 @@ const matchResultContainer = struct {
             for (match.playerInv[i].timeTaken.items) |time| {
                 timeTaken += time;
             }
-
+            p_self.items[currEng].stdTimePerTurn = mathl.computeStandardDeviation(i64, match.playerInv[i].timeTaken.items);
             p_self.items[currEng].avgTimePerTurn = @divFloor(timeTaken, @as(i64, @intCast(match.playerInv[i].timeTaken.items.len + 1)));
         }
         const lineString = try match.chessState.move_history.getLineString(alloc);
@@ -122,7 +124,7 @@ const matchResultContainer = struct {
         for (0..2) |i| {
             const engIdx = match.playerInv[i].engineUsed;
             const res = p_self.items[engIdx];
-            const scoreStr = try std.fmt.allocPrint(alloc, "engine: {s}, {d} matches, win: {d}, lose: {d}, draw: {d}, flagged: {d}, speed: {d} ms/move;\n", .{ settings.engineNames[engIdx]._slice(), res.nMatch, res.win, res.lose, res.draw, res.flagged, res.avgTimePerTurn });
+            const scoreStr = try std.fmt.allocPrint(alloc, "engine: {s}, {d} matches, win: {d}, lose: {d}, draw: {d}, flagged: {d}, speed: {d}(+-{d}) ms/move;\n", .{ settings.engineNames[engIdx]._slice(), res.nMatch, res.win, res.lose, res.draw, res.flagged, res.avgTimePerTurn, res.stdTimePerTurn });
             defer alloc.free(scoreStr);
             _ = try file.write(scoreStr);
         }
@@ -499,6 +501,7 @@ const guiState = struct {
             },
             .INFO => {
                 p_self.engineInventory.items.items[cmdBuffer.engine].alive = true;
+                p_self.executeInfoCmd(cmdBuffer);
                 return true;
             },
             .BESTMOVE => {
@@ -694,6 +697,10 @@ const guiState = struct {
         }
         return true;
     }
+    pub fn executeInfoCmd(p_self: *guiState, cmdBuffer: signedCmd) void {
+        _ = p_self;
+        std.debug.print("{d}: {s}\n", .{ cmdBuffer.engine, cmdBuffer.str });
+    }
     pub fn executeOptionCmd(p_self: *guiState, cmdBuffer: signedCmd) bool {
         var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer.str, ' ') catch {
             return false;
@@ -819,7 +826,12 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
 fn matchRoutine(p_self: *guiState) !void {
     try p_self.respondAll("setoption name clearhash");
     if (p_self.config.match.useOpeningBook and p_self.config.match.openingBookPathProvided) {
-        var openings = try p_self.config.match.openingDb.sample(p_self.alloc, 1, .draw);
+        if (p_self.config.debugMode) {
+            std.debug.print("[DEBUG] matchRoutine: Picking an opening from len {d}\n", .{p_self.config.match.openingDb.drawnEntries.items.len});
+        }
+        var openings = p_self.config.match.openingDb.sample(p_self.alloc, 1, .draw) catch {
+            @panic("");
+        };
         if (p_self.config.debugMode) {
             std.debug.print("[DEBUG] matchRoutine: opening picked: {s}\n", .{openings.items[0]._slice()});
         }

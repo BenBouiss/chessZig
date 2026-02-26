@@ -64,7 +64,7 @@ save format?
     - popsize: {d};
     - bounds: [[{f}, {f}], ..., [{f}, {f}]];
     - steps: [[{f}], ..., [{f}]];
-    - fmtCode: {s}; // to be used to diffenrentiate in the MH population => chess population
+    - fmtCode: {s}; // to be used to differentiate in the MH population => chess population
         - ex: f64_f64_f64_f64_f64_f64
     - populationHistory: [[indiv1, ..., indivN](0) .... [indiv1, ..., indivN](iter)];
         - Indiv fmt: [position: [{f}, {f}, ..., {f}], uid: {d}, score: {f}]

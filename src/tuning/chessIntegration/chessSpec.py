@@ -42,63 +42,36 @@ class score:
     def __repr__(self) -> str:
         return f"win: {self.win} lose: {self.lose} draw: {self.draw} score: {self.getScore()}"
 
-def weightFileToHeuristicEntry(path: str) -> heuristicEntry:
-    ret: heuristicEntry = heuristicEntry()
-    with open(path, "r") as file:
-        for line in file.readlines():
-            if not line:
-                continue
-            leftBorder = line.find("[")
-            rightBorder = line.find("]")
-            if (leftBorder == -1 or rightBorder == -1):
-                continue
-            tokenList = line[leftBorder+1:rightBorder].split(",")
-            floatList = [float(x) for x in tokenList]
-            if line.startswith("pawn"):
-                ret.pawnScoreArr = np.array(floatList, dtype = float)
-            elif line.startswith("bishop"):
-                ret.bishopScoreArr = np.array(floatList, dtype = float)
-            elif line.startswith("knight"):
-                ret.knightScoreArr = np.array(floatList, dtype = float)
-            elif line.startswith("rook"):
-                ret.rookScoreArr = np.array(floatList, dtype = float)
-            elif line.startswith("queen"):
-                ret.queenScoreArr = np.array(floatList, dtype = float)
-            elif line.startswith("king"):
-                ret.kingScoreArr = np.array(floatList, dtype = float)
-        return ret
-
 
 class heuristicEntry:
-    simpleMobilityScore: float
-    simpleIsolatedPawnScore: float
-    simpleStackedPawnScore: float
+    mobilityScore: float
+    isolatedPawnScore: float
+    stackedPawnScore: float
+    passedPawnScore: float
 
-    pawnScoreArr: npt.NDArray[np.float64]
-    bishopScoreArr: npt.NDArray[np.float64]
-    knightScoreArr: npt.NDArray[np.float64]
-    rookScoreArr: npt.NDArray[np.float64]
-    queenScoreArr: npt.NDArray[np.float64]
-    kingScoreArr: npt.NDArray[np.float64]
-
+    # safeties? 
+    safetyKnight: float
+    safetyBishop: float
+    safetyRook: float
+    safetyQueen: float
     def __init__(self):
         pass
         
-    def printAll(self): 
-        print(f"All the scores: {self.simpleMobilityScore} {self.simpleIsolatedPawnScore} {self.simpleStackedPawnScore}")
-        print(self.pawnScoreArr)
-
     def saveToFile(self, path: str) -> None:
+        # scalar value
+        # simpleStackedPawnScore: {d};
         with open(path, "w") as file:
-            file.write(f"pawnScoreArr: {self.pawnScoreArr.tolist()};\n")
-            file.write(f"bishopScoreArr: {self.bishopScoreArr.tolist()};\n")
-            file.write(f"knightScoreArr: {self.knightScoreArr.tolist()};\n")
-            file.write(f"rookScoreArr: {self.rookScoreArr.tolist()};\n")
-            file.write(f"queenScoreArr: {self.queenScoreArr.tolist()};\n")
-            file.write(f"kingScoreArr: {self.kingScoreArr.tolist()};\n")
+            file.write(f"isolatedPawnScore = {self.isolatedPawnScore};\n")
+            file.write(f"mobilityScore = {self.mobilityScore};\n")
+            file.write(f"stackedPawnScore = {self.stackedPawnScore};\n")
 
-    def getPosition(self) -> list[npt.ArrayLike]:
-        return [self.pawnScoreArr, self.bishopScoreArr, self.knightScoreArr, self.rookScoreArr, self.queenScoreArr, self.kingScoreArr]
+            file.write(f"safetyKnight = {self.safetyKnight};\n")
+            file.write(f"safetyBishop = {self.safetyBishop};\n")
+            file.write(f"safetyRook = {self.safetyRook};\n")
+            file.write(f"safetyQueen = {self.safetyQueen};\n")
+
+    def getPosition(self) -> list[typing.Any]:
+        return [self.isolatedPawnScore, self.mobilityScore, self.stackedPawnScore]
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
         return np.concatenate(self.getPosition())

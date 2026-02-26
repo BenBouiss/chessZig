@@ -28,11 +28,11 @@ test "en passant checking" {
     std.debug.print("[TEST]: En passant checking passed\n", .{});
 }
 
-test "perft" {
+test "perft - startpos" {
     mainl.initAll(false);
     const perft_THREAD = 1;
     const perft_BATCHED = true;
-    const perft_MAX_DEPTH = 6;
+    const perft_MAX_DEPTH = 7;
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
     //try std.testing.expect(!hashl.isHashTable_init());
     for (1..perft_MAX_DEPTH + 1) |depth| {
@@ -49,6 +49,27 @@ test "perft" {
 
     std.debug.print("[TEST]: Perft checks passed\n", .{});
 }
+//test "perft - Kiwipete" {
+//    mainl.initAll(false);
+//    const perft_THREAD = 1;
+//    const perft_BATCHED = true;
+//    const perft_MAX_DEPTH = 6;
+//    var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, benchmarkl.KIWIPETE_FEN);
+//    //try std.testing.expect(!hashl.isHashTable_init());
+//    for (1..perft_MAX_DEPTH + 1) |depth| {
+//        const _start: i64 = std.time.microTimestamp();
+//        const res = perftl.perftThreadStart(&board, @intCast(depth), perft_THREAD, perft_BATCHED) catch {
+//            std.debug.print("[PANIC]: Error when launching perft\n", .{});
+//            @panic("");
+//        };
+//        const expect: i64 = @intCast(res.n_nodeExplored);
+//        //try std.testing.expectEqual(expect, benchmarkl.ExpectedPerftResKiwipete[depth]);
+//        const _stop = std.time.microTimestamp();
+//        std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(_stop - _start, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, 1 + (_stop - _start)) });
+//    }
+//
+//    std.debug.print("[TEST]: Perft kiwipete checks passed\n", .{});
+//}
 
 test "book algebraic" {
     mainl.initAll(false);

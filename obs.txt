@@ -81,3 +81,32 @@ move ordering and alpha beta pruning performance:
 	- added killer move, somewhat better
 	engine: normal, 2 matches, win: 0, lose: 1, draw: 1, flagged: 0, speed: 1418 ms/move;
 	engine: quiescence, 2 matches, win: 1, lose: 0, draw: 1, flagged: 0, speed: 1598 ms/move;
+
+compile time search params vs struct of all params:
+	difference of .info
+	compiletime
+	[engine1]
+	path="engines/bin/engine_22_02_26_cpltime";
+	vs
+	[engine1]
+	path="engines/bin/engine_22_02_26_cpltime";
+	___
+	
+	compiletime_var
+	[engine1]
+	path="engines/bin/engine_22_02_26_var";
+	vs
+	[engine2]
+	path="engines/bin/engine_22_02_26_var";
+
+	difference of match logs
+
+	compiletime
+	engine: normal, 2 matches, win: 0, lose: 2, draw: 0, flagged: 0, speed: 659 ms/move;
+	engine: quiescence, 2 matches, win: 2, lose: 0, draw: 0, flagged: 0, speed: 1253 ms/move;
+	___
+	engine: normal, 2 matches, win: 0, lose: 2, draw: 0, flagged: 0, speed: 656 ms/move;
+	engine: quiescence, 2 matches, win: 2, lose: 0, draw: 0, flagged: 0, speed: 1316 ms/move;
+
+	very little impact on performance therefore the "chain" call or somewhat "currying" of the alpha beta search feature is removed to just a call with a *const searchFeatures
+
