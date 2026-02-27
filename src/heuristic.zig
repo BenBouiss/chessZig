@@ -9,6 +9,7 @@ const weightl = @import("weights.zig");
 const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const movel = @import("move.zig");
+const schedulerl = @import("search/scheduler.zig");
 
 const std = @import("std");
 
@@ -18,6 +19,7 @@ const string = stringl.string;
 const IMove = movel.IMove;
 pub const scoreType: type = i32;
 pub const weightType: type = i32;
+const searchFeatures = schedulerl.searchFeatures;
 
 pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
     var score: scoreType = 0;
@@ -1109,8 +1111,35 @@ pub fn _initMoveOrdering() void {
     historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
     killerMoves = undefined;
 }
-
-pub fn eval_move_heuristic(move: IMove, ply: u16) scoreType {
+pub fn eval_move_heuristic_line(move: IMove, ply: u16, prevLine: *const movel.line) scoreType {
+    if (move.equal(prevLine.moves[ply])) {
+        // previous best move at that ply
+        return configl.ORDERING_LINE_VALUE;
+    }
+    if (move.isCapture()) {
+        return mvv_lva[@intFromEnum(move.getFromPiece())][@intFromEnum(move.getCapturePiece())];
+    } else {
+        //
+        if (move.equal(killerMoves[ply][0])) {
+            return 90;
+        } else if (move.equal(killerMoves[ply][1])) {
+            return 80;
+        } else {
+            if (comptime configl.DEFAULT_USE_HISTORY) {
+                const w = @intFromEnum(move.getFromPiece()) <= @intFromEnum(e_piece.nWhiteKing);
+                return historyHeuristic[@intFromBool(w)][move.getFrom()][move.getTo()];
+            }
+        }
+    }
+    return 0;
+}
+pub fn eval_move_heuristic(move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool) scoreType {
+    if (comptime useLine) {
+        return eval_move_heuristic_line(move, ply, prevLine);
+    }
+    return eval_move_heuristic_std(move, ply);
+}
+pub fn eval_move_heuristic_std(move: IMove, ply: u16) scoreType {
     if (move.isCapture()) {
         return mvv_lva[@intFromEnum(move.getFromPiece())][@intFromEnum(move.getCapturePiece())];
     } else {
@@ -1138,17 +1167,23 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16) [chess.MAX_POSSIBLE_MOVE]usize {
+pub fn cst_eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool) [chess.MAX_POSSIBLE_MOVE]usize {
     var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     for (0..p_moves.len) |i| {
         ret[i] = i;
-        scores[i] = eval_move_heuristic(p_moves.moves[i], ply);
+        scores[i] = eval_move_heuristic(p_moves.moves[i], ply, prevLine, useLine);
     }
     std.mem.sort(usize, ret[0..p_moves.len], scores, cmp_eval_move);
     return ret;
 }
 
+pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures) [chess.MAX_POSSIBLE_MOVE]usize {
+    if (p_feature.usingIncrementalSearch) {
+        return cst_eval_move_sorting_mask(p_moves, ply, prevLine, true);
+    }
+    return cst_eval_move_sorting_mask(p_moves, ply, prevLine, false);
+}
 pub fn main() !void {
     try sanityCheck();
     //try test_main();

@@ -29,6 +29,7 @@ pub fn getScoreMaskFromTurn(white: bool) scoreType {
 }
 pub const depthCommunication = struct {
     depth: u16 = 0,
+    line: movel.line = .{},
     depthSet: bool = false,
     lock: bool = false,
     pub fn acquireLock(p_self: *depthCommunication) void {
@@ -53,6 +54,11 @@ pub const depthCommunication = struct {
         p_self.depthSet = true;
         p_self.releaseLock();
     }
+    pub fn setLine(p_self: *depthCommunication, line: *const movel.line) void {
+        p_self.acquireLock();
+        p_self.line = line.*;
+        p_self.releaseLock();
+    }
 };
 
 pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depthCom: *depthCommunication, feat: searchFeatures) void {
@@ -70,14 +76,14 @@ pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.A
         }
         std.debug.print("starting search {} depth\n", .{depthCom.depth});
         depthCom.depthSet = false;
-        if (searchEntrypoint(p_state, p_startingMoves, p_info, depthCom.depth, &feat) == 1) {
+        if (searchEntrypoint(p_state, p_startingMoves, p_info, depthCom.depth, &feat, &depthCom.line) == 1) {
             std.debug.print("[ERROR] alphaBetaWaitingRoom: Exiting main thread\n", .{});
             break;
         }
     }
 }
 
-pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_feature: *const searchFeatures) i8 {
+pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_feature: *const searchFeatures, prevLine: *const movel.line) i8 {
     p_info.working = true;
     defer p_info.working = false;
     const alpha: scoreType = -weightl.simpleCheckMateScore;
@@ -89,7 +95,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 
         p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, p_feature, 1, &pv);
+        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, p_feature, 1, &pv, prevLine);
 
         _ = p_state.undoMove();
 
@@ -107,7 +113,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     // 1 is error
     return 1;
 }
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_feature: *const searchFeatures, ply: u16, pv: *pvContainer) scoreType {
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_feature: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line) scoreType {
     pv.setLen(ply);
     if (p_state.isStaleMateRepetition()) {
         if (p_feature.useHash) {
@@ -161,7 +167,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     //}
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply);
+    const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_feature);
     var finalScore: scoreType = 0;
     for (0..fmoves.len) |i| {
         const idx = indexes[i];
@@ -169,7 +175,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 
         _ = p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_feature, ply + 1, pv);
+        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_feature, ply + 1, pv, prevLine);
 
         _ = p_state.undoMove();
 
@@ -222,7 +228,8 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         _alpha = best_value;
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves_ordered(p_state, true);
-    const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply);
+
+    const indexes = heuristicl.cst_eval_move_sorting_mask(&fmoves, ply, undefined, false);
     for (0..fmoves.len) |i| {
         const idx = indexes[i];
         const move: IMove = fmoves.moves[idx];
