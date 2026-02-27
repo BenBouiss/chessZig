@@ -5,14 +5,16 @@ name="fixed depth";
 "setoption name fixedDepth value true";
 "setoption name useHash value false";
 "setoption name useTexel value false";
+"setoption name useQuiescence value true";
 
 [engine2]
 path="zig-out/bin/engine";
 name="line ordering";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+"setoption name fixedDepth value true";
 "setoption name useHash value false";
 "setoption name useTexel value false";
+"setoption name useQuiescence value false";
 
 [match]
 nMatch=4;

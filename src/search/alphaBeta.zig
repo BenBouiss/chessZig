@@ -83,7 +83,7 @@ pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.A
     }
 }
 
-pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_feature: *const searchFeatures, prevLine: *const movel.line) i8 {
+pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const searchFeatures, prevLine: *const movel.line) i8 {
     p_info.working = true;
     defer p_info.working = false;
     const alpha: scoreType = -weightl.simpleCheckMateScore;
@@ -95,7 +95,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 
         p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, p_feature, 1, &pv, prevLine);
+        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, p_features, 1, &pv, prevLine);
 
         _ = p_state.undoMove();
 
@@ -113,10 +113,10 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     // 1 is error
     return 1;
 }
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_feature: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line) scoreType {
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line) scoreType {
     pv.setLen(ply);
     if (p_state.isStaleMateRepetition()) {
-        if (p_feature.useHash) {
+        if (p_features.useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
             _ = hashl.hashTable.storeEntry(&s_entry);
             // might be useful for late game
@@ -128,13 +128,14 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 
     if (depth <= 0 or !p_info.alive) {
         p_info.n_nodeExplored += 1;
-        if (p_feature.useQuiescence) {
-            if (p_state.getLastMove().isCapture() or p_state.isChecked()) {
+        if (p_features.useQuiescence) {
+            const ischeck = p_state.isChecked();
+            if (p_state.getLastMove().isCapture() or ischeck) {
                 // perform quiesc
-                return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply);
+                return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine);
             }
         }
-        if (p_feature.useTexelEvaluation) {
+        if (p_features.useTexelEvaluation) {
             const score = color_mask * heuristicl.texelEvaluation(p_state);
             return score;
         } else {
@@ -143,7 +144,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
     }
 
-    if (p_feature.useHash) {
+    if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
         if (entry.valid) {
             p_info.n_hashRetrieve += 1;
@@ -158,7 +159,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     //    const R: u16 = 2 + 1;
     //    if (depth > R) {
     //        p_state.makeNullMove();
-    //        const score = -searchLoop(p_state, p_info, depth - 1 - R, -beta, -_alpha, p_feature, ply + 1 + R);
+    //        const score = -searchLoop(p_state, p_info, depth - 1 - R, -beta, -_alpha, p_features, ply + 1 + R);
     //        p_state.undoNullMove();
     //        if (score >= beta) {
     //            return beta;
@@ -167,7 +168,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     //}
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_feature);
+    const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features);
     var finalScore: scoreType = 0;
     for (0..fmoves.len) |i| {
         const idx = indexes[i];
@@ -175,7 +176,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 
         _ = p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_feature, ply + 1, pv, prevLine);
+        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine);
 
         _ = p_state.undoMove();
 
@@ -205,14 +206,15 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             finalScore = weightl.simpleStalemateScore;
         }
     }
-    if (p_feature.useHash) {
+    if (p_features.useHash) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), color_mask * finalScore);
         _ = hashl.hashTable.storeEntry(&s_entry);
     }
     return finalScore;
 }
-pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16) scoreType {
+pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, wasChecked: bool, pv: *pvContainer, prevLine: *const movel.line) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
+    pv.setLen(ply);
     var _alpha = alpha;
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
@@ -229,7 +231,8 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves_ordered(p_state, true);
 
-    const indexes = heuristicl.cst_eval_move_sorting_mask(&fmoves, ply, undefined, false);
+    //const indexes = heuristicl.cst_eval_move_sorting_mask(&fmoves, ply, undefined, false);
+    const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features);
     for (0..fmoves.len) |i| {
         const idx = indexes[i];
         const move: IMove = fmoves.moves[idx];
@@ -239,22 +242,22 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         // if move nor capture nor checking
         // problem here where a checking sequence ie
         // black checked -> white not checked nor capture = end of quiescence, the search might need to continue
-        if (!move.isCapture() and !p_state.isChecked()) {
+        if (!move.isCapture() and !wasChecked) {
             _ = p_state.undoMove();
             continue;
         }
-        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1);
+        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, wasChecked, pv, prevLine);
 
         _ = p_state.undoMove();
-
+        if (score > best_value) {
+            best_value = score;
+        }
         if (score >= beta) {
             return score;
         }
         if (score > _alpha) {
             _alpha = score;
-        }
-        if (score > best_value) {
-            best_value = score;
+            pv.onBestMove(move, ply);
         }
     }
     return best_value;
