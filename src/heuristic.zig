@@ -17,14 +17,22 @@ const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
 const string = stringl.string;
 const IMove = movel.IMove;
+const moveBBState = movel.moveBBState;
 pub const scoreType: type = i32;
 pub const weightType: type = i32;
 const searchFeatures = schedulerl.searchFeatures;
 
 pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
+    const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
+    const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
+
     var score: scoreType = 0;
     score += evaluate_PSQT(p_state, values);
-    score += evaluate_mobility(p_state, values.MobilityValue);
+    score += evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values.MobilityValue);
+    score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values);
+    score += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values);
     score += evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue, values.PassedPawnValue);
     return score;
 }
@@ -33,15 +41,30 @@ pub const heuristicComponents = struct {
     PSQT: scoreType = 0,
     Mobility: scoreType = 0,
     PawnStruct: scoreType = 0,
+    Safety: scoreType = 0,
+    Structure: scoreType = 0,
     pub fn total(self: *const heuristicComponents) scoreType {
-        return self.PSQT + self.Mobility + self.PawnStruct;
+        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure;
     }
     pub fn print(self: *const heuristicComponents) void {
-        std.debug.print("Score: PQST = {d}, Mobility = {d}, PawnStruct = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.total() });
+        std.debug.print("Score: PQST = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.total() });
     }
 };
 pub fn evaluate_debug(p_state: *chess.Board_state, values: *heuristicValues) heuristicComponents {
-    return .{ .PSQT = evaluate_PSQT(p_state, values), .Mobility = evaluate_mobility(p_state, values.MobilityValue), .PawnStruct = evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue, values.PassedPawnValue) };
+    const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
+    const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
+    const ret: heuristicComponents = .{
+        .PSQT = evaluate_PSQT(p_state, values),
+        .Mobility = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values.MobilityValue),
+
+        .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values),
+        .Structure = evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values),
+
+        .PawnStruct = evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue, values.PassedPawnValue),
+    };
+    return ret;
 }
 
 pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
@@ -110,45 +133,55 @@ pub fn evaluate_pawnStructure(p_state: *chess.Board_state, isolatedCoef: scoreTy
     const passedPawnScore = passedCoef * @as(scoreType, @intCast(nWhitePassed - nBlackPassed));
     return doubledPawnScore + isolatedScore + passedPawnScore;
 }
-pub fn evaluate_mobility(p_state: *chess.Board_state, mobilityCoef: scoreType) scoreType {
+pub fn evaluate_mobility(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, mobilityCoef: scoreType) scoreType {
     // going to use "raw" mobility only taking board coverage
     // now trying with only legals
-    const whiteMoveAggr = moveGenl.cst_moveGenBB(p_state, true);
-    const moveW: i64 = @intCast(whiteMoveAggr.count());
+    _ = p_state;
+    const moveW: i64 = @intCast(p_whiteMoveBB.count());
 
-    const blackMoveAggr = moveGenl.cst_moveGenBB(p_state, false);
-    const moveB: i64 = @intCast(blackMoveAggr.count());
+    const moveB: i64 = @intCast(p_blackMoveBB.count());
 
-    var ret: scoreType = mobilityCoef * @as(scoreType, @intCast(moveW - moveB));
-
-    // counting negative for white as the best safety is not attackers => 0 heuristic
-    var retSaf: i32 = 0;
-    const kingWSafety = chess.safetyArea(p_state.wKingSq);
-    const kingBSafety = chess.safetyArea(p_state.bKingSq);
-    const bKnightAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.knightMoves));
-    const bBishopAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.bishopMoves));
-    const bRookAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.rookMoves));
-    const bQueenAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & blackMoveAggr.queenMoves));
-
-    const wKnightAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.knightMoves));
-    const wBishopAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.bishopMoves));
-    const wRookAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.rookMoves));
-    const wQueenAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & whiteMoveAggr.queenMoves));
-
-    retSaf -= @intCast(SAFETY_KNIGHT * bKnightAtt + SAFETY_BISHOP * bBishopAtt + SAFETY_ROOK * bRookAtt + SAFETY_QUEEN * bQueenAtt);
-    retSaf -= @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt))]);
-
-    retSaf += @intCast(SAFETY_KNIGHT * wKnightAtt + SAFETY_BISHOP * wBishopAtt + SAFETY_ROOK * wRookAtt + SAFETY_QUEEN * wQueenAtt);
-    retSaf += @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt))]);
-    ret += @as(scoreType, @intCast(retSaf));
-
-    return ret;
+    return mobilityCoef * @as(scoreType, @intCast(moveW - moveB));
 
     // these are insanely expensive
     //const moveW = moveGenl.generateMoveCountLegalMoves(p_state, true);
     //const moveB = moveGenl.generateMoveCountLegalMoves(p_state, false);
     //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
 }
+pub fn evaluate_safety(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues) scoreType {
+    // counting negative for white as the best safety is not attackers => 0 heuristic
+    var retSaf: scoreType = 0;
+    const kingWSafety = chess.safetyArea(p_state.wKingSq);
+    const kingBSafety = chess.safetyArea(p_state.bKingSq);
+    const bKnightAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & p_blackMoveBB.knightMoves));
+    const bBishopAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & p_blackMoveBB.bishopMoves));
+    const bRookAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & p_blackMoveBB.rookMoves));
+    const bQueenAtt: scoreType = @intCast(chess.l_popcount(kingWSafety & p_blackMoveBB.queenMoves));
+
+    const wKnightAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & p_whiteMoveBB.knightMoves));
+    const wBishopAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & p_whiteMoveBB.bishopMoves));
+    const wRookAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & p_whiteMoveBB.rookMoves));
+    const wQueenAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & p_whiteMoveBB.queenMoves));
+
+    retSaf += @intCast(values.SafetyKnightValue * wKnightAtt + values.SafetyBishopValue * wBishopAtt + values.SafetyRookValue * wRookAtt + values.SafetyQueenValue * wQueenAtt);
+    retSaf -= @intCast(values.SafetyKnightValue * bKnightAtt + values.SafetyBishopValue * bBishopAtt + values.SafetyRookValue * bRookAtt + values.SafetyQueenValue * bQueenAtt);
+
+    // white is advantaged from a high safety_arr index, more =wPieceAtt are present in the black king vicinity thus it should be counted as positive
+    retSaf += @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt))]);
+    retSaf -= @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt))]);
+    return retSaf;
+}
+pub fn evaluate_structure(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues) scoreType {
+    var ret: scoreType = 0;
+
+    // structure protection,
+    // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
+    const w_pieceProtect = p_whiteMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.wKingSq));
+    const b_pieceProtect = p_blackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
+    ret += @as(scoreType, @intCast(w_pieceProtect.count() - b_pieceProtect.count())) * values.StructureProtectionValue;
+    return ret;
+}
+
 pub fn epieceToHeuristic(piece: e_piece, values: *heuristicValues) scoreType {
     switch (piece) {
         .nEmptySquare, .nWhite, .nBlack, .nWhiteKing, .nBlackKing => {
@@ -376,20 +409,24 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
         std.debug.print("[DEBUG] modifyHeuristicWeight: modifying buffer with following value {d} \n[", .{_val});
     }
 
-    if (s.containsE("isolatedPawnScore", .ignoreCase)) {
+    if (s.containsE("isolatedPawn", .ignoreCase)) {
         globalHeuristic.IsolatedPawnValue = _val;
-    } else if (s.containsE("mobilityScore", .ignoreCase)) {
+    } else if (s.containsE("mobility", .ignoreCase)) {
         globalHeuristic.MobilityValue = _val;
-    } else if (s.containsE("stackedPawnScore", .ignoreCase)) {
+    } else if (s.containsE("stackedPawn", .ignoreCase)) {
         globalHeuristic.StackedPawnValue = _val;
+    } else if (s.containsE("passedPawn", .ignoreCase)) {
+        globalHeuristic.PassedPawnValue = _val;
     } else if (s.containsE("safetyKnight", .ignoreCase)) {
-        SAFETY_KNIGHT = _val;
+        globalHeuristic.SafetyKnightValue = _val;
     } else if (s.containsE("safetyBishop", .ignoreCase)) {
-        SAFETY_BISHOP = _val;
+        globalHeuristic.SafetyBishopValue = _val;
     } else if (s.containsE("safetyRook", .ignoreCase)) {
-        SAFETY_ROOK = _val;
+        globalHeuristic.SafetyRookValue = _val;
     } else if (s.containsE("safetyQueen", .ignoreCase)) {
-        SAFETY_QUEEN = _val;
+        globalHeuristic.SafetyQueenValue = _val;
+    } else if (s.containsE("structureProtection", .ignoreCase)) {
+        globalHeuristic.StructureProtectionValue = _val;
     } else {
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token {s}\n", .{s._slice()});
@@ -409,6 +446,13 @@ pub const heuristicValues = struct {
     StackedPawnValue: scoreType = weightl.simpleStackedPawnScore,
     PassedPawnValue: scoreType = weightl.simplePassedPawnScore,
 
+    SafetyBishopValue: scoreType = weightl.simpleSafetyBishopScore,
+    SafetyKnightValue: scoreType = weightl.simpleSafetyKnightScore,
+    SafetyRookValue: scoreType = weightl.simpleSafetyRookScore,
+    SafetyQueenValue: scoreType = weightl.simpleQueenScore,
+
+    StructureProtectionValue: scoreType = weightl.simpleStructureProtectionScore,
+
     Pawn_PSQT: [chess.N_SQUARES]scoreType = weightl.pawnScoreArr,
     Bishop_PSQT: [chess.N_SQUARES]scoreType = weightl.bishopScoreArr,
     Knight_PSQT: [chess.N_SQUARES]scoreType = weightl.knightScoreArr,
@@ -420,12 +464,9 @@ pub const heuristicValues = struct {
 };
 
 // source: https://www.chessprogramming.org/King_Safety
-var SAFETY_KNIGHT: scoreType = 20;
-var SAFETY_BISHOP: scoreType = 20;
-var SAFETY_ROOK: scoreType = 40;
-var SAFETY_QUEEN: scoreType = 80;
 const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
+var STRUCTURE_PROTECTION: scoreType = 1;
 const N_PHASES: usize = 2;
 const N_WEIGHTS: usize = 256;
 const NTERMS: usize = 1024;

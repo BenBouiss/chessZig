@@ -34,7 +34,7 @@ pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
 pub const MAX_DEPTH: u16 = 6;
 pub const MAXIMUM_SEARCH_DEPTH: u16 = 64;
-pub const MAX_QUIESC_DEPTH: u16 = 4;
+pub const MAX_QUIESC_DEPTH: u16 = 6;
 
 pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;

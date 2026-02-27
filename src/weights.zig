@@ -20,6 +20,13 @@ pub const simpleIsolatedPawnScore: scoreType = -1;
 pub const simpleStackedPawnScore: scoreType = -1;
 
 pub const simplePassedPawnScore: scoreType = 2;
+pub const simpleStructureProtectionScore: scoreType = 1;
+
+// source: https://www.chessprogramming.org/King_Safety
+pub const simpleSafetyBishopScore: scoreType = 20;
+pub const simpleSafetyKnightScore: scoreType = 20;
+pub const simpleSafetyRookScore: scoreType = 40;
+pub const simpleSafetyQueenScore: scoreType = 80;
 
 pub var weights: heuristicl.coeffTuple = .{ .val = [_]NVector{ .{ .val = undefined }, .{ .val = undefined } } };
 

@@ -946,27 +946,41 @@ pub fn moveGenQueenBB(p_board: *Board_state, comptime white: bool, emptyOrEnemy:
 }
 
 pub fn cst_moveGenBB(p_board: *Board_state, comptime white: bool) moveBBState {
-    if (white) {
-        var ret: moveBBState = .{};
-        const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(true)];
-        moveGenPawnBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenKnightBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenBishopBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenRookBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenQueenBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenKingBB(p_board, true, EmptyOrEnemy, &ret);
-        return ret;
-    } else {
-        var ret: moveBBState = .{};
-        const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(false)];
-        moveGenPawnBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenKnightBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenBishopBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenRookBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenQueenBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenKingBB(p_board, false, EmptyOrEnemy, &ret);
-        return ret;
+    var ret: moveBBState = .{};
+    const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(white)];
+    moveGenPawnBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenKnightBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenBishopBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenRookBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenQueenBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenKingBB(p_board, white, EmptyOrEnemy, &ret);
+    return ret;
+}
+pub const generationModifiers = enum { NORMAL, QUIETMOVE, CAPTURES, ALL };
+pub fn cst_moveGenBB_extra(p_board: *Board_state, comptime white: bool, comptime extra: generationModifiers) moveBBState {
+    var ret: moveBBState = .{};
+    var EmptyOrEnemy: u64 = 0;
+    switch (extra) {
+        .NORMAL => {
+            EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(white)];
+        },
+        .QUIETMOVE => {
+            EmptyOrEnemy = ~p_board.occupiedBB;
+        },
+        .CAPTURES => {
+            EmptyOrEnemy = p_board.c_occupiedBB[@intFromBool(!white)];
+        },
+        .ALL => {
+            EmptyOrEnemy = chess.UNIVERSE;
+        },
     }
+    moveGenPawnBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenKnightBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenBishopBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenRookBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenQueenBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenKingBB(p_board, white, EmptyOrEnemy, &ret);
+    return ret;
 }
 
 pub fn moveGenBB(p_board: *Board_state) moveBBState {
