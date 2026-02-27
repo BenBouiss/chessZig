@@ -6,7 +6,6 @@ const chessl = @import("../chess.zig");
 const moveGenl = @import("../move_generation.zig");
 const perftl = @import("perft.zig");
 const alphaBetal = @import("alphaBeta.zig");
-const alphaBetaLl = @import("alphaBetaL.zig");
 const threadingl = @import("threading.zig");
 const heuristicl = @import("../heuristic.zig");
 const hashl = @import("../hashTable.zig");
@@ -25,12 +24,14 @@ pub const searchFeatures = struct {
     useHash: bool = configl.DEFAULT_USEHASHTABLE,
     useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
     useQuiescence: bool = configl.DEFAULT_USEQUIESC,
+    usingIncrementalSearch: bool = !configl.DEFAULT_FIXED_DEPTH,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
     ret.useHash = p_engine.options.useHashTable;
     ret.useTexelEvaluation = p_engine.options.useTexelEvaluation;
     ret.useQuiescence = p_engine.options.useQuiescence;
+    ret.usingIncrementalSearch = !p_engine.options.fixDepth;
     return ret;
 }
 
@@ -221,6 +222,23 @@ pub const scheduler = struct {
             depthComs.*[i].setDepth(depth);
         }
     }
+    pub fn startSearchWithLine(p_self: *scheduler, depth: u16, depthComs: *[]depthCommunication, line: *const movel.line) void {
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] startSearch: starting search at depth: {d}\n", .{depth});
+        }
+        std.debug.assert(depth != 0);
+        p_self.timeM.startSearchTick();
+
+        //for (depthComs.*) |*com| {
+        //    com.setDepth(depth);
+        //}
+        for (0..p_self.p_threadPack.len) |i| {
+            depthComs.*[i].setLine(line);
+            p_self.p_threadPack.items(._tInfo)[i].working = true;
+            depthComs.*[i].setDepth(depth);
+        }
+    }
+
     pub fn getSearchStatus(p_self: *scheduler) searchStatus {
         var searcher = p_self.p_engine.searcher;
         if (searcher.interrupt) {
@@ -337,7 +355,7 @@ pub const scheduler = struct {
                     break;
                 }
                 p_self.searchDepth += 1;
-                p_self.startSearch(p_self.searchDepth, &coms);
+                p_self.startSearchWithLine(p_self.searchDepth, &coms, &decision.line);
             } else if (stat == .CONTINUE) {
                 //if (p_self.timeM.isOvertimeCritical(p_self.timeRemaining()) and p_self.canIncreaseDepth) {
                 //    p_self.handleInterrupt();
