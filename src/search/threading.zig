@@ -25,7 +25,6 @@ pub const threadInfo = struct {
     depth: u8 = 0,
     working: bool = false,
     alive: bool = false,
-    currentTask: usize = 0,
 };
 pub const threadInfo_container = struct {
     len: u16,

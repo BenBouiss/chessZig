@@ -42,18 +42,9 @@ class score:
     def __repr__(self) -> str:
         return f"win: {self.win} lose: {self.lose} draw: {self.draw} score: {self.getScore()}"
 
-
 class heuristicEntry:
-    mobilityScore: float
-    isolatedPawnScore: float
-    stackedPawnScore: float
-    passedPawnScore: float
+    weights: list[float]
 
-    # safeties? 
-    safetyKnight: float
-    safetyBishop: float
-    safetyRook: float
-    safetyQueen: float
     def __init__(self):
         pass
         
@@ -61,21 +52,30 @@ class heuristicEntry:
         # scalar value
         # simpleStackedPawnScore: {d};
         with open(path, "w") as file:
-            file.write(f"isolatedPawnScore = {self.isolatedPawnScore};\n")
-            file.write(f"mobilityScore = {self.mobilityScore};\n")
-            file.write(f"stackedPawnScore = {self.stackedPawnScore};\n")
+            file.write(f"stackedPawnScore = {self.weights[stackedPawnScore_idx]};\n")
+            file.write(f"passedPawnScore = {self.weights[passedPawnScore_idx]};\n")
+            file.write(f"isolatedPawnScore = {self.weights[isolatedPawnScore_idx]};\n")
 
-            file.write(f"safetyKnight = {self.safetyKnight};\n")
-            file.write(f"safetyBishop = {self.safetyBishop};\n")
-            file.write(f"safetyRook = {self.safetyRook};\n")
-            file.write(f"safetyQueen = {self.safetyQueen};\n")
+            file.write(f"safetyKnight = {self.weights[safetyKnight_idx]};\n")
+            file.write(f"safetyBishop = {self.weights[safetyBishop_idx]};\n")
+            file.write(f"safetyRook = {self.weights[safetyRook_idx]};\n")
+            file.write(f"safetyQueen = {self.weights[safetyQueen_idx]};\n")
 
-    def getPosition(self) -> list[typing.Any]:
-        return [self.isolatedPawnScore, self.mobilityScore, self.stackedPawnScore]
+            file.write(f"structureProtection = {self.weights[structureProtection_idx]};\n")
+            file.write(f"mobilityScore = {self.weights[mobility_idx]};\n")
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
-        return np.concatenate(self.getPosition())
+        return np.concatenate(self.weights)
         
+def entryFrom1dArray(arr: npt.NDArray[np.float64]) -> heuristicEntry:
+    ret = heuristicEntry()
+    ret.weights = arr.tolist()
+    return ret
+
+def entryFromList(arr: list[float]) -> heuristicEntry:
+    ret = heuristicEntry()
+    ret.weights = list(arr)
+    return ret
 
 @dataclass
 class chessIndividual(object):
@@ -138,5 +138,48 @@ class callbackSave(template.callback):
         with open(path, "w") as file:
             yaml.dump(savingDict, file)
 
+class callbackBaseline(template.callback):
+    """
+    """
+    def __init__(self):
+        super().__init__()
+    
+    def on_iter_end(self):
+        assert self.mh is not None
+        assert self.mh.objective is not None
+        best = self.mh.getBestIndiv()
+        nBaseline = len(self.mh.objective.baseline)
+        if best.score == nBaseline * 2:
+            print("[DEBUG] callbackBaseline: adding the current best to the baseline")
+            self.mh.objective.appendBaseline(entryFrom1dArray(best.position))
+        
+ 
+
+
+# weight section
+total_idx = 0
+
+stackedPawnScore_idx = total_idx
+total_idx += 1
+passedPawnScore_idx = total_idx
+total_idx += 1
+isolatedPawnScore_idx = total_idx
+total_idx += 1
+
+safetyKnight_idx = total_idx
+total_idx += 1
+safetyBishop_idx = total_idx
+total_idx += 1
+safetyRook_idx = total_idx
+total_idx += 1
+safetyQueen_idx = total_idx
+total_idx += 1
+
+structureProtection_idx = total_idx
+total_idx += 1
+mobility_idx = total_idx
+total_idx += 1
+
+simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0]
 
 

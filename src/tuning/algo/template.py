@@ -38,11 +38,12 @@ DEFAULT_SEED = 42
 DEFAULT_INT = 1
 DEFAULT_PREVAL = False
 class templateSelectionAlgo(object):
-    def __init__(self, popsize: int, maxiter: int, seed: int = DEFAULT_SEED, preEval: bool = DEFAULT_PREVAL, cbs: list[callback] | None = None, saveLog: bool = False, saveOpt: saveOptions = saveOptions()):
+    def __init__(self, popsize: int, maxiter: int, seed: int = DEFAULT_SEED, preEval: bool = DEFAULT_PREVAL, cbs: list[callback] | None = None, saveLog: bool = False, saveOpt: saveOptions = saveOptions(), useGreedy: bool = True):
         self.objective: objective.objective | None = None
 
         self.running = False
         self.preEval: bool = preEval
+        self.useGreedy: bool = useGreedy
 
         self.maxiter: int = maxiter
         self.iter: int = 0
@@ -155,6 +156,14 @@ class templateSelectionAlgo(object):
     def getCurrentPositions(self) -> list[npt.NDArray[np.float64]]:
         return [x.position for x in self.population]
 
+    def getBestIndiv(self) -> individual:
+        assert self.objective is not None
+        bestIdx = 0
+        for idx, indiv in enumerate(self.population):
+            if (indiv.score > self.population[bestIdx].score):
+                bestIdx = idx
+        return self.population[bestIdx]
+
     def printPopulation(self) -> None:
         for i in range(self.popsize):
             print(self.population[i])
@@ -164,6 +173,7 @@ class templateSelectionAlgo(object):
             indiv.uid = self.popsize
         self.population.append(indiv)
         self.popsize += 1
+
 
     def loadYaml(self, path: str) -> None:
         assert os.path.exists(path)
