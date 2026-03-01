@@ -57,7 +57,7 @@ pub const status = struct {
     BCastlingK: bool = false,
     BCastlingQ: bool = false,
     pub fn turn(self: status) chessl.e_color {
-        if (self.whiteToMove) {
+        if (self._whiteToMove) {
             return .WHITE;
         }
         return .BLACK;

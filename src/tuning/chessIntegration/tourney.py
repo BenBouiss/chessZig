@@ -160,6 +160,11 @@ class matchStatus(Enum):
     IN_PROGRESS = 2
     FINISHED = 3
 
+class tournamentType(Enum):
+    CLASSIC = 1
+    BASELINE = 2
+
+
 def scheduleMatches(popsize: int) -> list[tuple[int, int]]:
     """
     ex for 4 configs
@@ -178,15 +183,43 @@ def scheduleMatches(popsize: int) -> list[tuple[int, int]]:
         for y in range(x+1, len(indexes)):
             ret.append((x, y))
     return ret;
+def scheduleMatchesBaseline(popsize: int, popBase: int) -> list[tuple[int, int]]:
+    """
+    ex for 4 configs and 2 baseline
+    [0, 1, 2, 3]
+    schedule:
+        0 vs base_0
+        0 vs base_1
+
+        1 vs base_0
+        1 vs base_1
+
+        2 vs base_0
+        2 vs base_1
+
+        3 vs base_0
+        3 vs base_1
+    """
+    ret: list[tuple[int, int]] = []
+    indexes = list(range(popsize))
+    for x in range(len(indexes)):
+        for y in range(popBase):
+            ret.append((x, y))
+    return ret;
+
 
 class matchContainerInfo(object):
     order: list[tuple[int, int]]
     status: list[matchStatus]
-    def __init__(self, popsize: int):
+    def __init__(self, popsize: int, popBase: int = 0, type: tournamentType = tournamentType.CLASSIC):
         self.order = []
         self.status = []
         self.popsize: int = popsize
-        self.order.extend(scheduleMatches(popsize))
+        if (type == tournamentType.CLASSIC):
+            self.order.extend(scheduleMatches(popsize))
+        else:
+            self.order.extend(scheduleMatchesBaseline(popsize, popBase))
+
         for _ in range(len(self.order)):
             self.status.append(matchStatus.PENDING)
     def splitNThreads(self, nThread: int) -> list[list[int]]:
@@ -208,22 +241,19 @@ class matchContainerInfo(object):
 
 
 class tournament(object):
-    def __init__(self, timeF: timeFormat, templatePath: str|None, logDir: str, evalBin: str|None = None, debugMode: bool = False, nThread: int = 1 ):
+    def __init__(self, timeF: timeFormat, templatePath: str|None, logDir: str, evalBin: str|None = None, debugMode: bool = False, nThread: int = 1, type: tournamentType = tournamentType.CLASSIC):
         self.timeFormat: timeFormat = timeF
+        self.type = type
         self.matchInv: matchContainerInfo = matchContainerInfo(1)
         self.templatePath: str|None = templatePath 
         self.population: list[chessIndividual] = []
+        self.baseline: list[chessIndividual] = []
         self.evalBin: str|None = evalBin
         self.debugMode: bool = debugMode
         if debugMode:
             print("Building tournament with debug on")
         self.logDir: str = logDir
-
-        # can very between 0.1 and -0.1
-        self.fraction_diff: float = 0.1
-
         self.setThread(nThread)
-
         self.logs: dict = {}
     
     def setThread(self, nThread: int) -> None:
@@ -235,18 +265,21 @@ class tournament(object):
         indexes = matchInfo.splitNThreads(self.nThread)
         workingThreads: list[threading.Thread] = []
         for threadId, idx in enumerate(indexes):
-            workingThreads.append(threading.Thread(target = self._dispatchMatch, args = ([idx, threadId])))
+            workingThreads.append(threading.Thread(target = self.thread_dispatchMatch, args = ([idx, threadId])))
             workingThreads[-1].start()
         for x in workingThreads:
             x.join()
         
-    def _dispatchMatch(self, idx: list[int], threadId: int) -> None:
+    def thread_dispatchMatch(self, idx: list[int], threadId: int) -> None:
         assert self.population is not None
         assert self.templatePath is not None
         for i in idx:
             pair = self.matchInv.order[i]
             opp1 = self.population[pair[0]].position
-            opp2 = self.population[pair[1]].position
+            if (self.type == tournamentType.BASELINE):
+                opp2 = self.baseline[pair[1]].position
+            else:
+                opp2 = self.population[pair[1]].position
 
             self.matchInv.status[i] = matchStatus.IN_PROGRESS
             global_scoreBoard.updateScoreBoard(self)
@@ -264,7 +297,8 @@ class tournament(object):
             for i in range(len(self.population)):
                 print(f"[DEBUG] \t {self.population[i].scoring}, id: {self.population[i].uid}\n")
         self.population[pair[0]].scoring.addEq(score[0])
-        self.population[pair[1]].scoring.addEq(score[1])
+        if (not self.type == tournamentType.BASELINE):
+            self.population[pair[1]].scoring.addEq(score[1])
 
         if (self.debugMode):
             for i in range(len(self.population)):
@@ -275,33 +309,28 @@ class chessObjective(obj.objective):
     def __init__(self, tourney: tournament, **parentKwargs):
         self.tourney = tourney
         super().__init__(**parentKwargs)
+        self.baseline: list[heuristicEntry] = []
     
     def _evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
-        matchInv: matchContainerInfo = matchContainerInfo(len(positions))
+        matchInv: matchContainerInfo = matchContainerInfo(len(positions), popBase = len(self.baseline), type = self.tourney.type)
         self.tourney.population = []
         for i in range(len(positions)):
             self.tourney.population.append(
                 chessIndividual(
-                    position = entryFrom1dArray(np.array(positions[i])), 
+                    position = chessSpec.entryFrom1dArray(np.array(positions[i])), 
                     uid = i, scoring = score(0, 0, 0, False))
                 )
+        self.tourney.baseline = [chessIndividual(
+                    position = pos, uid = x, scoring = score(0, 0, 0, False)) for x, pos in enumerate(self.baseline)]
         self.tourney.dispatchMatch(matchInv)
         return [x.scoring.getScore() for x in self.tourney.population]
 
+    def setBaseline(self, entry: heuristicEntry) -> None:
+        self.baseline = [entry]
 
-def entryFrom1dArray(arr: npt.NDArray[np.float64]) -> heuristicEntry:
-    ret = heuristicEntry()
-    ret.mobilityScore = arr[0];
-    ret.isolatedPawnScore = arr[1];
-    ret.stackedPawnScore = arr[2];
-    ret.passedPawnScore = arr[3];
+    def appendBaseline(self, entry: heuristicEntry) -> None:
+        self.baseline.append(entry)
 
-    ret.safetyKnight = arr[4];
-    ret.safetyBishop = arr[5];
-    ret.safetyRook = arr[6];
-    ret.safetyQueen = arr[7];
-
-    return ret
 
 # since all the current positions are "similar" enough might
 # be a good idea to do a dummy func with only nDim in input
@@ -328,8 +357,7 @@ def dummyStep(step: float, nDim: int) -> npt.NDArray[np.float64]:
 UPPER_BOUND_WEIGHT = 100
 LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
 STEP_WEIGTH = 1
-N_WEIGHT_MAP = 6
-N_PARAMS = 8
+N_PARAMS = chessSpec.total_idx
 def clear() -> None:
     print("\x1B[2J\x1B[H", end = "\r")
 
@@ -341,12 +369,21 @@ if __name__ == "__main__":
 
     popsize = 8
     maxiter = 16
+
+    popsize = 7
+    maxiter = 16 
+    cbs = [chessSpec.callbackBaseline()]
     saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix = "ben")
-    mh = gw.GW(popsize = popsize, maxiter = maxiter, saveLog = True, preEval = True, saveOpt = saveOpt)
-    tourn = tournament(standardTimeFormat, templatePath = path, evalBin = evaluationBinPath, debugMode = True, logDir = tmpFolder, nThread=4)
+    mh = gw.GW(popsize = popsize, maxiter = maxiter, saveLog = True, preEval = True, saveOpt = saveOpt, cbs = cbs)
+    tourn = tournament(standardTimeFormat, templatePath = path, evalBin = evaluationBinPath, debugMode = True, logDir = tmpFolder, nThread=4, type = tournamentType.BASELINE)
 
     mh.setObjective(chessObjective(maximize=True, tourney=tourn, bounds = dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim = N_PARAMS), steps = dummyStep(STEP_WEIGTH, nDim = N_PARAMS)))
+    assert mh.objective is not None
+    mh.objective.setBaseline(chessSpec.entryFromList(chessSpec.simpleBaselineWeights))
+
     mh.generatePopulation()
+
+    mh.addInvididual(indiv = individual(position = np.array(chessSpec.simpleBaselineWeights), uid = -1))
     mh.printPopulation()
     
     mh.optimize()

@@ -16,7 +16,7 @@ from chessIntegration.chessSpec import callbackSave
 class GW(template.templateSelectionAlgo):
     def __init__(self, **parentKwargs):
         super().__init__(**parentKwargs)
-        assert self.popsize > 3, "GW needs atleast 3"
+        assert self.popsize >= 3, "GW needs atleast 3"
 
         # value decreasing with iterations from 2 to 0
         self.a: float = 2
@@ -28,7 +28,7 @@ class GW(template.templateSelectionAlgo):
         scores = self.evaluate(new_pos)
 
         for i in range(self.popsize):
-            if (scores[i] > self.population[i].score):
+            if (scores[i] >= self.population[i].score or not self.useGreedy):
                 self.population[i].position = new_pos[i]
                 self.population[i].score = scores[i]
 

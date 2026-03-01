@@ -15,11 +15,11 @@ pub const simpleQueenScore: scoreType = 900;
 pub const simpleCheckMateScore: scoreType = 99999;
 pub const simpleStalemateScore: scoreType = 0;
 
-pub const simpleMobilityScore: scoreType = 5;
 pub const simpleIsolatedPawnScore: scoreType = -1;
 pub const simpleStackedPawnScore: scoreType = -1;
-
 pub const simplePassedPawnScore: scoreType = 2;
+
+pub const simpleMobilityScore: scoreType = 5;
 pub const simpleStructureProtectionScore: scoreType = 1;
 
 // source: https://www.chessprogramming.org/King_Safety
