@@ -585,7 +585,7 @@ pub const engine = struct {
             if (fenCmdOffset == -1) {
                 return false;
             }
-            p_self.state = chess.getBoardFromUciFen(utilsl.stripStr(cmdBuffer[(@intCast(fenCmdOffset + 2))..]), alloc, p_self.status.debugMode) catch {
+            p_self.state = chess.getBoardFromUciFen(utilsl.stripStr(cmdBuffer[(@intCast(fenCmdOffset + 3))..]), alloc, p_self.status.debugMode) catch {
                 return false;
             };
         } else {

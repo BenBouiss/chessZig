@@ -172,14 +172,11 @@ pub fn evaluate_safety(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBB
     return retSaf;
 }
 pub fn evaluate_structure(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues) scoreType {
-    var ret: scoreType = 0;
-
     // structure protection,
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
     const w_pieceProtect = p_whiteMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.wKingSq));
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
-    ret += @as(scoreType, @intCast(w_pieceProtect.count() - b_pieceProtect.count())) * values.StructureProtectionValue;
-    return ret;
+    return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * values.StructureProtectionValue;
 }
 
 pub fn epieceToHeuristic(piece: e_piece, values: *heuristicValues) scoreType {

@@ -367,11 +367,9 @@ if __name__ == "__main__":
     evaluationBinPath = "zig-out/bin/evaluate"
     os.makedirs(tmpFolder, exist_ok=True)
 
-    popsize = 8
-    maxiter = 16
+    popsize = 16
+    maxiter = 32
 
-    popsize = 7
-    maxiter = 16 
     cbs = [chessSpec.callbackBaseline()]
     saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix = "ben")
     mh = gw.GW(popsize = popsize, maxiter = maxiter, saveLog = True, preEval = True, saveOpt = saveOpt, cbs = cbs)
@@ -384,6 +382,7 @@ if __name__ == "__main__":
     mh.generatePopulation()
 
     mh.addInvididual(indiv = individual(position = np.array(chessSpec.simpleBaselineWeights), uid = -1))
+    mh.addInvididual(indiv = individual(position = np.array(chessSpec.newWeight_0), uid = -1))
     mh.printPopulation()
     
     mh.optimize()

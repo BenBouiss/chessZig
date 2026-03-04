@@ -1,24 +1,28 @@
 [engine1]
 path="zig-out/bin/engine";
-name="Standard heuristic";
+name="prev";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
+//"debug on";
 
 [engine2]
 path="zig-out/bin/engine";
-name="new weight";
+name="new";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
-"setoption name heuristicWeightsPath value engines/heuristics/weight_iter_6_popsize_16_baseline.winfo";
+//"debug on";
 
 [match]
-nMatch=4;
+nMatch=1;
 playerSwitch=true;
 debugMode=false;
-useOpeningBook=true;
+useOpeningBook=false;
 openingBookPath="opening/8moves_v3.pgn";
+infinite=false;
+
+timeFormat=(6000, 0);
 
 logsLocation="logs/ben/ben";
 //saveLogs=true;

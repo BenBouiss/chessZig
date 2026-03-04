@@ -224,7 +224,7 @@ pub const scheduler = struct {
     }
     pub fn startSearchWithLine(p_self: *scheduler, depth: u16, depthComs: *[]depthCommunication, line: *const movel.line) void {
         if (p_self.isDebugMode()) {
-            std.debug.print("[DEBUG] startSearch: starting search at depth: {d}\n", .{depth});
+            std.debug.print("[DEBUG] startSearchWithLine: starting search at depth: {d}\n", .{depth});
         }
         std.debug.assert(depth != 0);
         p_self.timeM.startSearchTick();
@@ -285,6 +285,10 @@ pub const scheduler = struct {
         };
         defer p_self.alloc.free(coms);
 
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] staticLoop: Starting with max depth: {d} \n", .{depth});
+        }
+
         p_self.searchDepth = depth;
         p_self.startSearch(depth, &coms);
 
@@ -328,6 +332,10 @@ pub const scheduler = struct {
             return;
         };
         defer p_self.alloc.free(coms);
+
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] incrementalLoop: Starting with max depth: {d} \n", .{maxDepth});
+        }
         p_self.searchDepth = 1;
         p_self.startSearch(p_self.searchDepth, &coms);
 
@@ -445,6 +453,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
 
     const _nThread = @min(searcher.nThreads, moveArray.len);
     if (_nThread == 0) {
+        std.debug.print("[PANIC] dispatchUciGoThreads: thread {d} move {d}\n", .{ searcher.nThreads, moveArray.len });
         @panic("No thread or no moves available");
     }
     if (p_engine.status.debugMode) {
@@ -468,7 +477,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     sched.setThreadPack(&pack);
     if (searcher.config.depth == 0) {
         if (p_engine.status.debugMode) {
-            std.debug.print("[DEBUG] executeGoCmd: No depth found  in the cmd string using the default engine option \n", .{});
+            std.debug.print("[DEBUG] executeGoCmd: No depth found in the cmd string using the default engine option \n", .{});
         }
         searcher.config.depth = p_engine.options.depthLevel;
     }
