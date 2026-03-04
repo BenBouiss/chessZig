@@ -123,7 +123,7 @@ sections:
 
 
 ##.winfo: Primarely used to pass weights to the engine throught the heuristicWeightsPath option,  
-    - {piece}ScoreArr, cmd = '{piece}ScoreArr = [{d}, {d}, ..., {d}];' where piece is a chess piece, the content here is an array of 64 float values separeted by ',' to be used in the evaluation function. If the number of elements isnt 64, the line will be ignored
-    - {piece}value, WIP way to set the individual piece heuristic values, primarely used in the piece counting phase of the evaluation function
-    - more to come as the evaluation gets more complex
+- {piece}ScoreArr, cmd = '{piece}ScoreArr = [{d}, {d}, ..., {d}];' where piece is a chess piece, the content here is an array of 64 float values separeted by ',' to be used in the evaluation function. If the number of elements isnt 64, the line will be ignored
+- {piece}value, WIP way to set the individual piece heuristic values, primarely used in the piece counting phase of the evaluation function
+- more to come as the evaluation gets more complex
 
