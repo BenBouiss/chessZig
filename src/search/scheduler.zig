@@ -14,20 +14,24 @@ const configl = @import("../config.zig");
 
 const moveContainer = movel.moveContainer;
 const IMove = movel.IMove;
-const moveLine = movel.moveLine;
 const scoreType = heuristicl.scoreType;
 const threadPackageArray = threadingl.threadPackageArray;
+const depthCommunication = alphaBetal.depthCommunication;
 
 pub const searchStatus = enum { CONTINUE, INTERRUPTED, FINISHED };
 
 pub const searchFeatures = struct {
-    useHash: bool = false,
+    useHash: bool = configl.DEFAULT_USEHASHTABLE,
+    useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
+    useQuiescence: bool = configl.DEFAULT_USEQUIESC,
+    usingIncrementalSearch: bool = !configl.DEFAULT_FIXED_DEPTH,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
-    if (p_engine.options.useHashTable) {
-        ret.useHash = true;
-    }
+    ret.useHash = p_engine.options.useHashTable;
+    ret.useTexelEvaluation = p_engine.options.useTexelEvaluation;
+    ret.useQuiescence = p_engine.options.useQuiescence;
+    ret.usingIncrementalSearch = !p_engine.options.fixDepth;
     return ret;
 }
 
@@ -52,8 +56,8 @@ pub const uciSearcher = struct {
 };
 pub const moveDecisionExt = struct {
     move: IMove = .{},
-    line: moveLine = .{},
     scoring: scoreType = 0,
+    line: movel.line = .{},
     pub fn invertScore(p_self: *moveDecisionExt) void {
         p_self.scoring = -p_self.scoring;
     }
@@ -140,7 +144,6 @@ pub const scheduler = struct {
     engineSet: bool = false,
     p_threadPack: *threadPackageArray = undefined,
     alloc: std.mem.Allocator = undefined,
-    finalChoice: moveDecisionExt = .{},
     searchDepth: u16 = 0,
     searchIncrement: u16 = 0,
     turn: bool = true,
@@ -155,17 +158,43 @@ pub const scheduler = struct {
     pub fn setThreadPack(p_self: *scheduler, p_pack: *threadPackageArray) void {
         p_self.p_threadPack = p_pack;
     }
-    pub fn sendFinal(p_self: *scheduler) void {
+    pub fn startThreadPack(p_self: *scheduler, alloc: std.mem.Allocator) ![]alphaBetal.depthCommunication {
+        threadingl.zeroThreadPackArray(p_self.p_threadPack);
+        const feat = getSearchFeatures(p_self.p_engine);
+        var coms = try alloc.alloc(alphaBetal.depthCommunication, p_self.p_threadPack.len);
+        for (0..p_self.p_threadPack.len) |thread_id| {
+            if (p_self.isDebugMode()) {
+                std.debug.print("[DEBUG] startThreadPack: starting thread {d}\n", .{thread_id});
+            }
+            coms[thread_id] = .{ .depth = 0, .depthSet = false, .lock = false };
+            p_self.p_threadPack.items(._tInfo)[thread_id].alive = true;
+
+            p_self.p_threadPack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, alphaBetal.alphaBetaWaitingRoom, .{ &p_self.p_threadPack.items(.chessState)[thread_id], &p_self.p_threadPack.items(.moves)[thread_id], &p_self.p_threadPack.items(._tInfo)[thread_id], &coms[thread_id], feat });
+        }
+        return coms;
+    }
+    pub fn sendFinal(p_self: *scheduler, decision: *moveDecisionExt) void {
         if (!p_self.engineSet) {
             @panic("engine not set");
         }
-        const msg = std.fmt.allocPrint(p_self.alloc, "bestmove {s}", .{p_self.finalChoice.move.getStr()}) catch unreachable;
-        defer p_self.alloc.free(msg);
-        if (p_self.isDebugMode()) {
-            std.debug.print("[DEBUG] sendFinal: final choice {s} with scoring: {d} at depth {d}\n", .{ p_self.finalChoice.move.getStr(), p_self.finalChoice.scoring, p_self.searchDepth + p_self.searchIncrement });
-        }
+
+        const msg = std.fmt.allocPrint(p_self.alloc, "bestmove {s}", .{decision.move.getStr()}) catch unreachable;
         p_self.p_engine.respond(utilsl.trimStr(msg));
+        defer p_self.alloc.free(msg);
     }
+    pub fn sendPartial(p_self: *scheduler, decision: *moveDecisionExt) void {
+        if (!p_self.engineSet) {
+            @panic("engine not set");
+        }
+
+        const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
+        const n_nodes: i64 = @intCast(res.n_nodeExplored);
+
+        const final_info = std.fmt.allocPrint(p_self.alloc, "info depth {d} score cp {d} nodes {d} currmove {s} pv {f}", .{ p_self.searchDepth, decision.scoring, n_nodes, utilsl.trimStr(&decision.move.getStr()), decision.line }) catch unreachable;
+        defer p_self.alloc.free(final_info);
+        p_self.p_engine.respond(utilsl.trimStr(final_info));
+    }
+
     pub fn sendUpdate(p_self: *scheduler) void {
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
         const n_nodes: i64 = @intCast(res.n_nodeExplored);
@@ -178,19 +207,38 @@ pub const scheduler = struct {
         p_self.p_engine.respond(msg);
         return;
     }
-    pub fn startSearch(p_self: *scheduler, depth: u16) !void {
+    pub fn startSearch(p_self: *scheduler, depth: u16, depthComs: *[]depthCommunication) void {
         if (p_self.isDebugMode()) {
             std.debug.print("[DEBUG] startSearch: starting search at depth: {d}\n", .{depth});
         }
         std.debug.assert(depth != 0);
-        threadingl.zeroThreadPackArray(p_self.p_threadPack);
         p_self.timeM.startSearchTick();
-        const feat = getSearchFeatures(p_self.p_engine);
 
-        for (0..p_self.p_threadPack.len) |thread_id| {
-            p_self.p_threadPack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, alphaBetal.searchEntrypoint, .{ &p_self.p_threadPack.items(.chessState)[thread_id], &p_self.p_threadPack.items(.moves)[thread_id], &p_self.p_threadPack.items(._tInfo)[thread_id], depth, feat });
+        //for (depthComs.*) |*com| {
+        //    com.setDepth(depth);
+        //}
+        for (0..p_self.p_threadPack.len) |i| {
+            p_self.p_threadPack.items(._tInfo)[i].working = true;
+            depthComs.*[i].setDepth(depth);
         }
     }
+    pub fn startSearchWithLine(p_self: *scheduler, depth: u16, depthComs: *[]depthCommunication, line: *const movel.line) void {
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] startSearchWithLine: starting search at depth: {d}\n", .{depth});
+        }
+        std.debug.assert(depth != 0);
+        p_self.timeM.startSearchTick();
+
+        //for (depthComs.*) |*com| {
+        //    com.setDepth(depth);
+        //}
+        for (0..p_self.p_threadPack.len) |i| {
+            depthComs.*[i].setLine(line);
+            p_self.p_threadPack.items(._tInfo)[i].working = true;
+            depthComs.*[i].setDepth(depth);
+        }
+    }
+
     pub fn getSearchStatus(p_self: *scheduler) searchStatus {
         var searcher = p_self.p_engine.searcher;
         if (searcher.interrupt) {
@@ -198,7 +246,8 @@ pub const scheduler = struct {
         }
         searcher.endCounter = 0;
         for (0..p_self.p_threadPack.len) |i| {
-            searcher.endCounter += @intFromBool(!p_self.p_threadPack.items(._tInfo)[i].running);
+            const info: threadingl.threadInfo = p_self.p_threadPack.items(._tInfo)[i];
+            searcher.endCounter += @intFromBool(!info.working);
         }
         if (searcher.endCounter == p_self.p_threadPack.len) {
             return .FINISHED;
@@ -206,83 +255,137 @@ pub const scheduler = struct {
         return .CONTINUE;
     }
     pub fn handleInterrupt(p_self: *scheduler) void {
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] handleInterrupt: interrupting\n", .{});
+        }
         for (0..p_self.p_threadPack.len) |i| {
-            p_self.p_threadPack.items(._tInfo)[i].running = false;
+            p_self.p_threadPack.items(._tInfo)[i].alive = false;
         }
         threadingl.joinOnThreadPack(p_self.p_threadPack);
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] handleInterrupt: finished\n", .{});
+        }
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) void {
         if (p_self.canIncreaseDepth) {
-            p_self.searchDepth = @min(depth, depth - 1);
+            p_self.incrementalLoop(depth);
         } else {
-            p_self.searchDepth = depth;
+            p_self.staticLoop(depth);
         }
-
-        p_self.startSearch(p_self.searchDepth) catch {
-            p_self.p_engine.searcher.searching = false;
-            std.debug.print("[ERROR] waitingLoop: Cant start search\n", .{});
+    }
+    pub fn extractBest(p_self: *scheduler) moveDecisionExt {
+        const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
+        return res.currentBest.copy();
+    }
+    pub fn staticLoop(p_self: *scheduler, depth: u16) void {
+        var coms = p_self.startThreadPack(p_self.alloc) catch {
+            std.debug.print("[DEBUG] staticLoop: failed to start the pack\n", .{});
+            p_self.engineSet = false;
             return;
         };
-        p_self.waitingLoop();
-    }
-    pub fn extractBest(p_self: *scheduler) void {
-        const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
-        p_self.finalChoice = res.currentBest.copy();
-    }
-    pub fn waitingLoop(p_self: *scheduler) void {
-        p_self.searchIncrement = 0;
-        p_self.p_engine.searcher.searching = true;
+        defer p_self.alloc.free(coms);
+
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] staticLoop: Starting with max depth: {d} \n", .{depth});
+        }
+
+        p_self.searchDepth = depth;
+        p_self.startSearch(depth, &coms);
+
+        var decision: moveDecisionExt = .{};
+
+        var countTimePrint = @divFloor(configl.INFO_TICKRATE_NS, configl.SCHEDULER_TICKRATE_NS);
+        countTimePrint = @max(1, countTimePrint);
+        var count: usize = 0;
         while (true) {
-            std.Thread.sleep(configl.INFO_TICKRATE_NS);
-            p_self.sendUpdate();
+            std.Thread.sleep(configl.SCHEDULER_TICKRATE_NS);
+            if (count % countTimePrint == 0) {
+                p_self.sendUpdate();
+                count = 0;
+            }
+            count += 1;
             const stat = p_self.getSearchStatus();
+
+            //std.debug.print("{}\n", .{stat});
+
             if (stat == .INTERRUPTED) {
                 p_self.handleInterrupt();
                 break;
-            }
-            if (stat == .FINISHED) {
-                // need logic here wether to launch new search if time available
-                p_self.timeM.append(.{ .time = p_self.timeM.timeSinceStartMs(), .checked = p_self.p_engine.state.isLegal(p_self.turn) });
-                if (!p_self.canExtendSearch()) {
-                    p_self.extractBest();
-                    p_self.sendFinal();
-                    p_self.commitNewSearchDepth();
-                    break;
-                }
-                p_self.searchIncrement += 1;
-                if (p_self.isDebugMode()) {
-                    std.debug.print("[DEBUG] waitingLoop: Increasing the search depth\n", .{});
-                }
-                p_self.startSearch(p_self.searchDepth + p_self.searchIncrement) catch {
-                    p_self.extractBest();
-                    p_self.sendFinal();
-                    p_self.commitNewSearchDepth();
-                    break;
-                };
-            }
-            if (stat == .CONTINUE) {
-                if (p_self.timeM.isOvertimeCritical(p_self.timeRemaining()) and p_self.canIncreaseDepth) {
-                    p_self.handleInterrupt();
-                    p_self.searchIncrement = 0;
-
-                    p_self.searchDepth = @min(p_self.searchDepth, p_self.searchDepth - 2);
-                    p_self.searchDepth = @max(0, p_self.searchDepth);
-
-                    if (p_self.isDebugMode()) {
-                        std.debug.print("[DEBUG] waitingLoop: CRITICALY LOW TIME! RE LAUNCHING AT DEPTH - 2\n", .{});
-                    }
-                    p_self.startSearch(p_self.searchDepth) catch {
-                        return;
-                    };
-                }
+            } else if (stat == .FINISHED) {
+                decision = p_self.extractBest();
+                p_self.handleInterrupt();
+                break;
+            } else if (stat == .CONTINUE) {
+                // nothing much
             }
         }
-        p_self.p_engine.searcher.searching = false;
-        // TODO FIX ME: UCI style thingy here
+
+        p_self.sendPartial(&decision);
+        p_self.sendFinal(&decision);
+        // TODO: FIX ME: UCI style thingy here
+        p_self.engineSet = false;
+        //
+    }
+    pub fn incrementalLoop(p_self: *scheduler, maxDepth: u16) void {
+        var coms = p_self.startThreadPack(p_self.alloc) catch {
+            p_self.engineSet = false;
+            return;
+        };
+        defer p_self.alloc.free(coms);
+
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] incrementalLoop: Starting with max depth: {d} \n", .{maxDepth});
+        }
+        p_self.searchDepth = 1;
+        p_self.startSearch(p_self.searchDepth, &coms);
+
+        var decision: moveDecisionExt = .{};
+        var countTimePrint = @divFloor(configl.INFO_TICKRATE_NS, configl.SCHEDULER_TICKRATE_NS);
+        countTimePrint = @max(1, countTimePrint);
+        var count: usize = 0;
+
+        while (p_self.searchDepth <= maxDepth) {
+            std.Thread.sleep(configl.SCHEDULER_TICKRATE_NS);
+            if (count % countTimePrint == 0) {
+                p_self.sendUpdate();
+                count = 0;
+            }
+
+            count += 1;
+            const stat = p_self.getSearchStatus();
+            if (stat == .INTERRUPTED) {
+                break;
+            } else if (stat == .FINISHED) {
+                p_self.timeM.append(.{ .time = p_self.timeM.timeSinceStartMs(), .checked = p_self.p_engine.state.isLegal(p_self.turn) });
+                decision = p_self.extractBest();
+                p_self.sendPartial(&decision);
+                if (!p_self.canExtendSearch() or p_self.searchDepth == maxDepth) {
+                    break;
+                }
+                p_self.searchDepth += 1;
+                p_self.startSearchWithLine(p_self.searchDepth, &coms, &decision.line);
+            } else if (stat == .CONTINUE) {
+                //if (p_self.timeM.isOvertimeCritical(p_self.timeRemaining()) and p_self.canIncreaseDepth) {
+                //    p_self.handleInterrupt();
+
+                //    p_self.searchDepth = @min(p_self.searchDepth, p_self.searchDepth - 2);
+                //    p_self.searchDepth = @max(0, p_self.searchDepth);
+                //    if (p_self.isDebugMode()) {
+                //        std.debug.print("[DEBUG] waitingLoop: CRITICALY LOW TIME! RE LAUNCHING AT DEPTH - 2\n", .{});
+                //    }
+                //    p_self.startSearch(p_self.searchDepth, &coms);
+                //}
+            }
+        }
+
+        p_self.handleInterrupt();
+        p_self.sendFinal(&decision);
+        // TODO: FIX ME: UCI style thingy here
         p_self.engineSet = false;
     }
     pub fn commitNewSearchDepth(p_self: *scheduler) void {
         // saves the new depth for future use, ie make the search deeper and deeper as the game goes on
+        //
         if (!p_self.canIncreaseDepth) {
             return;
         }
@@ -312,10 +415,7 @@ pub const scheduler = struct {
         const prevTime: i64 = p_self.timeM.timeSinceStartMs();
         const floatTime: f64 = @floatFromInt(p_self.timeRemaining());
         const maxTime: i64 = @intFromFloat(floatTime * configl.SCHEDULER_MAX_TIME_FRCT);
-        if (((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime) and (p_self.searchIncrement < configl.SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR)) {
-            return true;
-        }
-        return false;
+        return (((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime) and (p_self.searchIncrement < configl.SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR));
     }
     pub inline fn isDebugMode(p_self: *scheduler) bool {
         return p_self.p_engine.status.debugMode;
@@ -353,6 +453,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
 
     const _nThread = @min(searcher.nThreads, moveArray.len);
     if (_nThread == 0) {
+        std.debug.print("[PANIC] dispatchUciGoThreads: thread {d} move {d}\n", .{ searcher.nThreads, moveArray.len });
         @panic("No thread or no moves available");
     }
     if (p_engine.status.debugMode) {
@@ -367,6 +468,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     defer threadingl.freeThreadPackArray(p_engine.alloc, &pack);
 
     p_engine.searcher.searching = true;
+    defer p_engine.searcher.searching = false;
 
     if (p_engine.status.debugMode) {
         searcher.printInfo();
@@ -375,7 +477,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     sched.setThreadPack(&pack);
     if (searcher.config.depth == 0) {
         if (p_engine.status.debugMode) {
-            std.debug.print("[DEBUG] executeGoCmd: No depth found  in the cmd string using the default engine option \n", .{});
+            std.debug.print("[DEBUG] executeGoCmd: No depth found in the cmd string using the default engine option \n", .{});
         }
         searcher.config.depth = p_engine.options.depthLevel;
     }
@@ -390,6 +492,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
 
     //TODO FIX ME
     sched.setEngine(p_engine);
+    // pre start the searching thread here
     sched.entryPointSearch(searcher.config.depth);
 }
 

@@ -12,7 +12,11 @@ const speedTestl = @import("speedTest.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
 const evalEngl = @import("evaluateEngine.zig");
-const guil = @import("gui/gui.zig");
+const bookl = @import("book.zig");
+const stringl = @import("string.zig");
+const filel = @import("file.zig");
+const perftl = @import("search/perft.zig");
+const heuristicl = @import("heuristic.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -20,33 +24,15 @@ const useDebug = build_options.useDebug;
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
 
-pub fn initAll() void {
-    magicl._initMagic(&magicl.magicTable);
+pub fn initAll(verbose: bool) void {
+    magicl._initMagic(&magicl.magicTable, verbose);
 
     hashl._initZobrist(GLOBAL_ALLOC, 42);
     //hashl._initOrReallocHashTable(GLOBAL_ALLOC, 2000);
 
-    moveTablel._initTables();
+    moveTablel._initTables(verbose);
     if (comptime useDebug) {
         std.debug.print("[PRE] Building using the useDebug flag\n", .{});
-    }
-}
-pub fn test_bench() void {
-    initAll();
-    benchl.test_benchmark();
-}
-pub fn test_speedTest() !void {
-    var engine: enginel.engine = try enginel.engine.init(GLOBAL_ALLOC);
-    //engine.uciMode = true;
-    engine.executeBuffer("uci");
-    engine.executeBuffer("debug on");
-    engine.executeBuffer("setoption name hash value 1");
-    engine.executeBuffer("isready");
-    engine.executeBuffer("benchmark");
-
-    std.Thread.sleep(std.time.ns_per_s);
-    while (engine.searcher.searching) {
-        std.Thread.sleep(configl.INFO_TICKRATE_NS);
     }
 }
 
@@ -83,16 +69,39 @@ pub fn test_decision() !void {
         const dec = getDecision(&eng);
         try std.testing.expect(dec.scoring > 8000);
     }
-
     std.debug.print("[TEST]: Mate in one test passed\n", .{});
+}
+pub fn test_speed() !void {
+    var eng = try initEngine();
+    defer eng.free();
+    eng.executeBuffer("setoption name useTexel value true");
+    eng.executeBuffer("position startpos");
+    eng.executeBuffer("go depth 6");
+    waitOnEngine(&eng);
+}
+pub fn test_bug() !void {
+    initAll(false);
+    var eng = try initEngine();
+    defer eng.free();
+    eng.executeBuffer("setoption name UCI_elo value 3000");
+    eng.executeBuffer("setoption name fixedDepth value true");
+    eng.executeBuffer("setoption name useHash value false");
+    //eng.executeBuffer("setoption name useQuiescence value true");
+    eng.executeBuffer("ucinewgame");
+    eng.executeBuffer("position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0");
+    eng.executeBuffer("isready");
+    eng.executeBuffer("go wtime 300000 btime 300000 winc 5000 binc 5000");
+    waitOnEngine(&eng);
 }
 
 pub fn main() anyerror!void {
-    //magicl.main();
+    //try test_speed();
+    //try heuristicl.main();
     //try chessl.main();
-    //test_bench();
-    //try enginel.launch_engine(true);
-    //try test_decision();
-    try evalEngl.main();
-    //try test_test();
+    //try test_bug();
+    //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
+    //Jdefer path.free(GLOBAL_ALLOC);
+    //Jtry bookl.main(&path);
+
+    try benchl.main();
 }

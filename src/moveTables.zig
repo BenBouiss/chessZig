@@ -11,6 +11,7 @@ const ONE = chess.ONE;
 const e_color = chess.e_color;
 const e_direction = chess.e_direction;
 const squareInfo = squarel.squareInfo;
+const e_square = squarel.e_square;
 
 pub const cachedTables: AttackTable = AttackTable.init();
 pub const cachedKingTable: kingTable = kingTable.init();
@@ -18,11 +19,21 @@ pub const cachedKingTable: kingTable = kingTable.init();
 // https://www.chessprogramming.org/Square_Attacked_By#Obstructed
 pub var arrRectangular: [64][64]u64 = undefined;
 
-pub fn _initTables() void {
-    std.debug.print("[PRE] Starting the table move build\n", .{});
+pub fn _initTables(verbose: bool) void {
+    if (verbose) {
+        std.debug.print("[PRE] Starting the table move build\n", .{});
+    }
     initInbetween(&arrRectangular);
-    std.debug.print("[PRE] Finished\n", .{});
+
+    initSafetyArea(&safetyArea);
+
+    if (verbose) {
+        std.debug.print("[PRE] Finished\n", .{});
+    }
 }
+// https://www.chessprogramming.org/King_Safety will be defined
+// as
+pub var safetyArea: [64]u64 = undefined;
 
 pub const AttackTable = struct {
     rayAttacks: [64][8]u64 = undefined,
@@ -150,5 +161,28 @@ pub fn initInbetween(table: *[64][64]u64) void {
                 continue;
             }
         }
+    }
+}
+pub fn initSafetyArea(table: *[64]u64) void {
+    //const baseSq: i8 = 28;
+    const baseSq: i8 = @intFromEnum(e_square.e4);
+    const anchors = [4]squarel.e_square{ .b1, .b7, .h7, .h1 };
+    var box: u64 = chess.EMPTY;
+    box |= chess.inBetween(anchors[0], anchors[1]);
+    box |= chess.inBetween(anchors[1], anchors[2]);
+    box |= chess.inBetween(anchors[2], anchors[3]);
+    box |= chess.inBetween(anchors[3], anchors[0]);
+    box |= (chess.sqToBitboard(anchors[0]) | chess.sqToBitboard(anchors[1]) | chess.sqToBitboard(anchors[2]) | chess.sqToBitboard(anchors[3]));
+    //std.debug.print("[DEBUG]initSafetyArea : init box\n", .{});
+    //chess.print_bitboard(box);
+    //std.debug.print("\n", .{});
+    for (0..64) |sq| {
+        // TODO quick and dirty way, 8 occl in all directions for each squares. Other solutions is moving a "square" of 3x3 around the king square and simulate the queen moves inside it
+        // in theory the clipping should not be an issue as the queen move with distance of 3 should not overlap
+        var delta: i8 = @intCast(sq);
+        delta -= baseSq;
+        const newBox = chess.genShift(box, delta);
+        table[sq] = chess.getRookAttacks(newBox, @enumFromInt(sq)) | chess.getBishopAttacks(newBox, @enumFromInt(sq));
+        table[sq] |= chess.knightAttacks(chess.xToBitboard(@intCast(sq)));
     }
 }

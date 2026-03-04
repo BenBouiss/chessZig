@@ -100,8 +100,8 @@ pub fn contains(a: []const u8, b: []const u8, comptime token: strTokens) bool {
     return moveTarget == b.len;
 }
 
-pub fn find(comptime T: type, a: []const T, e: T) i8 {
-    var ret: i8 = 0;
+pub fn find(comptime T: type, a: []const T, e: T) i32 {
+    var ret: i32 = 0;
     for (a) |a_e| {
         if (a_e == e) {
             return ret;
@@ -110,12 +110,12 @@ pub fn find(comptime T: type, a: []const T, e: T) i8 {
     }
     return -1;
 }
-pub fn findM(comptime T: type, a: []const T, e: []const T) i8 {
+pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
     if (e.len > a.len) {
         return -1;
     }
-    var ret: i8 = 0;
-    var count: i8 = 0;
+    var ret: i32 = 0;
+    var count: i32 = 0;
     for (0..a.len) |i| {
         const a_e = a[i];
         if (count == e.len) {
@@ -167,6 +167,34 @@ pub fn trimStr(str: []const u8) []const u8 {
         }
     }
     return str;
+}
+pub fn stripStr(str: []const u8) []const u8 {
+    // removes empty spaces at the start / end of the string
+    if (str.len == 0) {
+        return str;
+    }
+    var firstIndex: usize = 0;
+    var endIndex: usize = str.len;
+    for (0..str.len) |i| {
+        if (str[i] == ' ') {
+            firstIndex = i;
+        } else {
+            break;
+        }
+    }
+    for (0..str.len) |i| {
+        const _i = str.len - 1 - i;
+        if (str[_i] == ' ') {
+            endIndex = _i;
+        } else {
+            break;
+        }
+    }
+    firstIndex += 1;
+    if (str[0] != ' ') {
+        firstIndex = 0;
+    }
+    return str[firstIndex..endIndex];
 }
 
 pub fn lower(alloc: std.mem.Allocator, buffer: []const u8) ![]const u8 {

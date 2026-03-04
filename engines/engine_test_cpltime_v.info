@@ -1,0 +1,28 @@
+[engine1]
+path="engines/bin/engine_22_02_26_var";
+name="normal";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value true";
+"setoption name useHash value false";
+"setoption name useTexel value false";
+
+[engine2]
+path="engines/bin/engine_22_02_26_var";
+name="quiescence";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value true";
+"setoption name useHash value false";
+"setoption name useTexel value false";
+"setoption name useQuiescence value true";
+
+[match]
+nMatch=1;
+playerSwitch=true;
+//debugMode=true;
+useOpeningBook=false;
+openingBookPath="opening/8moves_v3.pgn";
+
+logsLocation="logs/ben/ben";
+//saveLogs=true;
+
+
