@@ -2,6 +2,6 @@ const guil = @import("gui/gui.zig");
 const mainl = @import("main.zig");
 
 pub fn main() void {
-    mainl.initAll();
+    mainl.initAll(true);
     guil.main();
 }

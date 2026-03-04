@@ -56,19 +56,25 @@ pub const magicRecord = struct {
         return .{ .isInitialized = true, .rookMoves = undefined, .bishopMoves = undefined };
     }
 };
-pub fn _initMagic(p_magic: *magicRecord) void {
+pub fn _initMagic(p_magic: *magicRecord, verbose: bool) void {
     if (comptime useMagic) {
-        std.debug.print("Building using magic move gen!\n", .{});
+        if (verbose) {
+            std.debug.print("Building using magic move gen!\n", .{});
+        }
     }
     const _start = std.time.milliTimestamp();
-    std.debug.print("[PRE] Starting the search for magic keys \n", .{});
+
+    if (verbose) {
+        std.debug.print("[PRE] Starting the search for magic keys \n", .{});
+    }
     p_magic.* = magicRecord.init();
 
-    //initRookBishopMagic(&ret);
     initRookBishopMagicCached(p_magic);
     initRookBishopMoves(p_magic);
 
-    std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
+    if (verbose) {
+        std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
+    }
     return;
 }
 
@@ -113,21 +119,17 @@ pub fn initRookBishopMoves(p_record: *magicRecord) void {
     return;
 }
 
-//pub fn magicIndex(entry: magic_entry, blockers: u64) usize {
-//    const _blockers = blockers & entry.mask;
-//    const hash = _blockers *% entry.magic;
-//    return @intCast(hash >> @intCast(64 - entry.index_bit));
-//}
-
 pub fn rookMagicIndex(entry: magic_entry, blockers: u64) u64 {
     const _blockers = blockers & entry.mask;
     const hash = _blockers *% entry.magic;
-    return (hash >> (64 - ROOK_FIXED_BIT));
+    //return (hash >> (64 - ROOK_FIXED_BIT));
+    return (hash >> 52);
 }
 pub fn bishopMagicIndex(entry: magic_entry, blockers: u64) u64 {
     const _blockers = blockers & entry.mask;
     const hash = _blockers *% entry.magic;
-    return (hash >> @intCast(64 - BISHOP_FIXED_BIT));
+    //return (hash >> (64 - BISHOP_FIXED_BIT));
+    return (hash >> 55);
 }
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {

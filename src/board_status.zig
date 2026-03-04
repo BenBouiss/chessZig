@@ -22,7 +22,14 @@ pub const bCastleKRookBit: u64 = 0xA000000000000000;
 pub const bCastleQKingBit: u64 = 0x1400000000000000;
 pub const bCastleQRookBit: u64 = 0x900000000000000;
 
+pub const e_turn = enum(u2) { BLACK = 0, WHITE = 1 };
 pub const statusStack = struct {
+    // status: 5 bools
+    // size: 5 bytes
+    // stacksize = 5 * 4096 = 20 480 bytes
+    //
+    // if packed to u8 size = 1 byte
+    // stacksize = 4096 bytes
     items: [movel.MAX_MATCH_LENGTH]status = undefined,
     len: usize = 0,
 
@@ -42,7 +49,7 @@ pub const statusStack = struct {
 };
 
 pub const status = struct {
-    whiteToMove: bool = true,
+    _whiteToMove: bool = true,
 
     WCastlingK: bool = false,
     WCastlingQ: bool = false,
@@ -50,10 +57,19 @@ pub const status = struct {
     BCastlingK: bool = false,
     BCastlingQ: bool = false,
     pub fn turn(self: status) chessl.e_color {
-        if (self.whiteToMove) {
+        if (self._whiteToMove) {
             return .WHITE;
         }
         return .BLACK;
+    }
+    pub inline fn setTurn(self: *status, white: bool) void {
+        self._whiteToMove = white;
+    }
+    pub inline fn whiteToMove(self: status) bool {
+        return self._whiteToMove;
+    }
+    pub inline fn invertTurn(self: *status) void {
+        self._whiteToMove = !self._whiteToMove;
     }
     pub fn canCastle(self: status, comptime whiteMove: bool) bool {
         if (comptime whiteMove) {
@@ -75,28 +91,28 @@ pub const status = struct {
         return self.BCastlingQ;
     }
     pub fn onKingMove(self: status) status {
-        if (self.whiteToMove) {
-            return .{ .whiteToMove = false, .WCastlingK = false, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+        if (self._whiteToMove) {
+            return .{ ._whiteToMove = false, .WCastlingK = false, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
         } else {
-            return .{ .whiteToMove = true, .BCastlingK = false, .BCastlingQ = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ };
+            return .{ ._whiteToMove = true, .BCastlingK = false, .BCastlingQ = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ };
         }
     }
     pub fn onRookMove(self: status, rooks: u64, comptime white: bool) status {
         if (comptime white) {
             if (isLeftRook(rooks)) {
-                return .{ .whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ ._whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
             } else if (isRightRook(rooks)) {
-                return .{ .whiteToMove = false, .WCastlingK = false, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ ._whiteToMove = false, .WCastlingK = false, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
             } else {
-                return .{ .whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ ._whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
             }
         } else {
             if (isLeftRook(rooks)) {
-                return .{ .whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = false };
+                return .{ ._whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = false };
             } else if (isRightRook(rooks)) {
-                return .{ .whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = false, .BCastlingQ = self.BCastlingQ };
+                return .{ ._whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = false, .BCastlingQ = self.BCastlingQ };
             } else {
-                return .{ .whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ ._whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
             }
         }
     }

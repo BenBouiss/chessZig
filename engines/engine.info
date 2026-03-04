@@ -1,0 +1,29 @@
+[engine1]
+path="zig-out/bin/engine";
+name="prev";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value false";
+"setoption name useHash value false";
+//"debug on";
+
+[engine2]
+path="zig-out/bin/engine";
+name="new";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value false";
+"setoption name useHash value false";
+//"debug on";
+
+[match]
+nMatch=1;
+playerSwitch=true;
+debugMode=false;
+useOpeningBook=false;
+openingBookPath="opening/8moves_v3.pgn";
+infinite=false;
+
+timeFormat=(60000, 0);
+
+logsLocation="logs/ben/ben";
+//saveLogs=true;
+

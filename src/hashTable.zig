@@ -133,7 +133,6 @@ pub const Hash_table = struct {
         }
     }
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
-        //return hash >> @intCast(64 - self.nBits);
         return hash % self.entries.len;
     }
     pub fn getBucketFromFullHashIndex(self: Hash_table, hash: u64) *Hash_bucket {
@@ -144,6 +143,16 @@ pub const Hash_table = struct {
         return &self.entries[offset];
     }
 
+    pub fn overwriteEvaluationEntries(p_self: *Hash_table, p_entry: *const Hash_entry, score: scoreType) void {
+        const index = p_entry.key.code;
+        var p_bucket = p_self.getBucketFromFullHashIndex(index);
+        for (0..p_bucket.len) |i| {
+            var ent = &p_bucket.entries[i];
+            if (ent.key.code == p_entry.key.code) {
+                ent.val.evaluation = score;
+            }
+        }
+    }
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry) bool {
         const index = p_entry.key.code;
         p_self.n_insertion += 1;

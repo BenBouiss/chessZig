@@ -108,6 +108,16 @@ pub const ExpectedBenchmarkResults = [_]i64{
 };
 // source: https://github.com/Timmoth/grandchesstree
 
+pub const ExpectedPerftResKiwipete = [_]i64{
+    48,
+    2039,
+    97862,
+    4085603,
+    193690690,
+    8031647685,
+};
+pub const KIWIPETE_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0";
+
 pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread: u8, batched: bool) void {
     var _start: i64 = 0;
     var _end: i64 = 0;
@@ -140,9 +150,6 @@ pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool
         _end = std.time.milliTimestamp();
         std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, _node, @divFloor(_node, (_end - _start + 1)) * 1000 });
         bench_res.printInfo();
-        if (_node != ExpectedBenchmarkResults[depth]) {
-            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], _node, ExpectedBenchmarkResults[depth] - _node });
-        }
         if (comptime useHash) {
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{bench_res.n_hashRetrieve});
             std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
@@ -152,14 +159,15 @@ pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool
 }
 
 pub fn test_benchmark() void {
-    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch unreachable;
+    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, KIWIPETE_FEN) catch unreachable;
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 7, 1, false);
-    //nodeBenchmark_debug(&game_state, 7, false);
+    nodeExplorationBenchmark(&game_state, 6, 1, true);
+    //nodeBenchmark_debug(&game_state, 6, false);
 }
 
 pub fn main() !void {
+    mainl.initAll(true);
     test_benchmark();
 }

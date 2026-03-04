@@ -21,7 +21,6 @@ const moveContainer = movel.moveContainer;
 const typedMoveContainer = movel.typedMoveContainer;
 const e_square = squarel.e_square;
 const scoreType = heuristicl.scoreType;
-const moveLine = movel.moveLine;
 const engine = enginel.engine;
 const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
@@ -100,13 +99,13 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
         p_engine.respond(msg);
         p_engine.searcher.endCounter = 0;
         for (0..p_threadPack.len) |i| {
-            p_engine.searcher.endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].running);
+            p_engine.searcher.endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].alive);
         }
     }
     p_engine.searcher.searching = false;
     if (p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
         for (0..p_threadPack.len) |i| {
-            p_threadPack.items(._tInfo)[i].running = false;
+            p_threadPack.items(._tInfo)[i].alive = false;
         }
         threadingl.joinOnThreadPack(p_threadPack);
     }
@@ -119,9 +118,9 @@ const perftSearchFeatures = struct {
 };
 
 pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feats: perftSearchFeatures) void {
-    p_info.running = true;
+    p_info.working = true;
+    defer p_info.working = false;
     if (depth == 0) {
-        p_info.running = false;
         p_info.n_nodeExplored += 1;
         return;
     }
@@ -135,10 +134,9 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
 
         _ = p_state.undoMove();
     }
-    p_info.running = false;
 }
 pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8, feats: perftSearchFeatures) u64 {
-    if (depth <= 0 or !p_info.running) {
+    if (depth <= 0 or !p_info.alive) {
         p_info.n_nodeExplored += 1;
         return 1;
     }
