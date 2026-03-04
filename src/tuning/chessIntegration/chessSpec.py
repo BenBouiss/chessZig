@@ -182,4 +182,8 @@ total_idx += 1
 
 simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0]
 
+# obtained after 14 iter and 8 popsize
+
+newWeight_0: list[float] = [0.0, -3.0, 100.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]
+
 

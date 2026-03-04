@@ -327,8 +327,10 @@ pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
     }
     return ret;
 }
-pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) bool {
-    assert(turnToken.len == 1);
+pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) debug_err!bool {
+    if (turnToken.len != 1) {
+        return debug_err.fenErr;
+    }
     const turnLetter = utils.lowerLetter(turnToken[0]);
     if (turnLetter == 'w') {
         p_state.stat.setTurn(true);
@@ -392,7 +394,7 @@ pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Boar
         return debug_err.fenErr;
     }
     var board = try getBoardFromFen_pieces(tokens.items[0]);
-    _ = getBoardFromFen_turn(&board, tokens.items[1]);
+    _ = try getBoardFromFen_turn(&board, tokens.items[1]);
     _ = getBoardFromFen_castle(&board, tokens.items[2]);
     _ = getBoardFromFen_enPassant(&board, tokens.items[3]);
     board.halfMoveClock = @intCast(getBoardFromFen_clockMove(tokens.items[4]));
@@ -404,7 +406,10 @@ pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Boar
 }
 
 pub fn getBoardFromUciFen(uciStr: []const u8, alloc: std.mem.Allocator, debug: bool) !Board_state {
-    var ret = getBoardFromFen(alloc, uciStr) catch unreachable;
+    var ret = getBoardFromFen(alloc, uciStr) catch {
+        std.debug.print("[PANIC] getboardFromUciFen: error while parsing {s}\n", .{uciStr});
+        @panic("");
+    };
     try applyUciMoves(&ret, uciStr, alloc, debug);
     return ret;
 }

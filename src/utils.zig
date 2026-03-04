@@ -190,7 +190,11 @@ pub fn stripStr(str: []const u8) []const u8 {
             break;
         }
     }
-    return str[(firstIndex + 1)..endIndex];
+    firstIndex += 1;
+    if (str[0] != ' ') {
+        firstIndex = 0;
+    }
+    return str[firstIndex..endIndex];
 }
 
 pub fn lower(alloc: std.mem.Allocator, buffer: []const u8) ![]const u8 {

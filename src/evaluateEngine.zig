@@ -181,6 +181,7 @@ const matchStatus = struct {
     availableMoves: movel.moveContainer = .{},
     status: e_matchFlag = .Error,
     nextTurnTrigger: bool = false,
+    nextTurn_move: movel.IMove = .{},
     positionUpdated: bool = false,
 
     prevTick: i64 = 0,
@@ -534,6 +535,7 @@ const guiState = struct {
         const p = p_self.getCurrentPlayer();
         // if this hits, mismatch between the current player and the engine that did the computing
         std.debug.assert(p.engineUsed == cmdBuffer.engine);
+        std.debug.assert(!p_self.match.nextTurnTrigger);
         const status = p_self.executeBestMove(cmdBuffer.str) catch |err| {
             std.debug.print("[DEBUG] matchOnBestMove: found err: {}\n", .{err});
             if (err == err_gui_bestmove.unknownMove_error) {
@@ -547,9 +549,6 @@ const guiState = struct {
             }
             return false;
         };
-        if (status) {
-            p_self.match.nextTurnTrigger = true;
-        }
         return status;
     }
     pub fn startMatch(p_self: *guiState) !void {
@@ -569,7 +568,6 @@ const guiState = struct {
         try p_self.respond(msg, p_self.getCurrentPlayer().engineUsed);
 
         try p_self.waitEngine();
-
         try p_self.sendGoSearchCommand();
     }
     fn nextTurn(p_self: *guiState) !bool {
@@ -577,7 +575,11 @@ const guiState = struct {
             p_self.match.status = .StaleMateRepetition;
             return false;
         }
-        p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
+        if (p_self.match.chessState.isInsufficientMaterial()) {
+            p_self.match.status = .StaleMateInsuficientMaterial;
+            return false;
+        }
+
         if (p_self.match.availableMoves.len == 0) {
             if (p_self.match.chessState.isLegal(p_self.match.chessState.whiteToMove())) {
                 p_self.match.status = .StaleMate;
@@ -586,10 +588,6 @@ const guiState = struct {
                 p_self.match.status = .CheckMate;
                 return false;
             }
-        }
-        if (p_self.match.chessState.isInsufficientMaterial()) {
-            p_self.match.status = .StaleMateInsuficientMaterial;
-            return false;
         }
 
         try p_self.waitEngine();
@@ -643,6 +641,11 @@ const guiState = struct {
         try p_self.respond(msg, p_self.getCurrentPlayer().engineUsed);
     }
     fn sendGoSearchCommand(p_self: *guiState) !void {
+        if (p_self.match.availableMoves.len == 0) {
+            p_self.close();
+            std.debug.assert(p_self.match.availableMoves.len != 0);
+        }
+
         const msgMatch = try p_self.match.getGoStr(p_self.alloc);
         const msg = try std.fmt.allocPrint(p_self.alloc, "go {s} ", .{msgMatch});
 
@@ -690,11 +693,15 @@ const guiState = struct {
         if (!moveArr.items[0].isIn(p_self.match.availableMoves)) {
             return err_gui_bestmove.unknownMove_error;
         }
+        p_self.match.nextTurnTrigger = true;
+        p_self.match.nextTurn_move = moveArr.items[0];
 
-        p_self.match.chessState.makeMove(moveArr.items[0]);
+        p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
+        p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
         if (p_self.status.debugMode) {
             chessl.sanityCheckBoardState(&p_self.match.chessState);
         }
+
         return true;
     }
     pub fn executeInfoCmd(p_self: *guiState, cmdBuffer: signedCmd) void {
@@ -840,6 +847,7 @@ fn matchRoutine(p_self: *guiState) !void {
     } else {
         p_self.setBoard(chessl.DEFAULT_FEN);
     }
+    p_self.match.nextTurnTrigger = false;
     p_self.startMatch() catch {
         @panic("Failed to start the match");
     };
@@ -847,10 +855,12 @@ fn matchRoutine(p_self: *guiState) !void {
     var lastUpated: i64 = 0;
     while (p_self.status.running and p_self.match.status == .Continue) {
         if (p_self.match.nextTurnTrigger) {
+            p_self.match.nextTurnTrigger = false;
             const stat = try onNextTurnTrigger(p_self);
             if (!stat) {
                 break;
             }
+            p_self.match.positionUpdated = true;
         }
 
         std.Thread.sleep(configl.WAIT_TICKRATE_NS);
@@ -860,6 +870,7 @@ fn matchRoutine(p_self: *guiState) !void {
             const p = p_self.getCurrentPlayer();
             try p_self.sendEngineInterrupt(p.engineUsed);
             p_self.match.status = .Flagged;
+            break;
         }
         if (((std.time.milliTimestamp() - lastUpated) > configl.EVALUTATION_GUI_WAIT_MS) or (p_self.match.positionUpdated)) {
             p_self.match.positionUpdated = false;
@@ -886,8 +897,14 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
 }
 
 fn onNextTurnTrigger(p_self: *guiState) !bool {
+    //p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
+    //p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
+    //if (p_self.status.debugMode) {
+    //    chessl.sanityCheckBoardState(&p_self.match.chessState);
+    //}
+
     try p_self.match.turnComplete(p_self.alloc);
-    p_self.match.nextTurnTrigger = false;
+
     _ = p_self.nextTurn() catch {
         p_self.close();
         return false;
@@ -921,8 +938,8 @@ pub fn launch_gui(infoPath: []const u8) !void {
     _ = try ret.addEngine(settings.enginePaths[0]._slice());
     _ = try ret.addEngine(settings.enginePaths[1]._slice());
 
-    ret.match.playerInv[0] = try player.init(ret.alloc, standardTimeFormat, .BLACK, 1);
-    ret.match.playerInv[1] = try player.init(ret.alloc, standardTimeFormat, .WHITE, 0);
+    ret.match.playerInv[0] = try player.init(ret.alloc, settings.match.timeF, .BLACK, 1);
+    ret.match.playerInv[1] = try player.init(ret.alloc, settings.match.timeF, .WHITE, 0);
 
     ret.status.running = true;
     ret.status.phase = .MATCH;
@@ -946,6 +963,7 @@ const configMatch = struct {
     saveLogs: bool = true,
     logPath: string = undefined,
     logPathProvided: bool = false,
+    infinite: bool = false,
 
     openingDb: bookl.openingDatabase = undefined,
     pub fn setOpeningBookPath(p_self: *configMatch, alloc: std.mem.Allocator, path: []const u8) anyerror!void {
@@ -1164,6 +1182,36 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         settings.match.setLoggingLocationPath(alloc, path) catch {
             return false;
         };
+        return true;
+    } else if (buffer.startsWith("timeFormat")) {
+        const start = buffer.extractFromBounds("(", ",") catch {
+            return false;
+        };
+        const inc = buffer.extractFromBounds(",", ")") catch {
+            return false;
+        };
+
+        const _start = std.fmt.parseInt(i64, utilsl.stripStr(start), 10) catch {
+            return false;
+        };
+        const _inc = std.fmt.parseInt(i64, utilsl.stripStr(inc), 10) catch {
+            return false;
+        };
+
+        std.debug.print("[DEBUG] handleMatchInfoStrBuffer: '{s}' '{s}'\n", .{ utilsl.stripStr(start), utilsl.stripStr(inc) });
+        settings.match.timeF = .{ .time = _start, .inc = _inc };
+        return true;
+    } else if (buffer.startsWith("infinite")) {
+        const boolStr = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        if (utilsl.equal(u8, boolStr, "true")) {
+            settings.match.infinite = true;
+        } else if (utilsl.equal(u8, boolStr, "false")) {
+            settings.match.infinite = false;
+        } else {
+            return false;
+        }
         return true;
     }
 

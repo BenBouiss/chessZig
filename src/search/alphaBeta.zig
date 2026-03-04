@@ -74,7 +74,7 @@ pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.A
         if (!depthCom.depthSet) {
             continue;
         }
-        std.debug.print("starting search {} depth\n", .{depthCom.depth});
+        //std.debug.print("starting search {} depth\n", .{depthCom.depth});
         depthCom.depthSet = false;
         if (searchEntrypoint(p_state, p_startingMoves, p_info, depthCom.depth, &feat, &depthCom.line) == 1) {
             std.debug.print("[ERROR] alphaBetaWaitingRoom: Exiting main thread\n", .{});
@@ -154,18 +154,18 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var _alpha = alpha;
     // null move prunning here
     // R = 3
-    //if (comptime configl.DEFAULT_USE_NULLPRUNE) {
-    //    // see chess programming video
-    //    const R: u16 = 2 + 1;
-    //    if (depth > R) {
-    //        p_state.makeNullMove();
-    //        const score = -searchLoop(p_state, p_info, depth - 1 - R, -beta, -_alpha, p_features, ply + 1 + R);
-    //        p_state.undoNullMove();
-    //        if (score >= beta) {
-    //            return beta;
-    //        }
-    //    }
-    //}
+    if (comptime configl.DEFAULT_USE_NULLPRUNE) {
+        // see chess programming video
+        const R: u16 = 2 + 1;
+        if (depth > R) {
+            p_state.makeNullMove();
+            const score = -searchLoop(p_state, p_info, depth - 1 - R, -beta, -_alpha, p_features, ply + 1 + R, pv, prevLine);
+            p_state.undoNullMove();
+            if (score >= beta) {
+                return beta;
+            }
+        }
+    }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features);
