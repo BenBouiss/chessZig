@@ -24,6 +24,7 @@ pub const searchFeatures = struct {
     useHash: bool = configl.DEFAULT_USEHASHTABLE,
     useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
     useQuiescence: bool = configl.DEFAULT_USEQUIESC,
+    useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     usingIncrementalSearch: bool = !configl.DEFAULT_FIXED_DEPTH,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
@@ -32,6 +33,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.useTexelEvaluation = p_engine.options.useTexelEvaluation;
     ret.useQuiescence = p_engine.options.useQuiescence;
     ret.usingIncrementalSearch = !p_engine.options.fixDepth;
+    ret.useNullPrune = p_engine.options.useNullPrune;
     return ret;
 }
 

@@ -1,25 +1,23 @@
 [engine1]
 path="zig-out/bin/engine";
-name="normal";
+name="Standard";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
-"setoption name useTexel value false";
 
 [engine2]
 path="zig-out/bin/engine";
-name="texel weight";
+name="pruning";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
-"setoption name useTexel value false";
-"setoption name heuristicWeightsPath value engines/heuristics/test_texel.winfo";
+"setoption name useNullPruning value true";
 
 [match]
-nMatch=1;
+nMatch=6;
 playerSwitch=true;
 debugMode=false;
-useOpeningBook=false;
+useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
 
 logsLocation="logs/ben/ben";

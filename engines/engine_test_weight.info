@@ -1,17 +1,19 @@
 [engine1]
+//path="engines/bin/engine_03_03_26_tourney";
 path="zig-out/bin/engine";
-name="Standard heuristic";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
-"setoption name useHash value false";
-
-[engine2]
-path="zig-out/bin/engine";
-name="new weight";
+name="better heuristic";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
 "setoption name heuristicWeightsPath value engines/heuristics/weight_iter_6_popsize_16_baseline.winfo";
+
+[engine2]
+path="zig-out/bin/engine";
+name="better better heuristic";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value false";
+"setoption name useHash value false";
+"setoption name heuristicWeightsPath value engines/heuristics/weight_iter_26_popsize_16_baseline.winfo";
 
 [match]
 nMatch=4;
