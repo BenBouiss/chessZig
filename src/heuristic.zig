@@ -68,52 +68,87 @@ pub fn evaluate_debug(p_state: *chess.Board_state, values: *heuristicValues) heu
 }
 
 pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
-    var score: scoreType = 0;
+    var score_count: scoreType = 0;
+    var score_mg: scoreType = 0;
+    var score_eg: scoreType = 0;
+    var phase = totalPhase;
     for (0..chess.N_SQUARES) |sq| {
         const piece = p_state.get_piece(@intCast(sq));
         switch (piece) {
             .nEmptySquare, .nWhite, .nBlack => {},
-
             .nWhitePawn => {
-                score += values.Pawn_PSQT[sq] + values.PawnValue;
+                score_count += values.PawnValue;
+                score_mg += values.Pawn_PSQT[MG][sq];
+                score_eg += values.Pawn_PSQT[EG][sq];
             },
             .nWhiteBishop => {
-                score += values.Bishop_PSQT[sq] + values.BishopValue;
+                phase -= bishopPhase;
+                score_count += values.BishopValue;
+                score_mg += values.Bishop_PSQT[MG][sq];
+                score_eg += values.Bishop_PSQT[EG][sq];
             },
             .nWhiteKnight => {
-                score += values.Knight_PSQT[sq] + values.KnightValue;
+                phase -= knightPhase;
+                score_count += values.KnightValue;
+                score_mg += values.Knight_PSQT[MG][sq];
+                score_eg += values.Knight_PSQT[EG][sq];
             },
             .nWhiteRook => {
-                score += values.Rook_PSQT[sq] + values.RookValue;
+                phase -= rookPhase;
+                score_count += values.RookValue;
+                score_mg += values.Rook_PSQT[MG][sq];
+                score_eg += values.Rook_PSQT[EG][sq];
             },
             .nWhiteQueen => {
-                score += values.Queen_PSQT[sq] + values.QueenValue;
+                phase -= queenPhase;
+                score_count += values.QueenValue;
+                score_mg += values.Queen_PSQT[MG][sq];
+                score_eg += values.Queen_PSQT[EG][sq];
             },
             .nWhiteKing => {
-                score += values.King_PSQT[sq];
+                score_mg += values.King_PSQT[MG][sq];
+                score_eg += values.King_PSQT[EG][sq];
             },
 
             .nBlackPawn => {
-                score -= (values.Pawn_PSQT[sq ^ 56] + values.PawnValue);
+                score_count -= values.PawnValue;
+                score_mg -= values.Pawn_PSQT[MG][sq ^ 56];
+                score_eg -= values.Pawn_PSQT[EG][sq ^ 56];
             },
             .nBlackBishop => {
-                score -= (values.Bishop_PSQT[sq ^ 56] + values.BishopValue);
+                phase -= bishopPhase;
+                score_count -= values.BishopValue;
+                score_mg -= values.Bishop_PSQT[MG][sq ^ 56];
+                score_eg -= values.Bishop_PSQT[EG][sq ^ 56];
             },
             .nBlackKnight => {
-                score -= (values.Knight_PSQT[sq ^ 56] + values.KnightValue);
+                phase -= knightPhase;
+                score_count -= values.KnightValue;
+                score_mg -= values.Knight_PSQT[MG][sq ^ 56];
+                score_eg -= values.Knight_PSQT[EG][sq ^ 56];
             },
             .nBlackRook => {
-                score -= (values.Rook_PSQT[sq ^ 56] + values.RookValue);
+                phase -= rookPhase;
+                score_count -= values.RookValue;
+                score_mg -= values.Rook_PSQT[MG][sq ^ 56];
+                score_eg -= values.Rook_PSQT[EG][sq ^ 56];
             },
             .nBlackQueen => {
-                score -= (values.Queen_PSQT[sq ^ 56] + values.QueenValue);
+                phase -= queenPhase;
+                score_count -= values.QueenValue;
+                score_mg -= values.Queen_PSQT[MG][sq ^ 56];
+                score_eg -= values.Queen_PSQT[EG][sq ^ 56];
             },
             .nBlackKing => {
-                score -= (values.King_PSQT[sq ^ 56]);
+                score_mg -= values.King_PSQT[MG][sq ^ 56];
+                score_eg -= values.King_PSQT[EG][sq ^ 56];
             },
         }
     }
-    return score;
+    phase = @max(phase, 0);
+    //std.debug.assert(phase >= 0);
+    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+    return score_count + @divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
 }
 
 pub fn evaluate_pawnStructure(p_state: *chess.Board_state, isolatedCoef: scoreType, stackedCoef: scoreType, passedCoef: scoreType) scoreType {
@@ -370,21 +405,46 @@ pub fn modifyHeuristicWeight_array(alloc: std.mem.Allocator, s: *string, debug: 
         }
         std.debug.print("{d}]\n", .{buffer[chess.N_SQUARES - 1]});
     }
+    var dest: *[N_PHASES][chess.N_SQUARES]scoreType = undefined;
     if (s.containsE("pawn", .ignoreCase)) {
-        globalHeuristic.Pawn_PSQT = buffer;
+        //globalHeuristic.Pawn_PSQT = .{ buffer, buffer };
+        dest = &globalHeuristic.Pawn_PSQT;
     } else if (s.containsE("knight", .ignoreCase)) {
-        globalHeuristic.Knight_PSQT = buffer;
+        //globalHeuristic.Knight_PSQT = .{ buffer, buffer };
+        dest = &globalHeuristic.Knight_PSQT;
     } else if (s.containsE("bishop", .ignoreCase)) {
-        globalHeuristic.Bishop_PSQT = buffer;
+        //globalHeuristic.Bishop_PSQT = .{ buffer, buffer };
+        dest = &globalHeuristic.Bishop_PSQT;
     } else if (s.containsE("rook", .ignoreCase)) {
-        globalHeuristic.Rook_PSQT = buffer;
+        //globalHeuristic.Rook_PSQT = .{ buffer, buffer };
+        dest = &globalHeuristic.Rook_PSQT;
     } else if (s.containsE("queen", .ignoreCase)) {
-        globalHeuristic.Queen_PSQT = buffer;
+        //globalHeuristic.Queen_PSQT = .{ buffer, buffer };
+        dest = &globalHeuristic.Queen_PSQT;
     } else if (s.containsE("king", .ignoreCase)) {
-        globalHeuristic.King_PSQT = buffer;
+        //globalHeuristic.King_PSQT = .{ buffer, buffer };
+        dest = &globalHeuristic.King_PSQT;
     } else {
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token \n[", .{});
+        }
+        return;
+    }
+    if (s.containsE("MG", .ignoreCase)) {
+        dest.*[MG] = buffer;
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set MG\n", .{});
+        }
+    } else if (s.containsE("EG", .ignoreCase)) {
+        dest.*[EG] = buffer;
+
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set EG\n", .{});
+        }
+    } else {
+        dest.* = .{ buffer, buffer };
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set both\n", .{});
         }
     }
 }
@@ -446,16 +506,16 @@ pub const heuristicValues = struct {
     SafetyBishopValue: scoreType = weightl.simpleSafetyBishopScore,
     SafetyKnightValue: scoreType = weightl.simpleSafetyKnightScore,
     SafetyRookValue: scoreType = weightl.simpleSafetyRookScore,
-    SafetyQueenValue: scoreType = weightl.simpleQueenScore,
+    SafetyQueenValue: scoreType = weightl.simpleSafetyQueenScore,
 
     StructureProtectionValue: scoreType = weightl.simpleStructureProtectionScore,
 
-    Pawn_PSQT: [chess.N_SQUARES]scoreType = weightl.pawnScoreArr,
-    Bishop_PSQT: [chess.N_SQUARES]scoreType = weightl.bishopScoreArr,
-    Knight_PSQT: [chess.N_SQUARES]scoreType = weightl.knightScoreArr,
-    Rook_PSQT: [chess.N_SQUARES]scoreType = weightl.rookScoreArr,
-    Queen_PSQT: [chess.N_SQUARES]scoreType = weightl.queenScoreArr,
-    King_PSQT: [chess.N_SQUARES]scoreType = weightl.kingScoreArr,
+    Pawn_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.pawnScoreArr, weightl.pawnScoreArr },
+    Bishop_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.bishopScoreArr, weightl.bishopScoreArr },
+    Knight_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.knightScoreArr, weightl.knightScoreArr },
+    Rook_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.rookScoreArr, weightl.rookScoreArr },
+    Queen_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.queenScoreArr, weightl.queenScoreArr },
+    King_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.kingScoreArr, weightl.kingScoreArr_EG },
 
     // other more complex values may be inserted below
 };
@@ -469,6 +529,12 @@ const N_WEIGHTS: usize = 256;
 const NTERMS: usize = 1024;
 pub var globalHeuristic: heuristicValues = .{};
 
+//const pawnPhase: usize = 0;
+const bishopPhase: usize = 1;
+const knightPhase: usize = 1;
+const rookPhase: usize = 2;
+const queenPhase: usize = 4;
+const totalPhase: scoreType = @intCast(knightPhase * 4 + bishopPhase * 4 + rookPhase * 4 + queenPhase * 2);
 // value between 0 and 1
 const TUNE_K: scoreType = 5;
 
@@ -591,10 +657,22 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         idx += 1;
 
         // mobility
-        var moveW = moveGenl.cst_moveGenBB(p_state, true);
-        var moveB = moveGenl.cst_moveGenBB(p_state, false);
+        //var moveW = moveGenl.cst_moveGenBB(p_state, true);
+        //var moveB = moveGenl.cst_moveGenBB(p_state, false);
+
+        const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
+        const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
+        const moveW = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
+        const moveB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(moveW.count()), .bcoeff = @intCast(moveB.count()) });
+        idx += 1;
+
+        // structure protection
+        const w_pieceProtect = allwhiteMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.wKingSq));
+        const b_pieceProtect = allblackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
+
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(w_pieceProtect.count()), .bcoeff = @intCast(b_pieceProtect.count()) });
         idx += 1;
 
         // pawn structure
@@ -604,6 +682,15 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
         idx += 1;
 
+        const wp = p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
+        const bp = p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
+        const nWhitePassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(wp, bp)));
+        const nBlackPassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(bp, wp)));
+
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(nWhitePassed), .bcoeff = @intCast(nBlackPassed) });
+        idx += 1;
+
+        // piece psqt
         p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), &idx);
 
         p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), &idx);
@@ -617,10 +704,8 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)])), &idx);
     }
     if (comptime (configl.TUNE_SAFETY)) {
-        const kingW = squarel.squareInfo.init(p_state.getKingSq(true));
-        const kingB = squarel.squareInfo.init(p_state.getKingSq(false));
-        const maskW = kingW.getAllAttackingSquares();
-        const maskB = kingB.getAllAttackingSquares();
+        const maskW = chess.safetyArea(p_state.wKingSq);
+        const maskB = chess.safetyArea(p_state.bKingSq);
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
         idx += 1;
@@ -850,11 +935,11 @@ pub const coeffVector = struct {
     }
 };
 
-pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string) ![]texelEntry {
-    var tokens = try filel.getTokensFromFileAlloc(alloc, path._slice(), '\n', configl.N_POSITIONS);
+pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string, nSkips: usize) ![]texelEntry {
+    var tokens = try filel.getTokensFromFileAlloc(alloc, path._slice(), '\n', configl.N_POSITIONS, nSkips);
     var entries: []texelEntry = try alloc.alloc(texelEntry, configl.N_POSITIONS);
 
-    for (0..configl.N_POSITIONS) |i| {
+    for (0..tokens.items.len) |i| {
         var s = tokens.items[i];
         var tok = try s.split(alloc, ' ');
         defer tok.deinit(alloc);
@@ -875,7 +960,7 @@ pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string) ![]texelEntry 
 }
 
 pub fn mainTexel(alloc: std.mem.Allocator, path: string) !void {
-    const entries = try getEntriesFromFile(alloc, path);
+    const entries = try getEntriesFromFile(alloc, path, 0);
     defer alloc.free(entries);
     printEntriesInfo(entries);
     try optimization_entrypoint(alloc, entries);
@@ -883,10 +968,9 @@ pub fn mainTexel(alloc: std.mem.Allocator, path: string) !void {
     return;
 }
 pub const csvHeader = struct {
-    templateEntry: *texelEntry = undefined,
+    n_params: usize,
     pub fn format(self: csvHeader, writer: *std.Io.Writer) !void {
-        const tuple = self.templateEntry.tuples;
-        for (0..tuple.len) |i| {
+        for (0..self.n_params) |i| {
             try writer.print("Coeff_{d}_w,Coeff_{d}_b,", .{ i, i });
         }
 
@@ -904,21 +988,26 @@ pub const csvBody = struct {
         try writer.print("{d},{d}", .{ self.entry.phase, self.entry.result });
     }
 };
-pub fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []texelEntry, path: string) !void {
+pub fn createEmptyFile(alloc: std.mem.Allocator, path: string) !void {
     // format
     // Coeff_1_w, Coeff_1_b, ...., Coeff_n_w, Coeff_n_b, phase, outcome)
     // <--comma separated values--->
-
     const file = try std.fs.cwd().createFile(path._slice(), .{ .read = true });
     defer file.close();
 
     // save header
-    const headerTemplate: csvHeader = .{ .templateEntry = &entries[0] };
+    const headerTemplate: csvHeader = .{ .n_params = configl.N_TERMS };
 
     const header_str = try std.fmt.allocPrint(alloc, "{f}\n", .{headerTemplate});
     defer alloc.free(header_str);
     _ = try file.write(header_str);
-    // save
+}
+pub fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []texelEntry, path: string) !void {
+    // <--comma separated values--->
+    const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .write_only });
+    defer file.close();
+    try file.seekFromEnd(0);
+
     const print_freq: usize = 10000;
     for (0..entries.len) |i| {
         if (i % print_freq == 0) {
@@ -1103,7 +1192,7 @@ pub fn sanityCheck() !void {
     var path: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "opening/E12.33-1M-D12-Resolved.book");
     defer path.free(mainl.GLOBAL_ALLOC);
 
-    var tokens = try filel.getTokensFromFileAlloc(mainl.GLOBAL_ALLOC, path._slice(), '\n', configl.N_POSITIONS);
+    var tokens = try filel.getTokensFromFileAlloc(mainl.GLOBAL_ALLOC, path._slice(), '\n', configl.N_POSITIONS, 0);
     defer stringl.freeArrayList_string(mainl.GLOBAL_ALLOC, &tokens);
     var err: f32 = 0;
     for (tokens.items) |fen| {
@@ -1129,9 +1218,20 @@ pub fn sanityCheck() !void {
 }
 pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !void {
     //
-    const entries = try getEntriesFromFile(alloc, dataPath);
-    defer alloc.free(entries);
-    try saveCoefficientToFile(alloc, entries, savePath);
+    const allEntries = try filel.getFileLineSize(alloc, dataPath._slice());
+    var remainingEntries = allEntries;
+    std.debug.print("[DEBUG] test_save: number of lines found: {d}\n", .{allEntries});
+
+    try createEmptyFile(alloc, savePath);
+    var skips: usize = 0;
+    while (remainingEntries != 0) {
+        std.debug.print("Remaining entries: {d} \n", .{remainingEntries});
+        remainingEntries = remainingEntries -| configl.N_POSITIONS;
+        const entries = try getEntriesFromFile(alloc, dataPath, skips);
+        defer alloc.free(entries);
+        try saveCoefficientToFile(alloc, entries, savePath);
+        skips += configl.N_POSITIONS;
+    }
 }
 
 // move heuristic "sections"
@@ -1222,14 +1322,28 @@ pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, pre
     }
     return cst_eval_move_sorting_mask(p_moves, ply, prevLine, false);
 }
+pub fn dummyScaling(score: scoreType, phase: scoreType) scoreType {
+    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+    return @divFloor((score * (256 - _phase)) + score * _phase, 256);
+}
+pub fn test_scaling() !void {
+    const scoreTest = [_]scoreType{ 0, 100, -100, -500, 500, 1000 };
+    for (scoreTest) |score| {
+        for (0..32) |phase| {
+            std.debug.print("{d} ", .{dummyScaling(score, @intCast(phase))});
+        }
+        std.debug.print("\n", .{});
+    }
+}
 pub fn main() !void {
-    try sanityCheck();
+    //try sanityCheck();
     //try test_main();
     var path: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "opening/E12.33-1M-D12-Resolved.book");
     var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights_int.csv");
     defer path.free(mainl.GLOBAL_ALLOC);
     defer savePath.free(mainl.GLOBAL_ALLOC);
 
-    try test_save(mainl.GLOBAL_ALLOC, path, savePath);
+    try test_scaling();
+    //try test_save(mainl.GLOBAL_ALLOC, path, savePath);
     //try mainTexel(mainl.GLOBAL_ALLOC, path);
 }

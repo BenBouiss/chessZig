@@ -5,6 +5,7 @@ const chessl = @import("chess.zig");
 const scoreType = heuristicl.scoreType;
 const weightType = heuristicl.weightType;
 const NVector = heuristicl.NVector;
+const heuristicValues = heuristicl.heuristicValues;
 
 // values from https://www.chessprogramming.org/Evaluation for now
 pub const simplePawnScore: scoreType = 100;
@@ -15,10 +16,12 @@ pub const simpleQueenScore: scoreType = 900;
 pub const simpleCheckMateScore: scoreType = 99999;
 pub const simpleStalemateScore: scoreType = 0;
 
+// ============ pawn structure ============
 pub const simpleIsolatedPawnScore: scoreType = -1;
 pub const simpleStackedPawnScore: scoreType = -1;
 pub const simplePassedPawnScore: scoreType = 2;
 
+// ============ structure ============
 pub const simpleMobilityScore: scoreType = 5;
 pub const simpleStructureProtectionScore: scoreType = 1;
 
@@ -41,3 +44,12 @@ pub const rookScoreArr = [chessl.N_SQUARES]scoreType{ -25, -20, -15, 4, -1, -15,
 pub const queenScoreArr = [chessl.N_SQUARES]scoreType{ -29, -22, -23, -9, -23, -27, -25, -31, -27, -13, 0, -14, -11, -11, -15, -28, -22, -4, -9, -8, -12, -8, -12, -20, -10, -11, -1, -3, 0, -7, -15, -16, 0, -12, 16, 12, 18, 15, -9, -4, -1, 32, 24, 44, 54, 47, 32, 1, 10, 24, 44, -7, 15, 56, 42, 18, 4, 0, -6, -78, 51, 18, 65, 19 };
 
 pub const kingScoreArr = [chessl.N_SQUARES]scoreType{ 17, 30, -3, -14, 6, -1, 40, 18, -4, 3, -14, -50, -57, -18, 13, 4, -47, -42, -43, -79, -64, -32, -28, -32, -55, -43, -52, -28, -51, -47, -8, -50, -55, 50, 11, -4, -19, 13, 0, -49, -62, 12, -57, 44, -67, 28, 37, -31, -32, 10, 55, 56, 56, 55, 10, 3, 4, 54, 47, -99, -99, 60, 83, -62 };
+
+// source: https://www.chessprogramming.org/Simplified_Evaluation_Function
+pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0, 0, -10, -20, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -30, 0, 0, 0, 0, -30, -30, -50, -30, -30, -30, -30, -30, -30, -50 };
+
+// optionnal pre filled heuristic values
+const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = -12, .PassedPawnValue = 93, .IsolatedPawnValue = 6, .SafetyKnightValue = 36, .SafetyBishopValue = 8, .SafetyRookValue = -5, .SafetyQueenValue = 44, .StructureProtectionValue = 1, .MobilityValue = -4 };
+
+const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = -16, .PassedPawnValue = -12, .IsolatedPawnValue = 27, .SafetyKnightValue = 6, .SafetyBishopValue = 5, .SafetyRookValue = -7, .SafetyQueenValue = 12, .StructureProtectionValue = 2, .MobilityValue = -2 };
+// [-16.0, -12.0, 27.0, 6.0, 5.0, -7.0, 12.0, 2.0, -1.0]
