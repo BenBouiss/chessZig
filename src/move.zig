@@ -621,10 +621,13 @@ pub const line = struct {
 };
 pub const pvContainer = struct {
     pv_arr: [configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove),
+
     pv_len: [configl.MAXIMUM_SEARCH_DEPTH]usize = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH]usize),
+
     pub inline fn setLen(p_self: *pvContainer, ply: u16) void {
         p_self.pv_len[ply] = ply;
     }
+
     pub fn onBestMove(p_self: *pvContainer, move: IMove, ply: u16) void {
         // sets the main line (ie: the main diagonal) with the best move found
         p_self.pv_arr[ply][ply] = move;
