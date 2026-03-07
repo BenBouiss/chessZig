@@ -154,19 +154,19 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var _alpha = alpha;
     // null move prunning here
     // R = 3
-    if (p_features.useNullPrune) {
-        // see chess programming video
-        const R: u16 = 2 + 1;
-        const ischeck = p_state.isChecked();
-        if (depth > R and !ischeck) {
-            p_state.makeNullMove();
-            const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine); // - 1 to be changed to + 1, ply + 1 => ply
-            p_state.undoNullMove();
-            if (score >= beta) {
-                return beta;
-            }
-        }
-    }
+    //if (p_features.useNullPrune) {
+    //    // see chess programming video
+    //    const R: u16 = 2 + 1;
+    //    const ischeck = p_state.isChecked();
+    //    if (depth > R and !ischeck) {
+    //        p_state.makeNullMove();
+    //        const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine); // - 1 to be changed to + 1, ply + 1 => ply
+    //        p_state.undoNullMove();
+    //        if (score >= beta) {
+    //            return beta;
+    //        }
+    //    }
+    //}
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features);
@@ -194,8 +194,8 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         if (_alpha >= beta) {
             // save here the killer moves
             if (!move.isCapture()) {
-                heuristicl.killerMoves[ply][0] = heuristicl.killerMoves[ply][0];
-                heuristicl.killerMoves[ply][1] = move;
+                heuristicl.killerMoves[ply][1] = heuristicl.killerMoves[ply][0];
+                heuristicl.killerMoves[ply][0] = move;
             }
             break;
         }
