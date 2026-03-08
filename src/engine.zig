@@ -23,7 +23,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USETEXEL, USEQUIESCENCE, USENULLPRUNE };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USETEXEL, USEQUIESCENCE, USENULLPRUNE };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -176,7 +176,8 @@ pub const engineOptions = struct {
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
-    fixDepth: bool = configl.DEFAULT_FIXED_DEPTH,
+    fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
+    useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
 
     engineElo: spinVarType = configl.DEFAULT_ELO,
     setOptions: std.ArrayList(setOptionEntry) = undefined,
@@ -246,6 +247,8 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
         try p_self.addOption(.{ .name = "fixedDepth", .optionType = .FIXED_DEPTH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_FIXED_DEPTH } } });
+        try p_self.addOption(.{ .name = "useStaticSearch", .optionType = .USESTATICSEARCH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_STATIC_SEARCH } } });
+
         try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
@@ -553,7 +556,17 @@ pub const engine = struct {
                 if (!entry.info.str.validateValue(val)) {
                     return false;
                 }
-                p_self.options.fixDepth = utilsl.contains(val, "true", .ignoreCase);
+                p_self.options.fixedDepth = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .USESTATICSEARCH => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useStaticSearch = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
             .CLEAR_HASH => {
@@ -792,6 +805,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .UCI_ELO;
     } else if (utilsl.contains(cmdBuffer, " fixeddepth", .ignoreCase)) {
         return .FIXED_DEPTH;
+    } else if (utilsl.contains(cmdBuffer, " usestaticsearch", .ignoreCase)) {
+        return .USESTATICSEARCH;
     } else if (utilsl.contains(cmdBuffer, " clearhash", .ignoreCase)) {
         return .CLEAR_HASH;
     } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {

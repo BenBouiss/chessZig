@@ -14,7 +14,7 @@ name="pruning";
 "setoption name useNullPruning value true";
 
 [match]
-nMatch=6;
+nMatch=1;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

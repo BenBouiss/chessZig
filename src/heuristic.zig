@@ -1317,7 +1317,7 @@ pub fn cst_eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16,
 }
 
 pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures) [chess.MAX_POSSIBLE_MOVE]usize {
-    if (p_feature.usingIncrementalSearch) {
+    if (!p_feature.useStaticSearch) {
         return cst_eval_move_sorting_mask(p_moves, ply, prevLine, true);
     }
     return cst_eval_move_sorting_mask(p_moves, ply, prevLine, false);

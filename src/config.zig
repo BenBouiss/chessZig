@@ -18,7 +18,8 @@ pub const MAX_HASHSIZE = 1000; // in MB => 1 GB
 
 pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
-pub const DEFAULT_USEHASHTABLE = true;
+
+pub const DEFAULT_USEHASHTABLE = false;
 pub const DEFAULT_USETEXEL = false;
 pub const _DEFAULT_USETEXEL = "false";
 
@@ -36,7 +37,7 @@ pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
 pub const MAX_DEPTH: u16 = 6;
 pub const MAXIMUM_SEARCH_DEPTH: u16 = 64;
-pub const MAX_QUIESC_DEPTH: u16 = 6;
+pub const MAX_QUIESC_DEPTH: u16 = 4;
 
 pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;
@@ -44,6 +45,9 @@ pub const DEFAULT_ELO: u32 = 2500;
 
 pub const _DEFAULT_FIXED_DEPTH = "true";
 pub const DEFAULT_FIXED_DEPTH = true;
+
+pub const _DEFAULT_STATIC_SEARCH = "false";
+pub const DEFAULT_STATIC_SEARCH = false;
 
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
@@ -54,6 +58,7 @@ pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
 pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
 pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
 pub var SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR: u16 = 3;
+
 // estimate of the time increase when increasing the depth by 1
 pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
 pub const SCHEDULER_TICKRATE_NS = (std.math.pow(u64, 10, 6));
