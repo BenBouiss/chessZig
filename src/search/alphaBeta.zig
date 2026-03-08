@@ -48,6 +48,7 @@ pub const depthCommunication = struct {
     pub fn setDepth(p_self: *depthCommunication, depth: u16) void {
         p_self.acquireLock();
         if (p_self.depthSet) {
+            // if this hits, it means that a search was already set, and a new one was ordered while the previous one is still ongoing
             @panic("???");
         }
         p_self.depth = depth;
@@ -65,7 +66,6 @@ pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.A
     while (p_info.alive) {
         // for some reason if this function gets updated too fast the scheduler gets bricked in the handleInterrupt method
         // trying to join on a thread with p_info.alive = false?
-        //
         // FIXME: ???
 
         std.Thread.sleep(configl.WR_TICKRATE_NS);
@@ -154,19 +154,19 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var _alpha = alpha;
     // null move prunning here
     // R = 3
-    //if (p_features.useNullPrune) {
-    //    // see chess programming video
-    //    const R: u16 = 2 + 1;
-    //    const ischeck = p_state.isChecked();
-    //    if (depth > R and !ischeck) {
-    //        p_state.makeNullMove();
-    //        const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine); // - 1 to be changed to + 1, ply + 1 => ply
-    //        p_state.undoNullMove();
-    //        if (score >= beta) {
-    //            return beta;
-    //        }
-    //    }
-    //}
+    if (p_features.useNullPrune) {
+        // see chess programming video
+        const R: u16 = 2 + 1;
+        const ischeck = p_state.isChecked();
+        if (depth > R and !ischeck) {
+            p_state.makeNullMove();
+            const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine); // - 1 to be changed to + 1, ply + 1 => ply
+            p_state.undoNullMove();
+            if (score >= beta) {
+                return beta;
+            }
+        }
+    }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features);
@@ -186,10 +186,11 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
         if (finalScore > _alpha) {
             _alpha = finalScore;
+            pv.onBestMove(move, ply);
+
             if (!move.isCapture()) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
             }
-            pv.onBestMove(move, ply);
         }
         if (_alpha >= beta) {
             // save here the killer moves
@@ -217,40 +218,41 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
     pv.setLen(ply);
     var _alpha = alpha;
-    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
-    const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
     if (depth == 0 or !p_info.alive) {
+        const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
+        const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
         p_info.n_nodeExplored += 1;
         return static_eval;
     }
-    var best_value = static_eval;
-    if (best_value >= beta) {
-        return best_value;
-    }
-    if (best_value > _alpha) {
-        _alpha = best_value;
-    }
+    //var best_value = static_eval;
+    //if (best_value >= beta) {
+    //    return best_value;
+    //}
+    //if (best_value > _alpha) {
+    //    _alpha = best_value;
+    //}
     const fmoves: moveContainer = moveGenl.generateLegalMoves_ordered(p_state, true);
 
     //const indexes = heuristicl.cst_eval_move_sorting_mask(&fmoves, ply, undefined, false);
     const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features);
+    var best_value: scoreType = 0;
     for (0..fmoves.len) |i| {
         const idx = indexes[i];
         const move: IMove = fmoves.moves[idx];
 
-        p_state.makeMove(move);
-
         // if move nor capture nor checking
         // problem here where a checking sequence ie
         // black checked -> white not checked nor capture = end of quiescence, the search might need to continue
+
         if (!move.isCapture() and !wasChecked) {
-            _ = p_state.undoMove();
             continue;
         }
+        p_state.makeMove(move);
+
         const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, wasChecked, pv, prevLine);
 
         _ = p_state.undoMove();
-        if (score > best_value) {
+        if (i == 0 or score > best_value) {
             best_value = score;
         }
         if (score >= beta) {

@@ -645,14 +645,6 @@ pub const Board_state = struct {
         ret.stack = .{};
         ret.s_stack = .{};
 
-        // stack vs heap
-        //ret.move_history = try alloc.create(matchMoveContainer);
-        //ret.stack = try alloc.create(boardStack);
-        //ret.s_stack = try alloc.create(board_statusl.statusStack);
-        //ret.move_history.* = .{};
-        //ret.stack.* = .{};
-        //ret.s_stack.* = .{};
-        //ret.isInit = true;
         if (comptime useDebug) {
             std.debug.print("[DEBUG] from Board_state.init: size of board state: {d} bytes\n", .{@sizeOf(Board_state)});
             std.debug.print("[DEBUG] from Board_state.init: size of stack : {d} bytes\n", .{@sizeOf(boardStack)});
@@ -668,12 +660,9 @@ pub const Board_state = struct {
     pub fn free(p_self: *Board_state, alloc: std.mem.Allocator) void {
         _ = alloc;
         _ = p_self;
-        //if (p_self.isInit) {
-        //    alloc.destroy(p_self.stack);
-        //    alloc.destroy(p_self.s_stack);
-        //    alloc.destroy(p_self.move_history);
-        //    p_self.isInit = false;
-        //}
+    }
+    pub fn copy(p_self: *const Board_state) Board_state {
+        return p_self.*;
     }
     pub inline fn whiteToMove(self: Board_state) bool {
         return self.stat.whiteToMove();
@@ -695,15 +684,6 @@ pub const Board_state = struct {
         var ret: []Board_state = try alloc.alloc(Board_state, n);
         for (0..n) |i| {
             ret[i] = self;
-
-            //ret[i].stack = try alloc.create(boardStack);
-            //ret[i].s_stack = try alloc.create(board_statusl.statusStack);
-            //ret[i].move_history = try alloc.create(matchMoveContainer);
-
-            //ret[i].stack.* = self.stack.*;
-            //ret[i].s_stack.* = self.s_stack.*;
-            //ret[i].move_history.* = self.move_history.*;
-
             if (comptime useDebug) {
                 sanityCheckBoardState(&ret[i]);
             }
@@ -2297,6 +2277,17 @@ pub fn algebraicLineToIMoveMatch(line: *string) !matchMoveContainer {
     }
     return ret;
 }
+pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *string) !Board_state {
+    const moves = try algebraicLineToIMoveMatch(line);
+    var ret = try getBoardFromFen(alloc, DEFAULT_FEN);
+    for (0..moves.len) |i| {
+        const move = moves.moves[i];
+        ret.makeMove(move);
+        sanityCheckBoardState(&ret);
+    }
+    return ret;
+}
+
 pub fn algebraicToFen(alloc: std.mem.Allocator, line: *string) ![MAX_FEN_LENGTH]u8 {
     const moves = try algebraicLineToIMoveMatch(line);
     var tmp: Board_state = try getBoardFromFen(alloc, DEFAULT_FEN);

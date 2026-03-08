@@ -342,17 +342,11 @@ const guiState = struct {
 
         return p_self.engineInventory.addEngine(p_self.alloc, eng);
     }
-    pub fn setBoard(p_self: *guiState, fen: []const u8) void {
+    pub inline fn setBoard(p_self: *guiState, fen: []const u8) void {
         p_self.match.chessState = chessl.getBoardFromFen(p_self.alloc, fen) catch unreachable;
     }
-    pub fn setBoardFromLine(p_self: *guiState, line: *string) !void {
-        const moves = try chessl.algebraicLineToIMoveMatch(line);
-        p_self.match.chessState = try chessl.getBoardFromFen(p_self.alloc, chessl.DEFAULT_FEN);
-        for (0..moves.len) |i| {
-            const move = moves.moves[i];
-            p_self.match.chessState.makeMove(move);
-            chessl.sanityCheckBoardState(&p_self.match.chessState);
-        }
+    pub inline fn setBoardFromLine(p_self: *guiState, line: *string) !void {
+        p_self.match.chessState = try chessl.algebraicLineToBoardstate(p_self.alloc, line);
     }
 
     pub fn handleCmd(p_self: *guiState, cmd: signedCmd) void {
@@ -375,8 +369,6 @@ const guiState = struct {
     }
 
     pub fn respond(p_self: *guiState, msg: []const u8, engineIndex: u8) !void {
-        //var writer = &p_self.f_writer.interface;
-
         const eng: *engine_info = p_self.engineInventory.items.items[engineIndex];
         var writer = &eng.f_writer.interface;
 
@@ -803,14 +795,23 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
     if (p_self.config.match.playerSwitch) {
         _nMatch = _nMatch * 2;
     }
+    var currState: Board_state = undefined;
     while (matchCount < _nMatch) {
         if (matchCount != 0 and p_self.config.match.playerSwitch) {
+            p_self.match.chessState = currState.copy();
             const tmp = p_self.match.playerInv[0].engineUsed;
             p_self.match.playerInv[0].engineUsed = p_self.match.playerInv[1].engineUsed;
             p_self.match.playerInv[1].engineUsed = tmp;
             if (p_self.status.debugMode) {
                 std.debug.print("[DEBUG] mainGuiThread: swaping player white engine: {d}, black engine: {d}\n", .{ p_self.match.playerInv[1].engineUsed, p_self.match.playerInv[0].engineUsed });
             }
+        } else {
+            currState = pickBoardState(p_self) catch {
+                p_self.close();
+                return;
+            };
+
+            p_self.match.chessState = currState.copy();
         }
         matchRoutine(p_self) catch {
             p_self.close();
@@ -830,8 +831,7 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
     p_self.close();
     record.free(p_self.alloc);
 }
-fn matchRoutine(p_self: *guiState) !void {
-    try p_self.respondAll("setoption name clearhash");
+fn pickBoardState(p_self: *guiState) !Board_state {
     if (p_self.config.match.useOpeningBook and p_self.config.match.openingBookPathProvided) {
         if (p_self.config.debugMode) {
             std.debug.print("[DEBUG] matchRoutine: Picking an opening from len {d}\n", .{p_self.config.match.openingDb.drawnEntries.items.len});
@@ -843,10 +843,14 @@ fn matchRoutine(p_self: *guiState) !void {
             std.debug.print("[DEBUG] matchRoutine: opening picked: {s}\n", .{openings.items[0]._slice()});
         }
         defer openings.deinit(p_self.alloc);
-        try p_self.setBoardFromLine(&openings.items[0]);
+        return try chessl.algebraicLineToBoardstate(p_self.alloc, &openings.items[0]);
     } else {
-        p_self.setBoard(chessl.DEFAULT_FEN);
+        return try chessl.getBoardFromFen(p_self.alloc, chessl.DEFAULT_FEN);
     }
+}
+fn matchRoutine(p_self: *guiState) !void {
+    try p_self.respondAll("setoption name clearhash");
+
     p_self.match.nextTurnTrigger = false;
     p_self.startMatch() catch {
         @panic("Failed to start the match");

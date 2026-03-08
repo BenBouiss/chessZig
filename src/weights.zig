@@ -52,4 +52,3 @@ pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20
 const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = -12, .PassedPawnValue = 93, .IsolatedPawnValue = 6, .SafetyKnightValue = 36, .SafetyBishopValue = 8, .SafetyRookValue = -5, .SafetyQueenValue = 44, .StructureProtectionValue = 1, .MobilityValue = -4 };
 
 const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = -16, .PassedPawnValue = -12, .IsolatedPawnValue = 27, .SafetyKnightValue = 6, .SafetyBishopValue = 5, .SafetyRookValue = -7, .SafetyQueenValue = 12, .StructureProtectionValue = 2, .MobilityValue = -2 };
-// [-16.0, -12.0, 27.0, 6.0, 5.0, -7.0, 12.0, 2.0, -1.0]
