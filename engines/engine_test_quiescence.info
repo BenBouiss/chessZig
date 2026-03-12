@@ -1,17 +1,15 @@
 [engine1]
-path="engines/bin/engine_quiesc_capt";
-name="capture";
+path="engines/bin/engine_12_03_26_prevQuiesc";
+name="prev";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value true";
 "setoption name useHash value false";
 "setoption name useQuiescence value true";
 
 [engine2]
-path="engines/bin/engine_quiesc_capt_check";
-name="capture + check";
+path="zig-out/bin/engine";
+name="chessProg";
 //"debug on";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value true";
 "setoption name useHash value false";
 "setoption name useQuiescence value true";
 
@@ -21,6 +19,7 @@ playerSwitch=true;
 //debugMode=true;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
+timeFormat=(60000, 1000);
 
 logsLocation="logs/ben/ben";
 //saveLogs=true;

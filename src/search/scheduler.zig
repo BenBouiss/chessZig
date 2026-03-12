@@ -194,7 +194,7 @@ pub const scheduler = struct {
         }
 
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
-        const n_nodes: i64 = @intCast(res.n_nodeExplored);
+        const n_nodes: i64 = @intCast(res.searchStat.n_nodeExplored);
 
         const final_info = std.fmt.allocPrint(p_self.alloc, "info depth {d} score cp {d} nodes {d} currmove {s} pv {f}", .{ p_self.searchDepth, decision.scoring, n_nodes, utilsl.trimStr(&decision.move.getStr()), decision.line }) catch unreachable;
         defer p_self.alloc.free(final_info);
@@ -203,10 +203,10 @@ pub const scheduler = struct {
 
     pub fn sendUpdate(p_self: *scheduler) void {
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
-        const n_nodes: i64 = @intCast(res.n_nodeExplored);
+        const n_nodes: i64 = @intCast(res.searchStat.n_nodeExplored);
         const timeDelta = p_self.timeM.timeSinceStartMs();
 
-        const msg = std.fmt.allocPrint(p_self.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+        const msg = std.fmt.allocPrint(p_self.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d} cutoff: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion, res.searchStat.n_cutoffs }) catch {
             return;
         };
         defer p_self.alloc.free(msg);
