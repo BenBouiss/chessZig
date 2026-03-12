@@ -13,6 +13,11 @@ const scoreType = heuristicl.scoreType;
 const debug_err = chessl.debug_err;
 const moveDecisionExt = schedulerl.moveDecisionExt;
 
+pub const searchStatistic = struct {
+    n_cutoffs: u64 = 0,
+    n_nodeExplored: u64 = 0,
+    n_hashRetrieve: u64 = 0,
+};
 /// Benchmark function to test the node generation speed in
 /// "real world" settings mainly computing heuristics...
 ///
@@ -20,11 +25,10 @@ const moveDecisionExt = schedulerl.moveDecisionExt;
 pub const threadInfo = struct {
     currentBest: moveDecisionExt = .{},
     currentMove: moveDecisionExt = .{},
-    n_nodeExplored: u64 = 0,
-    n_hashRetrieve: u64 = 0,
     depth: u8 = 0,
     working: bool = false,
     alive: bool = false,
+    searchStat: searchStatistic = .{},
 };
 pub const threadInfo_container = struct {
     len: u16,
@@ -45,8 +49,9 @@ pub const threadInfo_container = struct {
         self.n_active = 0;
         for (0..self.len) |i| {
             const info = self.items[i];
-            ret.n_nodeExplored += info.n_nodeExplored;
-            ret.n_hashRetrieve += info.n_hashRetrieve;
+            ret.searchStat.n_nodeExplored += info.searchStat.n_nodeExplored;
+            ret.searchStat.n_hashRetrieve += info.searchStat.n_hashRetrieve;
+            ret.searchStat.n_cutoffs += info.searchStat.n_cutoffs;
             self.n_active += @intFromBool(info.working);
         }
         return ret;
@@ -92,8 +97,9 @@ pub fn getCombinedFromPack(p_array: *threadPackageArray) threadInfo {
     var ret: threadInfo = .{};
     for (0..p_array.len) |i| {
         const info = p_array.items(._tInfo)[i];
-        ret.n_nodeExplored += info.n_nodeExplored;
-        ret.n_hashRetrieve += info.n_hashRetrieve;
+        ret.searchStat.n_nodeExplored += info.searchStat.n_nodeExplored;
+        ret.searchStat.n_hashRetrieve += info.searchStat.n_hashRetrieve;
+        ret.searchStat.n_cutoffs += info.searchStat.n_cutoffs;
         if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
             ret.currentBest = info.currentBest;
         }
@@ -102,7 +108,7 @@ pub fn getCombinedFromPack(p_array: *threadPackageArray) threadInfo {
 }
 pub fn zeroThreadPackArray(p_array: *threadPackageArray) void {
     for (0..p_array.len) |i| {
-        p_array.items(._tInfo)[i].n_nodeExplored = 0;
+        p_array.items(._tInfo)[i].searchStat.n_nodeExplored = 0;
     }
 }
 pub fn freeThreadPackArray(alloc: std.mem.Allocator, p_array: *threadPackageArray) void {

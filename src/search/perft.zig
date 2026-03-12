@@ -94,7 +94,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
         std.Thread.sleep(configl.INFO_TICKRATE_NS);
         const res = threadingl.getCombinedFromPack(p_threadPack);
         const _end: u64 = @intCast(std.time.milliTimestamp());
-        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.n_nodeExplored, (_end - _start + 1)) * 1000, res.n_nodeExplored, res.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, (_end - _start + 1)) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
             continue;
         };
         defer p_engine.alloc.free(msg);
@@ -127,7 +127,7 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
     defer p_info.working = false;
     defer p_info.alive = false;
     if (depth == 0) {
-        p_info.n_nodeExplored += 1;
+        p_info.searchStat.n_nodeExplored += 1;
         return;
     }
     for (0..p_startingMoves.items.len) |i| {
@@ -142,25 +142,25 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
 }
 pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8, feats: perftSearchFeatures) u64 {
     if (depth <= 0 or !p_info.alive) {
-        p_info.n_nodeExplored += 1;
+        p_info.searchStat.n_nodeExplored += 1;
         return 1;
     }
 
     if (p_state.isStaleMateRepetition()) {
-        p_info.n_nodeExplored += 1;
+        p_info.searchStat.n_nodeExplored += 1;
         return 1;
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     if (feats.useBatched and depth == 1) {
-        p_info.n_nodeExplored += fmoves.len;
+        p_info.searchStat.n_nodeExplored += fmoves.len;
         return fmoves.len;
     }
     if (feats.useHash) {
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
-            p_info.n_hashRetrieve += @intCast(entry.moveA());
+            p_info.searchStat.n_hashRetrieve += @intCast(entry.moveA());
 
-            p_info.n_nodeExplored += entry.moveA();
+            p_info.searchStat.n_nodeExplored += entry.moveA();
             return entry.moveA();
         }
     }
@@ -207,7 +207,7 @@ pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_info: *threadInf
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
         _ = p_state.makeMove(move);
-        p_info.n_nodeExplored += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
+        p_info.searchStat.n_nodeExplored += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
         _ = p_state.undoMove();
     }
 }
@@ -226,7 +226,7 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
     if (comptime useHash) {
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
-            p_info.n_hashRetrieve += @intCast(entry.moveA());
+            p_info.searchStat.n_hashRetrieve += @intCast(entry.moveA());
             return entry.moveA();
         }
     }
@@ -260,7 +260,7 @@ pub fn perft_debug_loop(p_state: *chess.Board_state, depth: u8, batched: bool, p
     if (comptime useHash) {
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
-            p_res.n_hashRetrieve += @intCast(entry.moveA());
+            p_res.searchStat.n_hashRetrieve += @intCast(entry.moveA());
             return entry.moveA();
         }
     }
