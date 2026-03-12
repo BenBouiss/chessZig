@@ -65,7 +65,7 @@ pub const status = struct {
     pub inline fn setTurn(self: *status, white: bool) void {
         self._whiteToMove = white;
     }
-    pub inline fn whiteToMove(self: status) bool {
+    pub inline fn whiteToMove(self: *const status) bool {
         return self._whiteToMove;
     }
     pub inline fn invertTurn(self: *status) void {

@@ -42,21 +42,25 @@ pub const err_gui_bestmove = error{
     unknownMove_error,
 };
 
-const matchResultsBench = struct {
-    //
-    //(W) Win / Lose / Draw
-    //(B) Win / Lose / Draw
+const matchResult = struct {
     win: u8 = 0,
     lose: u8 = 0,
     draw: u8 = 0,
     flagged: u8 = 0,
+};
+
+const matchResultsBench = struct {
+    //
+    //0: (B) Win / Lose / Draw
+    //1: (W) Win / Lose / Draw
+    res: [2]matchResult = .{ .{}, .{} },
     avgTimePerTurn: i64 = 0,
     stdTimePerTurn: i64 = 0,
     nMatch: u8 = 0,
     finalFen: string = undefined,
     pub fn getScore(self: *matchResultsBench) scoreType {
-        var ret: scoreType = @intCast(self.win);
-        ret += @as(scoreType, @floatFromInt(self.draw)) / 2;
+        var ret: scoreType = @intCast(self.res.win[0] + self.res.win[1]);
+        ret += @as(scoreType, @floatFromInt(self.res.draw[0] + self.res.draw[1])) / 2;
         return ret;
     }
 };
@@ -75,22 +79,34 @@ const matchResultContainer = struct {
                 @panic("???");
             },
             .CheckMate => {
-                p_self.items[currEngine].lose += 1;
-                p_self.items[otherEngine].win += 1;
+                p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
+                p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
+                //p_self.items[currEngine].lose += 1;
+                //p_self.items[otherEngine].win += 1;
             },
 
             .Flagged => {
-                p_self.items[currEngine].lose += 1;
-                p_self.items[currEngine].flagged += 1;
-                p_self.items[otherEngine].win += 1;
+                p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
+                p_self.items[currEngine].res[@intFromBool(p)].flagged += 1;
+                p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
+
+                //p_self.items[currEngine].lose += 1;
+                //p_self.items[currEngine].flagged += 1;
+                //p_self.items[otherEngine].win += 1;
             },
             .StaleMate, .StaleMateRepetition, .Dnf => {
-                p_self.items[currEngine].draw += 1;
-                p_self.items[otherEngine].draw += 1;
+                p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
+                p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
+
+                //p_self.items[currEngine].draw += 1;
+                //p_self.items[otherEngine].draw += 1;
             },
             .StaleMateInsuficientMaterial => {
-                p_self.items[currEngine].draw += 1;
-                p_self.items[otherEngine].draw += 1;
+                p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
+                p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
+
+                //p_self.items[currEngine].draw += 1;
+                //p_self.items[otherEngine].draw += 1;
             },
         }
         for (0..2) |i| {
@@ -124,9 +140,18 @@ const matchResultContainer = struct {
         for (0..2) |i| {
             const engIdx = match.playerInv[i].engineUsed;
             const res = p_self.items[engIdx];
-            const scoreStr = try std.fmt.allocPrint(alloc, "engine: {s}, {d} matches, win: {d}, lose: {d}, draw: {d}, flagged: {d}, speed: {d}(+-{d}) ms/move;\n", .{ settings.engineNames[engIdx]._slice(), res.nMatch, res.win, res.lose, res.draw, res.flagged, res.avgTimePerTurn, res.stdTimePerTurn });
+            const nwins = res.res[0].win + res.res[1].win;
+            const nloses = res.res[0].lose + res.res[1].lose;
+            const ndraws = res.res[0].draw + res.res[1].draw;
+            const nflags = res.res[0].flagged + res.res[1].flagged;
+
+            const scoreStr = try std.fmt.allocPrint(alloc, "engine: {s}, {d} matches, win: {d}, lose: {d}, draw: {d}, flagged: {d}, speed: {d}(+-{d}) ms/move;\n", .{ settings.engineNames[engIdx]._slice(), res.nMatch, nwins, nloses, ndraws, nflags, res.avgTimePerTurn, res.stdTimePerTurn });
             defer alloc.free(scoreStr);
             _ = try file.write(scoreStr);
+
+            const breakStr = try std.fmt.allocPrint(alloc, "engine: {s}, breakdown (w/l/d) w: {d}/{d}/{d}, b: {d}/{d}/{d} \n", .{ settings.engineNames[engIdx]._slice(), res.res[1].win, res.res[1].lose, res.res[1].draw, res.res[0].win, res.res[0].lose, res.res[0].draw });
+            defer alloc.free(breakStr);
+            _ = try file.write(breakStr);
         }
 
         // save the setting part
@@ -145,7 +170,12 @@ const matchResultContainer = struct {
         const interface = &writer.interface;
         for (0..p_self.items.len) |i| {
             const res = p_self.items[i];
-            const respmsg = try std.fmt.allocPrint(alloc, "{d} {d} {d} \n", .{ res.win, res.lose, res.draw });
+
+            const nwins = res.res[0].win + res.res[1].win;
+            const nloses = res.res[0].lose + res.res[1].lose;
+            const ndraws = res.res[0].draw + res.res[1].draw;
+
+            const respmsg = try std.fmt.allocPrint(alloc, "{d} {d} {d} \n", .{ nwins, nloses, ndraws });
             defer alloc.free(respmsg);
             try interface.writeAll(respmsg);
             try interface.flush();
@@ -798,13 +828,19 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
     var currState: Board_state = undefined;
     while (matchCount < _nMatch) {
         if (matchCount != 0 and p_self.config.match.playerSwitch) {
-            p_self.match.chessState = currState.copy();
             const tmp = p_self.match.playerInv[0].engineUsed;
             p_self.match.playerInv[0].engineUsed = p_self.match.playerInv[1].engineUsed;
             p_self.match.playerInv[1].engineUsed = tmp;
             if (p_self.status.debugMode) {
                 std.debug.print("[DEBUG] mainGuiThread: swaping player white engine: {d}, black engine: {d}\n", .{ p_self.match.playerInv[1].engineUsed, p_self.match.playerInv[0].engineUsed });
             }
+            if (matchCount % 2 == 0) {
+                currState = pickBoardState(p_self) catch {
+                    p_self.close();
+                    return;
+                };
+            }
+            p_self.match.chessState = currState.copy();
         } else {
             currState = pickBoardState(p_self) catch {
                 p_self.close();
@@ -834,13 +870,13 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
 fn pickBoardState(p_self: *guiState) !Board_state {
     if (p_self.config.match.useOpeningBook and p_self.config.match.openingBookPathProvided) {
         if (p_self.config.debugMode) {
-            std.debug.print("[DEBUG] matchRoutine: Picking an opening from len {d}\n", .{p_self.config.match.openingDb.drawnEntries.items.len});
+            std.debug.print("[DEBUG] pickBoardState: Picking an opening from len {d}\n", .{p_self.config.match.openingDb.drawnEntries.items.len});
         }
         var openings = p_self.config.match.openingDb.sample(p_self.alloc, 1, .draw) catch {
             @panic("");
         };
         if (p_self.config.debugMode) {
-            std.debug.print("[DEBUG] matchRoutine: opening picked: {s}\n", .{openings.items[0]._slice()});
+            std.debug.print("[DEBUG] pickBoardState: opening picked: {s}\n", .{openings.items[0]._slice()});
         }
         defer openings.deinit(p_self.alloc);
         return try chessl.algebraicLineToBoardstate(p_self.alloc, &openings.items[0]);

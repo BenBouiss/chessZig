@@ -29,12 +29,19 @@ build script:
 
 
 Tasklist:
-- (?)Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
+- [?] Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
     - Still on the fence on this one
-- Convert evaluation to use centiPawn represention(use larger int instead of lower floats?)
-- Heuristic to add to evaluation
-    - King safety (use the one present in the texel coeffs see .zig file)
+- [x] Convert evaluation to use centiPawn represention(use larger int instead of lower floats?) 
+- [ ] Heuristic to add to evaluation
+    - [x] King safety (use the one present in the texel coeffs see .zig file)
     - Add complexity
+
+- [ ] Search optimization 
+    - [ ] Late move reduction
+        - in the move ordering search the "best" moves to deeper depth than the lower owns
+        - heuristics for the depth decays dependant of the state of the game
+    - [ ] Futility pruning ?
+    - [ ] History ordering debug
 
 Sources: 
 - https://www.chessprogramming.org/

@@ -26,7 +26,7 @@ pub const _DEFAULT_USETEXEL = "false";
 pub const DEFAULT_USE_NULLPRUNE = false;
 pub const _DEFAULT_USE_NULLPRUNE = "false";
 
-pub const DEFAULT_USE_HISTORY = false;
+pub const DEFAULT_USE_HISTORY = true;
 pub const MAX_HIST_HEURISTIC_VALUE = 70;
 pub const ORDERING_LINE_VALUE = 9999;
 
@@ -65,7 +65,7 @@ pub const SCHEDULER_TICKRATE_NS = (std.math.pow(u64, 10, 6));
 pub const WR_TICKRATE_NS = (std.math.pow(u64, 10, 5));
 
 // hashTable constants
-pub const ITEM_PER_BUCKET = 4;
+pub const ITEM_PER_BUCKET = 2;
 
 // inactivity timers:
 //

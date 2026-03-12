@@ -1,20 +1,20 @@
 [engine1]
-path="zig-out/bin/engine";
-name="Standard";
+path="engines/bin/engine_08_03_26";
+name="non hash";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
 
 [engine2]
-path="zig-out/bin/engine";
-name="pruning";
+path="engines/bin/engine_08_03_26";
+name="hash";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
-"setoption name useHash value false";
-"setoption name useNullPruning value true";
+"setoption name useHash value true";
+"setoption name hash value 100";
 
 [match]
-nMatch=1;
+nMatch=6;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

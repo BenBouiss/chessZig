@@ -13,20 +13,35 @@ const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
 const useHash = build_options.useHash;
 const scoreType = heuristicl.scoreType;
+const IMove = movel.IMove;
 
 pub const Key = struct {
     code: u64 = 0,
 };
 
-// note the gain in space is not visible in the debug build
-const entryVal = union { moveAmount: u64, evaluation: scoreType };
+// note: the gain in space is not visible in the debug build
+// will try to implement the chess programming version where way more stuff is stored
+const entryComponents = union { moveAmount: u64, search: searchEntry };
+
+// Types of nodes:
+//  ALL: Upper bound: less than alpha
+//  PV: or Exact Complete evaluation of a position done a depth 0
+//  CUT: Lower bound: greater or equal than beta. Induced a beta cutoff
+//
+pub const nodeType = enum { PV, ALL, CUT };
+
+pub const searchEntry = struct {
+    evaluation: scoreType = 0,
+    t: nodeType = .ALL,
+    bestMove: IMove = .{},
+    // this is for the replacing strat, might be optionnal with alway replace
+    //age: usize,
+};
 
 pub const Hash_entry = struct {
     key: Key = .{},
 
-    val: entryVal = undefined,
-    //moveAmount: u64 = 0,
-    //evaluation: scoreType = 0,
+    val: entryComponents = undefined,
 
     exploredDeph: u8 = 0,
     age: u8 = 0,
@@ -38,17 +53,19 @@ pub const Hash_entry = struct {
     }
 
     pub inline fn eval(self: Hash_entry) scoreType {
-        return self.val.evaluation;
+        return self.val.search.evaluation;
     }
 };
 
 pub fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    //return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
     return .{ .key = key, .exploredDeph = depth, .val = .{ .moveAmount = moveAmount }, .valid = true };
 }
 pub fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
-    //return .{ .key = key, .exploredDeph = depth, .valid = true, .evaluation = eval };
-    return .{ .key = key, .exploredDeph = depth, .val = .{ .evaluation = eval }, .valid = true };
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .search = .{ .evaluation = eval } }, .valid = true };
+}
+
+pub fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: IMove) Hash_entry {
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .search = .{ .evaluation = eval, .t = nodeT, .bestMove = bestMove } }, .valid = true };
 }
 pub const Hash_bucket = struct {
     entries: [configl.ITEM_PER_BUCKET]Hash_entry,
@@ -60,7 +77,7 @@ pub const Hash_bucket = struct {
     pub fn printSize(p_self: *Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
         std.debug.print("[DEBUG] printSize: entries size is {d} bytes\n", .{@sizeOf(Hash_entry)});
-        std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryVal)});
+        std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryComponents)});
         _ = p_self;
     }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
@@ -81,13 +98,24 @@ pub const Hash_bucket = struct {
         return .{ .valid = false };
     }
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
+        var ret_idx: usize = 0;
+        var entry_found: bool = false;
         for (0..p_self.len) |i| {
-            const entry = p_self.entries[i];
+            const entry = &p_self.entries[i];
+            // >= to select an entry that was explored to current depth or deeper
             if (entry.key.code == hash and entry.exploredDeph >= depth) {
-                return entry;
+                if (entry_found and p_self.entries[ret_idx].exploredDeph < entry.exploredDeph) {
+                    ret_idx = i;
+                    continue;
+                }
+                entry_found = true;
+                ret_idx = i;
             }
         }
-        return .{ .valid = false };
+        if (!entry_found) {
+            return .{ .valid = false };
+        }
+        return p_self.entries[ret_idx];
     }
     fn acquireLock(p_self: *Hash_bucket) void {
         while (p_self.lock) {}
@@ -98,12 +126,18 @@ pub const Hash_bucket = struct {
     }
 };
 
+pub const hashTableStat = struct {
+    hit: u64 = 0,
+    miss: u64 = 0,
+    collision: u64 = 0,
+};
 pub const Hash_table = struct {
     entries: []Hash_bucket,
     MBsize: u32 = 0,
     size: u64 = 0,
     n_insertion: u64 = 0,
     initialized: bool = false,
+    stat: hashTableStat = .{},
 
     pub fn init(alloc: std.mem.Allocator, MBsize: u32) !Hash_table {
         var total_size: u64 = @intCast(MBsize * 1000000);
@@ -149,7 +183,7 @@ pub const Hash_table = struct {
         for (0..p_bucket.len) |i| {
             var ent = &p_bucket.entries[i];
             if (ent.key.code == p_entry.key.code) {
-                ent.val.evaluation = score;
+                ent.val.search.evaluation = score;
             }
         }
     }
