@@ -145,8 +145,8 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scor
             },
         }
     }
-    phase = @max(phase, 0);
-    //std.debug.assert(phase >= 0);
+    //phase = @max(phase, 0);
+    std.debug.assert(phase == p_state.getPhase());
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
     return score_count + @divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
 }
@@ -530,11 +530,11 @@ const NTERMS: usize = 1024;
 pub var globalHeuristic: heuristicValues = .{};
 
 //const pawnPhase: usize = 0;
-const bishopPhase: usize = 1;
-const knightPhase: usize = 1;
-const rookPhase: usize = 2;
-const queenPhase: usize = 4;
-const totalPhase: scoreType = @intCast(knightPhase * 4 + bishopPhase * 4 + rookPhase * 4 + queenPhase * 2);
+pub const bishopPhase: usize = 1;
+pub const knightPhase: usize = 1;
+pub const rookPhase: usize = 2;
+pub const queenPhase: usize = 4;
+pub const totalPhase: scoreType = @intCast(knightPhase * 4 + bishopPhase * 4 + rookPhase * 4 + queenPhase * 2);
 // value between 0 and 1
 const TUNE_K: scoreType = 5;
 
@@ -1249,13 +1249,20 @@ pub fn _initMoveOrdering() void {
     historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
     killerMoves = undefined;
 }
-pub fn eval_move_heuristic_line(move: IMove, ply: u16, prevLine: *const movel.line) scoreType {
+pub fn eval_move_heuristic_line(move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
+    if (move.equal(hashMove)) {
+        return configl.ORDERING_LINE_VALUE + 1;
+    }
     if (move.equal(prevLine.moves[ply])) {
         // previous best move at that ply
         return configl.ORDERING_LINE_VALUE;
     }
+    const fpiece = move.getFromPiece();
+    const cpiece = move.getCapturePiece();
+    const from = move.getFrom();
+    const to = move.getTo();
     if (move.isCapture()) {
-        return mvv_lva[@intFromEnum(move.getFromPiece())][@intFromEnum(move.getCapturePiece())];
+        return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
     } else {
         //
         if (move.equal(killerMoves[ply][0])) {
@@ -1264,22 +1271,26 @@ pub fn eval_move_heuristic_line(move: IMove, ply: u16, prevLine: *const movel.li
             return 80;
         } else {
             if (comptime configl.DEFAULT_USE_HISTORY) {
-                const w = @intFromEnum(move.getFromPiece()) <= @intFromEnum(e_piece.nWhiteKing);
-                return historyHeuristic[@intFromBool(w)][move.getFrom()][move.getTo()];
+                const w = @intFromEnum(fpiece) <= @intFromEnum(e_piece.nWhiteKing);
+                return historyHeuristic[@intFromBool(w)][from][to];
             }
         }
     }
     return 0;
 }
-pub fn eval_move_heuristic(move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool) scoreType {
+pub fn eval_move_heuristic(move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) scoreType {
     if (comptime useLine) {
-        return eval_move_heuristic_line(move, ply, prevLine);
+        return eval_move_heuristic_line(move, ply, prevLine, hashMove);
     }
     return eval_move_heuristic_std(move, ply);
 }
 pub fn eval_move_heuristic_std(move: IMove, ply: u16) scoreType {
+    const fpiece = move.getFromPiece();
+    const cpiece = move.getCapturePiece();
+    const from = move.getFrom();
+    const to = move.getTo();
     if (move.isCapture()) {
-        return mvv_lva[@intFromEnum(move.getFromPiece())][@intFromEnum(move.getCapturePiece())];
+        return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
     } else {
         //
         if (move.equal(killerMoves[ply][0])) {
@@ -1288,8 +1299,8 @@ pub fn eval_move_heuristic_std(move: IMove, ply: u16) scoreType {
             return 80;
         } else {
             if (comptime configl.DEFAULT_USE_HISTORY) {
-                const w = @intFromEnum(move.getFromPiece()) <= @intFromEnum(e_piece.nWhiteKing);
-                return historyHeuristic[@intFromBool(w)][move.getFrom()][move.getTo()];
+                const w = @intFromEnum(fpiece) <= @intFromEnum(e_piece.nWhiteKing);
+                return historyHeuristic[@intFromBool(w)][from][to];
             }
         }
     }
@@ -1297,7 +1308,10 @@ pub fn eval_move_heuristic_std(move: IMove, ply: u16) scoreType {
 }
 pub fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) void {
     const _bonus = @max(-configl.MAX_HIST_HEURISTIC_VALUE, @min(configl.MAX_HIST_HEURISTIC_VALUE, bonus));
-    historyHeuristic[@intFromBool(white)][from][to] += _bonus - @divFloor(historyHeuristic[@intFromBool(white)][from][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
+
+    const turnIdx = @intFromBool(white);
+    historyHeuristic[turnIdx][from][to] += _bonus - @divFloor(historyHeuristic[turnIdx][from][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
+    historyHeuristic[turnIdx][from][to] = @min(historyHeuristic[turnIdx][from][to], configl.MAX_HIST_HEURISTIC_VALUE);
 }
 pub inline fn computeHistoryBonus(depth: u16) scoreType {
     return @intCast(depth * 10);
@@ -1305,22 +1319,22 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn cst_eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool) [chess.MAX_POSSIBLE_MOVE]usize {
+pub fn cst_eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) [chess.MAX_POSSIBLE_MOVE]usize {
     var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     for (0..p_moves.len) |i| {
         ret[i] = i;
-        scores[i] = eval_move_heuristic(p_moves.moves[i], ply, prevLine, useLine);
+        scores[i] = eval_move_heuristic(p_moves.moves[i], ply, prevLine, useLine, hashMove);
     }
     std.mem.sort(usize, ret[0..p_moves.len], scores, cmp_eval_move);
     return ret;
 }
 
-pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures) [chess.MAX_POSSIBLE_MOVE]usize {
+pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) [chess.MAX_POSSIBLE_MOVE]usize {
     if (!p_feature.useStaticSearch) {
-        return cst_eval_move_sorting_mask(p_moves, ply, prevLine, true);
+        return cst_eval_move_sorting_mask(p_moves, ply, prevLine, true, hashMove);
     }
-    return cst_eval_move_sorting_mask(p_moves, ply, prevLine, false);
+    return cst_eval_move_sorting_mask(p_moves, ply, prevLine, false, hashMove);
 }
 pub fn dummyScaling(score: scoreType, phase: scoreType) scoreType {
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);

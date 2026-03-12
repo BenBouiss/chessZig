@@ -194,7 +194,7 @@ pub const typedMoveContainer = struct {
 pub fn arrayListMoveToMoveContainer(arr: *std.ArrayList(IMove)) moveContainer {
     var ret: moveContainer = moveContainer.init(0);
     for (0..arr.items.len) |i| {
-        _ = ret.append(arr.items[i]);
+        ret.append(arr.items[i]);
     }
     return ret;
 }
@@ -211,13 +211,9 @@ pub const moveContainer = struct {
         ret.len = len;
         return ret;
     }
-    pub fn append(p_self: *moveContainer, move: IMove) bool {
-        //if (p_self.len == chess.MAX_POSSIBLE_MOVE) {
-        //    return false;
-        //}
+    pub fn append(p_self: *moveContainer, move: IMove) void {
         p_self.moves[p_self.len] = move;
         p_self.len += 1;
-        return true;
     }
 
     pub fn extend(p_self: *moveContainer, p_other: *const moveContainer) bool {

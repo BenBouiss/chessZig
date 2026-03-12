@@ -66,6 +66,8 @@ pub const threadInfo_container = struct {
     }
 };
 
+// FIXME: this is getting very anoying to use with the .items(._tInfo)[_]... . the initial idea was to not use a std.ArrayList of this to test the more compact in memory use. use 'packed' to fix if needed
+
 pub const threadPackageFrame = struct {
     chessState: Board_state,
     moves: std.ArrayList(IMove),
@@ -81,9 +83,8 @@ pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *Board_state, moveA
         std.debug.print("[ERROR] getThreadPackArray: move container init\n", .{});
         return debug_err.valueErr;
     };
-    //const cont = try p_state.duplicateNTimes(alloc, @intCast(n_threads));
     for (0.._nThread) |i| {
-        try ret.append(alloc, .{ .chessState = p_state.*, .moves = threadedMoves.items[i], .threadHandle = undefined, ._tInfo = .{} });
+        try ret.append(alloc, .{ .chessState = p_state.copy(), .moves = threadedMoves.items[i], .threadHandle = undefined, ._tInfo = .{} });
     }
     return ret;
 }

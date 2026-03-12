@@ -24,7 +24,6 @@ const scoreType = heuristicl.scoreType;
 const engine = enginel.engine;
 const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
-const threadInfo_container = threadingl.threadInfo_container;
 const benchmarkResult = benchmarkl.benchmarkResult;
 
 var GPA = std.heap.GeneralPurposeAllocator(.{}){};
@@ -68,7 +67,7 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine) void {
     }
     _ = dispatchPerftPackage(p_engine, &pack, searcher.config.depth, feats);
     _ = waitThreadFinish(p_engine, &pack) catch {
-        std.debug.print("ERROR wait thread\n", .{});
+        std.debug.print("[ERROR] wait thread\n", .{});
         return;
     };
 }
@@ -78,9 +77,12 @@ fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, de
 
     for (0.._nThread) |thread_id| {
         if (p_engine.status.debugMode) {
-            std.debug.print("[DEBUG] dispatchPerftPackage: Launching thread n° {d}\n", .{thread_id});
+            std.debug.print("[DEBUG] dispatchPerftPackage: Launching thread n° {d}, depth: {d}\n", .{ thread_id, depth });
         }
+        p_threadPack.items(._tInfo)[thread_id].working = true;
+        p_threadPack.items(._tInfo)[thread_id].alive = true;
         p_threadPack.items(.threadHandle)[thread_id] = std.Thread.spawn(.{}, perftUciEntrypoint, .{ &p_threadPack.items(.chessState)[thread_id], &p_threadPack.items(.moves)[thread_id], &p_threadPack.items(._tInfo)[thread_id], depth, feats }) catch {
+            std.debug.print("[ERROR] dispatchPerftPackage: thread n° {d}\n", .{thread_id});
             return false;
         };
     }
@@ -99,8 +101,11 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
         p_engine.respond(msg);
         p_engine.searcher.endCounter = 0;
         for (0..p_threadPack.len) |i| {
-            p_engine.searcher.endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].alive);
+            p_engine.searcher.endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].working);
         }
+    }
+    if (p_engine.status.debugMode) {
+        std.debug.print("[DEBUG] waitThreadFinish: exiting\n", .{});
     }
     p_engine.searcher.searching = false;
     if (p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
@@ -120,11 +125,11 @@ const perftSearchFeatures = struct {
 pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feats: perftSearchFeatures) void {
     p_info.working = true;
     defer p_info.working = false;
+    defer p_info.alive = false;
     if (depth == 0) {
         p_info.n_nodeExplored += 1;
         return;
     }
-
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
 

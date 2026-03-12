@@ -110,3 +110,35 @@ compile time search params vs struct of all params:
 
 	very little impact on performance therefore the "chain" call or somewhat "currying" of the alpha beta search feature is removed to just a call with a *const searchFeatures
 
+null move pruning vs non null move pruning:
+	the idea is to give the opponent another go by performing a null move and checking if the resulting score induces a beta cute off. in essence it should be able to speed up the search thus leading to deeper searches when fixedDepth = false, at the cost of potential good moves
+	safe guard implemented: 
+		- the current player cannot be in check
+		- depth > 3
+		- still need to implement check for endgame for zugzwang
+
+	result:
+
+	engine: Standard, 12 matches, win: 1, lose: 10, draw: 1, flagged: 0, speed: 5141(+-3327) ms/move;
+	engine: pruning, 12 matches, win: 10, lose: 1, draw: 1, flagged: 0, speed: 4732(+-2379) ms/move;
+	Engine #0
+		 name: Standard
+		 path: engines/bin/engine_08_03_26
+		 option: setoption name UCI_elo value 3000
+		 option: setoption name fixedDepth value false
+		 option: setoption name useHash value false
+	Engine #1
+		 name: pruning
+		 path: engines/bin/engine_08_03_26
+		 option: setoption name UCI_elo value 3000
+		 option: setoption name fixedDepth value false
+		 option: setoption name useHash value false
+		 option: setoption name useNullPruning value true
+	Match settings: 
+		 nMatch: 6
+		 player switch: true
+		 time format: time 300000 inc 5000
+		 use opening book true
+		 opening book path opening/8moves_v3.pgn
+	
+	conclusion = good!

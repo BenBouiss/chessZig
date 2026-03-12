@@ -39,7 +39,7 @@ pub fn initAll(verbose: bool) void {
 fn initEngine() !enginel.engine {
     var engine: enginel.engine = try enginel.engine.init(GLOBAL_ALLOC);
     engine.executeBuffer("uci");
-    engine.executeBuffer("debug on");
+    //engine.executeBuffer("debug on");
     engine.executeBuffer("isready");
     return engine;
 }
@@ -77,7 +77,7 @@ pub fn test_speed() !void {
     eng.executeBuffer("setoption name useQuiescence value true");
     eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
     eng.executeBuffer("setoption name useNullPruning value true");
-    eng.executeBuffer("go depth 7");
+    eng.executeBuffer("go depth 5");
     waitOnEngine(&eng);
 }
 pub fn test_bug() !void {
@@ -94,9 +94,18 @@ pub fn test_bug() !void {
     eng.executeBuffer("go wtime 300000 btime 300000 winc 5000 binc 5000");
     waitOnEngine(&eng);
 }
+pub fn test_perft() !void {
+    initAll(false);
+    var eng = try initEngine();
+    defer eng.free();
+    eng.executeBuffer("position startpos");
+    eng.executeBuffer("go perft depth 7 batched");
+    waitOnEngine(&eng);
+}
 
 pub fn main() anyerror!void {
-    try test_speed();
+    try test_perft();
+    //try test_speed();
     //try heuristicl.main();
     //try chessl.main();
     //try test_bug();
