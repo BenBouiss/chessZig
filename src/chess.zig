@@ -1127,14 +1127,15 @@ pub const Board_state = struct {
         return (self.occupiedBB == EMPTY);
     }
     pub fn getPhase(self: *const Board_state) usize {
-        var ret: usize = heuristicl.totalPhase;
+        var ret: heuristicl.scoreType = heuristicl.totalPhase;
 
-        ret -= heuristicl.bishopPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] + self.pieceCount[@intFromEnum(e_piece.nBlackBishop)]);
-        ret -= heuristicl.knightPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteKnight)] + self.pieceCount[@intFromEnum(e_piece.nBlackKnight)]);
-        ret -= heuristicl.rookPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteRook)] + self.pieceCount[@intFromEnum(e_piece.nBlackRook)]);
-        ret -= heuristicl.queenPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteQueen)] + self.pieceCount[@intFromEnum(e_piece.nBlackQueen)]);
+        ret -= @intCast(heuristicl.bishopPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] + self.pieceCount[@intFromEnum(e_piece.nBlackBishop)]));
+        ret -= @intCast(heuristicl.knightPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteKnight)] + self.pieceCount[@intFromEnum(e_piece.nBlackKnight)]));
+        ret -= @intCast(heuristicl.rookPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteRook)] + self.pieceCount[@intFromEnum(e_piece.nBlackRook)]));
+        ret -= @intCast(heuristicl.queenPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteQueen)] + self.pieceCount[@intFromEnum(e_piece.nBlackQueen)]));
+        ret = @max(0, ret);
 
-        return ret;
+        return @intCast(ret);
     }
     pub fn isEndGame(self: *const Board_state) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteQueen) + self.getPieceCount(.nWhiteQueen);

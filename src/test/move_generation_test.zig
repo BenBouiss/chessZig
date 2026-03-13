@@ -41,7 +41,7 @@ test "perft - startpos" {
             std.debug.print("[PANIC]: Error when launching perft\n", .{});
             @panic("");
         };
-        const expect: i64 = @intCast(res.n_nodeExplored);
+        const expect: i64 = @intCast(res.searchStat.n_nodeExplored);
         try std.testing.expectEqual(expect, benchmarkl.ExpectedBenchmarkResults[depth]);
         const _stop = std.time.microTimestamp();
         std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(_stop - _start, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, 1 + (_stop - _start)) });

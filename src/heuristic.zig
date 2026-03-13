@@ -17,6 +17,7 @@ const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
 const string = stringl.string;
 const IMove = movel.IMove;
+const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
 pub const scoreType: type = i32;
 pub const weightType: type = i32;
@@ -145,8 +146,11 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scor
             },
         }
     }
-    //phase = @max(phase, 0);
-    std.debug.assert(phase == p_state.getPhase());
+    phase = @max(phase, 0);
+    if (phase != p_state.getPhase()) {
+        std.debug.print("[PANIC] {d} {d}", .{ phase, p_state.getPhase() });
+        @panic("");
+    }
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
     return score_count + @divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
 }
@@ -1319,18 +1323,58 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn cst_eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) [chess.MAX_POSSIBLE_MOVE]usize {
-    var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
+pub fn cst_eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) moveOrdering {
+    //var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
+    var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     for (0..p_moves.len) |i| {
-        ret[i] = i;
+        ret.indexes[i] = i;
         scores[i] = eval_move_heuristic(p_moves.moves[i], ply, prevLine, useLine, hashMove);
     }
-    std.mem.sort(usize, ret[0..p_moves.len], scores, cmp_eval_move);
+    ret.len = p_moves.len;
+    // could potentially do ret.scores as the context and sort the array of "entries" with where entries contains an idx, score and depth
+    // alla struct of arrays vs array of struct (here is struct of arrays)
+    std.mem.sort(usize, ret.indexes[0..p_moves.len], scores, cmp_eval_move);
+
+    for (0..ret.len) |idx| {
+        ret.scores[idx] = scores[ret.indexes[idx]];
+    }
     return ret;
 }
+pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer) void {
+    const otherKingBB = p_state.getKingSq(!p_state.whiteToMove());
+    const safetyArea = chess.safetyArea(otherKingBB);
+    //const lnd = std.math.log(f32, std.math.e, @floatFromInt(depth));
+    var nDecrease: usize = 1;
+    for (0..p_order.len) |i| {
+        if (p_order.scores[i] >= configl.MAX_HIST_HEURISTIC_VALUE) {
+            p_order.depths[i] = depth;
+            continue;
+        }
+        // here we decide what moves are considered to be important as to not sacrifice some depth
+        const move = fmoves.moves[p_order.indexes[i]];
+        const to = move.getTo();
+        if ((to & safetyArea) != 0 or move.isCapture() or move.isPromotion()) {
+            p_order.depths[i] = depth;
+            continue;
+        }
+        // here "slowly" decrease the depth
 
-pub fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) [chess.MAX_POSSIBLE_MOVE]usize {
+        //const sum: f32 = 1 + lnd * std.math.log(f32, std.math.e, @floatFromInt(nDecrease)) / 3.14;
+        //p_order.depths[i] = depth - @as(u16, @intFromFloat(sum));
+        p_order.depths[i] = depth - 2;
+        nDecrease += 1;
+    }
+    return;
+}
+pub const moveOrdering = struct {
+    indexes: [chess.MAX_POSSIBLE_MOVE]usize = undefined,
+    depths: [chess.MAX_POSSIBLE_MOVE]u16 = undefined,
+    scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
+    len: u8 = 0,
+};
+
+pub inline fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) moveOrdering {
     if (!p_feature.useStaticSearch) {
         return cst_eval_move_sorting_mask(p_moves, ply, prevLine, true, hashMove);
     }
