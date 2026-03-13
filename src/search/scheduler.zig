@@ -28,6 +28,7 @@ pub const searchFeatures = struct {
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
     fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
+    useLateMoveReduc: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
@@ -35,6 +36,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.useTexelEvaluation = p_engine.options.useTexelEvaluation;
     ret.useQuiescence = p_engine.options.useQuiescence;
     ret.useNullPrune = p_engine.options.useNullPrune;
+    ret.useLateMoveReduc = p_engine.options.useLateMoveReduction;
 
     ret.useStaticSearch = p_engine.options.useStaticSearch;
     ret.fixedDepth = p_engine.options.fixedDepth;

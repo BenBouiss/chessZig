@@ -1,22 +1,22 @@
 [engine1]
-path="zig-out/bin/engine";
-name="no hash";
+path="engines/bin/engine_13_03_26_late";
+name="no late move";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
 "setoption name useHash value false";
-//"setoption name useNullPruning value true";
+"setoption name fixedDepth value false";
+"setoption name useNullPruning value true";
 
 [engine2]
-path="zig-out/bin/engine";
-name="hash";
+path="engines/bin/engine_13_03_26_late";
+name="late move"
 "setoption name UCI_elo value 3000";
+"setoption name useHash value false";
 "setoption name fixedDepth value false";
-"setoption name useHash value true";
-"setoption name hash value 1000";
-//"setoption name useNullPruning value true";
+"setoption name useNullPruning value true";
+"setoption name useLateMoveReduction value true";
 
 [match]
-nMatch=2;
+nMatch=6;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

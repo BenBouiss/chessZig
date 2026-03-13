@@ -43,11 +43,14 @@ pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;
 pub const DEFAULT_ELO: u32 = 2500;
 
-pub const _DEFAULT_FIXED_DEPTH = "true";
-pub const DEFAULT_FIXED_DEPTH = true;
+pub const _DEFAULT_FIXED_DEPTH = "false";
+pub const DEFAULT_FIXED_DEPTH = false;
 
 pub const _DEFAULT_STATIC_SEARCH = "false";
 pub const DEFAULT_STATIC_SEARCH = false;
+
+pub const DEFAULT_LATE_MOVE_REDUCTION = false;
+pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
 
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;

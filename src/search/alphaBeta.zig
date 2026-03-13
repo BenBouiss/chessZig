@@ -89,36 +89,33 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
 
+    _ = p_startingMoves;
     var pv: pvContainer = .{};
-    for (0..p_startingMoves.items.len) |i| {
-        const move = p_startingMoves.items[i];
 
-        p_state.makeMove(move);
+    const score = searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, alpha, beta, p_features, 1, &pv, prevLine);
+    const move = pv.pv_arr[0][0];
+    p_info.currentBest.move = move;
+    p_info.currentBest.scoring = score;
+    //pv.onBestMove(move, 0);
+    p_info.currentBest.line.setLineFromPV(&pv);
+    //std.debug.print("[DEBUG] searchEntrypoint: new best line found {f} cp {d}\n", .{ p_info.currentBest.line, score });
 
-        _ = p_state.undoMove();
-
-        if (i == 0 or p_info.currentBest.scoring < score) {
-            p_info.currentBest.move = move;
-            p_info.currentBest.scoring = score;
-            pv.onBestMove(move, 0);
-            p_info.currentBest.line.setLineFromPV(&pv);
-            //std.debug.print("[DEBUG] searchEntrypoint: new best line found {f} cp {d}\n", .{ p_info.currentBest.line, score });
-        }
-    }
     if (p_info.alive) {
         return 0;
     }
     // 1 is error
     return 1;
 }
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line) scoreType {
-    pv.setLen(ply);
+pub const searchType = enum { NonPV, PV };
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
+    if (comptime t == .PV) {
+        pv.setLen(ply);
+    }
     if (p_state.isStaleMateRepetition()) {
         if (p_features.useHash) {
-            //const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
-            //_ = hashl.hashTable.storeEntry(&s_entry);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
+            _ = hashl.hashTable.storeEntry(&s_entry);
             // might be useful for late game
             //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
         }
@@ -164,9 +161,9 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         // see chess programming video
         const R: u16 = 2 + 1;
         const ischeck = p_state.isChecked();
-        if (depth > R and !ischeck and !p_state.isEndGame()) {
+        if (depth > R and !ischeck and !p_state.isEndGame() and ply > 0) {
             p_state.makeNullMove();
-            const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine);
+            const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine, .NonPV);
             p_state.undoNullMove();
             if (score >= beta) {
                 p_info.searchStat.n_cutoffs += 1;
@@ -176,16 +173,32 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features, hashMove);
+    var order = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features, hashMove);
+    var useLMR: bool = false;
+    //https://www.chessprogramming.org/Late_Move_Reductions
+    if (p_features.useLateMoveReduc and depth > 3) {
+        heuristicl.computeLateMoveReduc(p_state, &order, depth - 1, &fmoves);
+        useLMR = true;
+    }
+
     var finalScore: scoreType = 0;
     var bestMove: IMove = .{};
     for (0..fmoves.len) |i| {
-        const idx = indexes[i];
+        const idx = order.indexes[i];
         const move: IMove = fmoves.moves[idx];
 
         _ = p_state.makeMove(move);
 
-        const score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine);
+        var score: scoreType = 0;
+        if (useLMR) {
+            if (p_state.isChecked()) {
+                score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+            } else {
+                score = -searchLoop(p_state, p_info, order.depths[i], -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+            }
+        } else {
+            score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+        }
 
         _ = p_state.undoMove();
 
@@ -193,10 +206,16 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         if (i == 0 or finalScore < score) {
             finalScore = score;
             bestMove = move;
+            if (i == 0 and ply == 0 and comptime t == .PV) {
+                pv.onBestMove(move, ply);
+            }
         }
+        // under no possible scenario can this become >=, the resulting engines only produce drawn games amongst themselves
         if (finalScore > _alpha) {
             _alpha = finalScore;
-            pv.onBestMove(move, ply);
+            if (comptime t == .PV) {
+                pv.onBestMove(move, ply);
+            }
 
             if (!isCapture) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
@@ -251,7 +270,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
 
     const indexes = heuristicl.eval_move_sorting_mask(&fmoves, ply, prevLine, p_features, .{});
     for (0..fmoves.len) |i| {
-        const idx = indexes[i];
+        const idx = indexes.indexes[i];
         const move: IMove = fmoves.moves[idx];
 
         // if move nor capture nor checking

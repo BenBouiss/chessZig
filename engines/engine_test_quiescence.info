@@ -3,18 +3,20 @@ path="engines/bin/engine_12_03_26_prevQuiesc";
 name="prev";
 "setoption name UCI_elo value 3000";
 "setoption name useHash value false";
+"setoption name fixedDepth value false";
 "setoption name useQuiescence value true";
 
 [engine2]
-path="zig-out/bin/engine";
+path="engines/bin/engine_12_03_26_nextQuiesc";
 name="chessProg";
 //"debug on";
 "setoption name UCI_elo value 3000";
 "setoption name useHash value false";
+"setoption name fixedDepth value false";
 "setoption name useQuiescence value true";
 
 [match]
-nMatch=2;
+nMatch=4;
 playerSwitch=true;
 //debugMode=true;
 useOpeningBook=true;
