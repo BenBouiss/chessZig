@@ -142,3 +142,35 @@ null move pruning vs non null move pruning:
 		 opening book path opening/8moves_v3.pgn
 	
 	conclusion = good!
+
+
+new alpha beta search algo
+source https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
+	- the Zws implementation seems quite slow as more "searches" are required
+
+	engine: normal AB search, 6 matches, win: 4, lose: 2, draw: 0, flagged: 0, speed: 5520(+-3796) ms/move;
+	engine: normal AB search, breakdown (w/l/d) w: 3/0/0, b: 1/2/0 
+	engine: zws search, 6 matches, win: 2, lose: 4, draw: 0, flagged: 0, speed: 5271(+-4402) ms/move;
+	engine: zws search, breakdown (w/l/d) w: 2/1/0, b: 0/3/0 
+	Engine #0
+		 name: normal AB search
+		 path: engines/bin/engine_13_03_26_normSearch
+		 option: setoption name UCI_elo value 3000
+		 option: setoption name fixedDepth value false
+		 option: setoption name useHash value false
+		 option: setoption name useNullPruning value true
+	Engine #1
+		 name: zws search
+		 path: engines/bin/engine_13_03_26_ZwsSearch
+		 option: setoption name UCI_elo value 3000
+		 option: setoption name fixedDepth value false
+		 option: setoption name useHash value false
+		 option: setoption name useNullPruning value true
+	Match settings: 
+		 nMatch: 3
+		 player switch: true
+		 time format: time 300000 inc 5000
+		 use opening book true
+		 opening book path opening/8moves_v3.pgn
+
+	conclusion = not great maybe more tries. 

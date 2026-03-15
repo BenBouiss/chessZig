@@ -411,22 +411,16 @@ pub fn modifyHeuristicWeight_array(alloc: std.mem.Allocator, s: *string, debug: 
     }
     var dest: *[N_PHASES][chess.N_SQUARES]scoreType = undefined;
     if (s.containsE("pawn", .ignoreCase)) {
-        //globalHeuristic.Pawn_PSQT = .{ buffer, buffer };
         dest = &globalHeuristic.Pawn_PSQT;
     } else if (s.containsE("knight", .ignoreCase)) {
-        //globalHeuristic.Knight_PSQT = .{ buffer, buffer };
         dest = &globalHeuristic.Knight_PSQT;
     } else if (s.containsE("bishop", .ignoreCase)) {
-        //globalHeuristic.Bishop_PSQT = .{ buffer, buffer };
         dest = &globalHeuristic.Bishop_PSQT;
     } else if (s.containsE("rook", .ignoreCase)) {
-        //globalHeuristic.Rook_PSQT = .{ buffer, buffer };
         dest = &globalHeuristic.Rook_PSQT;
     } else if (s.containsE("queen", .ignoreCase)) {
-        //globalHeuristic.Queen_PSQT = .{ buffer, buffer };
         dest = &globalHeuristic.Queen_PSQT;
     } else if (s.containsE("king", .ignoreCase)) {
-        //globalHeuristic.King_PSQT = .{ buffer, buffer };
         dest = &globalHeuristic.King_PSQT;
     } else {
         if (debug) {

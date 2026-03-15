@@ -208,7 +208,7 @@ pub fn r_bitscanK(b: u64) u8 {
     }
     return count;
 }
-pub fn print_board(p_board: *Board_state) void {
+pub fn print_board(p_board: *const Board_state) void {
     var print_buffer: [8][8]u8 = undefined;
     @memset(&print_buffer, .{ 0, 0, 0, 0, 0, 0, 0, 0 });
     //var bb: u64 = undefined;
