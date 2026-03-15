@@ -159,12 +159,22 @@ class callbackBaseline(template.callback):
 # weight section
 total_idx = 0
 
+mobility_idx = total_idx
+total_idx += 1
+
+structureProtection_idx = total_idx
+total_idx += 1
+
+isolatedPawnScore_idx = total_idx
+total_idx += 1
 stackedPawnScore_idx = total_idx
 total_idx += 1
 passedPawnScore_idx = total_idx
 total_idx += 1
-isolatedPawnScore_idx = total_idx
-total_idx += 1
+
+#not used
+#safetyPawn_idx = total_idx
+#total_idx += 1
 
 safetyKnight_idx = total_idx
 total_idx += 1
@@ -175,10 +185,8 @@ total_idx += 1
 safetyQueen_idx = total_idx
 total_idx += 1
 
-structureProtection_idx = total_idx
-total_idx += 1
-mobility_idx = total_idx
-total_idx += 1
+# p , n, b, r, q
+simplePieceCount: list[float] = [100, 300, 300, 500, 900]
 
 simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0]
 
