@@ -376,7 +376,7 @@ if __name__ == "__main__":
     tourn = tournament(standardTimeFormat, templatePath = path, evalBin = evaluationBinPath, debugMode = True, logDir = tmpFolder, nThread=4, type = tournamentType.BASELINE)
 
     mh.setObjective(chessObjective(maximize=True, tourney=tourn, bounds = dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim = N_PARAMS), steps = dummyStep(STEP_WEIGTH, nDim = N_PARAMS)))
-    assert mh.objective is not None
+    assert mh.objective is chessObjective
     mh.objective.setBaseline(chessSpec.entryFromList(chessSpec.simpleBaselineWeights))
 
     mh.generatePopulation()

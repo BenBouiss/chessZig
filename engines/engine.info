@@ -1,29 +1,30 @@
 [engine1]
-path="zig-out/bin/engine";
-name="prev";
+path="engines/bin/engine_15_03_26";
+name="'newest'";
+//"debug on"
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
-//"debug on";
+"setoption name heuristicWeightsPath value test/test_1773586952.winfo"
+"setoption name useNullPruning value true";
 
 [engine2]
-path="zig-out/bin/engine";
-name="new";
+path="engines/bin/engine_15_03_26";
+name="'newer'";
+//"debug on"
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
-//"debug on";
+"setoption name heuristicWeightsPath value test/test_1773585498.winfo"
+"setoption name useNullPruning value true";
 
 [match]
-nMatch=1;
+nMatch=4;
 playerSwitch=true;
 debugMode=false;
-useOpeningBook=false;
+useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-infinite=false;
-
-timeFormat=(60000, 0);
-
+timeFormat=(60000, 1000);
 logsLocation="logs/ben/ben";
 //saveLogs=true;
 

@@ -66,7 +66,31 @@ class heuristicEntry:
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
         return np.concatenate(self.weights)
+
+
+class namedHeuristicEntry:
+    def __init__(self, 
+                mobilityScore: None|list[float] = None,
+                structureScore: None|list[float] = None,
+                isolatedPawnScore: None|list[float] = None,
+                stackedPawnScore: None|list[float] = None,
+                passedPawnScore: None|list[float] = None,
+                safetyKnightScore: None|list[float] = None,
+                safetyBishopScore: None|list[float] = None,
+                safetyScore: None|list[float] = None,
+                safetyKnightScore: None|list[float] = None,
+                safetyKnightScore: None|list[float] = None,
+                 ):
+
+        self.mobilityScore: None | list[float] = mobilityScore
+    def toEntry(self) -> heuristicEntry:
+        ret = heuristicEntry()
+        #ret.weights.append()
+        return ret
+
         
+        
+
 def entryFrom1dArray(arr: npt.NDArray[np.float64]) -> heuristicEntry:
     ret = heuristicEntry()
     ret.weights = arr.tolist()
@@ -191,7 +215,7 @@ simplePieceCount: list[float] = [100, 300, 300, 500, 900]
 simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0]
 
 # obtained after 14 iter and 8 popsize
-
 newWeight_0: list[float] = [0.0, -3.0, 100.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]
+newWeight_0_bis: list[float] = [1.0, 3.0, 95.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]
 
 

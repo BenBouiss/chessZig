@@ -174,3 +174,29 @@ source https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
 		 opening book path opening/8moves_v3.pgn
 
 	conclusion = not great maybe more tries. 
+
+texel tuning result:
+	- Only using PQST weights everything else = 0 5w 2l 1d against the current "baseline"
+	engine: prev, 8 matches, win: 2, lose: 5, draw: 1, flagged: 0, speed: 1317(+-650) ms/move;
+		engine: prev, breakdown (w/l/d) w: 1/2/1, b: 1/3/0 
+		engine: new, 8 matches, win: 5, lose: 2, draw: 1, flagged: 0, speed: 1200(+-624) ms/move;
+		engine: new, breakdown (w/l/d) w: 3/1/0, b: 2/1/1 
+		Engine #0
+			 name: prev
+			 path: zig-out/bin/engine
+			 option: setoption name UCI_elo value 3000
+			 option: setoption name fixedDepth value false
+			 option: setoption name useHash value false
+		Engine #1
+			 name: new
+			 path: zig-out/bin/engine
+			 option: setoption name UCI_elo value 3000
+			 option: setoption name fixedDepth value false
+			 option: setoption name useHash value false
+			 option: setoption name heuristicWeightsPath value test/test_1773584013.winfo
+		Match settings: 
+			 nMatch: 4
+			 player switch: true
+			 time format: time 60000 inc 1000
+			 use opening book true
+			 opening book path opening/8moves_v3.pgn
