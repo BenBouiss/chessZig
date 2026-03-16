@@ -762,7 +762,7 @@ pub fn filterMoveLegal(p_state: *const Board_state, move_list: *moveContainer, w
     const all_attacks = chess.getAllAttackMask(p_state, p_state.occupiedBB, !white);
 
     const kingSqInfo = squareInfo.init(p_state.getKingSq(white));
-    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackMaskFromKing(p_state, white));
+    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackerFromKing(p_state, white));
     const linePieceBB = cached[0];
     const diagPieceBB = cached[1];
     for (0..move_list.len) |i| {
@@ -782,7 +782,7 @@ pub fn filterCountMoveLegal(p_state: *const Board_state, move_list: *moveContain
     const all_attacks = chess.getAllAttackMask(p_state, p_state.occupiedBB, !white);
 
     const kingSqInfo = squareInfo.init(p_state.getKingSq(white));
-    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackMaskFromKing(p_state, white));
+    const checks: squarel.checkContainer = squarel.convertBitBoardtoCheckContainer(chess.getAllAttackerFromKing(p_state, white));
     const linePieceBB = cached[0];
     const diagPieceBB = cached[1];
     var ret: usize = 0;

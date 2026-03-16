@@ -5,7 +5,10 @@ import pandas as pd
 import numpy as np
 import sys, os, math
 import torch
+
 import torch.nn as nn
+import torch.optim.lr_scheduler as lr_scheduler
+
 import numpy.typing as npt 
 from chessIntegration import chessSpec
 
@@ -81,7 +84,8 @@ def training_loop(opt: trainingOptions, model: nn.Module, freq_pos_change: int =
     criterion = nn.MSELoss()
     setInitWeight(opt, model)
     freezeM = opt.makeFreezeMask()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)#, weight_decay=0.0001
+    optimizer = torch.optim.Adam(model.parameters(), lr=1)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.75)
     if (fileSize is None):
         size = getFileLineNumbers(opt.path)
     else:
@@ -108,6 +112,7 @@ def training_loop(opt: trainingOptions, model: nn.Module, freq_pos_change: int =
         # here zero out the grad
         zeroOutGrad(freezeM, model)
         optimizer.step()  # Update the parameters
+        scheduler.step()
 
         if (ep % 10 == 0):
             print(f"Epoch: {ep}: loss = {loss.item()}")
@@ -208,7 +213,7 @@ class texelWeights:
         return True
 
     def pushArray(self, val: list[float], startingIdx: int) -> None:
-        self.elem.append(weight(idx = startingIdx, val = val))
+        self.elem.append(weight(idx = startingIdx, val = list(val)))
         self.elem.sort(key = lambda x: x.idx)
 
     def multiply(self, val: float) -> texelWeights:

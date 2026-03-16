@@ -52,7 +52,7 @@ pub const DEFAULT_STATIC_SEARCH = false;
 pub const DEFAULT_LATE_MOVE_REDUCTION = false;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
 
-pub const DEFAULT_SEARCH_TYPE: searchType = .ASPIRATION;
+pub const DEFAULT_SEARCH_TYPE: searchType = .STD;
 pub const searchType = enum { STD, ZWS, ASPIRATION };
 
 pub const MIN_ELO: u32 = 1000;

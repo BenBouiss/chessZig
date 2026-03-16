@@ -13,6 +13,9 @@ const schedulerl = @import("search/scheduler.zig");
 
 const std = @import("std");
 
+const build_options = @import("build_options");
+const useStaged = build_options.useStaged;
+
 const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
 const string = stringl.string;
@@ -30,11 +33,15 @@ pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType
     const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
 
     var score: scoreType = 0;
-    score += evaluate_PSQT(p_state, values);
-    score += evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values.MobilityValue);
-    score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values);
-    score += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values);
-    score += evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue, values.PassedPawnValue);
+    const phase: scoreType = @intCast(p_state.getPhase());
+    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+
+    score += evaluate_PSQT(p_state, values, _phase);
+
+    score += evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
+    score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
+    score += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
+    score += evaluate_pawnStructure(p_state, values, _phase);
     return score;
 }
 
@@ -56,19 +63,24 @@ pub fn evaluate_debug(p_state: *chess.Board_state, values: *heuristicValues) heu
     const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
+
+    const phase: scoreType = @intCast(p_state.getPhase());
+    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
     const ret: heuristicComponents = .{
-        .PSQT = evaluate_PSQT(p_state, values),
-        .Mobility = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values.MobilityValue),
+        .PSQT = evaluate_PSQT(p_state, values, _phase),
+        .Mobility = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
 
-        .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values),
-        .Structure = evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values),
-
-        .PawnStruct = evaluate_pawnStructure(p_state, values.IsolatedPawnValue, values.StackedPawnValue, values.PassedPawnValue),
+        .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
+        .Structure = evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase),
+        .PawnStruct = evaluate_pawnStructure(p_state, values, _phase),
     };
     return ret;
 }
+pub fn computeTapered(score_mg: scoreType, score_eg: scoreType, _phase: scoreType) scoreType {
+    return @divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
+}
 
-pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
+pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues, _phase: scoreType) scoreType {
     var score_count: scoreType = 0;
     var score_mg: scoreType = 0;
     var score_eg: scoreType = 0;
@@ -151,28 +163,28 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues) scor
         std.debug.print("[PANIC] {d} {d}", .{ phase, p_state.getPhase() });
         @panic("");
     }
-    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
-    return score_count + @divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
+    //const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+    return score_count + computeTapered(score_mg, score_eg, _phase); //@divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
 }
 
-pub fn evaluate_pawnStructure(p_state: *chess.Board_state, isolatedCoef: scoreType, stackedCoef: scoreType, passedCoef: scoreType) scoreType {
+pub fn evaluate_pawnStructure(p_state: *chess.Board_state, values: *heuristicValues, _phase: scoreType) scoreType {
     const wp = p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
     const bp = p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
 
     const nWhiteIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(wp)));
     const nBlackIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(bp)));
-    const isolatedScore = isolatedCoef * @as(scoreType, @intCast(nWhiteIsolated - nBlackIsolated));
+    const isolatedScore = computeTapered(values.IsolatedPawnValue[MG], values.IsolatedPawnValue[EG], _phase) * @as(scoreType, @intCast(nWhiteIsolated - nBlackIsolated));
 
     const nWhiteDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(wp)));
     const nBlackDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(bp)));
-    const doubledPawnScore = stackedCoef * @as(scoreType, @intCast(nWhiteDoubled - nBlackDoubled));
+    const doubledPawnScore = computeTapered(values.StackedPawnValue[MG], values.StackedPawnValue[EG], _phase) * @as(scoreType, @intCast(nWhiteDoubled - nBlackDoubled));
 
     const nWhitePassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(wp, bp)));
     const nBlackPassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(bp, wp)));
-    const passedPawnScore = passedCoef * @as(scoreType, @intCast(nWhitePassed - nBlackPassed));
+    const passedPawnScore = computeTapered(values.PassedPawnValue[MG], values.PassedPawnValue[EG], _phase) * @as(scoreType, @intCast(nWhitePassed - nBlackPassed));
     return doubledPawnScore + isolatedScore + passedPawnScore;
 }
-pub fn evaluate_mobility(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, mobilityCoef: scoreType) scoreType {
+pub fn evaluate_mobility(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
     // going to use "raw" mobility only taking board coverage
     // now trying with only legals
     _ = p_state;
@@ -180,14 +192,14 @@ pub fn evaluate_mobility(p_state: *chess.Board_state, p_whiteMoveBB: *const move
 
     const moveB: i64 = @intCast(p_blackMoveBB.count());
 
-    return mobilityCoef * @as(scoreType, @intCast(moveW - moveB));
+    return computeTapered(values.MobilityValue[MG], values.MobilityValue[EG], _phase) * @as(scoreType, @intCast(moveW - moveB));
 
     // these are insanely expensive
     //const moveW = moveGenl.generateMoveCountLegalMoves(p_state, true);
     //const moveB = moveGenl.generateMoveCountLegalMoves(p_state, false);
     //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
 }
-pub fn evaluate_safety(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues) scoreType {
+pub fn evaluate_safety(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
     // counting negative for white as the best safety is not attackers => 0 heuristic
     var retSaf: scoreType = 0;
     const kingWSafety = chess.safetyArea(p_state.wKingSq);
@@ -202,23 +214,22 @@ pub fn evaluate_safety(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBB
     const wRookAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & p_whiteMoveBB.rookMoves));
     const wQueenAtt: scoreType = @intCast(chess.l_popcount(kingBSafety & p_whiteMoveBB.queenMoves));
 
-    retSaf += @intCast(values.SafetyKnightValue * wKnightAtt + values.SafetyBishopValue * wBishopAtt + values.SafetyRookValue * wRookAtt + values.SafetyQueenValue * wQueenAtt);
-    retSaf -= @intCast(values.SafetyKnightValue * bKnightAtt + values.SafetyBishopValue * bBishopAtt + values.SafetyRookValue * bRookAtt + values.SafetyQueenValue * bQueenAtt);
+    retSaf += @intCast(computeTapered(values.SafetyKnightValue[MG], values.SafetyKnightValue[EG], _phase) * (wKnightAtt - bKnightAtt) + computeTapered(values.SafetyBishopValue[MG], values.SafetyBishopValue[EG], _phase) * (wBishopAtt - bBishopAtt) + computeTapered(values.SafetyRookValue[MG], values.SafetyRookValue[EG], _phase) * (wRookAtt - bRookAtt) + computeTapered(values.SafetyQueenValue[MG], values.SafetyQueenValue[EG], _phase) * (wQueenAtt - bQueenAtt));
 
     // white is advantaged from a high safety_arr index, more =wPieceAtt are present in the black king vicinity thus it should be counted as positive
     retSaf += @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt))]);
     retSaf -= @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt))]);
     return retSaf;
 }
-pub fn evaluate_structure(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues) scoreType {
+pub fn evaluate_structure(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
     // structure protection,
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
     const w_pieceProtect = p_whiteMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.wKingSq));
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
-    return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * values.StructureProtectionValue;
+    return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * computeTapered(values.StructureProtectionValue[MG], values.StructureProtectionValue[EG], _phase);
 }
 
-pub fn epieceToHeuristic(piece: e_piece, values: *heuristicValues) scoreType {
+pub fn e_pieceToHeuristic(piece: e_piece, values: *heuristicValues) scoreType {
     switch (piece) {
         .nEmptySquare, .nWhite, .nBlack, .nWhiteKing, .nBlackKing => {
             return 0;
@@ -464,27 +475,46 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
         std.debug.print("[DEBUG] modifyHeuristicWeight: modifying buffer with following value {d} \n[", .{_val});
     }
 
+    var dest: *[N_PHASES]scoreType = undefined;
     if (s.containsE("isolatedPawn", .ignoreCase)) {
-        globalHeuristic.IsolatedPawnValue = _val;
+        dest = &globalHeuristic.IsolatedPawnValue;
     } else if (s.containsE("mobility", .ignoreCase)) {
-        globalHeuristic.MobilityValue = _val;
+        dest = &globalHeuristic.MobilityValue;
     } else if (s.containsE("stackedPawn", .ignoreCase)) {
-        globalHeuristic.StackedPawnValue = _val;
+        dest = &globalHeuristic.StackedPawnValue;
     } else if (s.containsE("passedPawn", .ignoreCase)) {
-        globalHeuristic.PassedPawnValue = _val;
+        dest = &globalHeuristic.PassedPawnValue;
     } else if (s.containsE("safetyKnight", .ignoreCase)) {
-        globalHeuristic.SafetyKnightValue = _val;
+        dest = &globalHeuristic.SafetyKnightValue;
     } else if (s.containsE("safetyBishop", .ignoreCase)) {
-        globalHeuristic.SafetyBishopValue = _val;
+        dest = &globalHeuristic.SafetyBishopValue;
     } else if (s.containsE("safetyRook", .ignoreCase)) {
-        globalHeuristic.SafetyRookValue = _val;
+        dest = &globalHeuristic.SafetyRookValue;
     } else if (s.containsE("safetyQueen", .ignoreCase)) {
-        globalHeuristic.SafetyQueenValue = _val;
+        dest = &globalHeuristic.SafetyQueenValue;
     } else if (s.containsE("structureProtection", .ignoreCase)) {
-        globalHeuristic.StructureProtectionValue = _val;
+        dest = &globalHeuristic.StructureProtectionValue;
     } else {
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token {s}\n", .{s._slice()});
+        }
+        return;
+    }
+    if (s.containsE("MG", .ignoreCase)) {
+        dest.*[MG] = _val;
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set MG\n", .{});
+        }
+    } else if (s.containsE("EG", .ignoreCase)) {
+        dest.*[EG] = _val;
+
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set EG\n", .{});
+        }
+    } else {
+        dest.* = .{ _val, _val };
+        if (debug) {
+            std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set both\n", .{});
         }
     }
 }
@@ -496,17 +526,18 @@ pub const heuristicValues = struct {
     KnightValue: scoreType = weightl.simpleKnightScore,
     RookValue: scoreType = weightl.simpleRookScore,
     QueenValue: scoreType = weightl.simpleQueenScore,
-    MobilityValue: scoreType = weightl.simpleMobilityScore,
-    IsolatedPawnValue: scoreType = weightl.simpleIsolatedPawnScore,
-    StackedPawnValue: scoreType = weightl.simpleStackedPawnScore,
-    PassedPawnValue: scoreType = weightl.simplePassedPawnScore,
 
-    SafetyBishopValue: scoreType = weightl.simpleSafetyBishopScore,
-    SafetyKnightValue: scoreType = weightl.simpleSafetyKnightScore,
-    SafetyRookValue: scoreType = weightl.simpleSafetyRookScore,
-    SafetyQueenValue: scoreType = weightl.simpleSafetyQueenScore,
+    MobilityValue: [N_PHASES]scoreType = .{ weightl.simpleMobilityScore, weightl.simpleMobilityScore },
+    IsolatedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleIsolatedPawnScore, weightl.simpleIsolatedPawnScore },
+    StackedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleStackedPawnScore, weightl.simpleStackedPawnScore },
+    PassedPawnValue: [N_PHASES]scoreType = .{ weightl.simplePassedPawnScore, weightl.simplePassedPawnScore },
 
-    StructureProtectionValue: scoreType = weightl.simpleStructureProtectionScore,
+    SafetyBishopValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyBishopScore, weightl.simpleSafetyBishopScore },
+    SafetyKnightValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyKnightScore, weightl.simpleSafetyKnightScore },
+    SafetyRookValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyRookScore, weightl.simpleSafetyRookScore },
+    SafetyQueenValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyQueenScore, weightl.simpleSafetyQueenScore },
+
+    StructureProtectionValue: [N_PHASES]scoreType = .{ weightl.simpleStructureProtectionScore, weightl.simpleStructureProtectionScore },
 
     Pawn_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.pawnScoreArr, weightl.pawnScoreArr },
     Bishop_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.bishopScoreArr, weightl.bishopScoreArr },
@@ -1374,6 +1405,35 @@ pub inline fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u
     }
     return cst_eval_move_sorting_mask(p_moves, ply, prevLine, false, hashMove);
 }
+pub fn SEE(p_state: *chess.Board_state, sq: squarel.e_square) scoreType {
+    if (comptime !useStaged) {
+        return 0;
+    }
+    //
+    const piece = lowestAttackingPiece(p_state, sq);
+    const value: scoreType = 0;
+    if (piece != .nEmptySquare) {}
+    return value;
+}
+pub fn lowestAttackingPiece(p_state: *chess.Board_state, sq: squarel.e_square) e_piece {
+    const kingSq = p_state.getKingSq(!p_state.whiteToMove());
+    _ = kingSq;
+    var allAttack = chess.getAllAttackerFromSq(p_state, p_state.whiteToMove(), sq);
+    var ret: e_piece = .nEmptySquare;
+    var retHeur: scoreType = weightl.simpleCheckMateScore;
+    while (allAttack) {
+        const targetSq = chess.bitscan(allAttack);
+        allAttack &= allAttack - 1;
+        const piece = p_state.get_piece(targetSq);
+        const pieceH = e_pieceToHeuristic(piece, &globalHeuristic);
+        if (pieceH < retHeur) {
+            retHeur = pieceH;
+            ret = piece;
+        }
+    }
+    return ret;
+}
+
 pub fn dummyScaling(score: scoreType, phase: scoreType) scoreType {
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
     return @divFloor((score * (256 - _phase)) + score * _phase, 256);
