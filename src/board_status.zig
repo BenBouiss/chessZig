@@ -33,11 +33,11 @@ pub const statusStack = struct {
     items: [movel.MAX_MATCH_LENGTH]status = undefined,
     len: usize = 0,
 
-    pub fn push(p_self: *statusStack, item: status) void {
+    pub inline fn push(p_self: *statusStack, item: status) void {
         p_self.items[p_self.len] = item;
         p_self.len += 1;
     }
-    pub fn pop(p_self: *statusStack) status {
+    pub inline fn pop(p_self: *statusStack) status {
         if (comptime useDebug) {
             if (p_self.len == 0) {
                 @panic("Popping from empty boardframe, forgot to push?");
@@ -56,7 +56,7 @@ pub const status = struct {
 
     BCastlingK: bool = false,
     BCastlingQ: bool = false,
-    pub fn turn(self: status) chessl.e_color {
+    pub inline fn turn(self: status) chessl.e_color {
         if (self._whiteToMove) {
             return .WHITE;
         }
@@ -71,7 +71,7 @@ pub const status = struct {
     pub inline fn invertTurn(self: *status) void {
         self._whiteToMove = !self._whiteToMove;
     }
-    pub fn canCastle(self: status, comptime whiteMove: bool) bool {
+    pub inline fn canCastle(self: status, comptime whiteMove: bool) bool {
         if (comptime whiteMove) {
             return self.WCastlingK | self.WCastlingQ;
         } else {
@@ -90,7 +90,7 @@ pub const status = struct {
         }
         return self.BCastlingQ;
     }
-    pub fn onKingMove(self: status) status {
+    pub inline fn onKingMove(self: status) status {
         if (self._whiteToMove) {
             return .{ ._whiteToMove = false, .WCastlingK = false, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
         } else {
@@ -117,7 +117,7 @@ pub const status = struct {
         }
     }
 
-    pub fn castlingKey(self: status) u4 {
+    pub inline fn castlingKey(self: status) u4 {
         const r1: u4 = @intCast(@intFromBool(self.WCastlingK));
         const r2: u4 = @intCast(@intFromBool(self.WCastlingQ));
         const r3: u4 = @intCast(@intFromBool(self.BCastlingK));
@@ -125,9 +125,9 @@ pub const status = struct {
         return r1 | (r2 << 1) | (r3 << 2) | (r4 << 3);
     }
 };
-pub fn isLeftRook(rook: u64) bool {
+pub inline fn isLeftRook(rook: u64) bool {
     return (rook & LEFT_ROOKS) != chessl.EMPTY;
 }
-pub fn isRightRook(rook: u64) bool {
+pub inline fn isRightRook(rook: u64) bool {
     return (rook & RIGHT_ROOKS) != chessl.EMPTY;
 }

@@ -132,7 +132,7 @@ pub fn bishopMagicIndex(entry: magic_entry, blockers: u64) u64 {
     return (hash >> 55);
 }
 
-pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
+pub inline fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
     const magic = p_magicTable.rookMagic[@intFromEnum(sq)];
 
     const _blockers = blockers & magic.mask;
@@ -141,7 +141,7 @@ pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
     return p_magicTable.rookMoves[@intFromEnum(sq)][magic_index];
 }
 
-pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
+pub inline fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
     const magic = p_magicTable.bishopMagic[@intFromEnum(sq)];
     // precomputed then indexing removes the memcpy of indexing then computing then indexing again leading to better perf
     // from: Compiler explorer
