@@ -67,6 +67,7 @@ pub const notGHFile: u64 = 0x3f3f3f3f3f3f3f3f;
 pub const notHFile: u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
 pub const whitePawnPromoRank: u64 = 0xFF00000000000000;
 pub const blackPawnPromoRank: u64 = 0xFF;
+pub const nonPromoRank: u64 = ~(whitePawnPromoRank | blackPawnPromoRank);
 
 pub const whitePawnDoubleRank: u64 = 0xFF00;
 pub const blackPawnDoubleRank: u64 = 0xFF000000000000;
@@ -161,7 +162,7 @@ pub fn rotate180(bb: u64) u64 {
     return x;
 }
 
-pub fn bitscan(bb: u64) u8 {
+pub inline fn bitscan(bb: u64) u8 {
     // assumes bb is non empty
     if (comptime fastBitscan) {
         var ret: u32 = undefined;
@@ -189,7 +190,7 @@ pub fn bitscanK(b: u64) u8 {
 // @return index (0..63) of most significant one bit
 ///
 /// This function and the one above are branchless version of bitScan and r_bitScan, function are from chessprogramming.org
-pub fn r_bitscan(bb: u64) u8 {
+pub inline fn r_bitscan(bb: u64) u8 {
     if (comptime fastBitscan) {
         var ret: u32 = undefined;
         _ = intrinsicsl._BitScanForwardReverse64(&ret, bb);
@@ -517,7 +518,7 @@ pub inline fn safetyArea(sq: e_square) u64 {
     return tablel.safetyArea[@intFromEnum(sq)];
 }
 
-pub fn getColorPieceOffset(white: bool) u8 {
+pub inline fn getColorPieceOffset(white: bool) u8 {
     if (white) {
         return 0;
     }
@@ -553,7 +554,7 @@ pub const boardStack = struct {
     stack: [movel.MAX_MATCH_LENGTH]boardFrame = undefined,
     len: usize = 0,
 
-    pub fn push(p_self: *boardStack, p_frame: *const boardFrame) void {
+    pub inline fn push(p_self: *boardStack, p_frame: *const boardFrame) void {
         if (comptime useDebug) {
             if (p_self.len == movel.MAX_MATCH_LENGTH) {
                 @panic("Board stack is full, forgot to pop?");
@@ -562,7 +563,7 @@ pub const boardStack = struct {
         p_self.stack[p_self.len] = p_frame.*;
         p_self.len += 1;
     }
-    pub fn pop(p_self: *boardStack) boardFrame {
+    pub inline fn pop(p_self: *boardStack) boardFrame {
         if (comptime useDebug) {
             if (p_self.len == 0) {
                 @panic("Popping from empty boardframe, forgot to push?");
@@ -669,13 +670,13 @@ pub const Board_state = struct {
         _ = alloc;
         _ = p_self;
     }
-    pub fn copy(p_self: *const Board_state) Board_state {
+    pub inline fn copy(p_self: *const Board_state) Board_state {
         return p_self.*;
     }
     pub inline fn whiteToMove(self: *const Board_state) bool {
         return self.stat.whiteToMove();
     }
-    pub fn makeFrame(self: *const Board_state) boardFrame {
+    pub inline fn makeFrame(self: *const Board_state) boardFrame {
         return .{ .pinnedBB = self.pinnedBB, .victim = self.victim, .checkersBB = self.checkersBB, .enPassantIdx = self.enPassantIdx, .lastMove = self.lastMove, .key = self.key, .halfMoveClock = self.halfMoveClock };
     }
     pub inline fn pushState(self: *Board_state) void {
@@ -945,7 +946,7 @@ pub const Board_state = struct {
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
-        _ = p_self.move_history.popMove();
+        p_self.move_history.popMoveVoid();
         const popped = (p_self.stack.pop());
         p_self.loadFrame(&popped);
         return true;
@@ -972,8 +973,8 @@ pub const Board_state = struct {
         }
     }
     pub fn makeNullMove_cst(p_self: *Board_state, comptime white: bool) void {
-        //
-        p_self.stack.push(&p_self.makeFrame());
+        //p_self.stack.push(&p_self.makeFrame());
+        p_self.pushState();
         p_self.s_stack.push(p_self.stat);
 
         p_self.victim = .nEmptySquare;
@@ -991,6 +992,7 @@ pub const Board_state = struct {
         }
     }
     pub inline fn makeMove(p_self: *Board_state, move: IMove) void {
+        // FIXME: Look into makeMove capture specific method for better perf
         if (p_self.whiteToMove()) {
             p_self.makeMove_cst(move, true);
         } else {
@@ -1545,22 +1547,22 @@ pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) 
     return attacks ^ cachedTables.rayAttacks[sq][@intFromEnum(dir)];
 }
 
-pub fn diagonalAttacks(bb: u64, sq: e_square) u64 {
+pub inline fn diagonalAttacks(bb: u64, sq: e_square) u64 {
     return getAttackRay(bb, e_direction.NORTHEAST, sq) | getAttackRay(bb, e_direction.SOUTHWEST, sq); // ^ +
 }
 
-pub fn antiDiagAttacks(bb: u64, sq: e_square) u64 {
+pub inline fn antiDiagAttacks(bb: u64, sq: e_square) u64 {
     return getAttackRay(bb, e_direction.NORTHWEST, sq) | getAttackRay(bb, e_direction.SOUTHEAST, sq); // ^ +
 }
 
-pub fn fileAttacks(bb: u64, sq: e_square) u64 {
+pub inline fn fileAttacks(bb: u64, sq: e_square) u64 {
     return getAttackRay(bb, e_direction.NORTH, sq) | getAttackRay(bb, e_direction.SOUTH, sq); // ^ +
 }
 
-pub fn rankAttacks(bb: u64, sq: e_square) u64 {
+pub inline fn rankAttacks(bb: u64, sq: e_square) u64 {
     return getAttackRay(bb, e_direction.EAST, sq) | getAttackRay(bb, e_direction.WEST, sq); // ^ +
 }
-pub fn getRookAttacks(occBB: u64, sq: e_square) u64 {
+pub inline fn getRookAttacks(occBB: u64, sq: e_square) u64 {
     if (comptime useMagic) {
         return magicl.getRookMoves(sq, occBB);
     } else {
@@ -1569,7 +1571,7 @@ pub fn getRookAttacks(occBB: u64, sq: e_square) u64 {
         return ret;
     }
 }
-pub fn getBishopAttacks(occBB: u64, sq: e_square) u64 {
+pub inline fn getBishopAttacks(occBB: u64, sq: e_square) u64 {
     if (comptime useMagic) {
         return magicl.getBishopMoves(sq, occBB);
     } else {
@@ -1579,7 +1581,7 @@ pub fn getBishopAttacks(occBB: u64, sq: e_square) u64 {
     }
 }
 
-pub fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
+pub inline fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
     const sqBB = sqToBitboard(sq);
     if (comptime white) {
         return ((sqBB << 7) & notHFile) | ((sqBB << 9) & notAFile);
@@ -1588,17 +1590,17 @@ pub fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
     }
 }
 
-pub fn getKingAttacks(sq: e_square) u64 {
+pub inline fn getKingAttacks(sq: e_square) u64 {
     return tablel.cachedKingTable.KingAttack[@intFromEnum(sq)];
 }
 
-pub fn xrayRookAttacks(occ: u64, blockers: u64, rookSq: e_square) u64 {
+pub inline fn xrayRookAttacks(occ: u64, blockers: u64, rookSq: e_square) u64 {
     const attacks = getRookAttacks(occ, rookSq);
     const _blockers = (blockers & attacks) ^ occ;
     return attacks ^ getRookAttacks(_blockers, rookSq);
 }
 
-pub fn xrayBishopAttacks(occ: u64, blockers: u64, bishopSq: e_square) u64 {
+pub inline fn xrayBishopAttacks(occ: u64, blockers: u64, bishopSq: e_square) u64 {
     const attacks = getBishopAttacks(occ, bishopSq);
     const _blockers = (blockers & attacks) ^ occ;
     return attacks ^ getBishopAttacks(_blockers, bishopSq);
@@ -1632,17 +1634,17 @@ pub inline fn getSqAntiDiag(sq: e_square) i8 {
     return 7 - (_sq & 7) - (_sq >> 3);
 }
 
-pub fn fillFile(mask: u64) u64 {
+pub inline fn fillFile(mask: u64) u64 {
     return moveGenl.northOne(moveGenl.northOccl(mask, UNIVERSE)) | moveGenl.southOne(moveGenl.southOccl(mask, UNIVERSE)) | mask;
 }
-pub fn genShift(bb: u64, shift: i8) u64 {
+pub inline fn genShift(bb: u64, shift: i8) u64 {
     if (shift < 0) {
         return bb >> @intCast(-shift);
     }
     return bb << @intCast(shift);
 }
 
-pub fn passedPawns(pawn: u64, opp: u64) u64 {
+pub inline fn passedPawns(pawn: u64, opp: u64) u64 {
     // passed pawn: pawn without a neighboring enemy pawn
     // fill the ranks from top to bottom with a fill algo
     // then ~(shift left | shift right) & pawn
@@ -1653,7 +1655,7 @@ pub fn passedPawns(pawn: u64, opp: u64) u64 {
     return ~(lmask | rmask) & pawn;
 }
 
-pub fn isolatedPawns(pawn: u64) u64 {
+pub inline fn isolatedPawns(pawn: u64) u64 {
     // isolated pawn: pawn without a neighboring pawn
     // fill the ranks from top to bottom with a fill algo
     // then ~(shift left | shift right) & pawn
@@ -1663,7 +1665,7 @@ pub fn isolatedPawns(pawn: u64) u64 {
     const rmask = (cols >> 1) & notHFile;
     return ~(lmask | rmask) & pawn;
 }
-pub fn stackedPawns(pawn: u64) u64 {
+pub inline fn stackedPawns(pawn: u64) u64 {
     // stacked pawns: multiple pawns present on the same file
     const upPawns = pawn & (moveGenl.northOne(moveGenl.northOccl(pawn, UNIVERSE)));
     const downPawns = pawn & (moveGenl.southOne(moveGenl.southOccl(pawn, UNIVERSE)));
@@ -1690,7 +1692,7 @@ pub inline fn _AllAttackPawnMask(bb_piece: u64, white: bool) u64 {
     return _AllAttackPawnMask_cst(bb_piece, false);
 }
 
-pub fn _AllAttackPawnMask_cst(bb_piece: u64, comptime white: bool) u64 {
+pub inline fn _AllAttackPawnMask_cst(bb_piece: u64, comptime white: bool) u64 {
     var ret: u64 = EMPTY;
     if (comptime white) {
         ret |= (bb_piece << 7) & notHFile;
@@ -2178,7 +2180,9 @@ pub fn _pin_scenario() void {
     std.debug.print("[DEBUG] pin scenario: \n", .{});
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
 
-    var board = getBoardFromFen(get_global_alloc(), fen) catch {};
+    var board = getBoardFromFen(get_global_alloc(), fen) catch {
+        return;
+    };
     print_boardstate(&board);
     getCheckers(&board, true);
     std.debug.print("[DEBUG] _pin_scenario: W checkers\n", .{});
@@ -2382,14 +2386,14 @@ pub fn test_move_heur() !void {
     const moves = moveGenl.generateLegalMoves(&tmp);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
-        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move, 0) });
+        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic_std(move, 0) });
     }
     std.debug.print("ben\n", .{});
     const indexes = heuristicl.eval_move_sorting_mask(&moves, 0);
     for (0..moves.len) |i| {
         const idx = indexes[i];
         const move = moves.moves[idx];
-        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic(move, 0) });
+        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic_std(move, 0) });
     }
 }
 
@@ -2398,11 +2402,11 @@ pub fn main() !void {
     //try test_avx();
     //try test_isolated();
     //try test_passed();
-    try test_safety();
+    //try test_safety();
     //try test_stackedPawn();
-    //test_scenarios();
+    test_scenarios();
     //try test_single_algebraic();
     //try test_line_algebraic();
-    try test_move_heur();
+    //try test_move_heur();
     return;
 }

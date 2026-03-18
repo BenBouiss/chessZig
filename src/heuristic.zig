@@ -18,6 +18,8 @@ const useStaged = build_options.useStaged;
 
 const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
+const e_moveFlags = movel.e_moveFlags;
+
 const string = stringl.string;
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
@@ -229,10 +231,14 @@ pub fn evaluate_structure(p_state: *chess.Board_state, p_whiteMoveBB: *const mov
     return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * computeTapered(values.StructureProtectionValue[MG], values.StructureProtectionValue[EG], _phase);
 }
 
-pub fn e_pieceToHeuristic(piece: e_piece, values: *heuristicValues) scoreType {
+pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreType {
     switch (piece) {
-        .nEmptySquare, .nWhite, .nBlack, .nWhiteKing, .nBlackKing => {
+        .nEmptySquare, .nWhite, .nBlack => {
             return 0;
+        },
+
+        .nWhiteKing, .nBlackKing => {
+            return 100 * values.QueenValue;
         },
         .nWhitePawn, .nBlackPawn => {
             return values.PawnValue;
@@ -1278,7 +1284,7 @@ pub fn _initMoveOrdering() void {
     historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
     killerMoves = undefined;
 }
-pub fn eval_move_heuristic_line(move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
+pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
@@ -1291,7 +1297,11 @@ pub fn eval_move_heuristic_line(move: IMove, ply: u16, prevLine: *const movel.li
     const from = move.getFrom();
     const to = move.getTo();
     if (move.isCapture()) {
-        return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
+        if (comptime configl.DEFAULT_USE_SEE) {
+            return SEE(p_state, move);
+        } else {
+            return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
+        }
     } else {
         //
         if (move.equal(killerMoves[ply][0])) {
@@ -1307,19 +1317,23 @@ pub fn eval_move_heuristic_line(move: IMove, ply: u16, prevLine: *const movel.li
     }
     return 0;
 }
-pub fn eval_move_heuristic(move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) scoreType {
+pub fn eval_move_heuristic(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) scoreType {
     if (comptime useLine) {
-        return eval_move_heuristic_line(move, ply, prevLine, hashMove);
+        return eval_move_heuristic_line(p_state, move, ply, prevLine, hashMove);
     }
-    return eval_move_heuristic_std(move, ply);
+    return eval_move_heuristic_std(p_state, move, ply);
 }
-pub fn eval_move_heuristic_std(move: IMove, ply: u16) scoreType {
+pub fn eval_move_heuristic_std(p_state: *chess.Board_state, move: IMove, ply: u16) scoreType {
     const fpiece = move.getFromPiece();
     const cpiece = move.getCapturePiece();
     const from = move.getFrom();
     const to = move.getTo();
     if (move.isCapture()) {
-        return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
+        if (comptime configl.DEFAULT_USE_SEE) {
+            return SEE(p_state, move);
+        } else {
+            return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
+        }
     } else {
         //
         if (move.equal(killerMoves[ply][0])) {
@@ -1348,13 +1362,13 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn cst_eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) moveOrdering {
+pub fn cst_eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) moveOrdering {
     //var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     for (0..p_moves.len) |i| {
         ret.indexes[i] = i;
-        scores[i] = eval_move_heuristic(p_moves.moves[i], ply, prevLine, useLine, hashMove);
+        scores[i] = eval_move_heuristic(p_state, p_moves.moves[i], ply, prevLine, useLine, hashMove);
     }
     ret.len = p_moves.len;
     // could potentially do ret.scores as the context and sort the array of "entries" with where entries contains an idx, score and depth
@@ -1399,36 +1413,66 @@ pub const moveOrdering = struct {
     len: u8 = 0,
 };
 
-pub inline fn eval_move_sorting_mask(p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) moveOrdering {
+pub inline fn eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) moveOrdering {
     if (!p_feature.useStaticSearch) {
-        return cst_eval_move_sorting_mask(p_moves, ply, prevLine, true, hashMove);
+        return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, true, hashMove);
     }
-    return cst_eval_move_sorting_mask(p_moves, ply, prevLine, false, hashMove);
+    return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, false, hashMove);
 }
-pub fn SEE(p_state: *chess.Board_state, sq: squarel.e_square) scoreType {
-    if (comptime !useStaged) {
-        return 0;
+
+pub fn SEE(p_state: *chess.Board_state, move: IMove) scoreType {
+    const sq: squarel.e_square = @enumFromInt(move.getTo());
+    //if ((chess.sqToBitboard(sq) & chess.nonPromoRank) == 0) {
+    //    return _SEE(p_state, sq, true);
+    //}
+    const attacker = chess.getAllAttackerFromSq(p_state, !p_state.whiteToMove(), sq) ^ chess.xToBitboard(move.getFrom());
+    const defender = chess.getAllAttackerFromSq(p_state, p_state.whiteToMove(), sq);
+
+    return e_pieceToHeuristic(move.getCapturePiece(), &globalHeuristic) - _SEE(p_state, sq, false, defender, attacker);
+}
+pub fn _SEE(p_state: *chess.Board_state, sq: squarel.e_square, comptime promoRank: bool, att: u64, def: u64) scoreType {
+    const low = lowestAttackingPiece(p_state, att);
+    var value: scoreType = 0;
+    const sqPiece = p_state.get_piece(@intFromEnum(sq));
+    const sqScore = e_pieceToHeuristic(sqPiece, &globalHeuristic);
+    if (low.piece != .nEmptySquare) {
+        std.debug.print("[DEBUG] _SEE: lowest {} at {}\n", .{ low.piece, low.sq });
+        const _att = att ^ chess.sqToBitboard(low.sq);
+        if (chess.isKingPiece(sqPiece)) {
+            return -weightl.simpleCheckMateScore;
+        }
+        value = sqScore - _SEE(p_state, sq, promoRank, def, _att);
     }
-    //
-    const piece = lowestAttackingPiece(p_state, sq);
-    const value: scoreType = 0;
-    if (piece != .nEmptySquare) {}
     return value;
 }
-pub fn lowestAttackingPiece(p_state: *chess.Board_state, sq: squarel.e_square) e_piece {
-    const kingSq = p_state.getKingSq(!p_state.whiteToMove());
-    _ = kingSq;
-    var allAttack = chess.getAllAttackerFromSq(p_state, p_state.whiteToMove(), sq);
-    var ret: e_piece = .nEmptySquare;
+
+pub const piecePosition = struct {
+    piece: e_piece = .nEmptySquare,
+    sq: squarel.e_square = .invalid,
+};
+pub fn lowestAttackingPiece(p_state: *chess.Board_state, att: u64) piecePosition {
+    //const kingSq = p_state.getKingSq(p_state.whiteToMove());
+    //const prevPinned = (p_state.stack.stack[p_state.stack.len - 2].pinnedBB);
+    //var allAttack = chess.getAllAttackerFromSq(p_state, !p_state.whiteToMove(), sq);
+    var ret: piecePosition = .{};
     var retHeur: scoreType = weightl.simpleCheckMateScore;
-    while (allAttack) {
+    var allAttack = att;
+    while (allAttack != 0) {
         const targetSq = chess.bitscan(allAttack);
         allAttack &= allAttack - 1;
+        //const targetBB = chess.xToBitboard(targetSq);
+        //if ((targetBB & prevPinned) != 0) {
+        //    // FIXME: this might be a huge solution for my pinned computation further look needed
+        //    if (chess.inBetween(sq, @enumFromInt(targetSq)) & chess.inBetween(kingSq, @enumFromInt(targetSq)) == 0) {
+        //        continue;
+        //    }
+        //}
         const piece = p_state.get_piece(targetSq);
         const pieceH = e_pieceToHeuristic(piece, &globalHeuristic);
         if (pieceH < retHeur) {
             retHeur = pieceH;
-            ret = piece;
+            ret.piece = piece;
+            ret.sq = @enumFromInt(targetSq);
         }
     }
     return ret;
@@ -1447,6 +1491,14 @@ pub fn test_scaling() !void {
         std.debug.print("\n", .{});
     }
 }
+pub fn test_SEE() !void {
+    const fen = "k7/8/3r4/8/2r1b3/5B2/4R3/K7 w - - 0 1";
+    var state = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, fen);
+    chess.print_boardstate(&state);
+    const move = movel.build_move_reduce(@intFromEnum(squarel.e_square.f3), @intFromEnum(squarel.e_square.e4), e_moveFlags.CAPTURE);
+
+    std.debug.print("[DEBUG] test_SEE: score for move: {s} SEE = {d}\n", .{ move.getStr(), SEE(&state, move) });
+}
 pub fn main() !void {
     //try sanityCheck();
     //try test_main();
@@ -1456,6 +1508,7 @@ pub fn main() !void {
     defer savePath.free(mainl.GLOBAL_ALLOC);
 
     try test_scaling();
+    try test_SEE();
     //try test_save(mainl.GLOBAL_ALLOC, path, savePath);
     //try mainTexel(mainl.GLOBAL_ALLOC, path);
 }

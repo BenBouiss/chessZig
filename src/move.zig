@@ -24,15 +24,15 @@ const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 const MOVE_STR_MAX_LENGTH = 5;
 
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
-    var m_move: u16 = (flag & 0xF);
-    var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare) & 0xFF);
+    var m_move: u16 = (flag);
+    var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare));
     m_piece <<= 8;
-    m_piece |= (@intFromEnum(piece) & 0xFF);
+    m_piece |= @intFromEnum(piece);
 
     m_move <<= 6;
-    m_move |= (to & 0x3F);
+    m_move |= (to);
     m_move <<= 6;
-    m_move |= (from & 0x3F);
+    m_move |= (from);
     const ret: IMove = .{ .m_move = m_move, .m_piece = m_piece };
     return ret;
 }
@@ -52,7 +52,7 @@ pub const IMove = struct {
     // first 8 bits = start_piece, last = capture_piece
     m_piece: u16 = 0,
 
-    pub fn setCapture(p_self: *IMove, capture: e_piece) void {
+    pub inline fn setCapture(p_self: *IMove, capture: e_piece) void {
         //p_self.c_piece = capture;
         var m_piece: u16 = @intFromEnum(capture);
         m_piece <<= 8;
@@ -64,14 +64,14 @@ pub const IMove = struct {
         p_self.m_piece &= (0xFF00);
         p_self.m_piece |= (@intFromEnum(piece));
     }
-    pub fn setFlag(p_self: *IMove, flag: u8) void {
+    pub inline fn setFlag(p_self: *IMove, flag: u8) void {
         //reset the top 4 bits
         p_self.m_move &= (0xFFF);
         const _flag: u16 = @intCast(flag);
         p_self.m_move |= (_flag & 0xF) << 12;
     }
 
-    pub fn equal(self: IMove, other: IMove) bool {
+    pub inline fn equal(self: IMove, other: IMove) bool {
         return ((self.m_move == other.m_move) and (self.m_piece == other.m_piece));
     }
 
@@ -124,7 +124,7 @@ pub const IMove = struct {
     pub inline fn isQueenSideCastle(self: IMove) bool {
         return (self.getFlag() == @intFromEnum(e_moveFlags.QUEENCASTLE));
     }
-    pub fn isCastle(self: IMove) bool {
+    pub inline fn isCastle(self: IMove) bool {
         return self.isKingSideCastle() or self.isQueenSideCastle();
     }
     pub inline fn isEnpassant(self: IMove) bool {
@@ -137,7 +137,7 @@ pub const IMove = struct {
     pub inline fn isValid(self: IMove) bool {
         return (self.m_move != 0);
     }
-    pub fn copy(self: IMove) IMove {
+    pub inline fn copy(self: IMove) IMove {
         return .{ .m_move = self.m_move, .m_piece = self.m_piece };
     }
     pub fn getStr(self: IMove) [5]u8 {
@@ -211,7 +211,7 @@ pub const moveContainer = struct {
         ret.len = len;
         return ret;
     }
-    pub fn append(p_self: *moveContainer, move: IMove) void {
+    pub inline fn append(p_self: *moveContainer, move: IMove) void {
         p_self.moves[p_self.len] = move;
         p_self.len += 1;
     }
@@ -433,7 +433,29 @@ pub const matchMoveContainer = struct {
         //p_self.lastMove = p_self.moves[p_self.len - 1];
         return p_self.moves[p_self.len];
     }
-    pub fn getLastMove(self: matchMoveContainer) IMove {
+    pub fn popMoveVoid(p_self: *matchMoveContainer) void {
+        if (comptime useDebug) {
+            if (p_self.len <= 1) {
+                //@panic("list is empty");
+                p_self.len = 0;
+                return .{};
+            }
+        }
+        p_self.len -= 1;
+        if (p_self.len == 0) {
+            p_self.lastIrreversibleMoveIndex = 0;
+        } else if (p_self.lastIrreversibleMoveIndex == p_self.len) {
+            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len - 1);
+            while (p_self.lastIrreversibleMoveIndex > 0) : (p_self.lastIrreversibleMoveIndex -= 1) {
+                const move = p_self.moves[p_self.lastIrreversibleMoveIndex];
+                if (move.isIrreversible()) {
+                    break;
+                }
+            }
+        }
+        return;
+    }
+    pub inline fn getLastMove(self: matchMoveContainer) IMove {
         if (comptime useDebug) {
             if (self.len == 0) {
                 @panic("list is empty");
