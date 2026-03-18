@@ -2175,15 +2175,22 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
 
     return ret;
 }
-
-pub fn _pin_scenario() void {
+pub fn test_scenarios() !void {
     std.debug.print("[DEBUG] pin scenario: \n", .{});
-    const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
+    try pin_scenario();
+    return;
+}
 
-    var board = getBoardFromFen(get_global_alloc(), fen) catch {
+pub fn pin_scenario() !void {
+    //const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
+    const fen = DEFAULT_FEN;
+    std.debug.print("[DEBUG] pin scenario: {s}\n", .{fen});
+
+    var board = getBoardFromFen(mainl.GLOBAL_ALLOC, fen) catch {
         return;
     };
     print_boardstate(&board);
+
     getCheckers(&board, true);
     std.debug.print("[DEBUG] _pin_scenario: W checkers\n", .{});
     print_bitboard(board.checkersBB);
@@ -2201,53 +2208,65 @@ pub fn _pin_scenario() void {
     std.debug.print("[DEBUG] _pin_scenario: bb for d4\n", .{});
     sq = .d4;
     sqInfo = squareInfo.init(sq);
-    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
+    var bb: u64 = 0;
+    bb = magicl.getBishopMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
     print_bitboard(sqInfo.getDiagBB());
     print_bitboard(sqInfo.getAntiDiagBB());
 
-    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+    bb = magicl.getRookMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
     print_bitboard(sqInfo.getFileBB());
     print_bitboard(sqInfo.getRankBB());
 
+    //if (true)
+    //    return;
     std.debug.print("[DEBUG] _pin_scenario: bb for d5\n", .{});
     sq = .d5;
-    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
-    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
-
+    bb = magicl.getBishopMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
+    bb = magicl.getRookMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
     std.debug.print("[DEBUG] _pin_scenario: bb for e5\n", .{});
     sq = .e5;
-    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
-    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+    bb = magicl.getBishopMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
+    bb = magicl.getRookMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
 
     std.debug.print("[DEBUG] _pin_scenario: bb for f5\n", .{});
     sq = .f5;
-    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
-    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+    bb = magicl.getBishopMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
+    bb = magicl.getRookMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
 
     std.debug.print("[DEBUG] _pin_scenario: bb for f4\n", .{});
     sq = .f4;
-    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
-    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+    bb = magicl.getBishopMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
+    bb = magicl.getRookMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
 
     std.debug.print("[DEBUG] _pin_scenario: bb for f3\n", .{});
     sq = .f3;
-    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
-    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+    bb = magicl.getBishopMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
+    bb = magicl.getRookMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
 
     std.debug.print("[DEBUG] _pin_scenario: bb for e3\n", .{});
     sq = .e3;
-    print_bitboard(magicl.getBishopMoves(sq, board.occupiedBB));
-    print_bitboard(magicl.getRookMoves(sq, board.occupiedBB));
+    bb = magicl.getBishopMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
+    bb = magicl.getRookMoves(sq, board.occupiedBB);
+    print_bitboard(bb);
 
     utils.askContinue();
 
     return;
 }
 
-pub fn test_scenarios() void {
-    _pin_scenario();
-    return;
-}
 pub fn test_avx() !void {
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2RKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     //const fen = DEFAULT_FEN;
@@ -2404,7 +2423,7 @@ pub fn main() !void {
     //try test_passed();
     //try test_safety();
     //try test_stackedPawn();
-    test_scenarios();
+    try test_scenarios();
     //try test_single_algebraic();
     //try test_line_algebraic();
     //try test_move_heur();
