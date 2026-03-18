@@ -1420,31 +1420,106 @@ pub inline fn eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *cons
     return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, false, hashMove);
 }
 
-pub fn SEE(p_state: *chess.Board_state, move: IMove) scoreType {
-    const sq: squarel.e_square = @enumFromInt(move.getTo());
-    //if ((chess.sqToBitboard(sq) & chess.nonPromoRank) == 0) {
-    //    return _SEE(p_state, sq, true);
-    //}
-    const attacker = chess.getAllAttackerFromSq(p_state, !p_state.whiteToMove(), sq) ^ chess.xToBitboard(move.getFrom());
-    const defender = chess.getAllAttackerFromSq(p_state, p_state.whiteToMove(), sq);
-
-    return e_pieceToHeuristic(move.getCapturePiece(), &globalHeuristic) - _SEE(p_state, sq, false, defender, attacker);
-}
-pub fn _SEE(p_state: *chess.Board_state, sq: squarel.e_square, comptime promoRank: bool, att: u64, def: u64) scoreType {
-    const low = lowestAttackingPiece(p_state, att);
-    var value: scoreType = 0;
-    const sqPiece = p_state.get_piece(@intFromEnum(sq));
-    const sqScore = e_pieceToHeuristic(sqPiece, &globalHeuristic);
-    if (low.piece != .nEmptySquare) {
-        std.debug.print("[DEBUG] _SEE: lowest {} at {}\n", .{ low.piece, low.sq });
-        const _att = att ^ chess.sqToBitboard(low.sq);
-        if (chess.isKingPiece(sqPiece)) {
-            return -weightl.simpleCheckMateScore;
-        }
-        value = sqScore - _SEE(p_state, sq, promoRank, def, _att);
+pub fn SEE(p_state: *const chess.Board_state, move: IMove) scoreType {
+    const target = move.getCapturePiece();
+    if (target == .nEmptySquare) {
+        return 0;
     }
-    return value;
+    const to = move.getTo();
+    const from = move.getFrom();
+    return _SEE(p_state, @enumFromInt(to), target, @enumFromInt(from), move.getFromPiece(), p_state.whiteToMove());
 }
+// source: https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
+pub fn _SEE(p_state: *const chess.Board_state, toSq: squarel.e_square, target: e_piece, fromSq: squarel.e_square, aPiece: e_piece, white: bool) scoreType {
+    var gain: [32]scoreType = undefined;
+    var d: usize = 0;
+    const horizPiece = (p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)] |
+        p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)] |
+        p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
+        p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+    const diagPiece = (p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] |
+        p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)] |
+        p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
+        p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+
+    const mayXray: u64 = (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)] | diagPiece | horizPiece);
+
+    var fromSet = chess.sqToBitboard(fromSq);
+
+    //const toBB = chess.sqToBitboard(toSq);
+    const toSqInfo = squarel.squareInfo.init(toSq);
+    const toSqDiags = toSqInfo.getDiagonalsBB();
+
+    var occ = p_state.occupiedBB;
+
+    const attacker = chess.getAllAttackerFromSq(p_state, !p_state.whiteToMove(), toSq);
+    const defender = chess.getAllAttackerFromSq(p_state, p_state.whiteToMove(), toSq);
+    var attadef = attacker | defender;
+    gain[d] = e_pieceToHeuristic(target, &globalHeuristic);
+    var turn = white;
+    var _aPiece = aPiece;
+    while (fromSet != 0) {
+        d += 1;
+        turn = !turn;
+        gain[d] = e_pieceToHeuristic(_aPiece, &globalHeuristic) - gain[d - 1];
+        attadef ^= fromSet;
+        occ ^= fromSet;
+        if ((fromSet & mayXray) != 0) {
+            // update the attadef due to movement
+            attadef |= considerXrays(occ, toSq, toSqDiags, fromSet, diagPiece, horizPiece);
+        }
+        const low = lowestAttackDefPiece(p_state, attadef, turn);
+        if (low.sq == .invalid) {
+            fromSet = 0;
+            continue;
+        }
+        fromSet = chess.sqToBitboard(low.sq);
+        _aPiece = low.piece;
+    }
+    d -= 1;
+    //std.debug.print("[DEBUG] SEE: d = {d} {any}\n", .{ d, gain });
+    while (d != 0) : (d -= 1) {
+        // gain[4] = -max(--75,  1075) = -1075
+        //std.debug.print("[DEBUG] SEE: gain[{d}] = -max(-{d}, {d}) = {d}\n", .{ d - 1, gain[d - 1], gain[d], -@max(-gain[d - 1], gain[d]) });
+        gain[d - 1] = -@max(-gain[d - 1], gain[d]);
+    }
+    return gain[0];
+}
+pub fn considerXrays(occ: u64, fromSq: squarel.e_square, fromDiags: u64, movingBB: u64, diagPiece: u64, horizPiece: u64) u64 {
+    if (fromDiags & movingBB == 0) {
+        // then horizontal or vertical
+        const ret = chess.getRookAttacks(occ, fromSq) & horizPiece & occ;
+        return ret;
+    }
+    const ret = chess.getBishopAttacks(occ, fromSq) & diagPiece & occ;
+    return ret;
+}
+
+//pub fn bad_SEE(p_state: *chess.Board_state, move: IMove) scoreType {
+//    const sq: squarel.e_square = @enumFromInt(move.getTo());
+//    //if ((chess.sqToBitboard(sq) & chess.nonPromoRank) == 0) {
+//    //    return _SEE(p_state, sq, true);
+//    //}
+//    const attacker = chess.getAllAttackerFromSq(p_state, !p_state.whiteToMove(), sq) ^ chess.xToBitboard(move.getFrom());
+//    const defender = chess.getAllAttackerFromSq(p_state, p_state.whiteToMove(), sq);
+//
+//    return e_pieceToHeuristic(move.getCapturePiece(), &globalHeuristic) - __SEE(p_state, sq, false, defender, attacker);
+//}
+//pub fn bad__SEE(p_state: *chess.Board_state, sq: squarel.e_square, comptime promoRank: bool, att: u64, def: u64) scoreType {
+//    const low = lowestAttackingPiece(p_state, att);
+//    var value: scoreType = 0;
+//    const sqPiece = p_state.get_piece(@intFromEnum(sq));
+//    const sqScore = e_pieceToHeuristic(sqPiece, &globalHeuristic);
+//    if (low.piece != .nEmptySquare) {
+//        std.debug.print("[DEBUG] _SEE: lowest {} at {}\n", .{ low.piece, low.sq });
+//        const _att = att ^ chess.sqToBitboard(low.sq);
+//        if (chess.isKingPiece(sqPiece)) {
+//            return -weightl.simpleCheckMateScore;
+//        }
+//        value = sqScore - bad_SEE(p_state, sq, promoRank, def, _att);
+//    }
+//    return value;
+//}
 
 pub const piecePosition = struct {
     piece: e_piece = .nEmptySquare,
@@ -1477,6 +1552,23 @@ pub fn lowestAttackingPiece(p_state: *chess.Board_state, att: u64) piecePosition
     }
     return ret;
 }
+pub fn lowestAttackDefPiece(p_state: *const chess.Board_state, attDef: u64, white: bool) piecePosition {
+    var ret: piecePosition = .{};
+    var retHeur: scoreType = weightl.simpleCheckMateScore;
+    var allAttack = attDef & p_state.c_occupiedBB[@intFromBool(white)];
+    while (allAttack != 0) {
+        const targetSq = chess.bitscan(allAttack);
+        allAttack &= allAttack - 1;
+        const piece = p_state.get_piece(targetSq);
+        const pieceH = e_pieceToHeuristic(piece, &globalHeuristic);
+        if (pieceH < retHeur) {
+            retHeur = pieceH;
+            ret.piece = piece;
+            ret.sq = @enumFromInt(targetSq);
+        }
+    }
+    return ret;
+}
 
 pub fn dummyScaling(score: scoreType, phase: scoreType) scoreType {
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
@@ -1492,10 +1584,18 @@ pub fn test_scaling() !void {
     }
 }
 pub fn test_SEE() !void {
-    const fen = "k7/8/3r4/8/2r1b3/5B2/4R3/K7 w - - 0 1";
+    const fen = "1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - - 0 1";
+    var move = movel.build_move(@intFromEnum(squarel.e_square.f1), @intFromEnum(squarel.e_square.e5), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteRook);
+    //const fen = "1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - - 0 1";
+    //var move = movel.build_move(@intFromEnum(squarel.e_square.d3), @intFromEnum(squarel.e_square.e5), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteKnight);
+
     var state = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, fen);
+
+    //const fen = "k7/8/3r4/8/2r1b3/5B2/4R3/K7 w - - 0 1";
+    //var move = movel.build_move(@intFromEnum(squarel.e_square.f3), @intFromEnum(squarel.e_square.e4), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteBishop);
+    //move.setCapture(state.get_piece(move.getTo()));
+    move.setCapture(state.get_piece(move.getTo()));
     chess.print_boardstate(&state);
-    const move = movel.build_move_reduce(@intFromEnum(squarel.e_square.f3), @intFromEnum(squarel.e_square.e4), e_moveFlags.CAPTURE);
 
     std.debug.print("[DEBUG] test_SEE: score for move: {s} SEE = {d}\n", .{ move.getStr(), SEE(&state, move) });
 }

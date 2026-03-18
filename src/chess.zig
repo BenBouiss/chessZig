@@ -601,6 +601,7 @@ pub const Board_state = struct {
     bKingSq: e_square = .a1,
 
     pinnedBB: u64 = 0,
+    // contains 1 on the checkers and the squares in between
     checkersBB: u64 = 0,
 
     occupiedBB: u64 = 0,
@@ -1580,6 +1581,17 @@ pub inline fn getBishopAttacks(occBB: u64, sq: e_square) u64 {
         return ret;
     }
 }
+pub inline fn getQueenAttacks(occBB: u64, sq: e_square) u64 {
+    if (comptime useMagic) {
+        return magicl.getRookMoves(sq, occBB) | magicl.getBishopMoves(sq, occBB);
+    } else {
+        var ret = fileAttacks(occBB, sq);
+        ret |= rankAttacks(occBB, sq);
+        ret |= antiDiagAttacks(occBB, sq);
+        ret |= diagonalAttacks(occBB, sq);
+        return ret;
+    }
+}
 
 pub inline fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
     const sqBB = sqToBitboard(sq);
@@ -2182,8 +2194,7 @@ pub fn test_scenarios() !void {
 }
 
 pub fn pin_scenario() !void {
-    //const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
-    const fen = DEFAULT_FEN;
+    const fen = "k1p4R/1q2q1rq/8/Q2PP3/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
     std.debug.print("[DEBUG] pin scenario: {s}\n", .{fen});
 
     var board = getBoardFromFen(mainl.GLOBAL_ALLOC, fen) catch {
