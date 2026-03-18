@@ -481,7 +481,6 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         const move = movel.build_move(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pKing);
         ret.append(move);
     }
-
     return ret;
 }
 

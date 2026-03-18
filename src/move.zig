@@ -438,7 +438,6 @@ pub const matchMoveContainer = struct {
             if (p_self.len <= 1) {
                 //@panic("list is empty");
                 p_self.len = 0;
-                return .{};
             }
         }
         p_self.len -= 1;
