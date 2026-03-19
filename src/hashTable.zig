@@ -139,7 +139,7 @@ pub const Hash_table = struct {
     initialized: bool = false,
     stat: hashTableStat = .{},
 
-    pub fn init(alloc: std.mem.Allocator, MBsize: u32) !Hash_table {
+    pub fn init(alloc: std.mem.Allocator, MBsize: u32, verbose: bool) !Hash_table {
         var total_size: u64 = @intCast(MBsize * 1000000);
         total_size = @divFloor(total_size, @sizeOf(Hash_bucket));
         var ret: Hash_table = undefined;
@@ -155,8 +155,10 @@ pub const Hash_table = struct {
         }
         ret.initialized = true;
 
-        std.debug.print("[PRE] Initializing hash table with a size of {d} buckets !\n", .{total_size});
-        ret.entries[0].printSize();
+        if (verbose) {
+            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets !\n", .{total_size});
+            ret.entries[0].printSize();
+        }
         return ret;
     }
     pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator) void {
@@ -247,14 +249,16 @@ pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
 pub fn isHashTable_init() bool {
     return hashTable.initialized;
 }
-pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32) void {
+pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32, verbose: bool) void {
     // size in MB
 
-    std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
+    if (verbose) {
+        std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
+    }
     if (hashTable.initialized) {
         hashTable.free(alloc);
     }
-    hashTable = Hash_table.init(alloc, sizeHashTable) catch |err| {
+    hashTable = Hash_table.init(alloc, sizeHashTable, verbose) catch |err| {
         std.debug.print("[ERROR] _initHash: memory error during alloc {}\n", .{err});
         @panic("Mem error");
     };

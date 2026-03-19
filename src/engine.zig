@@ -11,6 +11,7 @@ const speedTestl = @import("speedTest.zig");
 const heuristicl = @import("heuristic.zig");
 const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
+const benchmarkl = @import("search/benchmark.zig");
 const filel = @import("file.zig");
 
 const Board_state = chess.Board_state;
@@ -23,7 +24,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USETEXEL, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USETEXEL, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -64,7 +65,7 @@ pub const inputChannel = struct {
     }
     fn acquireLock(p_self: *inputChannel) void {
         while (p_self.lock) {
-            std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+            std.Thread.sleep(configl.ENGINE_SERVING_TICKRATE_NS);
         }
         p_self.lock = true;
     }
@@ -175,6 +176,7 @@ pub const engineOptions = struct {
     useQuiescence: bool = configl.DEFAULT_USEQUIESC,
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useLateMoveReduction: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
+    useSEE: bool = configl.DEFAULT_USE_SEE,
 
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
@@ -245,6 +247,7 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
         try p_self.addOption(.{ .name = "useLateMoveReduction", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
+        try p_self.addOption(.{ .name = "useSEE", .optionType = .USESEE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_SEE } } });
 
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
@@ -274,6 +277,7 @@ pub const engine = struct {
         var buffer: [configl.MAX_USER_INPUT]u8 = undefined;
         var f_reader = std.fs.File.stdin().reader(&buffer);
         const reader = &f_reader.interface;
+        //_ = p_self.input.putCmd(p_self.alloc, "uci");
         while (p_self.status.running) {
             const inputBuffer = try getMsgStdin(reader);
             const msg = utilsl.trimStr(&inputBuffer);
@@ -366,6 +370,9 @@ pub const engine = struct {
             },
             .BENCHMARK => {
                 // by default single threaded will probably just use the engine options maybe
+                if (!p_self.status.initializedInternals) {
+                    _ = p_self.initInternals();
+                }
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINT => {
@@ -533,6 +540,16 @@ pub const engine = struct {
                 p_self.options.useLateMoveReduction = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
+            .USESEE => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useSEE = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
 
             .HASHTABLESIZE => {
                 const val = getSpinValFromSetOptionCmd(tokens) catch {
@@ -633,6 +650,9 @@ pub const engine = struct {
         p_self.status.positionProvided = true;
         return true;
     }
+    pub fn setFen(p_self: *engine, fen: []const u8) void {
+        p_self.state = chess.getBoardFromFen(p_self.alloc, fen) catch unreachable;
+    }
 
     fn initInternals(p_self: *engine) bool {
         p_self.status.initializedInternals = true;
@@ -640,7 +660,7 @@ pub const engine = struct {
 
         moveTablel._initTables(p_self.status.debugMode);
         hashTablel._initZobrist(p_self.alloc, configl.SEED);
-        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
+        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
 
         _ = p_self.updateElo(p_self.options.engineElo);
         return true;
@@ -664,7 +684,7 @@ pub const engine = struct {
         }
 
         p_self.options.hashTableSize = hashSize;
-        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
+        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
         return true;
     }
     fn updateElo(p_self: *engine, elo: spinVarType) bool {
@@ -700,6 +720,12 @@ pub const engine = struct {
         p_self.searcher.config = goArg;
         p_self.searcher.nThreads = p_self.options.nThreads;
         p_self.status.positionProvided = false;
+        if (p_self.searcher.config.depth == 0) {
+            if (p_self.status.debugMode) {
+                std.debug.print("[DEBUG] dispatchUciGoThreads: No depth found in the cmd string using the default engine option \n", .{});
+            }
+            p_self.searcher.config.depth = p_self.options.depthLevel;
+        }
         return schedulerl.dispatchUciGoCmd(p_self, cmdBuffer);
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -707,7 +733,9 @@ pub const engine = struct {
         if (p_self.searcher.searching) {
             return false;
         }
-        @panic("speedtest missing");
+        p_self.searcher.reset();
+        return benchmarkl.dispatchUciBenchmark(p_self);
+        //@panic("speedtest missing");
     }
 };
 pub fn getLastMoveFromUci(p_board: *Board_state, cmdBuffer: []const u8, alloc: std.mem.Allocator) !IMove {
@@ -794,6 +822,8 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
                 tokenIndex += 1;
                 continue;
             };
+            goArgs.wtime = goArgs.movetime;
+            goArgs.btime = goArgs.movetime;
         } else if (utilsl.contains(arg, "infinite", .ignoreCase)) {
             goArgs.infinite = true;
         } else {
@@ -831,6 +861,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
     } else if (utilsl.contains(cmdBuffer, " useNullPruning", .ignoreCase)) {
         return .USENULLPRUNE;
     } else if (utilsl.contains(cmdBuffer, " useLateMoveReduction", .ignoreCase)) {
+        return .USELATEMOVEREDUC;
+    } else if (utilsl.contains(cmdBuffer, " useSEE", .ignoreCase)) {
         return .USELATEMOVEREDUC;
     }
 
@@ -888,8 +920,8 @@ fn inputThreading(p_self: *engine) void {
             std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
             cumulTime = 0;
         }
-        std.Thread.sleep(configl.WAIT_TICKRATE_NS);
-        cumulTime += configl.WAIT_TICKRATE_NS;
+        std.Thread.sleep(configl.ENGINE_SERVING_TICKRATE_NS);
+        cumulTime += configl.ENGINE_SERVING_TICKRATE_NS;
     }
 }
 
@@ -940,12 +972,7 @@ pub fn launch_engine(debugMode: bool) !void {
     mainThread(debugMode);
     return;
 }
-pub fn launch_engine_shell(p_engine: *engine) !std.Thread {
-    p_engine.status.running = true;
-    const inputThread = try std.Thread.spawn(.{}, inputThreading, .{p_engine});
-    try p_engine.workingThreads.append(p_engine.alloc, inputThread);
-    return inputThread;
-}
+
 pub fn main() anyerror!void {
     try launch_engine(false);
 }

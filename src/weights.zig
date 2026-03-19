@@ -9,13 +9,10 @@ const heuristicValues = heuristicl.heuristicValues;
 
 // values from https://www.chessprogramming.org/Evaluation for now
 pub const simplePawnScore: scoreType = 100;
-//pub const simpleBishopScore: scoreType = 300;
-//pub const simpleKnightScore: scoreType = 300;
-pub const simpleBishopScore: scoreType = 325;
-pub const simpleKnightScore: scoreType = 325;
+pub const simpleBishopScore: scoreType = 300;
+pub const simpleKnightScore: scoreType = 300;
 pub const simpleRookScore: scoreType = 500;
-//pub const simpleQueenScore: scoreType = 900;
-pub const simpleQueenScore: scoreType = 1000;
+pub const simpleQueenScore: scoreType = 900;
 pub const simpleCheckMateScore: scoreType = 99999;
 pub const simpleStalemateScore: scoreType = 0;
 
