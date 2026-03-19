@@ -15,8 +15,8 @@ const moveDecisionExt = schedulerl.moveDecisionExt;
 
 pub const searchStatistic = struct {
     n_cutoffs: u64 = 0,
-    n_nodeExplored: u64 = 0,
     n_hashRetrieve: u64 = 0,
+    n_nodeExplored: u64 = 0,
 };
 /// Benchmark function to test the node generation speed in
 /// "real world" settings mainly computing heuristics...
@@ -81,7 +81,7 @@ pub const threadPackageFrame = struct {
 };
 pub const threadPackageArray = std.MultiArrayList(threadPackageFrame);
 
-pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *Board_state, moveArray: *movel.moveContainer, n_threads: u32) !threadPackageArray {
+pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *const Board_state, moveArray: *const movel.moveContainer, n_threads: u32) !threadPackageArray {
     const _nThread = @min(n_threads, moveArray.len);
     var ret: threadPackageArray = .{};
     const threadedMoves = moveArray.cutEvenly(alloc, _nThread) catch {

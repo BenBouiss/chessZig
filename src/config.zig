@@ -54,7 +54,9 @@ pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
 
 pub const DEFAULT_SEARCH_TYPE: searchType = .STD;
 pub const searchType = enum { STD, ZWS, ASPIRATION };
+
 pub const DEFAULT_USE_SEE = true;
+pub const _DEFAULT_USE_SEE = "true";
 
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
@@ -93,6 +95,8 @@ pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 
 pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 2_777_777;
+pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
+
 pub const UPDATE_TICKRATE_NS = 2777777;
 pub const READING_TICKRATE_NS = (2) * (std.math.pow(u64, 10, 6));
 

@@ -1,26 +1,29 @@
 [engine1]
-path="engines/bin/engine_17_03_26_seeOff";
-name="normale";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
-"setoption name useHash value false";
-"setoption name useNullPruning value true";
-
-[engine2]
-path="engines/bin/engine_17_03_26_seeOn";
-//path="zig-out/bin/engine";
+path="engines/bin/engine_19_03_26_SEE";
 name="SEE";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
 "setoption name useNullPruning value true";
+"setoption name useSEE value true";
+
+[engine2]
+path="engines/bin/engine_19_03_26_SEE";
+//path="zig-out/bin/engine";
+name="non see";
+"setoption name UCI_elo value 3000";
+"setoption name fixedDepth value false";
+"setoption name useHash value false";
+"setoption name useNullPruning value true";
+"setoption name useSEE value false";
 
 [match]
-nMatch=3;
+nMatch=6;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
+timeFormat=(60000, 100);
 
 logsLocation="logs/ben/ben";
 //saveLogs=true;

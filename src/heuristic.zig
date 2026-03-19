@@ -1284,7 +1284,7 @@ pub fn _initMoveOrdering() void {
     historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
     killerMoves = undefined;
 }
-pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
+pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
@@ -1297,7 +1297,7 @@ pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u
     const from = move.getFrom();
     const to = move.getTo();
     if (move.isCapture()) {
-        if (comptime configl.DEFAULT_USE_SEE) {
+        if (p_feature.useSEE) {
             return SEE(p_state, move);
         } else {
             return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
@@ -1317,19 +1317,19 @@ pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u
     }
     return 0;
 }
-pub fn eval_move_heuristic(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) scoreType {
+pub fn eval_move_heuristic(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
     if (comptime useLine) {
-        return eval_move_heuristic_line(p_state, move, ply, prevLine, hashMove);
+        return eval_move_heuristic_line(p_state, move, ply, prevLine, hashMove, p_feature);
     }
-    return eval_move_heuristic_std(p_state, move, ply);
+    return eval_move_heuristic_std(p_state, move, ply, p_feature);
 }
-pub fn eval_move_heuristic_std(p_state: *chess.Board_state, move: IMove, ply: u16) scoreType {
+pub fn eval_move_heuristic_std(p_state: *chess.Board_state, move: IMove, ply: u16, p_feature: *const searchFeatures) scoreType {
     const fpiece = move.getFromPiece();
     const cpiece = move.getCapturePiece();
     const from = move.getFrom();
     const to = move.getTo();
     if (move.isCapture()) {
-        if (comptime configl.DEFAULT_USE_SEE) {
+        if (p_feature.useSEE) {
             return SEE(p_state, move);
         } else {
             return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
@@ -1362,13 +1362,13 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn cst_eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove) moveOrdering {
+pub fn cst_eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) moveOrdering {
     //var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     for (0..p_moves.len) |i| {
         ret.indexes[i] = i;
-        scores[i] = eval_move_heuristic(p_state, p_moves.moves[i], ply, prevLine, useLine, hashMove);
+        scores[i] = eval_move_heuristic(p_state, p_moves.moves[i], ply, prevLine, useLine, hashMove, p_feature);
     }
     ret.len = p_moves.len;
     // could potentially do ret.scores as the context and sort the array of "entries" with where entries contains an idx, score and depth
@@ -1415,9 +1415,9 @@ pub const moveOrdering = struct {
 
 pub inline fn eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) moveOrdering {
     if (!p_feature.useStaticSearch) {
-        return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, true, hashMove);
+        return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, true, hashMove, p_feature);
     }
-    return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, false, hashMove);
+    return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, false, hashMove, p_feature);
 }
 
 pub fn SEE(p_state: *const chess.Board_state, move: IMove) scoreType {
