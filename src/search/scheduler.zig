@@ -29,7 +29,6 @@ pub const searchReport = struct {
 
 pub const searchFeatures = struct {
     useHash: bool = configl.DEFAULT_USEHASHTABLE,
-    useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
     useQuiescence: bool = configl.DEFAULT_USEQUIESC,
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
@@ -40,7 +39,6 @@ pub const searchFeatures = struct {
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
     ret.useHash = p_engine.options.useHashTable;
-    ret.useTexelEvaluation = p_engine.options.useTexelEvaluation;
     ret.useQuiescence = p_engine.options.useQuiescence;
     ret.useNullPrune = p_engine.options.useNullPrune;
     ret.useLateMoveReduc = p_engine.options.useLateMoveReduction;
@@ -155,14 +153,16 @@ pub const timeDecision = struct {
 //
 // if during a search the waiting thread of the scheduler notices the time being in the red, the scheduler should be allowed to interrupt the search
 pub const scheduler = struct {
-    timeM: timeManager = .{},
     p_engine: *enginel.engine = undefined,
-    engineSet: bool = false,
+
+    timeM: timeManager = .{},
+    features: searchFeatures = .{},
     p_threadPack: *threadPackageArray = undefined,
     alloc: std.mem.Allocator = undefined,
     searchDepth: u16 = 0,
+    engineSet: bool = false,
     turn: bool = true,
-    features: searchFeatures = .{},
+    reportProgress: bool = true,
 
     pub fn setEngine(p_self: *scheduler, p_engine: *enginel.engine) void {
         p_self.p_engine = p_engine;
@@ -352,7 +352,9 @@ pub const scheduler = struct {
         while (p_self.searchDepth <= configl.SCHEDULER_MAX_ENDGAME_DEPTH) {
             std.Thread.sleep(configl.SCHEDULER_TICKRATE_NS);
             if (count % countTimePrint == 0) {
-                p_self.sendUpdate();
+                if (p_self.reportProgress) {
+                    p_self.sendUpdate();
+                }
                 count = 0;
             }
             count += 1;
@@ -362,7 +364,9 @@ pub const scheduler = struct {
             } else if (stat == .FINISHED) {
                 p_self.timeM.append(.{ .time = p_self.timeM.timeSinceStartMs(), .checked = p_self.p_engine.state.isLegal(p_self.turn) });
                 decision = p_self.extractBest();
-                p_self.sendPartial(&decision);
+                if (p_self.reportProgress) {
+                    p_self.sendPartial(&decision);
+                }
                 if (!p_self.canExtendSearch(maxDepth, &decision)) {
                     break;
                 }
@@ -462,6 +466,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
 
     var sched = &searcher.schedul;
     sched.setThreadPack(&pack);
+    sched.reportProgress = true;
 
     // FIXME:
     sched.setEngine(p_engine);

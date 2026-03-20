@@ -20,13 +20,15 @@ pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
 
 pub const DEFAULT_USEHASHTABLE = false;
-pub const DEFAULT_USETEXEL = false;
-pub const _DEFAULT_USETEXEL = "false";
 
 pub const DEFAULT_USE_NULLPRUNE = false;
 pub const _DEFAULT_USE_NULLPRUNE = "false";
 
 pub const DEFAULT_USE_HISTORY = true;
+
+pub const KILLER_0_HEURISTIC_VALUE = 90;
+pub const KILLER_1_HEURISTIC_VALUE = 80;
+
 pub const MAX_HIST_HEURISTIC_VALUE = 70;
 pub const ORDERING_LINE_VALUE = 9999;
 
@@ -52,8 +54,8 @@ pub const DEFAULT_STATIC_SEARCH = false;
 pub const DEFAULT_LATE_MOVE_REDUCTION = false;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
 
-pub const DEFAULT_SEARCH_TYPE: searchType = .STD;
-pub const searchType = enum { STD, ZWS, ASPIRATION };
+pub const DEFAULT_SEARCH_TYPE: searchType = .PVS;
+pub const searchType = enum { STD, PVS, ZWS, ASPIRATION };
 
 pub const DEFAULT_USE_SEE = true;
 pub const _DEFAULT_USE_SEE = "true";
