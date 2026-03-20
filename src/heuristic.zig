@@ -1305,9 +1305,9 @@ pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u
     } else {
         //
         if (move.equal(killerMoves[ply][0])) {
-            return 90;
+            return configl.KILLER_0_HEURISTIC_VALUE;
         } else if (move.equal(killerMoves[ply][1])) {
-            return 80;
+            return configl.KILLER_0_HEURISTIC_VALUE;
         } else {
             if (comptime configl.DEFAULT_USE_HISTORY) {
                 const w = @intFromEnum(fpiece) <= @intFromEnum(e_piece.nWhiteKing);
@@ -1393,7 +1393,9 @@ pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrd
         // here we decide what moves are considered to be important as to not sacrifice some depth
         const move = fmoves.moves[p_order.indexes[i]];
         const to = move.getTo();
-        if ((to & safetyArea) != 0 or move.isCapture() or move.isPromotion()) {
+        if (SEE(p_state, move) < 0) {
+            //p_order.depths[i] = depth - 2;
+        } else if ((to & safetyArea) != 0 or move.isCapture() or move.isPromotion()) {
             p_order.depths[i] = depth;
             continue;
         }

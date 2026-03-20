@@ -24,7 +24,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USETEXEL, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -172,7 +172,6 @@ pub const engineIdentification = struct {
 pub const engineOptions = struct {
     nThreads: spinVarType = configl.DEFAULT_THREAD,
     useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
-    useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
     useQuiescence: bool = configl.DEFAULT_USEQUIESC,
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useLateMoveReduction: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
@@ -241,7 +240,6 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
-        try p_self.addOption(.{ .name = "useTexel", .optionType = .USETEXEL, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USETEXEL } } });
 
         try p_self.addOption(.{ .name = "useQuiescence", .optionType = .USEQUIESCENCE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEQUIESC } } });
 
@@ -500,16 +498,7 @@ pub const engine = struct {
                 p_self.options.useHashTable = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
-            .USETEXEL => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
-                    return false;
-                };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useTexelEvaluation = utilsl.contains(val, "true", .ignoreCase);
-                return true;
-            },
+
             .USEQUIESCENCE => {
                 const val = getCheckValFromSetOptionCmd(tokens) catch {
                     return false;
@@ -854,8 +843,6 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .CLEAR_HASH;
     } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {
         return .HEUR_WEIGHTS_PATH;
-    } else if (utilsl.contains(cmdBuffer, " useTexel", .ignoreCase)) {
-        return .USETEXEL;
     } else if (utilsl.contains(cmdBuffer, " useQuiescence", .ignoreCase)) {
         return .USEQUIESCENCE;
     } else if (utilsl.contains(cmdBuffer, " useNullPruning", .ignoreCase)) {

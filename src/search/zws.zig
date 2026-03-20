@@ -1,0 +1,140 @@
+const std = @import("std");
+const chess = @import("../chess.zig");
+const movel = @import("../move.zig");
+const moveGenl = @import("../move_generation.zig");
+const heuristicl = @import("../heuristic.zig");
+const weightl = @import("../weights.zig");
+const threadingl = @import("threading.zig");
+const schedulerl = @import("scheduler.zig");
+const alphaBetal = @import("alphaBeta.zig");
+const hashl = @import("../hashTable.zig");
+
+const IMove = movel.IMove;
+const moveContainer = movel.moveContainer;
+const pvContainer = movel.pvContainer;
+
+const scoreType = heuristicl.scoreType;
+
+const searchFeatures = schedulerl.searchFeatures;
+
+const threadInfo = threadingl.threadInfo;
+
+//https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
+pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: alphaBetal.searchType) scoreType {
+    if (comptime t == .PV) {
+        pv.setLen(ply);
+    }
+    var _alpha = alpha;
+    if (p_state.isStaleMateRepetition()) {
+        if (p_features.useHash) {
+            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
+            _ = hashl.hashTable.storeEntry(&s_entry);
+            // might be useful for late game
+            //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
+        }
+        return weightl.simpleStalemateScore;
+    }
+
+    if (depth <= 0 or !p_info.alive) {
+        return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine);
+    }
+
+    var hashMove: IMove = .{};
+    if (p_features.useHash) {
+        const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
+        if (entry.valid) {
+            p_info.searchStat.n_hashRetrieve += 1;
+            //if (entry.val.search.t == .CUT) {
+            //    return entry.eval();
+            //}
+            hashMove = entry.val.search.bestMove;
+        }
+    }
+
+    // null move prunning here
+    // R = 3
+    const ischeck = p_state.isChecked();
+    if (p_features.useNullPrune) {
+        // see chess programming video
+        const R: u16 = 2 + 1;
+        if (depth > R and !ischeck and !p_state.isEndGame() and ply > 0) {
+            p_state.makeNullMove();
+            const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine, .NonPV);
+            p_state.undoNullMove();
+            if (score >= beta) {
+                p_info.searchStat.n_cutoffs += 1;
+                return score;
+            }
+        }
+    }
+
+    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
+    var useLMR: bool = false;
+    //https://www.chessprogramming.org/Late_Move_Reductions
+    if (p_features.useLateMoveReduc and depth > 3 and !ischeck) {
+        heuristicl.computeLateMoveReduc(p_state, &order, depth - 1, &fmoves);
+        useLMR = true;
+    }
+
+    var finalScore: scoreType = 0;
+    var bestMove: IMove = .{};
+    for (0..fmoves.len) |i| {
+        const idx = order.indexes[i];
+        const move: IMove = fmoves.moves[idx];
+
+        _ = p_state.makeMove(move);
+        var score: scoreType = 0;
+        if (i == 0) {
+            score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+            bestMove = move;
+            if (comptime t == .PV) {
+                pv.onBestMove(move, ply);
+            }
+            finalScore = score;
+        } else {
+            score = -searchLoop(p_state, p_info, depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
+            if (score > _alpha and comptime t == .PV) {
+                score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, .PV);
+            }
+        }
+
+        _ = p_state.undoMove();
+
+        const isCapture = move.isCapture();
+        if (score > _alpha) {
+            _alpha = score;
+            bestMove = move;
+            finalScore = score;
+            if (comptime t == .PV) {
+                pv.onBestMove(move, ply);
+            }
+            if (!isCapture) {
+                heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
+            }
+        } else if (score >= beta) {
+            if (p_features.useHash) {
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), score, .CUT, move);
+                _ = hashl.hashTable.storeEntry(&s_entry);
+            }
+            if (!isCapture) {
+                heuristicl.killerMoves[ply][1] = heuristicl.killerMoves[ply][0];
+                heuristicl.killerMoves[ply][0] = move;
+            }
+            p_info.searchStat.n_cutoffs += 1;
+            return score;
+        }
+    }
+    if (fmoves.len == 0) {
+        if (!p_state.isLegal(p_state.whiteToMove())) {
+            finalScore = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(depth)));
+        } else {
+            finalScore = weightl.simpleStalemateScore;
+        }
+    }
+    if (p_features.useHash) {
+        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .PV, bestMove);
+        _ = hashl.hashTable.storeEntry(&s_entry);
+    }
+    return finalScore;
+}
