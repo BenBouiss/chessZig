@@ -445,12 +445,12 @@ pub fn modifyHeuristicWeight_array(alloc: std.mem.Allocator, s: *string, debug: 
         }
         return;
     }
-    if (s.containsE("MG", .ignoreCase)) {
+    if (s.containsE("_MG", .ignoreCase)) {
         dest.*[MG] = buffer;
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set MG\n", .{});
         }
-    } else if (s.containsE("EG", .ignoreCase)) {
+    } else if (s.containsE("_EG", .ignoreCase)) {
         dest.*[EG] = buffer;
 
         if (debug) {
@@ -506,12 +506,12 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
         }
         return;
     }
-    if (s.containsE("MG", .ignoreCase)) {
+    if (s.containsE("_MG", .ignoreCase)) {
         dest.*[MG] = _val;
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set MG\n", .{});
         }
-    } else if (s.containsE("EG", .ignoreCase)) {
+    } else if (s.containsE("_EG", .ignoreCase)) {
         dest.*[EG] = _val;
 
         if (debug) {
@@ -1307,7 +1307,7 @@ pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u
         if (move.equal(killerMoves[ply][0])) {
             return configl.KILLER_0_HEURISTIC_VALUE;
         } else if (move.equal(killerMoves[ply][1])) {
-            return configl.KILLER_0_HEURISTIC_VALUE;
+            return configl.KILLER_1_HEURISTIC_VALUE;
         } else {
             if (comptime configl.DEFAULT_USE_HISTORY) {
                 const w = @intFromEnum(fpiece) <= @intFromEnum(e_piece.nWhiteKing);
@@ -1403,7 +1403,7 @@ pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrd
 
         //const sum: f32 = 1 + lnd * std.math.log(f32, std.math.e, @floatFromInt(nDecrease)) / 3.14;
         //p_order.depths[i] = depth - @as(u16, @intFromFloat(sum));
-        p_order.depths[i] = depth - 2;
+        p_order.depths[i] = depth - 1;
         nDecrease += 1;
     }
     return;
