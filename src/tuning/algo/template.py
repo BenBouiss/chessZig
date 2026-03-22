@@ -95,9 +95,9 @@ class templateSelectionAlgo(object):
         ret = np.max([ret, self.objective.bounds[:, 0]], axis = 0)
         return ret
 
-
     def optimize(self) -> None:
         assert len(self.population) != 0 
+        assert self.objective is not None
         self.running = True
         
         if (self.preEval and (self.iter == 0)):
@@ -127,10 +127,6 @@ class templateSelectionAlgo(object):
         assert self.objective is not None
         return self.objective.evaluate(positions)
 
-    #def applyFrozenToNewPos(self, positions: npt.NDArray[np.float64]): 
-    #    # algo defined if supported
-    #    pass
-
     def on_iter_start(self): 
         for cb in self.callbacks:
             cb.on_iter_start()
@@ -143,7 +139,6 @@ class templateSelectionAlgo(object):
             #TODO for now we overwrite the existing file everytime "nasty"
             path = os.path.join(self.saveOpt.logDir, f"{self.saveOpt.prefix}_{self.uid}.yaml")
             self.saveToFile(path)
-
 
     def on_optim_start(self): 
         for cb in self.callbacks:
@@ -174,9 +169,8 @@ class templateSelectionAlgo(object):
         self.population.append(indiv)
         self.popsize += 1
 
-
     def loadYaml(self, path: str) -> None:
-        assert os.path.exists(path)
+        assert os.path.exists(path), "File not found"
         with open(path, 'r') as file:
             valDict = yaml.safe_load(file)
 
@@ -185,6 +179,9 @@ class templateSelectionAlgo(object):
         self.popsize = valDict.get("popsize", DEFAULT_INT) 
         self.preEval = valDict.get("preEval", DEFAULT_PREVAL) 
         self.seed = valDict.get("seed", DEFAULT_SEED) 
+
+        if self.objective is not None:
+            self.objective.loadFromFile(valDict)
 
         # steps/bounds section dont know how to orchestrate it with the objective thingy
         #self.maxiter = valDict.get("maxiter", 1) 
@@ -204,6 +201,7 @@ class templateSelectionAlgo(object):
                 currentIndiv = individual(position = lastFrame[FRAME_POSITION_IDX][i], uid = lastFrame[FRAME_UID_IDX][i], score = lastFrame[FRAME_SCORE_IDX][i])
                 self.population.append(currentIndiv)
 
+
     def saveToFile(self, path: str) -> None:
         # can be overloaded by other algo to save more things
         savingDict: dict = {}
@@ -215,8 +213,7 @@ class templateSelectionAlgo(object):
         savingDict["seed"] = self.seed
         if (self.objective is not None):
             # check fmt if not good need to convert to list of list
-            savingDict["bounds"] = self.objective.bounds.tolist()
-            savingDict["steps"] = self.objective.steps.tolist()
+            savingDict["objective"] = self.objective.saveToFile()
 
         savingDict["fmtCode"] = list(self.population[0].position.shape)
         for itr, iterList in enumerate(self.populationHistory):

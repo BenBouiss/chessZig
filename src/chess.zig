@@ -1411,10 +1411,8 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     std.debug.print("Zobrist key: {x}\n", .{p_board_state.key.code});
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
-    std.debug.print("Turn number: {d}, move stored: {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len });
-    const eval = heuristicl.evaluate_debug(p_board_state, &heuristicl.globalHeuristic);
-    std.debug.print("Current evaluation: \n", .{});
-    eval.print();
+    const moves = moveGenl.generateLegalMoves(p_board_state);
+    std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len, moves.len });
 
     printBoardValidity(p_board_state);
 
@@ -1427,8 +1425,10 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.halfMoveClock, p_board_state.move_history.getRepetitions(), p_board_state.move_history.lastIrreversibleMoveIndex });
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
 
-    const moves = moveGenl.generateLegalMoves(p_board_state);
-    moves.print();
+    const eval = heuristicl.evaluate_debug(p_board_state, &heuristicl.globalHeuristic);
+    std.debug.print("Current evaluation: \n", .{});
+    eval.print();
+
     sanityCheckBoardState(p_board_state);
 }
 

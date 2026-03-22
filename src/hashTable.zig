@@ -33,6 +33,7 @@ pub const nodeType = enum { PV, ALL, CUT };
 pub const searchEntry = struct {
     evaluation: scoreType = 0,
     t: nodeType = .ALL,
+    // bestMove also known as hash move (I think) is to be explored first
     bestMove: IMove = .{},
     // this is for the replacing strat, might be optionnal with alway replace
     //age: usize,
@@ -40,9 +41,7 @@ pub const searchEntry = struct {
 
 pub const Hash_entry = struct {
     key: Key = .{},
-
     val: entryComponents = undefined,
-
     exploredDeph: u8 = 0,
     age: u8 = 0,
 

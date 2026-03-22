@@ -189,7 +189,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         const idx = order.indexes[i];
         const move: IMove = fmoves.moves[idx];
 
-        _ = p_state.makeMove(move);
+        p_state.makeMove(move);
 
         var score: scoreType = 0;
         if (useLMR) {
@@ -218,16 +218,23 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
-
             if (!isCapture) {
-                heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
+                heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), depth * depth);
             }
         }
         if (_alpha >= beta) {
             // save here the killer moves
             if (!isCapture) {
-                heuristicl.killerMoves[ply][1] = heuristicl.killerMoves[ply][0];
-                heuristicl.killerMoves[ply][0] = move;
+                heuristicl.onKillerMove(move, ply);
+
+                const bonus = heuristicl.computeHistoryBonus(depth);
+                heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), bonus);
+                for (0..fmoves.len) |j| {
+                    const _move = fmoves.moves[j];
+                    if (!_move.isCapture() and j != i) {
+                        heuristicl.updateHistoryHeurist(p_state.whiteToMove(), _move.getFrom(), _move.getTo(), -bonus);
+                    }
+                }
             }
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .CUT, move);
@@ -316,8 +323,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
     if (finalScore > _alpha) {
         if (finalScore >= beta) {
             if (!firstM.isCapture()) {
-                heuristicl.killerMoves[ply][1] = heuristicl.killerMoves[ply][0];
-                heuristicl.killerMoves[ply][0] = firstM;
+                heuristicl.onKillerMove(firstM, ply);
             }
             p_info.searchStat.n_cutoffs += 1;
             return finalScore;
@@ -329,7 +335,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
         const idx = order.indexes[i];
         const move: IMove = fmoves.moves[idx];
         const isCapture = move.isCapture();
-        _ = p_state.makeMove(move);
+        p_state.makeMove(move);
 
         var score = -searchLoop_aspirationPvs(p_state, p_info, depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine);
 
@@ -349,8 +355,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
         if (score > finalScore) {
             if (score > beta) {
                 if (!isCapture) {
-                    heuristicl.killerMoves[ply][1] = heuristicl.killerMoves[ply][0];
-                    heuristicl.killerMoves[ply][0] = move;
+                    heuristicl.onKillerMove(move, ply);
                 }
                 p_info.searchStat.n_cutoffs += 1;
                 return score;
