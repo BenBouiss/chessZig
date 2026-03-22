@@ -379,11 +379,11 @@ if __name__ == "__main__":
 
     opt: trainingOptions = trainingOptions(
         tuneCfg = tuneConfig(tuneCount = False, 
-                tuneMobility =False, 
-                tuneStructure = False, 
-                tunePawnStructure = False, 
-                tunePSQT = True, 
-                tuneSafety = False), 
+        tuneMobility =False, 
+        tuneStructure = False, 
+        tunePawnStructure = False, 
+        tunePSQT = True, 
+        tuneSafety = False), 
         initialWeights=a)
 
     print(opt.makeTensorInitW())

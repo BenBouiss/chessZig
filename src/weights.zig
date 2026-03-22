@@ -49,6 +49,10 @@ pub const kingScoreArr = [chessl.N_SQUARES]scoreType{ 17, 30, -3, -14, 6, -1, 40
 pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0, 0, -10, -20, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -30, 0, 0, 0, 0, -30, -30, -50, -30, -30, -30, -30, -30, -30, -50 };
 
 // optionnal pre filled heuristic values
+// ============ presets ============
 const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = -12, .PassedPawnValue = 93, .IsolatedPawnValue = 6, .SafetyKnightValue = 36, .SafetyBishopValue = 8, .SafetyRookValue = -5, .SafetyQueenValue = 44, .StructureProtectionValue = 1, .MobilityValue = -4 };
 
 const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = -16, .PassedPawnValue = -12, .IsolatedPawnValue = 27, .SafetyKnightValue = 6, .SafetyBishopValue = 5, .SafetyRookValue = -7, .SafetyQueenValue = 12, .StructureProtectionValue = 2, .MobilityValue = -2 };
+
+//https://www.chessprogramming.org/Futility_Pruning
+// ============ futility prunning ============

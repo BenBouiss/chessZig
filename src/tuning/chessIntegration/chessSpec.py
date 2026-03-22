@@ -42,8 +42,11 @@ class score:
     def __repr__(self) -> str:
         return f"win: {self.win} lose: {self.lose} draw: {self.draw} score: {self.getScore()}"
 
+MG = 0
+EG = 1
+
 class heuristicEntry:
-    weights: list[float]
+    weights: list[list[float]]
 
     def __init__(self):
         pass
@@ -52,53 +55,77 @@ class heuristicEntry:
         # scalar value
         # simpleStackedPawnScore: {d};
         with open(path, "w") as file:
-            file.write(f"stackedPawnScore = {self.weights[stackedPawnScore_idx]};\n")
-            file.write(f"passedPawnScore = {self.weights[passedPawnScore_idx]};\n")
-            file.write(f"isolatedPawnScore = {self.weights[isolatedPawnScore_idx]};\n")
+            file.write(f"stackedPawnScore_MG = {self.weights[MG][stackedPawnScore_idx]};\n")
+            file.write(f"stackedPawnScore_EG = {self.weights[EG][stackedPawnScore_idx]};\n")
 
-            file.write(f"safetyKnight = {self.weights[safetyKnight_idx]};\n")
-            file.write(f"safetyBishop = {self.weights[safetyBishop_idx]};\n")
-            file.write(f"safetyRook = {self.weights[safetyRook_idx]};\n")
-            file.write(f"safetyQueen = {self.weights[safetyQueen_idx]};\n")
+            file.write(f"passedPawnScore_MG = {self.weights[MG][passedPawnScore_idx]};\n")
+            file.write(f"passedPawnScore_EG = {self.weights[EG][passedPawnScore_idx]};\n")
 
-            file.write(f"structureProtection = {self.weights[structureProtection_idx]};\n")
-            file.write(f"mobilityScore = {self.weights[mobility_idx]};\n")
+            file.write(f"isolatedPawnScore_MG = {self.weights[MG][isolatedPawnScore_idx]};\n")
+            file.write(f"isolatedPawnScore_EG = {self.weights[EG][isolatedPawnScore_idx]};\n")
+
+            file.write(f"safetyKnight_MG = {self.weights[MG][safetyKnight_idx]};\n")
+            file.write(f"safetyKnight_EG = {self.weights[EG][safetyKnight_idx]};\n")
+
+            file.write(f"safetyBishop_MG = {self.weights[MG][safetyBishop_idx]};\n")
+            file.write(f"safetyBishop_EG = {self.weights[EG][safetyBishop_idx]};\n")
+
+            file.write(f"safetyRook_MG = {self.weights[MG][safetyRook_idx]};\n")
+            file.write(f"safetyRook_EG = {self.weights[EG][safetyRook_idx]};\n")
+
+            file.write(f"safetyQueen_MG = {self.weights[MG][safetyQueen_idx]};\n")
+            file.write(f"safetyQueen_EG = {self.weights[EG][safetyQueen_idx]};\n")
+
+            file.write(f"structureProtection_MG = {self.weights[MG][structureProtection_idx]};\n")
+            file.write(f"structureProtection_EG = {self.weights[EG][structureProtection_idx]};\n")
+
+            file.write(f"mobilityScore_MG = {self.weights[MG][mobility_idx]};\n")
+            file.write(f"mobilityScore_EG = {self.weights[EG][mobility_idx]};\n")
+
+    def print(self) -> None:
+
+        print(f"stackedPawnScore: {self.weights[MG][stackedPawnScore_idx]} {self.weights[EG][stackedPawnScore_idx]}")
+
+        print(f"passedPawnScore: {self.weights[MG][passedPawnScore_idx]} {self.weights[EG][passedPawnScore_idx]}")
+
+        print(f"isolatedPawnScore: {self.weights[MG][isolatedPawnScore_idx]} {self.weights[EG][isolatedPawnScore_idx]}")
+
+        print(f"safetyKnight: {self.weights[MG][safetyKnight_idx]} {self.weights[EG][safetyKnight_idx]}")
+
+        print(f"safetyBishop: {self.weights[MG][safetyBishop_idx]} {self.weights[EG][safetyBishop_idx]}")
+
+        print(f"safetyRook: {self.weights[MG][safetyRook_idx]} {self.weights[EG][safetyRook_idx]}")
+
+        print(f"safetyQueen: {self.weights[MG][safetyQueen_idx]} {self.weights[EG][safetyQueen_idx]}")
+
+        print(f"structureProtection: {self.weights[MG][structureProtection_idx]} {self.weights[EG][structureProtection_idx]}")
+
+        print(f"mobilityScore: {self.weights[MG][mobility_idx]} {self.weights[EG][mobility_idx]}")
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
         return np.concatenate(self.weights)
 
-
-class namedHeuristicEntry:
-    def __init__(self, 
-                mobilityScore: None|list[float] = None,
-                structureScore: None|list[float] = None,
-                isolatedPawnScore: None|list[float] = None,
-                stackedPawnScore: None|list[float] = None,
-                passedPawnScore: None|list[float] = None,
-                safetyKnightScore: None|list[float] = None,
-                safetyBishopScore: None|list[float] = None,
-                safetyScore: None|list[float] = None,
-                safetyKnightScore: None|list[float] = None,
-                safetyKnightScore: None|list[float] = None,
-                 ):
-
-        self.mobilityScore: None | list[float] = mobilityScore
-    def toEntry(self) -> heuristicEntry:
-        ret = heuristicEntry()
-        #ret.weights.append()
-        return ret
-
-        
-        
-
 def entryFrom1dArray(arr: npt.NDArray[np.float64]) -> heuristicEntry:
     ret = heuristicEntry()
-    ret.weights = arr.tolist()
+    ret.weights = arr.reshape(2, -1).tolist()
     return ret
 
-def entryFromList(arr: list[float]) -> heuristicEntry:
+
+def entryFromListDup(arr: list[float]) -> heuristicEntry:
     ret = heuristicEntry()
-    ret.weights = list(arr)
+    ret.weights = [list(arr), list(arr)]
+    return ret
+
+def entryFrom1dList(arr: list[float]) -> heuristicEntry:
+    ret = heuristicEntry()
+    nsize = int(len(arr) / 2)
+    ret.weights = [list(arr[0:nsize]), list(arr[nsize:])]
+    return ret
+
+def entryFrom2dList(arr: list[list[float]]) -> heuristicEntry:
+    assert len(arr) == 2
+    ret = heuristicEntry()
+    ret.weights = [list(arr[0]), list(arr[1])]
     return ret
 
 @dataclass
@@ -158,7 +185,9 @@ class callbackSave(template.callback):
                 iterBuffer[2].append(frame[2])
             if (len(iterList) != 0):
                 savingDict["populationHistory"].append(iterBuffer)
+
         print(f"Saving dict {savingDict} to file: {path}")
+
         with open(path, "w") as file:
             yaml.dump(savingDict, file)
 
@@ -209,6 +238,7 @@ total_idx += 1
 safetyQueen_idx = total_idx
 total_idx += 1
 
+
 # p , n, b, r, q
 simplePieceCount: list[float] = [100, 300, 300, 500, 900]
 
@@ -218,4 +248,5 @@ simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1
 newWeight_0: list[float] = [0.0, -3.0, 100.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]
 newWeight_0_bis: list[float] = [1.0, 3.0, 95.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]
 
+newWeight_1: list[list[float]] = [[10.0, 100.0, 9.0, 32.0, 38.0, 100.0, -2.0, 2.0, 42.0], [-2.0, 100.0, 67.0, -2.0, 100.0, 32.0, 20.0, 100.0, -2.0]]
 

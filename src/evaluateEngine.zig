@@ -571,6 +571,7 @@ const guiState = struct {
             }
             return false;
         };
+
         return status;
     }
     pub fn startMatch(p_self: *guiState) !void {

@@ -7,6 +7,7 @@ import threading
 import subprocess
 import os, time, sys
 
+import yaml
 import numpy as np
 import numpy.typing as npt 
 
@@ -43,6 +44,8 @@ class scoreBoard:
                     text = "IN_PROGRESS"
                 case matchStatus.FINISHED:
                     text = "FINISHED"
+                case matchStatus.ERROR:
+                    text = "ERROR"
                 case _:
                     text = "UNKNOWN"
 
@@ -65,6 +68,7 @@ class timeFormat:
     # times in ms
     time: int
     inc: int
+    
 
 @dataclass
 class infoFile:
@@ -127,7 +131,7 @@ class match(object):
     def generateFiles(self, tmpfolder: str) -> str:
         heuristics = saveHeuristicsWeights([self.conf1, self.conf2], directory = tmpfolder, uid = self.uid, extra = self.extra)
         setting = readInfoFile(self.infoFilePath)
-        newInfoPath = os.path.join(tmpFolder, f"newInfo_{self.uid}_{self.extra}.info")
+        newInfoPath = os.path.join(tmpfolder, f"newInfo_{self.uid}_{self.extra}.info")
         with open(newInfoPath, "w") as file:
             for i in range(len(setting.engineNames)):
                 file.write(f"{setting.engineNames[i]}\n")
@@ -159,11 +163,19 @@ class matchStatus(Enum):
     PENDING = 1
     IN_PROGRESS = 2
     FINISHED = 3
+    ERROR = 4
 
 class tournamentType(Enum):
     CLASSIC = 1
     BASELINE = 2
+    INVALID = 3
 
+def valueToTournamentType(val: int) -> tournamentType:
+    if val == tournamentType.CLASSIC.value:
+        return tournamentType.CLASSIC
+    if val == tournamentType.BASELINE.value:
+        return tournamentType.BASELINE
+    return tournamentType.INVALID
 
 def scheduleMatches(popsize: int) -> list[tuple[int, int]]:
     """
@@ -255,7 +267,18 @@ class tournament(object):
         self.logDir: str = logDir
         self.setThread(nThread)
         self.logs: dict = {}
-    
+
+    def saveArgsToDict(self) -> dict:
+        ret = {}
+        ret["timeFormat"] = [self.timeFormat.time, self.timeFormat.inc]
+        ret["templatePath"] = self.templatePath
+        ret["logDir"] = self.logDir
+        ret["evalBin"] = self.evalBin
+        ret["debugMode"] = self.debugMode
+        ret["nThread"] = self.nThread
+        ret["type"] = self.type.value
+        return ret
+
     def setThread(self, nThread: int) -> None:
         assert nThread > 0
         self.nThread = nThread
@@ -269,7 +292,8 @@ class tournament(object):
             workingThreads[-1].start()
         for x in workingThreads:
             x.join()
-        
+        # check for the ERROR match and retry
+        self.retryErrors()
     def thread_dispatchMatch(self, idx: list[int], threadId: int) -> None:
         assert self.population is not None
         assert self.templatePath is not None
@@ -287,8 +311,37 @@ class tournament(object):
             currentMatch: match = match(conf1 = opp1, conf2 = opp2, infoFilePath=self.templatePath, extra = f"T{threadId}", debugMode = self.debugMode)
             scoreList = currentMatch.launchAndWaitResults(self.evalBin, self.logDir)
 
-            self.matchInv.status[i] = matchStatus.FINISHED
-            self.updateScore(pair=pair, score = scoreList)
+            if (len(scoreList) == 0):
+                self.matchInv.status[i] = matchStatus.ERROR
+            else:
+                self.matchInv.status[i] = matchStatus.FINISHED
+                self.updateScore(pair=pair, score = scoreList)
+            global_scoreBoard.updateScoreBoard(self)
+    
+    def retryErrors(self) -> None:
+        assert self.population is not None
+        assert self.templatePath is not None
+        for i in range(len(self.matchInv.status)):
+            if self.matchInv.status[i] != matchStatus.ERROR:
+                continue
+            pair = self.matchInv.order[i]
+            opp1 = self.population[pair[0]].position
+            if (self.type == tournamentType.BASELINE):
+                opp2 = self.baseline[pair[1]].position
+            else:
+                opp2 = self.population[pair[1]].position
+
+            self.matchInv.status[i] = matchStatus.IN_PROGRESS
+            global_scoreBoard.updateScoreBoard(self)
+
+            currentMatch: match = match(conf1 = opp1, conf2 = opp2, infoFilePath=self.templatePath, extra = f"T0r", debugMode = self.debugMode)
+            scoreList = currentMatch.launchAndWaitResults(self.evalBin, self.logDir)
+
+            if (len(scoreList) == 0):
+                self.matchInv.status[i] = matchStatus.ERROR
+            else:
+                self.matchInv.status[i] = matchStatus.FINISHED
+                self.updateScore(pair=pair, score = scoreList)
             global_scoreBoard.updateScoreBoard(self)
 
     def updateScore(self, pair: tuple[int, int], score: list[score]) -> None:
@@ -312,6 +365,7 @@ class chessObjective(obj.objective):
         self.baseline: list[heuristicEntry] = []
     
     def _evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
+        print(f"Evaluating {len(positions)} positions with {len(self.baseline)} baselines...")
         matchInv: matchContainerInfo = matchContainerInfo(len(positions), popBase = len(self.baseline), type = self.tourney.type)
         self.tourney.population = []
         for i in range(len(positions)):
@@ -331,6 +385,50 @@ class chessObjective(obj.objective):
     def appendBaseline(self, entry: heuristicEntry) -> None:
         self.baseline.append(entry)
 
+    def _saveToFile(self, log: dict) -> None:
+        log["baseline"] = [list(base.weights) for base in self.baseline]
+        log["tournament"] = self.tourney.saveArgsToDict()
+
+    def _loadFromFile(self, config: dict) -> None:
+        if config.get("baseline") is not None:
+            self.baseline = []
+            assert type(config["baseline"]) is list
+            for e in config["baseline"]:
+                self.baseline.append(chessSpec.entryFrom1dList(e))
+        if config.get("tournament") is not None:
+            self.tourney = tournamentFromConfigFile(config["tournament"])
+
+def tournamentFromConfigFile(config: dict) -> tournament:
+
+    assert os.path.exists(config["evalBin"])
+
+    return tournament(
+        timeF = timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
+        templatePath = config["templatePath"],
+        logDir = config["logDir"],
+        evalBin = config["evalBin"],
+        debugMode = config["debugMode"],
+        nThread = config["nThread"],
+        type = valueToTournamentType(config["type"])
+    )
+def objectiveFromConfigFile(path: str) -> chessObjective:
+    assert os.path.exists(path)
+    with open(path, "r") as file:
+        config = yaml.safe_load(file)
+        assert config.get("objective") is not None 
+        objConfig = config["objective"]
+        assert objConfig.get("tournament") is not None 
+        ret = chessObjective(tourney = tournamentFromConfigFile(objConfig["tournament"]), 
+                          maximize = objConfig["maximize"],
+                          bounds = objConfig["bounds"],
+                          steps = objConfig["steps"])
+
+        if objConfig.get("baseline") is not None:
+            ret.baseline = []
+            assert type(objConfig["baseline"]) is list
+            for e in objConfig["baseline"]:
+                ret.baseline.append(chessSpec.entryFrom2dList(e))
+        return ret
 
 # since all the current positions are "similar" enough might
 # be a good idea to do a dummy func with only nDim in input
@@ -355,9 +453,10 @@ def dummyStep(step: float, nDim: int) -> npt.NDArray[np.float64]:
     return np.repeat(np.array([step]), nDim)
 
 UPPER_BOUND_WEIGHT = 100
-LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
+LOWER_BOUND_WEIGHT = -2
+#LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
 STEP_WEIGTH = 1
-N_PARAMS = chessSpec.total_idx
+N_PARAMS = chessSpec.total_idx * 2
 def clear() -> None:
     print("\x1B[2J\x1B[H", end = "\r")
 
@@ -376,14 +475,15 @@ if __name__ == "__main__":
     tourn = tournament(standardTimeFormat, templatePath = path, evalBin = evaluationBinPath, debugMode = True, logDir = tmpFolder, nThread=4, type = tournamentType.BASELINE)
 
     mh.setObjective(chessObjective(maximize=True, tourney=tourn, bounds = dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim = N_PARAMS), steps = dummyStep(STEP_WEIGTH, nDim = N_PARAMS)))
-    assert mh.objective is chessObjective
-    mh.objective.setBaseline(chessSpec.entryFromList(chessSpec.simpleBaselineWeights))
+    assert type(mh.objective) is chessObjective
+    mh.objective.setBaseline(chessSpec.entryFromListDup(chessSpec.simpleBaselineWeights))
+    mh.objective.appendBaseline(chessSpec.entryFrom2dList(chessSpec.newWeight_1))
 
     mh.generatePopulation()
 
-    mh.addInvididual(indiv = individual(position = np.array(chessSpec.simpleBaselineWeights), uid = -1))
-    mh.addInvididual(indiv = individual(position = np.array(chessSpec.newWeight_0), uid = -1))
-    mh.printPopulation()
+    mh.addInvididual(indiv = individual(position = np.array(chessSpec.simpleBaselineWeights*2), uid = -1))
+    mh.addInvididual(indiv = individual(position = np.array(chessSpec.newWeight_0*2), uid = -1))
+    mh.addInvididual(indiv = individual(position = np.concatenate(chessSpec.newWeight_1), uid = -1))
     
     mh.optimize()
 
