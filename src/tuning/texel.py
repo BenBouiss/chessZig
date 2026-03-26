@@ -295,7 +295,7 @@ class texelWeights:
         return self
 
     def makeTensor(self) -> torch.Tensor:
-        return torch.tensor(self.getArray())
+        return torch.tensor(self.getArray(fullLength = True))
 
     def __repr__(self) -> str:
         ret = ""
@@ -425,10 +425,10 @@ def printTensorWeight(w, normalize: bool = False) -> None:
     knightSafety: {w[safetyKnight_idx]}, rookSafety: {w[safetyRook_idx]}, queenSafety: {w[safetyQueen_idx]} ")
 
 
-def saveModelWeightToFile(path: str, model: nn.Module) -> None:
+def saveModelWeightToFile(path: str, model: texelNet) -> None:
     saveWeightToFile(path, 
-                     model.W_mg.weight.detach().numpy()[0],
-                     model.W_eg.weight.detach().numpy()[0])
+         model.W_mg.weight.detach().numpy()[0],
+         model.W_eg.weight.detach().numpy()[0])
 
 def texelWeightToFileStr(w: texelWeights, phase: str) -> str:
     ret = ""
@@ -446,6 +446,8 @@ def texelWeightToFileStr(w: texelWeights, phase: str) -> str:
             ret += f"queenCountScore{phase} = {val};\n"
         elif (idx == mobility_idx):
             ret += f"mobilityScore{phase} = {val};\n"
+        elif (idx == kingMoveCountScore_idx):
+            ret += f"mobilityKingScore{phase} = {val};\n"
         elif (idx == structureProtection_idx):
             ret += f"structureProtectionScore{phase} = {val};\n"
         elif (idx == isolatedPawnScore_idx):
@@ -454,6 +456,8 @@ def texelWeightToFileStr(w: texelWeights, phase: str) -> str:
             ret += f"stackedPawnScore{phase} = {val};\n"
         elif (idx == passedPawnScore_idx):
             ret += f"passedPawnScore{phase} = {val};\n"
+        elif (idx == tempoChecksScore_idx):
+            ret += f"tempoChecksScore{phase} = {val};\n"
         elif (idx == safetyPawn_idx ):
             ret += f"safetyPawn{phase} = {val};\n"
         elif (idx == safetyKnight_idx ):
@@ -487,17 +491,27 @@ def texelWeightToFileStr(w: texelWeights, phase: str) -> str:
 
 def weightToFileStr(w: npt.NDArray[np.float16], phase: str) -> str:
     ret = ""
-    ret += (f"pawnCountScore{phase} = {w[countPawn_idx]};\n")
+    ret += f"pawnCountScore{phase} = {w[countPawn_idx]};\n"
     ret += f"bishopCountScore{phase} = {w[countBishop_idx]};\n"
     ret += f"knightCountScore{phase} = {w[countKnight_idx]};\n"
     ret += f"rookCountScore{phase} = {w[countRook_idx]};\nqueenCountScore{phase} = {w[countQueen_idx]};\n"
 
     ret += f"mobilityScore{phase} = {w[mobility_idx]};\n"
+    ret += f"mobilityKingScore{phase} = {w[kingMoveCountScore_idx]};\n"
     ret += f"structureProtectionScore{phase} = {w[structureProtection_idx]};\n"
 
     ret += f"isolatedPawnScore{phase} = {w[isolatedPawnScore_idx]};\n"
     ret += f"stackedPawnScore{phase} = {w[stackedPawnScore_idx]};\n"
     ret += f"passedPawnScore{phase} = {w[passedPawnScore_idx]};\n"
+    ret += f"tempoChecksScore{phase} = {w[tempoChecksScore_idx]};\n"
+
+    ret += f"safetyPawn{phase} = {w[safetyPawn_idx]};\n"
+    ret += f"safetyKnight{phase} = {w[safetyKnight_idx]};\n"
+    ret += f"safetyBishop{phase} = {w[safetyBishop_idx]};\n"
+    ret += f"safetyRook{phase} = {w[safetyRook_idx]};\n"
+    ret += f"safetyQueen{phase} = {w[safetyQueen_idx]};\n"
+
+
 
     ret += (f"pawnPSQT{phase} = {floatArrToString(w[PSQT_Pawn_idx:PSQT_Bishop_idx])};\n")
     ret += (f"bishopPSQT{phase} = {floatArrToString(w[PSQT_Bishop_idx:PSQT_Knight_idx])};\n")

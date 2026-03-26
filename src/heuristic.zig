@@ -389,12 +389,16 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
     var dest: *[N_PHASES]scoreType = undefined;
     if (s.containsE("isolatedPawn", .ignoreCase)) {
         dest = &globalHeuristic.IsolatedPawnValue;
-    } else if (s.containsE("mobility", .ignoreCase)) {
+    } else if (s.containsE("mobilityScore", .ignoreCase)) {
         dest = &globalHeuristic.MobilityValue;
+    } else if (s.containsE("mobilityKingScore", .ignoreCase)) {
+        dest = &globalHeuristic.KingMobilityValue;
     } else if (s.containsE("stackedPawn", .ignoreCase)) {
         dest = &globalHeuristic.StackedPawnValue;
     } else if (s.containsE("passedPawn", .ignoreCase)) {
         dest = &globalHeuristic.PassedPawnValue;
+    } else if (s.containsE("tempoChecksScore", .ignoreCase)) {
+        dest = &globalHeuristic.tempoChecksScore;
     } else if (s.containsE("safetyKnight", .ignoreCase)) {
         dest = &globalHeuristic.SafetyKnightValue;
     } else if (s.containsE("safetyBishop", .ignoreCase)) {
@@ -676,9 +680,9 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
 
         // tempo
         if (p_state.whiteToMove()) {
-            p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(@intFromBool(p_state.isChecked())), .bcoeff = 0 });
-        } else {
             p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = 0, .bcoeff = @intCast(@intFromBool(p_state.isChecked())) });
+        } else {
+            p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(@intFromBool(p_state.isChecked())), .bcoeff = 0 });
         }
         std.debug.assert(idx == configl.TEXEL_TEMPO_CHECKS_IDX);
         idx += 1;

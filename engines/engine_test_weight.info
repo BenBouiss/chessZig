@@ -1,19 +1,16 @@
 [engine1]
-//path="engines/bin/engine_03_03_26_tourney";
 path="zig-out/bin/engine";
-name="better heuristic";
-"setoption name UCI_elo value 3000";
+name="baseline";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
-"setoption name heuristicWeightsPath value engines/heuristics/weight_iter_6_popsize_16_baseline.winfo";
+"setoption name useNullPruning value true";
 
 [engine2]
 path="zig-out/bin/engine";
-name="better better heuristic";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+name="test";
 "setoption name useHash value false";
-"setoption name heuristicWeightsPath value engines/heuristics/weight_iter_26_popsize_16_baseline.winfo";
+"setoption name heuristicWeightsPath value test/test_1774509788.winfo";
+"setoption name useNullPruning value true";
 
 [match]
 nMatch=4;
@@ -21,6 +18,7 @@ playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
+timeFormat=(60000, 1000);
 
 logsLocation="logs/ben/ben";
 //saveLogs=true;
