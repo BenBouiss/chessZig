@@ -1760,52 +1760,21 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
     return ret;
 }
 
-pub fn _AllAttackKingMask(bb_piece: u64) u64 {
-    var ret: u64 = EMPTY;
-    var _bb_piece = bb_piece;
-    while (_bb_piece != 0) {
-        const sq = bitscan(_bb_piece);
-        _bb_piece &= _bb_piece - 1;
-        ret |= getKingAttacks(@enumFromInt(sq));
-    }
-    return ret;
-}
-
-pub fn getAllAttackMaskXrayKing(p_board: *Board_state, white: bool) u64 {
-    var ret: u64 = EMPTY;
-    var color_offset: u8 = 0;
-
-    if (!white) {
-        color_offset = 6;
-        ret |= _AllAttackPawnMask_cst(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhitePawn)], false);
-    } else {
-        ret |= _AllAttackPawnMask_cst(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhitePawn)], true);
-    }
-    const kingBB = p_board.getKingBB(white);
-    p_board.occupiedBB ^= kingBB;
-    ret |= knightAttacks(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteKnight)]);
-    ret |= _AllAttackBishopMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteBishop)], p_board.occupiedBB);
-    ret |= _AllAttackRookMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteRook)], p_board.occupiedBB);
-    ret |= _AllAttackQueenMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteQueen)], p_board.occupiedBB);
-    ret |= _AllAttackKingMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteKing)]);
-    p_board.occupiedBB ^= kingBB;
-
-    return ret;
-}
 pub fn getAllAttackMask(p_board: *const Board_state, occBB: u64, white: bool) u64 {
     var ret: u64 = EMPTY;
     var color_offset: u8 = 0;
     if (white) {
         ret |= _AllAttackPawnMask_cst(p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)], true);
+        ret |= getKingAttacks(p_board.wKingSq);
     } else {
         color_offset = 6;
         ret |= _AllAttackPawnMask_cst(p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)], false);
+        ret |= getKingAttacks(p_board.bKingSq);
     }
     ret |= knightAttacks(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteKnight)]);
     ret |= _AllAttackBishopMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteBishop)], occBB);
     ret |= _AllAttackRookMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteRook)], occBB);
     ret |= _AllAttackQueenMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteQueen)], occBB);
-    ret |= _AllAttackKingMask(p_board.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteKing)]);
 
     return ret;
 }
@@ -1834,14 +1803,14 @@ pub fn cst_getAllAttackerFromSq(p_board: *const Board_state, comptime white: boo
         ret |= _AllAttackRookMask(bb, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
         ret |= _AllAttackPawnMask(bb, white) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)]);
 
-        ret |= _AllAttackKingMask(bb) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)]);
+        ret |= getKingAttacks(sq) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)]);
     } else {
         ret |= knightAttacks(bb) & p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)];
         ret |= _AllAttackBishopMask(bb, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
         ret |= _AllAttackRookMask(bb, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
 
         ret |= _AllAttackPawnMask(bb, white) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
-        ret |= _AllAttackKingMask(bb) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)]);
+        ret |= getKingAttacks(sq) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)]);
     }
     return ret;
 }
@@ -2053,7 +2022,7 @@ pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 
         if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare) {
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)]));
         }
-        ret |= _AllAttackKingMask(destBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)]);
+        ret |= getKingAttacks(X) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)]);
 
         const piece_idx: u8 = @intFromEnum(e_piece.nBlackPawn);
         ret |= (destBB << 8) & (p_board.pieceBB[piece_idx]);
@@ -2067,7 +2036,7 @@ pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]));
         }
         //ret |= _AllAttackPawnMask(destBB, white) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
-        ret |= _AllAttackKingMask(destBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)]);
+        ret |= getKingAttacks(X) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)]);
 
         const piece_idx: u8 = @intFromEnum(e_piece.nWhitePawn);
         ret |= (destBB >> 8) & (p_board.pieceBB[piece_idx]);

@@ -200,3 +200,35 @@ texel tuning result:
 			 time format: time 60000 inc 1000
 			 use opening book true
 			 opening book path opening/8moves_v3.pgn
+
+
+Time spent processin 13.886 ms, time spent searching 48659 ms
+
+engine: baseline, 2 matches, win: 1, lose: 1, draw: 0, flagged: 0, speed: 977(+-404) ms/move;
+engine: baseline, breakdown (w/l/d) w: 0/1/0, b: 1/0/0 
+engine: test, 2 matches, win: 1, lose: 1, draw: 0, flagged: 0, speed: 1074(+-508) ms/move;
+engine: test, breakdown (w/l/d) w: 0/1/0, b: 1/0/0 
+Engine #0
+	 name: baseline
+	 path: zig-out/bin/engine
+	 option: setoption name fixedDepth value false
+	 option: setoption name useHash value false
+	 option: setoption name useNullPruning value true
+Engine #1
+	 name: test
+	 path: zig-out/bin/engine
+	 option: setoption name useHash value false
+	 option: setoption name heuristicWeightsPath value test/test_1774509788.winfo
+	 option: setoption name useNullPruning value true
+	 option: setoption name trackMetrics value true
+
+Same thing but with 4 matches with player switch
+Time spent processin 266.45 ms, time spent searching 320103 ms
+4 3 1
+3 4 1
+
+After placing the iterative deepening in the working thread part thus removing, the communication between the scheduler and the waitingroom
+6 2 0
+2 6 0
+Time spent processin 316.599 ms, time spent searching 276451 ms
+Also this texel weight is bad

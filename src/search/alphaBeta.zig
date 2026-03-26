@@ -66,6 +66,7 @@ pub const depthCommunication = struct {
 };
 
 pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depthCom: *depthCommunication, feat: searchFeatures) void {
+    // move the iterative deepening here, this saves 7+ back and forth separated by "2" sleeping thread
     while (p_info.alive) {
         // for some reason if this function gets updated too fast the scheduler gets bricked in the handleInterrupt method
         // trying to join on a thread with p_info.alive = false?
@@ -83,12 +84,12 @@ pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.A
             std.debug.print("[ERROR] alphaBetaWaitingRoom: Exiting main thread\n", .{});
             break;
         }
+        p_info.working = false;
     }
 }
 
 pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const searchFeatures, prevLine: *const movel.line) i8 {
     p_info.working = true;
-    defer p_info.working = false;
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
 

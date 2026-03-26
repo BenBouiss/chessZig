@@ -19,6 +19,9 @@ pub const MAX_HASHSIZE = 1000; // in MB => 1 GB
 pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
 
+pub const DEFAULT_TRACKMETRICS = false;
+pub const _DEFAULT_TRACKMETRICS = "false";
+
 pub const DEFAULT_USEHASHTABLE = false;
 
 pub const DEFAULT_USE_NULLPRUNE = false;
