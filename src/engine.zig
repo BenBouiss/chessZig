@@ -13,6 +13,7 @@ const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
 const benchmarkl = @import("search/benchmark.zig");
 const filel = @import("file.zig");
+const timel = @import("time.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -24,7 +25,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, TRACKMETRICS };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -155,7 +156,7 @@ pub const setOptionEntry = struct {
 
 pub const engineStatus = struct {
     running: bool = false,
-    // FIX ME useless for now
+    // FIXME: useless for now
     // searching vvv
     searching: bool = false,
     debugMode: bool = false,
@@ -167,6 +168,43 @@ pub const engineIdentification = struct {
     author: []const u8 = configl.AUTHOR,
     code: []const u8 = configl.VERSION,
     setLater: bool = false,
+};
+pub const engineMetrics = struct {
+    timeSearchingUs: i64 = 0,
+    timeProcessingUs: i64 = 0,
+    lock: bool = false,
+    pub fn addTimeToSearchingMs(p_self: *engineMetrics, timeMs: i64) void {
+        p_self.acquireLock();
+        p_self.timeSearchingUs += timeMs * std.time.us_per_ms;
+        p_self.releaseLock();
+    }
+    pub fn addTimeToProcessingMs(p_self: *engineMetrics, timeMs: i64) void {
+        p_self.acquireLock();
+        p_self.timeProcessingUs += timeMs * std.time.us_per_ms;
+        p_self.releaseLock();
+    }
+    pub fn addTimeToSearchingUs(p_self: *engineMetrics, timeUs: i64) void {
+        p_self.acquireLock();
+        p_self.timeSearchingUs += timeUs;
+        p_self.releaseLock();
+    }
+    pub fn addTimeToProcessingUs(p_self: *engineMetrics, timeUs: i64) void {
+        p_self.acquireLock();
+        p_self.timeProcessingUs += timeUs;
+        p_self.releaseLock();
+    }
+    pub fn acquireLock(p_self: *engineMetrics) void {
+        while (p_self.lock) {}
+        p_self.lock = true;
+    }
+    pub inline fn releaseLock(p_self: *engineMetrics) void {
+        p_self.lock = false;
+    }
+    pub fn printMetric(p_self: *const engineMetrics) void {
+        const proc: f64 = @as(f64, @floatFromInt(p_self.timeProcessingUs)) / std.time.us_per_ms;
+        const search: f64 = @as(f64, @floatFromInt(p_self.timeSearchingUs)) / std.time.us_per_ms;
+        std.debug.print("Time spent processin {d} ms, time spent searching {d} ms\n", .{ proc, search });
+    }
 };
 
 pub const engineOptions = struct {
@@ -186,6 +224,7 @@ pub const engineOptions = struct {
     setOptions: std.ArrayList(setOptionEntry) = undefined,
     nOptions: u16 = 0,
     depthLevel: u16 = configl.DEFAULT_DEPTH,
+    trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
 };
 
 pub const engine = struct {
@@ -199,6 +238,8 @@ pub const engine = struct {
     uciMode: bool = false,
     id: engineIdentification = .{},
     options: engineOptions = .{},
+    stopWatch: timel.stopWatch = .{},
+    metric: engineMetrics = .{},
 
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
@@ -208,6 +249,8 @@ pub const engine = struct {
         ret.id = .{};
         ret.searcher = .{};
         ret.options = .{};
+        ret.stopWatch = .{};
+        ret.metric = .{};
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
@@ -256,6 +299,10 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
+        try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
+    }
+    pub inline fn trackMetrics(p_self: *engine) bool {
+        return p_self.options.trackMetrics;
     }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
@@ -311,6 +358,9 @@ pub const engine = struct {
     fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
         p_self.searcher.interrupt = true;
+        if (p_self.trackMetrics()) {
+            p_self.metric.printMetric();
+        }
         p_self.waitOnWorkingThreads();
         p_self.respond("its ovah");
         p_self.free();
@@ -588,6 +638,17 @@ pub const engine = struct {
                 p_self.options.useStaticSearch = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
+            .TRACKMETRICS => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.trackMetrics = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+
             .CLEAR_HASH => {
                 return p_self.updateHash(p_self.options.hashTableSize);
             },
@@ -839,6 +900,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .FIXED_DEPTH;
     } else if (utilsl.contains(cmdBuffer, " usestaticsearch", .ignoreCase)) {
         return .USESTATICSEARCH;
+    } else if (utilsl.contains(cmdBuffer, " trackmetrics", .ignoreCase)) {
+        return .TRACKMETRICS;
     } else if (utilsl.contains(cmdBuffer, " clearhash", .ignoreCase)) {
         return .CLEAR_HASH;
     } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {
@@ -898,10 +961,15 @@ fn inputThreading(p_self: *engine) void {
     var cumulTime: u64 = 0;
     while (p_self.status.running) {
         while (p_self.input.cmdBuffer.items.len != 0 and p_self.status.running) {
+            p_self.stopWatch.startTimeTick();
             const cmdBuffer = p_self.input.readBuffer();
             defer p_self.alloc.free(cmdBuffer);
             p_self.executeBuffer(cmdBuffer);
             cumulTime = 0;
+            if (p_self.trackMetrics()) {
+                p_self.metric.addTimeToProcessingUs(p_self.stopWatch.timeSinceStartUs());
+            }
+            p_self.stopWatch.stop();
         }
         if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
             std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});

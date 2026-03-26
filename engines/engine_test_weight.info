@@ -11,6 +11,7 @@ name="test";
 "setoption name useHash value false";
 "setoption name heuristicWeightsPath value test/test_1774509788.winfo";
 "setoption name useNullPruning value true";
+"setoption name trackMetrics value true";
 
 [match]
 nMatch=4;

@@ -74,10 +74,11 @@ pub fn test_decision() !void {
 pub fn test_speed() !void {
     var eng = try initEngine();
     defer eng.free();
-    eng.executeBuffer("setoption name useQuiescence value true");
-    eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
-    eng.executeBuffer("setoption name useNullPruning value true");
-    eng.executeBuffer("go depth 5");
+    //eng.executeBuffer("setoption name useQuiescence value true");
+    //eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+    eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+    //eng.executeBuffer("setoption name useNullPruning value true");
+    eng.executeBuffer("go depth 6");
     waitOnEngine(&eng);
 }
 pub fn test_bug() !void {
@@ -104,9 +105,9 @@ pub fn test_perft() !void {
 }
 
 pub fn main() anyerror!void {
-    //try test_perft();
+    try test_perft();
     //try test_speed();
-    try heuristicl.main();
+    //try heuristicl.main();
     //try chessl.main();
     //try test_bug();
     //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
