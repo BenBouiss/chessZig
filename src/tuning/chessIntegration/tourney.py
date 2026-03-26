@@ -363,21 +363,26 @@ class chessObjective(obj.objective):
         self.tourney = tourney
         super().__init__(**parentKwargs)
         self.baseline: list[heuristicEntry] = []
+        self.indexesTemplate: list[int] = []
     
     def _evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
+        assert len(self.indexesTemplate) != 0, "Indexes is empty, cannot relate MH position to engine parameter"
         print(f"Evaluating {len(positions)} positions with {len(self.baseline)} baselines...")
         matchInv: matchContainerInfo = matchContainerInfo(len(positions), popBase = len(self.baseline), type = self.tourney.type)
         self.tourney.population = []
         for i in range(len(positions)):
             self.tourney.population.append(
                 chessIndividual(
-                    position = chessSpec.entryFrom1dArray(np.array(positions[i])), 
+                    position = chessSpec.entryFrom1dArray(np.array(positions[i]), indexes = self.indexesTemplate), 
                     uid = i, scoring = score(0, 0, 0, False))
                 )
         self.tourney.baseline = [chessIndividual(
                     position = pos, uid = x, scoring = score(0, 0, 0, False)) for x, pos in enumerate(self.baseline)]
         self.tourney.dispatchMatch(matchInv)
         return [x.scoring.getScore() for x in self.tourney.population]
+
+    def setIndexesTemplate(self, idx: list[int]) -> None:
+        self.indexesTemplate = idx
 
     def setBaseline(self, entry: heuristicEntry) -> None:
         self.baseline = [entry]
@@ -456,7 +461,7 @@ UPPER_BOUND_WEIGHT = 100
 LOWER_BOUND_WEIGHT = -2
 #LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
 STEP_WEIGTH = 1
-N_PARAMS = chessSpec.total_idx * 2
+N_PARAMS = 9 * 2
 def clear() -> None:
     print("\x1B[2J\x1B[H", end = "\r")
 
@@ -476,12 +481,13 @@ if __name__ == "__main__":
 
     mh.setObjective(chessObjective(maximize=True, tourney=tourn, bounds = dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim = N_PARAMS), steps = dummyStep(STEP_WEIGTH, nDim = N_PARAMS)))
     assert type(mh.objective) is chessObjective
-    mh.objective.setBaseline(chessSpec.entryFromListDup(chessSpec.simpleBaselineWeights))
-    mh.objective.appendBaseline(chessSpec.entryFrom2dList(chessSpec.newWeight_1))
+    mh.objective.setBaseline(chessSpec.simpleBaselineWeights)
+    mh.objective.setIndexesTemplate(chessSpec.simpleBaselineWeights.weights[0].getIndexes())
+    mh.objective.appendBaseline(chessSpec.entryFrom2dList(chessSpec.newWeight_1, indexes = mh.objective.indexesTemplate))
 
     mh.generatePopulation()
 
-    mh.addInvididual(indiv = individual(position = np.array(chessSpec.simpleBaselineWeights*2), uid = -1))
+    mh.addInvididual(indiv = individual(position = chessSpec.simpleBaselineWeights.get1DArray(), uid = -1))
     mh.addInvididual(indiv = individual(position = np.array(chessSpec.newWeight_0*2), uid = -1))
     mh.addInvididual(indiv = individual(position = np.concatenate(chessSpec.newWeight_1), uid = -1))
     

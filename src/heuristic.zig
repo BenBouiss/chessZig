@@ -10,6 +10,8 @@ const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const movel = @import("move.zig");
 const schedulerl = @import("search/scheduler.zig");
+const alphaBetal = @import("search/alphaBeta.zig");
+const threadingl = @import("search/threading.zig");
 
 const std = @import("std");
 
@@ -28,6 +30,8 @@ pub const scoreType: type = i32;
 pub const weightType: type = i32;
 const searchFeatures = schedulerl.searchFeatures;
 
+pub const texel_err = error{board_err};
+
 pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
     const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
     const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
@@ -43,7 +47,9 @@ pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType
     score += evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
     score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
     score += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
+    score += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
     score += evaluate_pawnStructure(p_state, values, _phase);
+
     return score;
 }
 
@@ -53,11 +59,12 @@ pub const heuristicComponents = struct {
     PawnStruct: scoreType = 0,
     Safety: scoreType = 0,
     Structure: scoreType = 0,
+    Tempo: scoreType = 0,
     pub fn total(self: *const heuristicComponents) scoreType {
-        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure;
+        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure + self.Tempo;
     }
     pub fn print(self: *const heuristicComponents) void {
-        std.debug.print("Score: PQST = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.total() });
+        std.debug.print("Score: PQST = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Tempo = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.Tempo, self.total() });
     }
 };
 pub fn evaluate_debug(p_state: *chess.Board_state, values: *heuristicValues) heuristicComponents {
@@ -75,6 +82,7 @@ pub fn evaluate_debug(p_state: *chess.Board_state, values: *heuristicValues) heu
         .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
         .Structure = evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase),
         .PawnStruct = evaluate_pawnStructure(p_state, values, _phase),
+        .Tempo = evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase),
     };
     return ret;
 }
@@ -191,10 +199,14 @@ pub fn evaluate_mobility(p_state: *chess.Board_state, p_whiteMoveBB: *const move
     // now trying with only legals
     _ = p_state;
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
-
     const moveB: i64 = @intCast(p_blackMoveBB.count());
+    const moveAmountScore = (computeTapered(values.MobilityValue[MG], values.MobilityValue[EG], _phase)) * @as(scoreType, @intCast(moveW - moveB));
 
-    return computeTapered(values.MobilityValue[MG], values.MobilityValue[EG], _phase) * @as(scoreType, @intCast(moveW - moveB));
+    const kingMoveW = p_whiteMoveBB.kingMoves & (~p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
+    const kingMoveB = p_blackMoveBB.kingMoves & (~p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
+    const kingMoveScore = (computeTapered(values.KingMobilityValue[MG], values.KingMobilityValue[EG], _phase)) * @as(scoreType, @intCast(chess.il_popcount(kingMoveW) - chess.il_popcount(kingMoveB)));
+
+    return moveAmountScore + kingMoveScore;
 
     // these are insanely expensive
     //const moveW = moveGenl.generateMoveCountLegalMoves(p_state, true);
@@ -230,6 +242,16 @@ pub fn evaluate_structure(p_state: *chess.Board_state, p_whiteMoveBB: *const mov
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
     return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * computeTapered(values.StructureProtectionValue[MG], values.StructureProtectionValue[EG], _phase);
 }
+pub fn evaluate_tempo(p_state: *chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
+    _ = p_whiteMoveBB;
+    _ = p_blackMoveBB;
+    var coeff: scoreType = 1;
+    if (p_state.whiteToMove()) {
+        coeff = -1;
+    }
+    const isChecked: scoreType = coeff * @intFromBool(p_state.isChecked());
+    return computeTapered(values.tempoChecksScore[MG], values.tempoChecksScore[EG], _phase) * isChecked;
+}
 
 pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreType {
     switch (piece) {
@@ -257,124 +279,7 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
         },
     }
 }
-//pub const m= struct {
-//    index: usize,
-//    fromPiece: scoreType,
-//    toPiece: scoreType,
-//};
 
-pub fn texelEvaluation(p_state: *chess.Board_state) scoreType {
-    // need to evaluate the pqst more efficiently ie with same method from past heuristic
-    const entry = texelEntry.initFromBoardFast(p_state);
-    var ret = texelEvaluation_PSQT(p_state, &weightl.weights, &entry.pFactors) + texelEvaluation_mobility(p_state, &weightl.weights, &entry.pFactors) + texelEvaluation_pawnStructure(p_state, &weightl.weights, &entry.pFactors);
-    if (comptime configl.TUNE_SAFETY) {
-        ret += texelEvaluation_safety(p_state, &weightl.weights, &entry.pFactors);
-    }
-    return ret;
-}
-pub fn texelEvaluationSlow(p_state: *chess.Board_state) scoreType {
-    var entry = texelEntry.initFromBoard(p_state);
-    return entry.get_eval(&weightl.weights);
-}
-pub fn texelEvaluation_mobility(p_state: *chess.Board_state, w: *coeffTuple, pfactors: *const [N_PHASES]scoreType) scoreType {
-    const moveW: i64 = @intCast(moveGenl.cst_moveGenBB(p_state, true).count());
-    const moveB: i64 = @intCast(moveGenl.cst_moveGenBB(p_state, false).count());
-    return (@as(scoreType, @intCast(moveW - moveB))) * (w.val[MG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_MOVE_COUNT_IDX] * pfactors[EG]);
-}
-pub fn texelEvaluation_pawnStructure(p_state: *chess.Board_state, w: *coeffTuple, pfactors: *const [N_PHASES]scoreType) scoreType {
-    const isolatedQt = @as(scoreType, @intCast(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
-    const isolatedScore = isolatedQt * (w.val[MG].val[configl.TEXEL_PAWN_ISOL_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_PAWN_ISOL_IDX] * pfactors[EG]);
-
-    const doubledPawnQt = @as(scoreType, @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) - chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))));
-    const doublePawnScore = doubledPawnQt * (w.val[MG].val[configl.TEXEL_PAWN_STACKED_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_PAWN_STACKED_IDX] * pfactors[EG]);
-    return isolatedScore + doublePawnScore;
-}
-pub fn texelEvaluation_safety(p_state: *chess.Board_state, w: *coeffTuple, pfactors: *const [N_PHASES]scoreType) scoreType {
-    const kingW = squarel.squareInfo.init(p_state.getKingSq(true));
-    const kingB = squarel.squareInfo.init(p_state.getKingSq(false));
-    const maskW = kingW.getAllAttackingSquares();
-    const maskB = kingB.getAllAttackingSquares();
-
-    const pawnSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_PAWN_PROX_IDX] * pfactors[EG]));
-
-    const bishopSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_BISHOP_PROX_IDX] * pfactors[EG]));
-
-    const knightSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_KNIGHT_PROX_IDX] * pfactors[EG]));
-
-    const rookSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_ROOK_PROX_IDX] * pfactors[EG]));
-
-    const queenSafety = @as(weightType, @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]) - chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]))) * ((w.val[MG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[MG] + w.val[EG].val[configl.TEXEL_SAFETY_QUEEN_PROX_IDX] * pfactors[EG]));
-    return pawnSafety + bishopSafety + knightSafety + rookSafety + queenSafety;
-}
-
-pub fn texelEvaluation_PSQT(p_state: *chess.Board_state, w: *coeffTuple, pfactors: *const [N_PHASES]scoreType) scoreType {
-    var score: scoreType = 0;
-    for (0..chess.N_SQUARES) |sq| {
-        const piece = p_state.get_piece(@intCast(sq));
-        switch (piece) {
-            .nEmptySquare, .nWhite, .nBlack => {},
-
-            .nWhitePawn => {
-                score += pfactors[MG] * (w.val[MG].val[configl.TEXEL_PAWN_PSQT_IDX + sq] + w.val[MG].val[configl.TEXEL_PAWN_COUNT_IDX]);
-                score += pfactors[EG] * (w.val[EG].val[configl.TEXEL_PAWN_PSQT_IDX + sq] + w.val[EG].val[configl.TEXEL_PAWN_COUNT_IDX]);
-            },
-            .nWhiteBishop => {
-                score += pfactors[MG] * (w.val[MG].val[configl.TEXEL_BISHOP_PSQT_IDX + sq] + w.val[MG].val[configl.TEXEL_BISHOP_COUNT_IDX]);
-                score += pfactors[EG] * (w.val[EG].val[configl.TEXEL_BISHOP_PSQT_IDX + sq] + w.val[EG].val[configl.TEXEL_BISHOP_COUNT_IDX]);
-            },
-            .nWhiteKnight => {
-                score += pfactors[MG] * (w.val[MG].val[configl.TEXEL_KNIGHT_PSQT_IDX + sq] + w.val[MG].val[configl.TEXEL_KNIGHT_COUNT_IDX]);
-                score += pfactors[EG] * (w.val[EG].val[configl.TEXEL_KNIGHT_PSQT_IDX + sq] + w.val[EG].val[configl.TEXEL_KNIGHT_COUNT_IDX]);
-            },
-            .nWhiteRook => {
-                score += pfactors[MG] * (w.val[MG].val[configl.TEXEL_ROOK_PSQT_IDX + sq] + w.val[MG].val[configl.TEXEL_ROOK_COUNT_IDX]);
-                score += pfactors[EG] * (w.val[EG].val[configl.TEXEL_ROOK_PSQT_IDX + sq] + w.val[EG].val[configl.TEXEL_ROOK_COUNT_IDX]);
-            },
-            .nWhiteQueen => {
-                score += pfactors[MG] * (w.val[MG].val[configl.TEXEL_QUEEN_PSQT_IDX + sq] + w.val[MG].val[configl.TEXEL_QUEEN_COUNT_IDX]);
-                score += pfactors[EG] * (w.val[EG].val[configl.TEXEL_QUEEN_PSQT_IDX + sq] + w.val[EG].val[configl.TEXEL_QUEEN_COUNT_IDX]);
-            },
-            .nWhiteKing => {
-                score += pfactors[MG] * (w.val[MG].val[configl.TEXEL_KING_PSQT_IDX + sq]);
-                score += pfactors[EG] * (w.val[EG].val[configl.TEXEL_KING_PSQT_IDX + sq]);
-            },
-
-            .nBlackPawn => {
-                score -= pfactors[MG] * (w.val[MG].val[configl.TEXEL_PAWN_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[MG].val[configl.TEXEL_PAWN_COUNT_IDX]);
-                score -= pfactors[EG] * (w.val[EG].val[configl.TEXEL_PAWN_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[EG].val[configl.TEXEL_PAWN_COUNT_IDX]);
-            },
-            .nBlackBishop => {
-                score -= pfactors[MG] * (w.val[MG].val[configl.TEXEL_BISHOP_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[MG].val[configl.TEXEL_BISHOP_COUNT_IDX]);
-                score -= pfactors[EG] * (w.val[EG].val[configl.TEXEL_BISHOP_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[EG].val[configl.TEXEL_BISHOP_COUNT_IDX]);
-            },
-            .nBlackKnight => {
-                score -= pfactors[MG] * (w.val[MG].val[configl.TEXEL_KNIGHT_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[MG].val[configl.TEXEL_KNIGHT_COUNT_IDX]);
-                score -= pfactors[EG] * (w.val[EG].val[configl.TEXEL_KNIGHT_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[EG].val[configl.TEXEL_KNIGHT_COUNT_IDX]);
-            },
-            .nBlackRook => {
-                score -= pfactors[MG] * (w.val[MG].val[configl.TEXEL_ROOK_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[MG].val[configl.TEXEL_ROOK_COUNT_IDX]);
-                score -= pfactors[EG] * (w.val[EG].val[configl.TEXEL_ROOK_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[EG].val[configl.TEXEL_ROOK_COUNT_IDX]);
-            },
-            .nBlackQueen => {
-                score -= pfactors[MG] * (w.val[MG].val[configl.TEXEL_QUEEN_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[MG].val[configl.TEXEL_QUEEN_COUNT_IDX]);
-                score -= pfactors[EG] * (w.val[EG].val[configl.TEXEL_QUEEN_PSQT_IDX + (chess.N_SQUARES - 1 - sq)] + w.val[EG].val[configl.TEXEL_QUEEN_COUNT_IDX]);
-            },
-            .nBlackKing => {
-                score -= pfactors[MG] * (w.val[MG].val[configl.TEXEL_KING_PSQT_IDX + (chess.N_SQUARES - 1 - sq)]);
-                score -= pfactors[EG] * (w.val[EG].val[configl.TEXEL_KING_PSQT_IDX + (chess.N_SQUARES - 1 - sq)]);
-            },
-        }
-    }
-    return score;
-}
-
-pub fn matDotScoreChess(m1: [chess.N_SQUARES]scoreType, m2: [chess.N_SQUARES]scoreType) scoreType {
-    var ret: scoreType = 0;
-    for (0..chess.N_SQUARES) |i| {
-        ret += (m1[i] * m2[i]);
-    }
-    return ret;
-}
 pub fn getMaskFromBB(bb: u64) [chess.N_SQUARES]scoreType {
     var ret: [chess.N_SQUARES]scoreType = std.mem.zeroes([chess.N_SQUARES]scoreType);
     for (0..chess.N_SQUARES) |i| {
@@ -534,6 +439,10 @@ pub const heuristicValues = struct {
     QueenValue: scoreType = weightl.simpleQueenScore,
 
     MobilityValue: [N_PHASES]scoreType = .{ weightl.simpleMobilityScore, weightl.simpleMobilityScore },
+    KingMobilityValue: [N_PHASES]scoreType = .{ weightl.simpleKingMobilityScore, weightl.simpleKingMobilityScore },
+
+    tempoChecksScore: [N_PHASES]scoreType = .{ weightl.simpleTempoChecksScore, weightl.simpleTempoChecksScore },
+
     IsolatedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleIsolatedPawnScore, weightl.simpleIsolatedPawnScore },
     StackedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleStackedPawnScore, weightl.simpleStackedPawnScore },
     PassedPawnValue: [N_PHASES]scoreType = .{ weightl.simplePassedPawnScore, weightl.simplePassedPawnScore },
@@ -581,6 +490,27 @@ pub fn computePhase(p_board: *chess.Board_state) scoreType {
     const _phase: scoreType = @intCast(phase);
     return @divFloor(256 * (24 - _phase), 24);
 }
+pub fn isBoardTexelValid(p_board: *chess.Board_state) bool {
+    //https://github.com/maksimKorzh/wukongJS/blob/main/docs/TEXEL'S_TUNING.MD
+    const fmoves = moveGenl.generateLegalMoves(p_board);
+    if (fmoves.len == 0) {
+        return false;
+    }
+    const stat = evaluate(p_board, &globalHeuristic);
+    var info: threadingl.threadInfo = .{ .alive = true, .working = true };
+    const feature: searchFeatures = .{ .useStaticSearch = true };
+
+    const alpha: scoreType = -weightl.simpleCheckMateScore;
+    const beta: scoreType = weightl.simpleCheckMateScore;
+
+    var pv: movel.pvContainer = .{};
+    var line: movel.line = .{};
+    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, &feature, 1, p_board.isChecked(), &pv, &line, .NonPV);
+    if (stat != quiesc) {
+        return false;
+    }
+    return true;
+}
 pub const texelEntry = struct {
     //
     //seval: i32 = 0,
@@ -606,6 +536,7 @@ pub const texelEntry = struct {
     // C vects from the eq with L the weight
     // E = L . (Cw - Cb)
     tuples: coeffVector = .{},
+    valid: bool = true,
     pub fn initFromBoard(p_state: *chess.Board_state) texelEntry {
         var ret: texelEntry = .{};
         ret.phase = computePhase(p_state);
@@ -631,15 +562,18 @@ pub const texelEntry = struct {
             @panic("");
         };
         defer board.free(alloc);
-        const phase: i32 = 24 - 4 * (board.getPieceCount(.nWhiteQueen) + board.getPieceCount(.nBlackQueen)) - 2 * (board.getPieceCount(.nWhiteRook) + board.getPieceCount(.nBlackRook)) - (board.getPieceCount(.nWhiteBishop) + board.getPieceCount(.nBlackBishop)) - (board.getPieceCount(.nWhiteKnight) + board.getPieceCount(.nBlackKnight));
-        const _phase: scoreType = @intCast(phase);
+        const phase: scoreType = @intCast(board.getPhase());
 
-        p_self.phase = @divFloor((256 * (24 - _phase)), 24);
+        p_self.phase = @divFloor((256 * (24 - phase)), 24);
 
         p_self.pFactors[MG] = @divFloor(256 - p_self.phase, 256);
         p_self.pFactors[EG] = @divFloor(1 * p_self.phase, 256);
 
         p_self.turn = board.whiteToMove();
+        p_self.valid = isBoardTexelValid(&board);
+        if (!p_self.valid) {
+            return texel_err.board_err;
+        }
         //p_self.seval = @intFromFloat(pastHeuristic(&board));
         //if (!board.whiteToMove()) {
         //    p_self.seval = -p_self.seval;
@@ -677,23 +611,26 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
     if (configl.TUNE_NORMAL) {
         // piece counts
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhitePawn)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackPawn)) });
+        std.debug.assert(idx == configl.TEXEL_PAWN_COUNT_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteBishop)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackBishop)) });
+        std.debug.assert(idx == configl.TEXEL_BISHOP_COUNT_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteKnight)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackKnight)) });
+        std.debug.assert(idx == configl.TEXEL_KNIGHT_COUNT_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteRook)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackRook)) });
+        std.debug.assert(idx == configl.TEXEL_ROOK_COUNT_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(p_state.getPieceCount(.nWhiteQueen)), .bcoeff = @intCast(p_state.getPieceCount(.nBlackQueen)) });
+        std.debug.assert(idx == configl.TEXEL_QUEEN_COUNT_IDX);
         idx += 1;
 
         // mobility
-        //var moveW = moveGenl.cst_moveGenBB(p_state, true);
-        //var moveB = moveGenl.cst_moveGenBB(p_state, false);
 
         const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
         const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
@@ -701,6 +638,14 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         const moveB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(moveW.count()), .bcoeff = @intCast(moveB.count()) });
+        std.debug.assert(idx == configl.TEXEL_MOVE_COUNT_IDX);
+        idx += 1;
+
+        const kingMoveW = allwhiteMoveBB.kingMoves & (~allblackMoveBB.getAttackedMask(chess.UNIVERSE));
+        const kingMoveB = allblackMoveBB.kingMoves & (~allwhiteMoveBB.getAttackedMask(chess.UNIVERSE));
+
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.l_popcount(kingMoveW)), .bcoeff = @intCast(chess.l_popcount(kingMoveB)) });
+        std.debug.assert(idx == configl.TEXEL_KINGMOVE_COUNT_IDX);
         idx += 1;
 
         // structure protection
@@ -708,13 +653,16 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         const b_pieceProtect = allblackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(w_pieceProtect.count()), .bcoeff = @intCast(b_pieceProtect.count()) });
+        std.debug.assert(idx == configl.TEXEL_PROTECTION_COUNT_IDX);
         idx += 1;
 
         // pawn structure
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.il_popcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        std.debug.assert(idx == configl.TEXEL_PAWN_ISOL_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.il_popcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        std.debug.assert(idx == configl.TEXEL_PAWN_STACKED_IDX);
         idx += 1;
 
         const wp = p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
@@ -723,42 +671,64 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         const nBlackPassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(bp, wp)));
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(nWhitePassed), .bcoeff = @intCast(nBlackPassed) });
+        std.debug.assert(idx == configl.TEXEL_PAWN_PASSED_IDX);
         idx += 1;
 
-        // piece psqt
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), &idx);
-
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), &idx);
-
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), &idx);
-
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), &idx);
-
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), &idx);
-
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)])), &idx);
+        // tempo
+        if (p_state.whiteToMove()) {
+            p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(@intFromBool(p_state.isChecked())), .bcoeff = 0 });
+        } else {
+            p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = 0, .bcoeff = @intCast(@intFromBool(p_state.isChecked())) });
+        }
+        std.debug.assert(idx == configl.TEXEL_TEMPO_CHECKS_IDX);
+        idx += 1;
     }
     if (comptime (configl.TUNE_SAFETY)) {
         const maskW = chess.safetyArea(p_state.wKingSq);
         const maskB = chess.safetyArea(p_state.bKingSq);
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
+        std.debug.assert(idx == configl.TEXEL_SAFETY_PAWN_PROX_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)])) });
+        std.debug.assert(idx == configl.TEXEL_SAFETY_BISHOP_PROX_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) });
+        std.debug.assert(idx == configl.TEXEL_SAFETY_KNIGHT_PROX_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)])) });
+        std.debug.assert(idx == configl.TEXEL_SAFETY_ROOK_PROX_IDX);
         idx += 1;
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
+        std.debug.assert(idx == configl.TEXEL_SAFETY_QUEEN_PROX_IDX);
         idx += 1;
     }
 
     if (configl.TUNE_COMPLEXITY) {}
+    if (comptime (configl.TUNE_PSQT)) {
+        // piece psqt
+        std.debug.assert(idx == configl.TEXEL_PAWN_PSQT_IDX);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), &idx);
+
+        std.debug.assert(idx == configl.TEXEL_BISHOP_PSQT_IDX);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), &idx);
+
+        std.debug.assert(idx == configl.TEXEL_KNIGHT_PSQT_IDX);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), &idx);
+
+        std.debug.assert(idx == configl.TEXEL_ROOK_PSQT_IDX);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), &idx);
+
+        std.debug.assert(idx == configl.TEXEL_QUEEN_PSQT_IDX);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), &idx);
+
+        std.debug.assert(idx == configl.TEXEL_KING_PSQT_IDX);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)])), &idx);
+    }
     return;
 }
 
@@ -987,26 +957,21 @@ pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string, nSkips: usize)
         } else if (utilsl.contains(outcome, "1.0", .ignoreCase)) {
             foutcome = 1;
         }
-        try entries[i].set_fen(alloc, s._slice(), foutcome);
+        entries[i].set_fen(alloc, s._slice(), foutcome) catch {
+            continue;
+        };
         //entries[i].print();
     }
     defer stringl.freeArrayList_string(alloc, &tokens);
     return entries;
 }
 
-pub fn mainTexel(alloc: std.mem.Allocator, path: string) !void {
-    const entries = try getEntriesFromFile(alloc, path, 0);
-    defer alloc.free(entries);
-    printEntriesInfo(entries);
-    try optimization_entrypoint(alloc, entries);
-
-    return;
-}
 pub const csvHeader = struct {
     n_params: usize,
     pub fn format(self: csvHeader, writer: *std.Io.Writer) !void {
         for (0..self.n_params) |i| {
-            try writer.print("Coeff_{d}_w,Coeff_{d}_b,", .{ i, i });
+            //try writer.print("Coeff_{d}_w,Coeff_{d}_b,", .{ i, i });
+            try writer.print("Delta_{d},", .{i});
         }
 
         try writer.print("Phase,Outcome", .{});
@@ -1017,7 +982,8 @@ pub const csvBody = struct {
     pub fn format(self: csvBody, writer: *std.Io.Writer) !void {
         const tuple = self.entry.tuples;
         for (0..tuple.len) |i| {
-            try writer.print("{d},{d},", .{ tuple.items[@intFromEnum(e_turn.WHITE)].val[i], tuple.items[@intFromEnum(e_turn.BLACK)].val[i] });
+            //try writer.print("{d},{d},", .{ tuple.items[@intFromEnum(e_turn.WHITE)].val[i], tuple.items[@intFromEnum(e_turn.BLACK)].val[i] });
+            try writer.print("{d},", .{tuple.items[@intFromEnum(e_turn.WHITE)].val[i] - tuple.items[@intFromEnum(e_turn.BLACK)].val[i]});
         }
 
         try writer.print("{d},{d}", .{ self.entry.phase, self.entry.result });
@@ -1048,6 +1014,9 @@ pub fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []texelEntry, pa
         if (i % print_freq == 0) {
             std.debug.print("{d} / {d} \r", .{ i, entries.len });
         }
+        if (!entries[i].valid) {
+            continue;
+        }
         const body: csvBody = .{ .entry = &entries[i] };
         const body_str = try std.fmt.allocPrint(alloc, "{f}\n", .{body});
         defer alloc.free(body_str);
@@ -1057,10 +1026,12 @@ pub fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []texelEntry, pa
 
 pub fn printEntriesInfo(entries: []const texelEntry) void {
     var buffer: [3]usize = .{ 0, 0, 0 };
+    var validBuffer: [2]usize = .{ 0, 0 };
     for (0..entries.len) |i| {
         buffer[@intFromFloat(entries[i].result * 2)] += 1;
+        validBuffer[@intFromBool(entries[i].valid)] += 1;
     }
-    std.debug.print("[DEBUG] printEntriesInfo: Breakdown of entries found 0: {d}, 0.5: {d}, 1: {d}\n", .{ buffer[0], buffer[1], buffer[2] });
+    std.debug.print("[DEBUG] printEntriesInfo: Breakdown of entries found 0: {d}, 0.5: {d}, 1: {d}\n valid: {d} non valid: {d}\n\n", .{ buffer[0], buffer[1], buffer[2], validBuffer[1], validBuffer[0] });
 }
 
 pub fn test_entries(entries: []const texelEntry, weights: *coeffTuple) !void {
@@ -1072,185 +1043,6 @@ pub fn test_entries(entries: []const texelEntry, weights: *coeffTuple) !void {
     }
 }
 
-pub fn optimization_entrypoint(alloc: std.mem.Allocator, entries: []const texelEntry) !void {
-    if (configl.USE_ADAGRAD) {
-        try optimization_adagrad(alloc, entries);
-    } else {
-        try optimization_std(alloc, entries);
-    }
-}
-pub fn optimization_std(alloc: std.mem.Allocator, entries: []const texelEntry) !void {
-    // init alleat weight
-    var weights: coeffTuple = coeffTuple.init(configl.SEED, configl.TUNER_START_FROM_OLD);
-    var bestWeights = weights.copy();
-    var bestScore: scoreType = -1;
-    var context: optimizationContext = .{};
-    for (0..configl.EPOCH) |ep| {
-        // I hate this
-        context.on_epoch_start();
-        weights = weightUpdate(&context, entries, &weights);
-        var err: f32 = 0;
-        for (0..entries.len) |i| {
-            var ent = entries[i];
-            // MSE by default
-            const eval: f32 = sigmoid(scoreType, ent.get_eval(&weights));
-            err += std.math.pow(f32, @as(f32, @floatFromInt(ent.result)) - eval, 2);
-        }
-        if (err < bestScore or bestScore == -1) {
-            bestScore = err;
-            bestWeights = weights.copy();
-        }
-        std.debug.print("[RESULT] optimization_entrypoint: epoch {d} error {d} ({d})\n", .{ ep, err / @as(scoreType, @floatFromInt(entries.len)), err });
-    }
-
-    std.debug.print("[RESULT] optimization_entrypoint: best found weights with err = ({d})\n", .{bestScore});
-    try bestWeights.saveToFile(alloc, "logs/tmp_test.txt");
-    return;
-}
-pub fn optimization_adagrad(alloc: std.mem.Allocator, entries: []const texelEntry) !void {
-    // init alleat weight
-    var weights: coeffTuple = coeffTuple.init(configl.SEED, configl.TUNER_START_FROM_OLD);
-    var bestWeights = weights.copy();
-    var bestScore: scoreType = -1;
-    var context: optimizationContext = .{};
-    var adagrad: coeffTuple = .{};
-    for (0..configl.EPOCH) |ep| {
-        // I hate this
-        context.on_epoch_start();
-        weights = adaGradWeightUpdate(&context, entries, &weights, &adagrad);
-        var err: scoreType = 0;
-        for (0..entries.len) |i| {
-            var ent = entries[i];
-            // MSE by default
-            err += std.math.pow(scoreType, ent.result - sigmoid(scoreType, ent.get_eval(&weights)), 2);
-        }
-        if (err < bestScore or bestScore == -1) {
-            bestScore = err;
-            bestWeights = weights.copy();
-        }
-        std.debug.print("[RESULT] optimization_entrypoint: epoch {d}, error {d} ({d}), learning rate {d}\n", .{ ep, err / @as(scoreType, @floatFromInt(entries.len)), err, context.learningRate });
-    }
-
-    std.debug.print("[RESULT] optimization_entrypoint: best found weights with err = ({d})\n", .{bestScore});
-    try bestWeights.saveToFile(alloc, "logs/tmp_test.txt");
-    return;
-}
-pub const optimizationContext = struct {
-    epoch: usize = 0,
-    learningRate: scoreType = configl.LEARNING_RATE,
-    learningRate_freq: usize = configl.LEARNING_RATE_FREQ,
-
-    pub fn on_epoch_start(p_self: *optimizationContext) void {
-        p_self.epoch += 1;
-        if ((p_self.epoch % p_self.learningRate_freq) == 0) {
-            p_self.learningRate *= configl.LEARNING_RATE_DROP;
-            p_self.learningRate = @max(p_self.learningRate, configl.LEARNING_RATE_MIN);
-        }
-    }
-};
-
-pub fn weightUpdate(ctx: *optimizationContext, entries: []const texelEntry, weights: *coeffTuple) coeffTuple {
-    var newWeights: coeffTuple = weights.copy();
-    const batchAmount: usize = @intFromFloat(@ceil(@as(scoreType, @floatFromInt(entries.len)) / configl.BATCH_SIZE));
-    // single sample batch at first
-    // for the multi sample batch can also send a slice of the entries to the compute gradient function
-
-    for (0..batchAmount) |batch| {
-        // compute gradient for each batch
-        // then apply it onto the next set of weights
-        //var gradient
-        var grad = computeGradient(entries[batch * configl.BATCH_SIZE .. (batch + 1) * configl.BATCH_SIZE], weights);
-
-        //TODO Find better way to keep track of the learning
-        grad.val[MG].multiplyEq(ctx.learningRate);
-        grad.val[EG].multiplyEq(ctx.learningRate);
-
-        // still wrong? should be a add instead of substract
-        newWeights.val[MG].substractVectEq(&grad.val[MG]);
-        newWeights.val[EG].substractVectEq(&grad.val[EG]);
-        //newWeights.val[MG].addVectEq(&grad.val[MG]);
-        //newWeights.val[EG].addVectEq(&grad.val[EG]);
-    }
-    return newWeights;
-}
-pub fn adaGradWeightUpdate(ctx: *optimizationContext, entries: []const texelEntry, weights: *coeffTuple, adagradCoeff: *coeffTuple) coeffTuple {
-    var newWeights: coeffTuple = weights.copy();
-    const batchAmount: usize = @intFromFloat(@ceil(@as(scoreType, @floatFromInt(entries.len)) / configl.BATCH_SIZE));
-    // single sample batch at first
-    // for the multi sample batch can also send a slice of the entries to the compute gradient function
-
-    for (0..batchAmount) |batch| {
-        // compute gradient for each batch
-        // then apply it onto the next set of weights
-        const grad = computeGradient(entries[batch * configl.BATCH_SIZE .. (batch + 1) * configl.BATCH_SIZE], weights);
-
-        for (0..configl.N_TERMS) |i| {
-            adagradCoeff.val[MG].val[i] += std.math.pow(scoreType, 2 * grad.val[MG].val[i] / configl.BATCH_SIZE, 2.0);
-            adagradCoeff.val[EG].val[i] += std.math.pow(scoreType, 2 * grad.val[EG].val[i] / configl.BATCH_SIZE, 2.0);
-
-            // still have this problem with - instead of + >:)
-            newWeights.val[MG].val[i] -= (TUNE_K * 2.0 / configl.BATCH_SIZE) * grad.val[MG].val[i] * (ctx.learningRate / std.math.sqrt(1e-8 + adagradCoeff.val[MG].val[i]));
-            newWeights.val[EG].val[i] -= (TUNE_K * 2.0 / configl.BATCH_SIZE) * grad.val[EG].val[i] * (ctx.learningRate / std.math.sqrt(1e-8 + adagradCoeff.val[EG].val[i]));
-        }
-    }
-    return newWeights;
-}
-pub fn computeGradient(batch_entries: []const texelEntry, weights: *coeffTuple) coeffTuple {
-    var ret: coeffTuple = .{};
-    for (0..batch_entries.len) |j| {
-        var ent = batch_entries[j];
-        // this is constant between epochs
-        var deltaC = ent.tuples.get_delta();
-
-        const s = sigmoid(scoreType, ent.get_eval(weights));
-        const X = @as(scoreType, @floatCast(TUNE_K)) * s * (ent.result - s) * (1 - s);
-
-        var mg_tmp = deltaC.copy();
-        mg_tmp.multiplyEq(X * ent.pFactors[MG]);
-        ret.val[MG].addVectEq(&mg_tmp);
-
-        var eg_tmp = deltaC.copy();
-        eg_tmp.multiplyEq(X * ent.pFactors[EG]);
-        ret.val[EG].addVectEq(&eg_tmp);
-    }
-    ret.val[MG].multiplyEq(@as(scoreType, @divFloor(-2, batch_entries.len)));
-    ret.val[EG].multiplyEq(@as(scoreType, @divFloor(-2, batch_entries.len)));
-
-    return ret;
-}
-pub fn test_main() !void {
-    var board = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, chess.DEFAULT_FEN);
-    std.debug.print("[DEBUG] test_main: eval using default weight on default fen: {d}\n", .{texelEvaluation(&board)});
-    @panic("");
-}
-pub fn sanityCheck() !void {
-    var path: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "opening/E12.33-1M-D12-Resolved.book");
-    defer path.free(mainl.GLOBAL_ALLOC);
-
-    var tokens = try filel.getTokensFromFileAlloc(mainl.GLOBAL_ALLOC, path._slice(), '\n', configl.N_POSITIONS, 0);
-    defer stringl.freeArrayList_string(mainl.GLOBAL_ALLOC, &tokens);
-    var err: f32 = 0;
-    for (tokens.items) |fen| {
-        var foutcome: f32 = 0;
-        if (fen.containsE("0.5", .ignoreCase)) {
-            foutcome = 0.5;
-        } else if (fen.containsE("1.0", .ignoreCase)) {
-            foutcome = 1;
-        }
-        var board = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, fen._slice());
-        //err += std.math.pow(scoreType, (sigmoid(scoreType, texelEvaluation(&board)) - foutcome), 2);
-
-        const eval: f32 = sigmoid(scoreType, texelEvaluation(&board));
-        err += std.math.pow(f32, foutcome - eval, 2);
-        defer board.free(mainl.GLOBAL_ALLOC);
-    }
-
-    std.debug.print("[RESULT] sanityCheck: error {d} ({d})\n", .{ err / @as(f32, @floatFromInt(tokens.items.len)), err });
-
-    var board = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, chess.DEFAULT_FEN);
-    const raw_eval = texelEvaluation(&board);
-    std.debug.print("[DEBUG] sanityCheck: eval using default weight on default fen: {d}, rounded: {d}\n", .{ raw_eval, sigmoid(scoreType, raw_eval) });
-}
 pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !void {
     //
     const allEntries = try filel.getFileLineSize(alloc, dataPath._slice());
@@ -1263,6 +1055,8 @@ pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !
         std.debug.print("Remaining entries: {d} \n", .{remainingEntries});
         remainingEntries = remainingEntries -| configl.N_POSITIONS;
         const entries = try getEntriesFromFile(alloc, dataPath, skips);
+
+        printEntriesInfo(entries);
         defer alloc.free(entries);
         try saveCoefficientToFile(alloc, entries, savePath);
         skips += configl.N_POSITIONS;
@@ -1435,6 +1229,7 @@ pub fn SEE(p_state: *const chess.Board_state, move: IMove) scoreType {
     const from = move.getFrom();
     return _SEE(p_state, @enumFromInt(to), target, @enumFromInt(from), move.getFromPiece(), p_state.whiteToMove());
 }
+
 // source: https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
 pub fn _SEE(p_state: *const chess.Board_state, toSq: squarel.e_square, target: e_piece, fromSq: squarel.e_square, aPiece: e_piece, white: bool) scoreType {
     var gain: [32]scoreType = undefined;
@@ -1582,13 +1377,15 @@ pub fn test_SEE() !void {
 pub fn main() !void {
     //try sanityCheck();
     //try test_main();
+    mainl.initAll(false);
     var path: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "opening/E12.33-1M-D12-Resolved.book");
-    var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights_int.csv");
+    var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights_int_filter_quiesc+endFen_red.csv");
+
     defer path.free(mainl.GLOBAL_ALLOC);
     defer savePath.free(mainl.GLOBAL_ALLOC);
 
-    try test_scaling();
-    try test_SEE();
-    //try test_save(mainl.GLOBAL_ALLOC, path, savePath);
+    //try test_scaling();
+    //try test_SEE();
+    try test_save(mainl.GLOBAL_ALLOC, path, savePath);
     //try mainTexel(mainl.GLOBAL_ALLOC, path);
 }

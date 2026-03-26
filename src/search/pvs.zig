@@ -41,7 +41,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
 
     if (depth <= 0 or !p_info.alive) {
-        return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine);
+        return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine, t);
     }
 
     var hashMove: IMove = .{};
@@ -77,7 +77,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
-    if (p_features.useLateMoveReduc and depth > 3) {
+    if (p_features.useLMR and depth > 3) {
         heuristicl.computeLateMoveReduc(p_state, &order, depth, &fmoves);
         useLMR = true;
     }

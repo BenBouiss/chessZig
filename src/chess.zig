@@ -934,7 +934,7 @@ pub const Board_state = struct {
                 p_self.pieceBB[@intFromEnum(castlePiece)] ^= castleBB;
                 p_self.c_occupiedBB[@intFromBool(white)] ^= (castleBB);
                 p_self.occupiedBB ^= castleBB;
-            } else if (toSq == (fromSq - 2)) {
+            } else if (toSq == (fromSq -% 2)) {
                 const castleBB = (xToBitboard(toSq + 1) | (xToBitboard(toSq - 2)));
                 p_self.pieceArray[toSq - 2] = castlePiece;
                 p_self.pieceArray[toSq + 1] = .nEmptySquare;
@@ -2421,7 +2421,7 @@ pub fn test_move_heur() !void {
     std.debug.print("ben\n", .{});
     const indexes = heuristicl.eval_move_sorting_mask(&moves, 0);
     for (0..moves.len) |i| {
-        const idx = indexes[i];
+        const idx = indexes.indexes[i];
         const move = moves.moves[idx];
         std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic_std(move, 0) });
     }

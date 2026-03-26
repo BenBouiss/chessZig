@@ -13,7 +13,7 @@ name="late move"
 "setoption name useHash value false";
 "setoption name fixedDepth value false";
 "setoption name useNullPruning value true";
-"setoption name useLateMoveReduction value true";
+"setoption name useLMR value true";
 
 [match]
 nMatch=6;

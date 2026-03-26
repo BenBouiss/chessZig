@@ -23,7 +23,11 @@ pub const simplePassedPawnScore: scoreType = 2;
 
 // ============ structure ============
 pub const simpleMobilityScore: scoreType = 5;
+pub const simpleKingMobilityScore: scoreType = 10;
 pub const simpleStructureProtectionScore: scoreType = 1;
+
+// ============ tempo ============
+pub const simpleTempoChecksScore: scoreType = 25;
 
 // source: https://www.chessprogramming.org/King_Safety
 pub const simpleSafetyBishopScore: scoreType = 20;
