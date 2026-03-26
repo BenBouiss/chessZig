@@ -75,7 +75,7 @@ pub const SCHEDULER_TICKRATE_NS = (std.math.pow(u64, 10, 6));
 pub const WR_TICKRATE_NS = (std.math.pow(u64, 10, 5));
 
 // hashTable constants
-pub const ITEM_PER_BUCKET = 2;
+pub const ITEM_PER_BUCKET = 3;
 
 // inactivity timers:
 //
@@ -97,6 +97,7 @@ pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 2_777_777;
 pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
+pub const ENGINE_LOCK_TICKRATE_NS = 1_000;
 
 pub const UPDATE_TICKRATE_NS = 2777777;
 pub const READING_TICKRATE_NS = (2) * (std.math.pow(u64, 10, 6));
@@ -126,11 +127,12 @@ pub const e_residue_type = enum(u4) { MSE = 0, RMSE };
 pub const TUNE_RESIDUE: e_residue_type = .MSE;
 
 pub const TUNE_NORMAL: bool = true; // 392 weights
-pub const TUNE_COMPLEXITY: bool = false; // ? weights
 pub const TUNE_SAFETY: bool = true; // > 5 weights
+pub const TUNE_COMPLEXITY: bool = false; // ? weights
+pub const TUNE_PSQT: bool = true; // > 5 weights
 
 //pub const N_TERMS: usize = 392 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
-pub const N_TERMS: usize = 394 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
+pub const N_TERMS: usize = 396 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
 
 // TEXEL indexes
 pub const TEXEL_PAWN_COUNT_IDX: usize = 0;
@@ -140,20 +142,25 @@ pub const TEXEL_ROOK_COUNT_IDX: usize = 3;
 pub const TEXEL_QUEEN_COUNT_IDX: usize = 4;
 
 pub const TEXEL_MOVE_COUNT_IDX: usize = 5;
-pub const TEXEL_PROTECTION_COUNT_IDX: usize = 6;
-pub const TEXEL_PAWN_ISOL_IDX: usize = 7;
-pub const TEXEL_PAWN_STACKED_IDX: usize = 8;
-pub const TEXEL_PAWN_PASSED_IDX: usize = 9;
+pub const TEXEL_KINGMOVE_COUNT_IDX: usize = 6;
 
-pub const TEXEL_PAWN_PSQT_IDX: usize = 10;
-pub const TEXEL_BISHOP_PSQT_IDX: usize = 74;
-pub const TEXEL_KNIGHT_PSQT_IDX: usize = 138;
-pub const TEXEL_ROOK_PSQT_IDX: usize = 202;
-pub const TEXEL_QUEEN_PSQT_IDX: usize = 266;
-pub const TEXEL_KING_PSQT_IDX: usize = 330;
+pub const TEXEL_PROTECTION_COUNT_IDX: usize = 7;
 
-pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 394;
-pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 395;
-pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 396;
-pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 397;
-pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 398;
+pub const TEXEL_PAWN_ISOL_IDX: usize = 8;
+pub const TEXEL_PAWN_STACKED_IDX: usize = 9;
+pub const TEXEL_PAWN_PASSED_IDX: usize = 10;
+
+pub const TEXEL_TEMPO_CHECKS_IDX: usize = 11;
+
+pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 12;
+pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 13;
+pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 14;
+pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 15;
+pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 16;
+
+pub const TEXEL_PAWN_PSQT_IDX: usize = 17;
+pub const TEXEL_BISHOP_PSQT_IDX: usize = 81;
+pub const TEXEL_KNIGHT_PSQT_IDX: usize = 145;
+pub const TEXEL_ROOK_PSQT_IDX: usize = 209;
+pub const TEXEL_QUEEN_PSQT_IDX: usize = 273;
+pub const TEXEL_KING_PSQT_IDX: usize = 337;

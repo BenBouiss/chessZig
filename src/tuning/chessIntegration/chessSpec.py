@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import time, typing, copy, os
+import time, typing, copy, os, sys
 import numpy as np 
 import numpy.typing as npt 
 import yaml
 
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+import texel
 from algo import template 
 
 SLEEP_LOCK_S = 0.01
@@ -46,87 +49,83 @@ MG = 0
 EG = 1
 
 class heuristicEntry:
-    weights: list[list[float]]
+    weights: list[texel.texelWeights]
 
     def __init__(self):
         pass
-        
+
     def saveToFile(self, path: str) -> None:
         # scalar value
         # simpleStackedPawnScore: {d};
+        phases = ["_MG", "_EG"]
         with open(path, "w") as file:
-            file.write(f"stackedPawnScore_MG = {self.weights[MG][stackedPawnScore_idx]};\n")
-            file.write(f"stackedPawnScore_EG = {self.weights[EG][stackedPawnScore_idx]};\n")
-
-            file.write(f"passedPawnScore_MG = {self.weights[MG][passedPawnScore_idx]};\n")
-            file.write(f"passedPawnScore_EG = {self.weights[EG][passedPawnScore_idx]};\n")
-
-            file.write(f"isolatedPawnScore_MG = {self.weights[MG][isolatedPawnScore_idx]};\n")
-            file.write(f"isolatedPawnScore_EG = {self.weights[EG][isolatedPawnScore_idx]};\n")
-
-            file.write(f"safetyKnight_MG = {self.weights[MG][safetyKnight_idx]};\n")
-            file.write(f"safetyKnight_EG = {self.weights[EG][safetyKnight_idx]};\n")
-
-            file.write(f"safetyBishop_MG = {self.weights[MG][safetyBishop_idx]};\n")
-            file.write(f"safetyBishop_EG = {self.weights[EG][safetyBishop_idx]};\n")
-
-            file.write(f"safetyRook_MG = {self.weights[MG][safetyRook_idx]};\n")
-            file.write(f"safetyRook_EG = {self.weights[EG][safetyRook_idx]};\n")
-
-            file.write(f"safetyQueen_MG = {self.weights[MG][safetyQueen_idx]};\n")
-            file.write(f"safetyQueen_EG = {self.weights[EG][safetyQueen_idx]};\n")
-
-            file.write(f"structureProtection_MG = {self.weights[MG][structureProtection_idx]};\n")
-            file.write(f"structureProtection_EG = {self.weights[EG][structureProtection_idx]};\n")
-
-            file.write(f"mobilityScore_MG = {self.weights[MG][mobility_idx]};\n")
-            file.write(f"mobilityScore_EG = {self.weights[EG][mobility_idx]};\n")
+            for i in range(len(phases)):
+                file.write(texel.texelWeightToFileStr(self.weights[i], phases[i]))
 
     def print(self) -> None:
+        phases = ["_MG", "_EG"]
+        weights = [[], []]
+        for i in range(len(phases)):
+            weights[i] = self.weights[i].getArray()
 
-        print(f"stackedPawnScore: {self.weights[MG][stackedPawnScore_idx]} {self.weights[EG][stackedPawnScore_idx]}")
+        if (weights[MG][texel.mobility_idx] != texel.INVALID_VALUE):
+            print(f"mobilityScore: {weights[MG][texel.mobility_idx]} {weights[EG][texel.mobility_idx]}")
 
-        print(f"passedPawnScore: {self.weights[MG][passedPawnScore_idx]} {self.weights[EG][passedPawnScore_idx]}")
+        if (weights[MG][texel.structureProtection_idx] != texel.INVALID_VALUE):
+            print(f"structureProtection: {weights[MG][texel.structureProtection_idx]} {weights[EG][texel.structureProtection_idx]}")
 
-        print(f"isolatedPawnScore: {self.weights[MG][isolatedPawnScore_idx]} {self.weights[EG][isolatedPawnScore_idx]}")
+        if (weights[MG][texel.isolatedPawnScore_idx] != texel.INVALID_VALUE):
+            print(f"isolatedPawnScore: {weights[MG][texel.isolatedPawnScore_idx]} {weights[EG][texel.isolatedPawnScore_idx]}")
 
-        print(f"safetyKnight: {self.weights[MG][safetyKnight_idx]} {self.weights[EG][safetyKnight_idx]}")
+        if (weights[MG][texel.stackedPawnScore_idx] != texel.INVALID_VALUE):
+            print(f"stackedPawnScore: {weights[MG][texel.stackedPawnScore_idx]} {weights[EG][texel.stackedPawnScore_idx]}")
 
-        print(f"safetyBishop: {self.weights[MG][safetyBishop_idx]} {self.weights[EG][safetyBishop_idx]}")
+        if (weights[MG][texel.passedPawnScore_idx] != texel.INVALID_VALUE):
+            print(f"passedPawnScore: {weights[MG][texel.passedPawnScore_idx]} {weights[EG][texel.passedPawnScore_idx]}")
 
-        print(f"safetyRook: {self.weights[MG][safetyRook_idx]} {self.weights[EG][safetyRook_idx]}")
+        if (weights[MG][texel.safetyKnight_idx] != texel.INVALID_VALUE):
+            print(f"safetyKnight: {weights[MG][texel.safetyKnight_idx]} {weights[EG][texel.safetyKnight_idx]}")
 
-        print(f"safetyQueen: {self.weights[MG][safetyQueen_idx]} {self.weights[EG][safetyQueen_idx]}")
+        if (weights[MG][texel.safetyBishop_idx] != texel.INVALID_VALUE):
+            print(f"safetyBishop: {weights[MG][texel.safetyBishop_idx]} {weights[EG][texel.safetyBishop_idx]}")
 
-        print(f"structureProtection: {self.weights[MG][structureProtection_idx]} {self.weights[EG][structureProtection_idx]}")
+        if (weights[MG][texel.safetyRook_idx] != texel.INVALID_VALUE):
+            print(f"safetyRook: {weights[MG][texel.safetyRook_idx]} {weights[EG][texel.safetyRook_idx]}")
 
-        print(f"mobilityScore: {self.weights[MG][mobility_idx]} {self.weights[EG][mobility_idx]}")
+        if (weights[MG][texel.safetyQueen_idx] != texel.INVALID_VALUE):
+            print(f"safetyQueen: {weights[MG][texel.safetyQueen_idx]} {weights[EG][texel.safetyQueen_idx]}")
+
+
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
-        return np.concatenate(self.weights)
+        return np.concatenate([self.weights[MG].getArray(), self.weights[EG].getArray()])
 
-def entryFrom1dArray(arr: npt.NDArray[np.float64]) -> heuristicEntry:
+def entryFrom1dArray(arr: npt.NDArray[np.float64], indexes: list[int]|None = None) -> heuristicEntry:
     ret = heuristicEntry()
-    ret.weights = arr.reshape(2, -1).tolist()
+    w = arr.reshape(2, -1, 1).astype(float).tolist()
+    if indexes is None:
+        indexes = list(range(len(w[0])))
+    ret.weights = [texel.texelWeightsFromLists(w[0], indexes), texel.texelWeightsFromLists(w[1], indexes)]
     return ret
 
+def entryFromListDup(arr: list[float], indexes: list[int] | None = None) -> heuristicEntry:
+    return entryFrom2dList([arr, arr], indexes)
 
-def entryFromListDup(arr: list[float]) -> heuristicEntry:
-    ret = heuristicEntry()
-    ret.weights = [list(arr), list(arr)]
-    return ret
-
-def entryFrom1dList(arr: list[float]) -> heuristicEntry:
-    ret = heuristicEntry()
+def entryFrom1dList(arr: list[float], indexes: list[int] | None = None) -> heuristicEntry:
     nsize = int(len(arr) / 2)
-    ret.weights = [list(arr[0:nsize]), list(arr[nsize:])]
-    return ret
+    return entryFrom2dList([list(arr[0:nsize]), list(arr[nsize:])], indexes)
 
-def entryFrom2dList(arr: list[list[float]]) -> heuristicEntry:
+def entryFrom2dList(arr: list[list[float]], indexes: list[int] | None = None) -> heuristicEntry:
     assert len(arr) == 2
     ret = heuristicEntry()
-    ret.weights = [list(arr[0]), list(arr[1])]
+    ret.weights = [texel.texelWeightsFromFlatLists(arr[0], indexes), texel.texelWeightsFromFlatLists(arr[1], indexes)]
     return ret
+
+def entryFromTexelWeights(w: texel.texelWeights) -> heuristicEntry:
+    ret: heuristicEntry = heuristicEntry()
+    ret.weights = [w.copy(), w.copy()]
+    return ret
+
 
 @dataclass
 class chessIndividual(object):
@@ -205,44 +204,14 @@ class callbackBaseline(template.callback):
         if best.score == nBaseline * 2:
             print("[DEBUG] callbackBaseline: adding the current best to the baseline")
             self.mh.objective.appendBaseline(entryFrom1dArray(best.position))
-        
- 
-
-
-# weight section
-total_idx = 0
-
-mobility_idx = total_idx
-total_idx += 1
-
-structureProtection_idx = total_idx
-total_idx += 1
-
-isolatedPawnScore_idx = total_idx
-total_idx += 1
-stackedPawnScore_idx = total_idx
-total_idx += 1
-passedPawnScore_idx = total_idx
-total_idx += 1
-
-#not used
-#safetyPawn_idx = total_idx
-#total_idx += 1
-
-safetyKnight_idx = total_idx
-total_idx += 1
-safetyBishop_idx = total_idx
-total_idx += 1
-safetyRook_idx = total_idx
-total_idx += 1
-safetyQueen_idx = total_idx
-total_idx += 1
-
 
 # p , n, b, r, q
 simplePieceCount: list[float] = [100, 300, 300, 500, 900]
 
-simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0]
+#simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0]
+#simpleBaselineWeights: texel.texelWeights = texel.texelWeightsFromLists(weights = [[-1.0], [2.0], [-1.0], [20.0], [20.0], [40.0], [80.0], [1.0], [5.0]], indexes = [texel.mobility_idx, texel.structureProtection_idx, texel.isolatedPawnScore_idx, texel.stackedPawnScore_idx, texel.passedPawnScore_idx, texel.safetyKnight_idx, texel.safetyBishop_idx, texel.safetyRook_idx, texel.safetyQueen_idx]) 
+simpleBaselineWeights: heuristicEntry = entryFromListDup(arr = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0], indexes = [texel.mobility_idx, texel.structureProtection_idx, texel.isolatedPawnScore_idx, texel.stackedPawnScore_idx, texel.passedPawnScore_idx, texel.safetyKnight_idx, texel.safetyBishop_idx, texel.safetyRook_idx, texel.safetyQueen_idx])
+
 
 # obtained after 14 iter and 8 popsize
 newWeight_0: list[float] = [0.0, -3.0, 100.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]

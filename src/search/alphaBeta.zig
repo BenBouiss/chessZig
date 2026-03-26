@@ -142,7 +142,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
 
     if (depth <= 0 or !p_info.alive) {
-        return handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine);
+        return handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine, t);
     }
 
     var hashMove: IMove = .{};
@@ -150,19 +150,19 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
         if (entry.valid) {
             p_info.searchStat.n_hashRetrieve += 1;
-            //if (entry.val.search.t == .CUT) {
-            //    return entry.eval();
-            //}
+            if (entry.val.search.t == .CUT) {
+                return entry.eval();
+            }
             hashMove = entry.val.search.bestMove;
         }
     }
 
     // null move prunning here
     // R = 3
+    const ischeck = p_state.isChecked();
     if (p_features.useNullPrune) {
         // see chess programming video
         const R: u16 = 2 + 1;
-        const ischeck = p_state.isChecked();
         if (depth > R and !ischeck and !p_state.isEndGame() and ply > 0) {
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine, .NonPV);
@@ -173,12 +173,11 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             }
         }
     }
-
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
-    if (p_features.useLateMoveReduc and depth > 3) {
+    if (p_features.useLMR and depth > 3 and !ischeck) {
         heuristicl.computeLateMoveReduc(p_state, &order, depth, &fmoves);
         useLMR = true;
     }
@@ -221,6 +220,10 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             if (!isCapture) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), depth * depth);
             }
+            if (p_features.useHash) {
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .PV, bestMove);
+                _ = hashl.hashTable.storeEntry(&s_entry);
+            }
         }
         if (_alpha >= beta) {
             // save here the killer moves
@@ -251,10 +254,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             finalScore = weightl.simpleStalemateScore;
         }
     }
-    if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .PV, bestMove);
-        _ = hashl.hashTable.storeEntry(&s_entry);
-    }
+
     return finalScore;
 }
 
@@ -277,7 +277,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
         p_info.searchStat.n_nodeExplored += 1;
         const ischeck = p_state.isChecked();
         // perform quiesc by default in aspiration mode ?
-        return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine);
+        return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, .PV);
     }
 
     // null move prunning here
@@ -301,7 +301,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, undefined);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
-    if (p_features.useLateMoveReduc and depth > 3) {
+    if (p_features.useLMR and depth > 3) {
         heuristicl.computeLateMoveReduc(p_state, &order, depth - 1, &fmoves);
         useLMR = true;
     }
@@ -368,23 +368,25 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
     }
     return finalScore;
 }
-pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line) scoreType {
+pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     p_info.searchStat.n_nodeExplored += 1;
     if (p_features.useQuiescence) {
         const ischeck = p_state.isChecked();
         if (p_state.getLastMove().isCapture() or ischeck) {
             // perform quiesc
-            return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine);
+            return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, t);
         }
     }
     const score = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
     return score;
 }
 
-pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, wasChecked: bool, pv: *pvContainer, prevLine: *const movel.line) scoreType {
+pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, wasChecked: bool, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
-    pv.setLen(ply);
+    if (comptime t == .PV) {
+        pv.setLen(ply);
+    }
     var _alpha = alpha;
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
@@ -398,7 +400,9 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         return best_value;
     }
     if (best_value > _alpha) {
-        pv.onBestMove(p_state.getLastMove(), ply - 1);
+        if (comptime t == .PV) {
+            pv.onBestMove(p_state.getLastMove(), ply - 1);
+        }
         _alpha = best_value;
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves_ordered(p_state, true);
@@ -417,7 +421,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         //}
         p_state.makeMove(move);
 
-        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, wasChecked, pv, prevLine);
+        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, wasChecked, pv, prevLine, t);
 
         _ = p_state.undoMove();
         if (i == 0 or score > best_value) {
@@ -429,7 +433,9 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         }
         if (score > _alpha) {
             _alpha = score;
-            pv.onBestMove(move, ply);
+            if (comptime t == .PV) {
+                pv.onBestMove(move, ply);
+            }
         }
     }
     return best_value;

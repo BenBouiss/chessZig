@@ -50,7 +50,8 @@ The currently modifiable fields:
 
 In singles, the value is extracted after the "="
 Note: All fields are case incensitive, the "..." indicates that the rest is ignored.
-Note2: The differentation between singles and PSQT is done via the PSQT value format which is field_name: \[val1, val2, ..., valn\];
+Note2: The differentation between singles and PSQT is done via the PSQT value format which is " field_name = \[val1, val2, ..., valn\];"
+The "=" can be replaced by anything else, the only required "fields" are field_name to identify the array to modify and the \[ and \] to extract the values separated by a comma.
 
 Since the engine uses a tapered evaluation, all of these parameter can be specified with "\_MG" or "\_EG" inside the field's name. If none of "\_MG" or "\_EG" is found, the value is set for both the MG(mid game), EG(end game) slots.
 

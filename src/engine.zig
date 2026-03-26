@@ -65,11 +65,11 @@ pub const inputChannel = struct {
     }
     fn acquireLock(p_self: *inputChannel) void {
         while (p_self.lock) {
-            std.Thread.sleep(configl.ENGINE_SERVING_TICKRATE_NS);
+            std.Thread.sleep(configl.ENGINE_LOCK_TICKRATE_NS);
         }
         p_self.lock = true;
     }
-    fn releaseLock(p_self: *inputChannel) void {
+    inline fn releaseLock(p_self: *inputChannel) void {
         p_self.lock = false;
     }
     pub fn nonEmpty(p_self: *inputChannel) bool {
@@ -174,7 +174,7 @@ pub const engineOptions = struct {
     useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
     useQuiescence: bool = configl.DEFAULT_USEQUIESC,
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
-    useLateMoveReduction: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
+    useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useSEE: bool = configl.DEFAULT_USE_SEE,
 
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
@@ -244,7 +244,7 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "useQuiescence", .optionType = .USEQUIESCENCE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEQUIESC } } });
 
         try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
-        try p_self.addOption(.{ .name = "useLateMoveReduction", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
+        try p_self.addOption(.{ .name = "useLMR ", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
         try p_self.addOption(.{ .name = "useSEE", .optionType = .USESEE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_SEE } } });
 
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
@@ -526,7 +526,7 @@ pub const engine = struct {
                 if (!entry.info.str.validateValue(val)) {
                     return false;
                 }
-                p_self.options.useLateMoveReduction = utilsl.contains(val, "true", .ignoreCase);
+                p_self.options.useLMR = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
             .USESEE => {
@@ -847,7 +847,7 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .USEQUIESCENCE;
     } else if (utilsl.contains(cmdBuffer, " useNullPruning", .ignoreCase)) {
         return .USENULLPRUNE;
-    } else if (utilsl.contains(cmdBuffer, " useLateMoveReduction", .ignoreCase)) {
+    } else if (utilsl.contains(cmdBuffer, " useLMR", .ignoreCase)) {
         return .USELATEMOVEREDUC;
     } else if (utilsl.contains(cmdBuffer, " useSEE", .ignoreCase)) {
         return .USELATEMOVEREDUC;
