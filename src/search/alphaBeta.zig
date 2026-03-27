@@ -391,6 +391,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     var _alpha = alpha;
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+
     if (depth == 0 or !p_info.alive) {
         p_info.searchStat.n_nodeExplored += 1;
         return static_eval;

@@ -226,8 +226,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (pinnedPiece != chess.EMPTY) {
             const from: u8 = chess.bitscan(pinnedPiece);
             pinnedPiece &= pinnedPiece - 1;
-            var to: i8 = @intCast(from);
-            to += pawnDir;
+            const to: i8 = @as(i8, @intCast(from)) + pawnDir;
             const _to: u8 = @intCast(to);
             if (chess.xToBitboard(_to) & pinHV != chess.EMPTY) {
                 _ = movel.build_move_in(from, _to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
@@ -237,8 +236,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (pinnedPiece != chess.EMPTY) {
             const to: u8 = chess.bitscan(pinnedPiece);
             pinnedPiece &= pinnedPiece - 1;
-            var from: i8 = @intCast(to);
-            from -= (pawnDir << 1);
+            const from: i8 = @as(i8, @intCast(to)) - (pawnDir << 1);
             _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
         }
 
@@ -282,8 +280,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
     while (bb != chess.EMPTY) {
         const to: u8 = chess.bitscan(bb);
         bb &= bb - 1;
-        var from: i8 = @intCast(to);
-        from -= pawnDir;
+        const from: i8 = @as(i8, @intCast(to)) - pawnDir;
         _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
     }
 
@@ -306,9 +303,8 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
     }
     while (bb != chess.EMPTY) {
         const to: u8 = chess.bitscan(bb);
-        var from: i8 = @intCast(to);
+        const from: i8 = @as(i8, @intCast(to)) - pawnDir;
         bb &= bb - 1;
-        from -= pawnDir;
         push_promotion(@intCast(from), to, pPawn, p_out);
     }
 
@@ -319,9 +315,8 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
     }
     while (bb != chess.EMPTY) {
         const to: u8 = chess.bitscan(bb);
-        var from: i8 = @intCast(to);
+        const from: i8 = @as(i8, @intCast(to)) - (pawnDir << 1);
         bb &= bb - 1;
-        from -= (pawnDir << 1);
         _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
     }
 
