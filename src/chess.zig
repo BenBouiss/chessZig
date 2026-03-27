@@ -1199,7 +1199,7 @@ pub const Board_state = struct {
                 p_self.pieceCount[@intFromEnum(promPiece)] += 1;
             } else if (move.isDoublePush()) {
                 // middle between from and to
-                p_self.enPassantIdx = (fromSq + toSq) / 2;
+                p_self.enPassantIdx = (fromSq + toSq) >> 1;
             }
 
             p_self.invert_turn();
@@ -1630,19 +1630,19 @@ pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) 
 }
 
 pub inline fn diagonalAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.NORTHEAST, sq) | getAttackRay(bb, e_direction.SOUTHWEST, sq); // ^ +
+    return getAttackRay(bb, e_direction.NORTHEAST, sq) | getAttackRay(bb, e_direction.SOUTHWEST, sq);
 }
 
 pub inline fn antiDiagAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.NORTHWEST, sq) | getAttackRay(bb, e_direction.SOUTHEAST, sq); // ^ +
+    return getAttackRay(bb, e_direction.NORTHWEST, sq) | getAttackRay(bb, e_direction.SOUTHEAST, sq);
 }
 
 pub inline fn fileAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.NORTH, sq) | getAttackRay(bb, e_direction.SOUTH, sq); // ^ +
+    return getAttackRay(bb, e_direction.NORTH, sq) | getAttackRay(bb, e_direction.SOUTH, sq);
 }
 
 pub inline fn rankAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.EAST, sq) | getAttackRay(bb, e_direction.WEST, sq); // ^ +
+    return getAttackRay(bb, e_direction.EAST, sq) | getAttackRay(bb, e_direction.WEST, sq);
 }
 pub inline fn getRookAttacks(occBB: u64, sq: e_square) u64 {
     if (comptime useMagic) {

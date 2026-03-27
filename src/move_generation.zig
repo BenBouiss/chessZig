@@ -32,7 +32,9 @@ const useDebug = build_options.useDebug;
 pub inline fn generateLegalMoves(p_board: *const Board_state) moveContainer {
     if (comptime useStaged) {
         var bbMoves = moveGenBB(p_board);
-        const moves = moveGenBBToMoveContainer(p_board, &bbMoves);
+        var moves: moveContainer = undefined;
+        moves.len = 0;
+        moveGenBBToMoveContainer(p_board, &bbMoves, &moves);
         //if (comptime useDebug) {
         //    var otherMove: moveContainer = moveGeneration(p_board);
         //    const f_otherMove = filterMoveLegal(p_board, &otherMove, p_board.whiteToMove());
@@ -49,6 +51,14 @@ pub inline fn generateLegalMoves(p_board: *const Board_state) moveContainer {
         var moves: moveContainer = moveGeneration(p_board);
         const fmoves = filterMoveLegal(p_board, &moves, p_board.whiteToMove());
         return fmoves;
+    }
+}
+pub inline fn generateLegalMovesCut(p_board: *const Board_state, p_out: *moveContainer) void {
+    if (comptime useStaged) {
+        var bbMoves = moveGenBB(p_board);
+        return moveGenBBToMoveContainer(p_board, &bbMoves, p_out);
+    } else {
+        @panic("Not implemented");
     }
 }
 
@@ -87,14 +97,13 @@ pub fn push_promotion_capture(from: u8, to: u8, piece: e_piece, cPiece: e_piece,
     p_out.append(move);
 }
 
-pub inline fn moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *moveBBState) moveContainer {
+pub inline fn moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *moveBBState, p_out: *moveContainer) void {
     if (p_board.whiteToMove()) {
-        return cst_moveGenBBToMoveContainer(p_board, p_moveBB, true);
+        return cst_moveGenBBToMoveContainer(p_board, p_moveBB, true, p_out);
     }
-    return cst_moveGenBBToMoveContainer(p_board, p_moveBB, false);
+    return cst_moveGenBBToMoveContainer(p_board, p_moveBB, false, p_out);
 }
-pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *moveBBState, comptime white: bool) moveContainer {
-    var ret: moveContainer = .{};
+pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *moveBBState, comptime white: bool, p_out: *moveContainer) void {
     var pawnDir: i8 = 8;
     var pPawn: e_piece = .nWhitePawn;
     var opPawn: e_piece = .nBlackPawn;
@@ -172,17 +181,15 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
             while (quietMoves != chess.EMPTY) {
                 const to: u8 = chess.bitscan(quietMoves);
                 quietMoves &= quietMoves - 1;
-                const move = movel.build_move(pieceSq, to, @intFromEnum(e_moveFlags.QUIETMOVE), piece);
-                ret.append(move);
+                _ = movel.build_move_in(pieceSq, to, @intFromEnum(e_moveFlags.QUIETMOVE), piece, p_out);
             }
             var attMoves = permittedMoves & p_board.occupiedBB;
             while (attMoves != chess.EMPTY) {
                 const to: u8 = chess.bitscan(attMoves);
                 const cPiece = p_board.get_piece(to);
                 attMoves &= attMoves - 1;
-                var move = movel.build_move(pieceSq, to, @intFromEnum(e_moveFlags.CAPTURE), piece);
-                move.setCapture(cPiece);
-                ret.append(move);
+                var pMove = movel.build_move_in(pieceSq, to, @intFromEnum(e_moveFlags.CAPTURE), piece, p_out);
+                pMove.setCapture(cPiece);
             }
         }
         // rook and queen
@@ -197,17 +204,15 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
             while (quietMoves != chess.EMPTY) {
                 const to: u8 = chess.bitscan(quietMoves);
                 quietMoves &= quietMoves - 1;
-                const move = movel.build_move(pieceSq, to, @intFromEnum(e_moveFlags.QUIETMOVE), piece);
-                ret.append(move);
+                _ = movel.build_move_in(pieceSq, to, @intFromEnum(e_moveFlags.QUIETMOVE), piece, p_out);
             }
             var attMoves = permittedMoves & p_board.occupiedBB;
             while (attMoves != chess.EMPTY) {
                 const to: u8 = chess.bitscan(attMoves);
                 const cPiece = p_board.get_piece(to);
                 attMoves &= attMoves - 1;
-                var move = movel.build_move(pieceSq, to, @intFromEnum(e_moveFlags.CAPTURE), piece);
-                move.setCapture(cPiece);
-                ret.append(move);
+                var pMove = movel.build_move_in(pieceSq, to, @intFromEnum(e_moveFlags.CAPTURE), piece, p_out);
+                pMove.setCapture(cPiece);
             }
         }
 
@@ -225,7 +230,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
             to += pawnDir;
             const _to: u8 = @intCast(to);
             if (chess.xToBitboard(_to) & pinHV != chess.EMPTY) {
-                ret.append(movel.build_move(from, _to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn));
+                _ = movel.build_move_in(from, _to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
             }
         }
         pinnedPiece = p_moveBB.doubleMoves & pinHV;
@@ -233,8 +238,8 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
             const to: u8 = chess.bitscan(pinnedPiece);
             pinnedPiece &= pinnedPiece - 1;
             var from: i8 = @intCast(to);
-            from -= 2 * pawnDir;
-            ret.append(movel.build_move(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn));
+            from -= (pawnDir << 1);
+            _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
         }
 
         pinnedPiece = p_board.pieceBB[@intFromEnum(pPawn)] & pinD12;
@@ -248,9 +253,8 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
                 const to: u8 = chess.bitscan(toAtt_bb);
                 toAtt_bb &= toAtt_bb - 1;
                 const cPiece = p_board.get_piece(to);
-                var move = movel.build_move(@intCast(from), to, @intFromEnum(e_moveFlags.CAPTURE), pPawn);
-                move.setCapture(cPiece);
-                ret.append(move);
+                var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pPawn, p_out);
+                pMove.setCapture(cPiece);
             }
         }
         pinnedPiece = p_moveBB.promotionMoves & p_board.occupiedBB & pinD12;
@@ -263,7 +267,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
             if (att != chess.EMPTY) {
                 const from: u8 = chess.bitscan(att);
                 att &= att - 1;
-                push_promotion_capture(from, to, pPawn, cPiece, &ret);
+                push_promotion_capture(from, to, pPawn, cPiece, p_out);
             }
         }
     }
@@ -280,7 +284,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         bb &= bb - 1;
         var from: i8 = @intCast(to);
         from -= pawnDir;
-        ret.append(movel.build_move(@intCast(from), to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn));
+        _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
     }
 
     bb = p_moveBB.promotionMoves & p_board.occupiedBB;
@@ -292,7 +296,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (att != chess.EMPTY) {
             const from: u8 = chess.bitscan(att);
             att &= att - 1;
-            push_promotion_capture(from, to, pPawn, cPiece, &ret);
+            push_promotion_capture(from, to, pPawn, cPiece, p_out);
         }
     }
     if (comptime white) {
@@ -305,7 +309,7 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         var from: i8 = @intCast(to);
         bb &= bb - 1;
         from -= pawnDir;
-        push_promotion(@intCast(from), to, pPawn, &ret);
+        push_promotion(@intCast(from), to, pPawn, p_out);
     }
 
     if (comptime white) {
@@ -317,8 +321,8 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         const to: u8 = chess.bitscan(bb);
         var from: i8 = @intCast(to);
         bb &= bb - 1;
-        from -= (2 * pawnDir);
-        ret.append(movel.build_move(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn));
+        from -= (pawnDir << 1);
+        _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
     }
 
     bb = p_moveBB.enPassantMoves;
@@ -331,9 +335,8 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (toAtt_bb != chess.EMPTY) {
             const from: u8 = chess.bitscan(toAtt_bb);
             toAtt_bb &= toAtt_bb - 1;
-            var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.ENPASSANT), pPawn);
-            move.setCapture(opPawn);
-            ret.append(move);
+            var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.ENPASSANT), pPawn, p_out);
+            pMove.setCapture(opPawn);
         }
     }
 
@@ -347,9 +350,8 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (toAtt_bb != chess.EMPTY) {
             const from: u8 = chess.bitscan(toAtt_bb);
             toAtt_bb &= toAtt_bb - 1;
-            var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.CAPTURE), pPawn);
-            move.setCapture(cPiece);
-            ret.append(move);
+            var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pPawn, p_out);
+            pMove.setCapture(cPiece);
         }
     }
 
@@ -364,16 +366,14 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (attCapture != chess.EMPTY) {
             const to: u8 = chess.bitscan(attCapture);
             attCapture &= attCapture - 1;
-            var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.CAPTURE), pBishop);
-            move.setCapture(p_board.get_piece(to));
-            ret.append(move);
+            var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pBishop, p_out);
+            pMove.setCapture(p_board.get_piece(to));
         }
         var attQuiet = allAtt & (~p_board.occupiedBB);
         while (attQuiet != chess.EMPTY) {
             const to: u8 = chess.bitscan(attQuiet);
             attQuiet &= attQuiet - 1;
-            const move = movel.build_move(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pBishop);
-            ret.append(move);
+            _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pBishop, p_out);
         }
     }
 
@@ -388,16 +388,14 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (attCapture != chess.EMPTY) {
             const to: u8 = chess.bitscan(attCapture);
             attCapture &= attCapture - 1;
-            var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.CAPTURE), pRook);
-            move.setCapture(p_board.get_piece(to));
-            ret.append(move);
+            var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pRook, p_out);
+            pMove.setCapture(p_board.get_piece(to));
         }
         var attQuiet = allAtt & (~p_board.occupiedBB);
         while (attQuiet != chess.EMPTY) {
             const to: u8 = chess.bitscan(attQuiet);
             attQuiet &= attQuiet - 1;
-            const move = movel.build_move(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pRook);
-            ret.append(move);
+            _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pRook, p_out);
         }
     }
 
@@ -412,16 +410,14 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (attCapture != chess.EMPTY) {
             const to: u8 = chess.bitscan(attCapture);
             attCapture &= attCapture - 1;
-            var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.CAPTURE), pQueen);
-            move.setCapture(p_board.get_piece(to));
-            ret.append(move);
+            var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pQueen, p_out);
+            pMove.setCapture(p_board.get_piece(to));
         }
         var attQuiet = allAtt & (~p_board.occupiedBB);
         while (attQuiet != chess.EMPTY) {
             const to: u8 = chess.bitscan(attQuiet);
             attQuiet &= attQuiet - 1;
-            const move = movel.build_move(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pQueen);
-            ret.append(move);
+            _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pQueen, p_out);
         }
     }
 
@@ -437,16 +433,14 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
         while (attCapture != chess.EMPTY) {
             const to: u8 = chess.bitscan(attCapture);
             attCapture &= attCapture - 1;
-            var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.CAPTURE), pKnight);
-            move.setCapture(p_board.get_piece(to));
-            ret.append(move);
+            var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pKnight, p_out);
+            pMove.setCapture(p_board.get_piece(to));
         }
         var attQuiet = allAtt & (~p_board.occupiedBB);
         while (attQuiet != chess.EMPTY) {
             const to: u8 = chess.bitscan(attQuiet);
             attQuiet &= attQuiet - 1;
-            const move = movel.build_move(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pKnight);
-            ret.append(move);
+            _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pKnight, p_out);
         }
     }
     // king BB
@@ -456,12 +450,10 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
     const from: u8 = chess.bitscan(pieceBB);
 
     if ((p_moveBB.kingSideCastlingMoves != chess.EMPTY) and p_board.canKingSideCastleAtt(white, allAttacks)) {
-        const move = movel.build_move(from, from + 2, @intFromEnum(e_moveFlags.KINGCASTLE), pKing);
-        ret.append(move);
+        _ = movel.build_move_in(from, from + 2, @intFromEnum(e_moveFlags.KINGCASTLE), pKing, p_out);
     }
     if ((p_moveBB.queenSideCastlingMoves != chess.EMPTY) and p_board.canQueenSideCastleAtt(white, allAttacks)) {
-        const move = movel.build_move(from, from - 2, @intFromEnum(e_moveFlags.QUEENCASTLE), pKing);
-        ret.append(move);
+        _ = movel.build_move_in(from, from - 2, @intFromEnum(e_moveFlags.QUEENCASTLE), pKing, p_out);
     }
 
     //const allAtt = chess.getKingAttacks(@enumFromInt(from)) & p_moveBB.kingMoves;
@@ -470,18 +462,15 @@ pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *move
     while (attCapture != chess.EMPTY) {
         const to: u8 = chess.bitscan(attCapture);
         attCapture &= attCapture - 1;
-        var move = movel.build_move(from, to, @intFromEnum(e_moveFlags.CAPTURE), pKing);
-        move.setCapture(p_board.get_piece(to));
-        ret.append(move);
+        var pMove = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pKing, p_out);
+        pMove.setCapture(p_board.get_piece(to));
     }
     var attQuiet = p_moveBB.kingMoves & (~p_board.occupiedBB);
     while (attQuiet != chess.EMPTY) {
         const to: u8 = chess.bitscan(attQuiet);
         attQuiet &= attQuiet - 1;
-        const move = movel.build_move(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pKing);
-        ret.append(move);
+        _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), pKing, p_out);
     }
-    return ret;
 }
 
 pub inline fn moveGeneration(p_board: *const Board_state) moveContainer {
@@ -1191,8 +1180,11 @@ pub fn cst_generateLegalMoves_ordered(p_board: *const Board_state, comptime capt
         moveGenQueenBB(p_board, false, EmptyOrEnemy, &ret);
         moveGenKingBB(p_board, false, EmptyOrEnemy, &ret);
     }
+    var moves: moveContainer = undefined;
+    moves.len = 0;
 
-    return moveGenBBToMoveContainer(p_board, &ret);
+    moveGenBBToMoveContainer(p_board, &ret, &moves);
+    return moves;
 }
 // Kogge-stone algo section
 // source: https://www.chessprogramming.org/Kogge-Stone_Algorithm
