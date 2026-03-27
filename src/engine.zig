@@ -282,7 +282,7 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
 
         try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
-        try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
+        try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEHASHTABLE } } });
 
         try p_self.addOption(.{ .name = "useQuiescence", .optionType = .USEQUIESCENCE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEQUIESC } } });
 
@@ -394,6 +394,9 @@ pub const engine = struct {
                 return p_self.executeGoCmd(cmdBuffer);
             },
             .POSITION => {
+                if (!p_self.status.initializedInternals) {
+                    _ = p_self.initInternals();
+                }
                 return p_self.executePositionCmd(cmdBuffer, p_self.alloc);
             },
             .UCINEWGAME => {

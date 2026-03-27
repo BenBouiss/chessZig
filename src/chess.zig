@@ -995,12 +995,19 @@ pub const Board_state = struct {
     pub inline fn makeMove(p_self: *Board_state, move: IMove) void {
         // FIXME: Look into makeMove capture specific method for better perf
         if (p_self.whiteToMove()) {
-            p_self.makeMove_cst(move, true);
+            p_self._makeMove(move, true);
         } else {
-            p_self.makeMove_cst(move, false);
+            p_self._makeMove(move, false);
         }
     }
-    pub fn makeMove_cst(p_self: *Board_state, move: IMove, comptime white: bool) void {
+    pub fn _makeMove(p_self: *Board_state, move: IMove, comptime white: bool) void {
+        if (move.isCapture()) {
+            p_self.makeMoveCapture_cst(move, white);
+        } else {
+            p_self.makeMoveQuiet_cst(move, white);
+        }
+    }
+    pub fn makeMoveCapture_cst(p_self: *Board_state, move: IMove, comptime white: bool) void {
         // test to reduce the makeMove load
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
@@ -1026,26 +1033,114 @@ pub const Board_state = struct {
         const victim = move.getCapturePiece();
 
         p_self.pieceArray[fromSq] = .nEmptySquare;
+        p_self.pieceArray[toSq] = fromPiece;
+
+        p_self.pieceBB[@intFromEnum(fromPiece)] ^= moveBB;
+        p_self.pieceBB[@intFromEnum(victim)] ^= toBB;
+
+        p_self.c_occupiedBB[@intFromBool(p_self.whiteToMove())] ^= moveBB;
+        p_self.c_occupiedBB[@intFromBool(!p_self.whiteToMove())] ^= toBB;
+
+        p_self.occupiedBB ^= fromBB;
+        p_self.victim = victim;
+
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
+        p_self.halfMoveClock = 0;
+
+        if (isRookPiece(victim)) {
+            p_self.stat = p_self.stat.onRookMove(toBB, !white);
+        }
+        p_self.pieceCount[@intFromEnum(victim)] -= 1;
+
+        if (isKingPiece(fromPiece)) {
+            if (comptime white) {
+                p_self.wKingSq = @enumFromInt(toSq);
+            } else {
+                p_self.bKingSq = @enumFromInt(toSq);
+            }
+            p_self.stat = p_self.stat.onKingMove();
+        } else if (isPawnPiece(fromPiece)) {
+            p_self.halfMoveClock = 0;
+            if (move.isPromotion()) {
+                // can also be or and not xor
+                const promPiece = flagPromotionToPiece(move.getFlag(), p_self.whiteToMove());
+                p_self.pieceBB[@intFromEnum(promPiece)] ^= toBB;
+                p_self.pieceBB[@intFromEnum(fromPiece)] ^= toBB;
+                p_self.pieceArray[toSq] = promPiece;
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][toSq]);
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(promPiece)][toSq]);
+
+                p_self.pieceCount[@intFromEnum(fromPiece)] -= 1;
+                p_self.pieceCount[@intFromEnum(promPiece)] += 1;
+            } else if (move.isEnpassant()) {
+                const victimSq: e_square = getSqFromCoord(getSqIdxRank(fromSq), getSqIdxFile(toSq));
+                const victimBB = sqToBitboard(victimSq);
+                const bisBB = victimBB | toBB;
+
+                p_self.pieceArray[@intFromEnum(victimSq)] = .nEmptySquare;
+
+                p_self.pieceBB[@intFromEnum(victim)] ^= bisBB;
+
+                p_self.c_occupiedBB[@intFromBool(!p_self.whiteToMove())] ^= bisBB;
+
+                p_self.occupiedBB ^= bisBB;
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][@intFromEnum(victimSq)]);
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
+            }
+            p_self.invert_turn();
+        } else if (isRookPiece(fromPiece)) {
+            p_self.stat = p_self.stat.onRookMove(fromBB, white);
+        } else {
+            p_self.invert_turn();
+        }
+
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][fromSq]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][toSq]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
+
+        _ = p_self.move_history.append(move, p_self.key);
+        p_self.turn_count += 1;
+
+        if (comptime useDebug) {
+            sanityCheckBoardState(p_self);
+        }
+        if (comptime useStaged) {
+            getCheckers_cst(p_self, !white);
+        }
+    }
+    pub fn makeMoveQuiet_cst(p_self: *Board_state, move: IMove, comptime white: bool) void {
+        // test to reduce the makeMove load
+        if (comptime useDebug) {
+            sanityCheckBoardState(p_self);
+        }
+
+        //p_self.stack.push(&p_self.makeFrame());
+        p_self.pushState();
+        p_self.s_stack.push(p_self.stat);
+
+        p_self.lastMove = move;
+        p_self.victim = .nEmptySquare;
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.playKey);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
+        p_self.enPassantIdx = 0;
+
+        const toSq = move.getTo();
+        const fromSq = move.getFrom();
+        const toBB = xToBitboard(toSq);
+        const fromBB = xToBitboard(fromSq);
+        const moveBB = fromBB | toBB;
+        const fromPiece = p_self.get_piece(fromSq);
+
+        p_self.pieceArray[fromSq] = .nEmptySquare;
+        p_self.pieceArray[toSq] = fromPiece;
 
         p_self.pieceBB[@intFromEnum(fromPiece)] ^= moveBB;
         p_self.c_occupiedBB[@intFromBool(p_self.whiteToMove())] ^= moveBB;
-        p_self.pieceArray[toSq] = fromPiece;
-
         p_self.occupiedBB ^= moveBB;
-        p_self.halfMoveClock += 1;
-        if (victim != .nEmptySquare) {
-            p_self.c_occupiedBB[@intFromBool(!p_self.whiteToMove())] ^= toBB;
-            p_self.occupiedBB ^= toBB;
-            p_self.pieceBB[@intFromEnum(victim)] ^= toBB;
-            p_self.victim = victim;
-            hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
-            p_self.halfMoveClock = 0;
-            if (isRookPiece(victim)) {
-                p_self.stat = p_self.stat.onRookMove(toBB, !white);
-            }
 
-            p_self.pieceCount[@intFromEnum(victim)] -= 1;
-        }
+        p_self.halfMoveClock += 1;
 
         if (isKingPiece(fromPiece)) {
             if (comptime white) {
@@ -1105,20 +1200,6 @@ pub const Board_state = struct {
             } else if (move.isDoublePush()) {
                 // middle between from and to
                 p_self.enPassantIdx = (fromSq + toSq) / 2;
-            } else if (move.isEnpassant()) {
-                const victimSq: e_square = getSqFromCoord(getSqIdxRank(fromSq), getSqIdxFile(toSq));
-                const victimBB = sqToBitboard(victimSq);
-                const bisBB = victimBB | toBB;
-
-                p_self.pieceArray[@intFromEnum(victimSq)] = .nEmptySquare;
-
-                p_self.pieceBB[@intFromEnum(victim)] ^= bisBB;
-
-                p_self.c_occupiedBB[@intFromBool(!p_self.whiteToMove())] ^= bisBB;
-
-                p_self.occupiedBB ^= bisBB;
-                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][@intFromEnum(victimSq)]);
-                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
             }
 
             p_self.invert_turn();

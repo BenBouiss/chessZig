@@ -17,8 +17,8 @@ pub const simpleCheckMateScore: scoreType = 99999;
 pub const simpleStalemateScore: scoreType = 0;
 
 // ============ pawn structure ============
-pub const simpleIsolatedPawnScore: scoreType = -1;
-pub const simpleStackedPawnScore: scoreType = -1;
+pub const simpleIsolatedPawnScore: scoreType = 1;
+pub const simpleStackedPawnScore: scoreType = 1;
 pub const simplePassedPawnScore: scoreType = 2;
 
 // ============ structure ============

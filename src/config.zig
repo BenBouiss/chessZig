@@ -23,9 +23,10 @@ pub const DEFAULT_TRACKMETRICS = false;
 pub const _DEFAULT_TRACKMETRICS = "false";
 
 pub const DEFAULT_USEHASHTABLE = false;
+pub const _DEFAULT_USEHASHTABLE = "false";
 
-pub const DEFAULT_USE_NULLPRUNE = false;
-pub const _DEFAULT_USE_NULLPRUNE = "false";
+pub const DEFAULT_USE_NULLPRUNE = true;
+pub const _DEFAULT_USE_NULLPRUNE = "true";
 
 pub const ORDERING_LINE_VALUE = 9999;
 

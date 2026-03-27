@@ -180,14 +180,16 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues, _pha
 pub fn evaluate_pawnStructure(p_state: *chess.Board_state, values: *heuristicValues, _phase: scoreType) scoreType {
     const wp = p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
     const bp = p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
+    // in an effort to have the weights all positive I swapped the diff, (nBlackIsolated - nWhiteIsolated) * (w>0) means that white is advantaged (s>0) if (nBlackIsolated > nWhiteIsolated) and black is advantaged(s<0) if (nBlackIsolated < nWhiteIsolated)
+    // same for doubled as doubled and isolated are seen as negative attributes hence why I chose negative weights to penalize the respective sides.
 
     const nWhiteIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(wp)));
     const nBlackIsolated: i8 = @intCast(chess.l_popcount(chess.isolatedPawns(bp)));
-    const isolatedScore = computeTapered(values.IsolatedPawnValue[MG], values.IsolatedPawnValue[EG], _phase) * @as(scoreType, @intCast(nWhiteIsolated - nBlackIsolated));
+    const isolatedScore = computeTapered(values.IsolatedPawnValue[MG], values.IsolatedPawnValue[EG], _phase) * @as(scoreType, @intCast(nBlackIsolated - nWhiteIsolated));
 
     const nWhiteDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(wp)));
     const nBlackDoubled: i8 = @intCast(chess.l_popcount(chess.stackedPawns(bp)));
-    const doubledPawnScore = computeTapered(values.StackedPawnValue[MG], values.StackedPawnValue[EG], _phase) * @as(scoreType, @intCast(nWhiteDoubled - nBlackDoubled));
+    const doubledPawnScore = computeTapered(values.StackedPawnValue[MG], values.StackedPawnValue[EG], _phase) * @as(scoreType, @intCast(nBlackDoubled - nWhiteDoubled));
 
     const nWhitePassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(wp, bp)));
     const nBlackPassed: i8 = @intCast(chess.l_popcount(chess.passedPawns(bp, wp)));
