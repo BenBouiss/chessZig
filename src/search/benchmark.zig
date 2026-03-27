@@ -57,6 +57,11 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
         sched.setEngine(p_engine);
         sched.features.fixedDepth = true;
         sched.reportProgress = false;
+        if (sched.turn) {
+            sched.timeM.remainingTimeMs = p_engine.searcher.config.wtime;
+        } else {
+            sched.timeM.remainingTimeMs = p_engine.searcher.config.btime;
+        }
 
         const res = sched.entryPointSearch(benchmarkDepth);
         results.append(p_engine.alloc, res) catch unreachable;

@@ -157,7 +157,7 @@ pub const scheduler = struct {
     pub inline fn setThreadPack(p_self: *scheduler, p_pack: *threadPackageArray) void {
         p_self.p_threadPack = p_pack;
     }
-    pub fn _startThreadPack(p_self: *scheduler, alloc: std.mem.Allocator) !void {
+    pub fn _startThreadPack(p_self: *scheduler, alloc: std.mem.Allocator, maxDepth: u16) !void {
         _ = alloc;
         threadingl.zeroThreadPackArray(p_self.p_threadPack);
         for (0..p_self.p_threadPack.len) |thread_id| {
@@ -167,7 +167,7 @@ pub const scheduler = struct {
             p_self.p_threadPack.items(._tInfo)[thread_id].alive = true;
             p_self.p_threadPack.items(._tInfo)[thread_id].working = true;
 
-            p_self.p_threadPack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, _startSearch, .{ p_self, &p_self.p_threadPack.items(.chessState)[thread_id], &p_self.p_threadPack.items(._tInfo)[thread_id], p_self.features });
+            p_self.p_threadPack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, _startSearch, .{ p_self, &p_self.p_threadPack.items(.chessState)[thread_id], &p_self.p_threadPack.items(._tInfo)[thread_id], p_self.features, maxDepth });
         }
     }
     pub fn startThreadPack(p_self: *scheduler, alloc: std.mem.Allocator) ![]alphaBetal.depthCommunication {
@@ -279,7 +279,7 @@ pub const scheduler = struct {
         if (p_self.features.useStaticSearch) {
             return p_self.staticLoop(depth);
         } else {
-            return p_self.incrementalLoop();
+            return p_self.incrementalLoop(depth);
         }
     }
     pub fn extractBest(p_self: *scheduler) moveDecisionExt {
@@ -334,12 +334,12 @@ pub const scheduler = struct {
         const res = threadingl.getCombinedFromPack(p_self.p_threadPack);
         return .{ .move = decision.move, .timeTakenMs = p_self.timeM.timeSinceStartMs(), .searchStat = res.searchStat };
     }
-    pub fn incrementalLoop(p_self: *scheduler) searchReport {
+    pub fn incrementalLoop(p_self: *scheduler, maxDepth: u16) searchReport {
         p_self.timeM.startSearchTick();
         defer p_self.timeM.stopWatch.stop();
         defer p_self.engineSet = false;
 
-        p_self._startThreadPack(p_self.alloc) catch {
+        p_self._startThreadPack(p_self.alloc, maxDepth) catch {
             return .{};
         };
 
@@ -354,7 +354,9 @@ pub const scheduler = struct {
         while (stat == .CONTINUE) {
             count += 1;
             if (count % countTimePrint == 0) {
-                p_self.sendUpdate();
+                if (p_self.reportProgress) {
+                    p_self.sendUpdate();
+                }
                 count = 0;
             }
             std.Thread.sleep(tickrate);
@@ -453,7 +455,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
         p_engine.metric.addTimeToSearchingMs(rep.timeTakenMs);
     }
 }
-pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_info: *threadingl.threadInfo, features: searchFeatures) void {
+pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
     // everything gets "returned" via the p_info
     // launched as single threaded
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
@@ -463,11 +465,13 @@ pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_inf
     var line: movel.line = .{};
     _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line);
     var decision = &p_info.currentBest;
-    while (p_info.alive and canExtendSearch(&sched.timeM, depth, configl.MAXIMUM_SEARCH_DEPTH, decision, &features)) {
+    while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, decision, &features)) {
         depth += 1;
         _ = (alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line));
         decision = &p_info.currentBest;
-        sendPartial(sched, depth, decision, p_info);
+        if (sched.reportProgress) {
+            sendPartial(sched, depth, decision, p_info);
+        }
     }
 }
 
