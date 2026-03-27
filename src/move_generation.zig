@@ -853,16 +853,14 @@ pub fn moveGenPawnBB(p_board: *const Board_state, comptime white: bool, emptyOrE
 }
 
 pub inline fn moveGenKnightBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
-    p_out.knightMoves = chess.EMPTY;
     if (comptime white) {
-        p_out.knightMoves |= (chess.knightAttacks(p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) & emptyOrEnemy;
+        p_out.knightMoves = (chess.knightAttacks(p_board.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) & emptyOrEnemy;
     } else {
-        p_out.knightMoves |= (chess.knightAttacks(p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)])) & emptyOrEnemy;
+        p_out.knightMoves = (chess.knightAttacks(p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)])) & emptyOrEnemy;
     }
 }
 
 pub fn moveGenKingBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
-    p_out.kingMoves = chess.EMPTY;
     if (comptime white) {
         p_out.kingMoves = chess.getKingAttacks(p_board.wKingSq) & emptyOrEnemy;
         const kingBB = p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)];
@@ -885,79 +883,46 @@ pub fn moveGenKingBB(p_board: *const Board_state, comptime white: bool, emptyOrE
 }
 pub inline fn moveGenBishopBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
     p_out.bishopMoves = chess.EMPTY;
+    var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)];
     if (comptime white) {
-        var _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)];
-        while (_bb != 0) {
-            const sq = chess.bitscan(_bb);
-            _bb &= _bb - 1;
-            p_out.bishopMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
-        }
-        p_out.bishopMoves &= emptyOrEnemy;
-    } else {
-        var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)];
-        while (_bb != 0) {
-            const sq = chess.bitscan(_bb);
-            _bb &= _bb - 1;
-            p_out.bishopMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
-        }
-        p_out.bishopMoves &= emptyOrEnemy;
+        _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)];
     }
+    while (_bb != 0) {
+        const sq = chess.bitscan(_bb);
+        _bb &= _bb - 1;
+        p_out.bishopMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
+    }
+    p_out.bishopMoves &= emptyOrEnemy;
 }
 pub inline fn moveGenRookBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
     p_out.rookMoves = chess.EMPTY;
+    var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)];
     if (comptime white) {
-        var _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)];
-        while (_bb != 0) {
-            const sq = chess.bitscan(_bb);
-            _bb &= _bb - 1;
-            p_out.rookMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
-        }
-        p_out.rookMoves &= emptyOrEnemy;
-    } else {
-        var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)];
-        while (_bb != 0) {
-            const sq = chess.bitscan(_bb);
-            _bb &= _bb - 1;
-            p_out.rookMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
-        }
-        p_out.rookMoves &= emptyOrEnemy;
+        _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)];
     }
+    while (_bb != 0) {
+        const sq = chess.bitscan(_bb);
+        _bb &= _bb - 1;
+        p_out.rookMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
+    }
+    p_out.rookMoves &= emptyOrEnemy;
 }
 
 pub inline fn moveGenQueenBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
     p_out.queenMoves = chess.EMPTY;
+    var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)];
     if (comptime white) {
-        var _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)];
-        while (_bb != 0) {
-            const sq = chess.bitscan(_bb);
-            _bb &= _bb - 1;
-            p_out.queenMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
-            p_out.queenMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
-        }
-        p_out.queenMoves &= emptyOrEnemy;
-    } else {
-        var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)];
-        while (_bb != 0) {
-            const sq = chess.bitscan(_bb);
-            _bb &= _bb - 1;
-            p_out.queenMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
-            p_out.queenMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
-        }
-        p_out.queenMoves &= emptyOrEnemy;
+        _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)];
     }
+    while (_bb != 0) {
+        const sq = chess.bitscan(_bb);
+        _bb &= _bb - 1;
+        p_out.queenMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
+        p_out.queenMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
+    }
+    p_out.queenMoves &= emptyOrEnemy;
 }
 
-pub fn cst_moveGenBB(p_board: *const Board_state, comptime white: bool) moveBBState {
-    var ret: moveBBState = .{};
-    const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(white)];
-    moveGenPawnBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenKnightBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenBishopBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenRookBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenQueenBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenKingBB(p_board, white, EmptyOrEnemy, &ret);
-    return ret;
-}
 pub const generationModifiers = enum { NORMAL, QUIETMOVE, CAPTURES, ALL };
 pub fn cst_moveGenBB_extra(p_board: *const Board_state, comptime white: bool, comptime extra: generationModifiers) moveBBState {
     var ret: moveBBState = .{};
@@ -991,149 +956,16 @@ pub inline fn moveGenBB(p_board: *const Board_state) moveBBState {
     }
     return cst_moveGenBB(p_board, false);
 }
-
-// Kogge-stone algo section
-// source: https://www.chessprogramming.org/Kogge-Stone_Algorithm
-
-pub fn northOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free;
-    gen |= pro & (gen << 8);
-    pro &= pro << 8;
-    gen |= pro & (gen << 16);
-    pro &= pro << 16;
-    gen |= pro & (gen << 32);
-    return gen;
-}
-pub fn northOne(bb: u64) u64 {
-    return (bb << 8);
-}
-pub fn southOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free;
-    gen |= pro & (gen >> 8);
-    pro &= pro >> 8;
-    gen |= pro & (gen >> 16);
-    pro &= pro >> 16;
-    gen |= pro & (gen >> 32);
-    return gen;
-}
-
-pub fn southOne(bb: u64) u64 {
-    return (bb >> 8);
-}
-
-pub fn eastOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free & chess.notHFile;
-
-    gen |= pro & (gen << 1);
-    pro &= pro << 1;
-    gen |= pro & (gen << 2);
-    pro &= pro << 2;
-    gen |= pro & (gen << 4);
-    return gen;
-}
-pub fn eastOne(bb: u64) u64 {
-    return ((bb & chess.notHFile) << 1);
-}
-
-pub fn westOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free & chess.notAFile;
-
-    gen |= pro & (gen >> 1);
-    pro &= pro >> 1;
-    gen |= pro & (gen >> 2);
-    pro &= pro >> 2;
-    gen |= pro & (gen >> 4);
-    return gen;
-}
-pub fn westOne(bb: u64) u64 {
-    return ((bb & chess.notAFile) >> 1);
-}
-
-pub fn northEastOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free & chess.notHFile;
-
-    gen |= pro & (gen << 9);
-    pro &= pro << 9;
-    gen |= pro & (gen << 18);
-    pro &= pro << 18;
-    gen |= pro & (gen << 36);
-    return gen;
-}
-pub fn northEastOne(bb: u64) u64 {
-    return (bb & chess.notHFile) << 9;
-}
-
-pub fn northWestOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free & chess.notHFile;
-
-    gen |= pro & (gen << 7);
-    pro &= pro << 7;
-    gen |= pro & (gen << 14);
-    pro &= pro << 14;
-    gen |= pro & (gen << 28);
-    return gen;
-}
-pub fn northWestOne(bb: u64) u64 {
-    return (bb & chess.notHFile) << 7;
-}
-
-pub fn southEastOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free & chess.notAFile;
-
-    gen |= pro & (gen >> 7);
-    pro &= pro >> 7;
-    gen |= pro & (gen >> 14);
-    pro &= pro >> 14;
-    gen |= pro & (gen >> 28);
-    return gen;
-}
-pub fn southEastOne(bb: u64) u64 {
-    return ((bb & chess.notAFile) >> 7);
-}
-
-pub fn southWestOccl(pieceBB: u64, free: u64) u64 {
-    var gen: u64 = pieceBB;
-    var pro: u64 = free & chess.notHFile;
-
-    gen |= pro & (gen >> 9);
-    pro &= pro >> 9;
-    gen |= pro & (gen >> 18);
-    pro &= pro >> 18;
-    gen |= pro & (gen >> 36);
-    return gen;
-}
-pub fn southWestOne(bb: u64) u64 {
-    return ((bb & chess.notHFile) >> 9);
-}
-
-// kogge-stone algo
-pub fn diagPinned(attBB: u64, kingBB: u64, free: u64) u64 {
-    const _free = free ^ kingBB;
-    var intersect = northEastOne(northEastOccl(attBB, _free)) & southWestOne(southWestOccl(kingBB, _free));
-
-    intersect |= northWestOne(northWestOccl(attBB, _free)) & southEastOne(southEastOccl(kingBB, _free));
-
-    intersect |= southEastOne(southEastOccl(attBB, _free)) & northWestOne(northWestOccl(kingBB, _free));
-
-    intersect |= southWestOne(southWestOccl(attBB, _free)) & northEastOne(northEastOccl(kingBB, _free));
-    return intersect;
-}
-pub fn linePinned(attBB: u64, kingBB: u64, free: u64) u64 {
-    const _free = free ^ kingBB;
-    var intersect = northOne(northOccl(attBB, _free)) & southOne(southOccl(kingBB, _free));
-    intersect |= southOne(southOccl(attBB, _free)) & northOne(northOccl(kingBB, _free));
-
-    intersect |= eastOne(eastOccl(attBB, _free)) & westOne(westOccl(kingBB, _free));
-
-    intersect |= westOne(westOccl(attBB, _free)) & eastOne(eastOccl(kingBB, _free));
-    return intersect;
+pub fn cst_moveGenBB(p_board: *const Board_state, comptime white: bool) moveBBState {
+    var ret: moveBBState = .{};
+    const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(white)];
+    moveGenPawnBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenKnightBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenBishopBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenRookBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenQueenBB(p_board, white, EmptyOrEnemy, &ret);
+    moveGenKingBB(p_board, white, EmptyOrEnemy, &ret);
+    return ret;
 }
 
 pub const qbb = struct {
@@ -1361,4 +1193,124 @@ pub fn cst_generateLegalMoves_ordered(p_board: *const Board_state, comptime capt
     }
 
     return moveGenBBToMoveContainer(p_board, &ret);
+}
+// Kogge-stone algo section
+// source: https://www.chessprogramming.org/Kogge-Stone_Algorithm
+
+pub fn northOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free;
+    gen |= pro & (gen << 8);
+    pro &= pro << 8;
+    gen |= pro & (gen << 16);
+    pro &= pro << 16;
+    gen |= pro & (gen << 32);
+    return gen;
+}
+pub fn northOne(bb: u64) u64 {
+    return (bb << 8);
+}
+pub fn southOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free;
+    gen |= pro & (gen >> 8);
+    pro &= pro >> 8;
+    gen |= pro & (gen >> 16);
+    pro &= pro >> 16;
+    gen |= pro & (gen >> 32);
+    return gen;
+}
+
+pub fn southOne(bb: u64) u64 {
+    return (bb >> 8);
+}
+
+pub fn eastOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen << 1);
+    pro &= pro << 1;
+    gen |= pro & (gen << 2);
+    pro &= pro << 2;
+    gen |= pro & (gen << 4);
+    return gen;
+}
+pub fn eastOne(bb: u64) u64 {
+    return ((bb & chess.notHFile) << 1);
+}
+
+pub fn westOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notAFile;
+
+    gen |= pro & (gen >> 1);
+    pro &= pro >> 1;
+    gen |= pro & (gen >> 2);
+    pro &= pro >> 2;
+    gen |= pro & (gen >> 4);
+    return gen;
+}
+pub fn westOne(bb: u64) u64 {
+    return ((bb & chess.notAFile) >> 1);
+}
+
+pub fn northEastOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen << 9);
+    pro &= pro << 9;
+    gen |= pro & (gen << 18);
+    pro &= pro << 18;
+    gen |= pro & (gen << 36);
+    return gen;
+}
+pub fn northEastOne(bb: u64) u64 {
+    return (bb & chess.notHFile) << 9;
+}
+
+pub fn northWestOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen << 7);
+    pro &= pro << 7;
+    gen |= pro & (gen << 14);
+    pro &= pro << 14;
+    gen |= pro & (gen << 28);
+    return gen;
+}
+pub fn northWestOne(bb: u64) u64 {
+    return (bb & chess.notHFile) << 7;
+}
+
+pub fn southEastOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notAFile;
+
+    gen |= pro & (gen >> 7);
+    pro &= pro >> 7;
+    gen |= pro & (gen >> 14);
+    pro &= pro >> 14;
+    gen |= pro & (gen >> 28);
+    return gen;
+}
+pub fn southEastOne(bb: u64) u64 {
+    return ((bb & chess.notAFile) >> 7);
+}
+
+pub fn southWestOccl(pieceBB: u64, free: u64) u64 {
+    var gen: u64 = pieceBB;
+    var pro: u64 = free & chess.notHFile;
+
+    gen |= pro & (gen >> 9);
+    pro &= pro >> 9;
+    gen |= pro & (gen >> 18);
+    pro &= pro >> 18;
+    gen |= pro & (gen >> 36);
+    return gen;
+}
+pub fn southWestOne(bb: u64) u64 {
+    return ((bb & chess.notHFile) >> 9);
 }

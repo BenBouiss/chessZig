@@ -84,7 +84,6 @@ pub const moveDecisionExt = struct {
     }
 };
 
-const TIME_BUFFER_SIZE: usize = 20;
 pub const timeManager = struct {
     stopWatch: timel.stopWatch = .{},
     remainingTimeMs: i64 = 0,
@@ -349,18 +348,25 @@ pub const scheduler = struct {
         var decision: moveDecisionExt = .{};
         var countTimePrint = @divFloor(configl.INFO_TICKRATE_NS, tickrate);
         countTimePrint = @max(1, countTimePrint);
+        var count: usize = 0;
 
         var stat = p_self.getSearchStatus();
         while (stat == .CONTINUE) {
+            count += 1;
+            if (count % countTimePrint == 0) {
+                p_self.sendUpdate();
+                count = 0;
+            }
+            std.Thread.sleep(tickrate);
             stat = p_self.getSearchStatus();
-            if (stat == .INTERRUPTED) {
-                break;
-            } else if (stat == .FINISHED) {
+            if (stat == .INTERRUPTED or stat == .FINISHED) {
                 decision = p_self.extractBest();
                 break;
             }
         }
-        std.debug.print("[DEBUG] _incrementalLoop: last status: {}\n", .{stat});
+        if (p_self.isDebugMode()) {
+            std.debug.print("[DEBUG] incrementalLoop: last status: {}\n", .{stat});
+        }
 
         p_self.sendFinal(&decision);
         p_self.handleInterrupt();
@@ -429,7 +435,7 @@ pub fn dispatchUciGoThreads(p_engine: *enginel.engine, moveArray: movel.moveCont
     sched.setThreadPack(&pack);
     sched.reportProgress = true;
 
-    // FIXME:
+    // FIXME: !!!
     sched.setEngine(p_engine);
     if (sched.turn) {
         sched.timeM.remainingTimeMs = searcher.config.wtime;

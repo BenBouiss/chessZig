@@ -232,3 +232,4 @@ After placing the iterative deepening in the working thread part thus removing, 
 2 6 0
 Time spent processin 316.599 ms, time spent searching 276451 ms
 Also this texel weight is bad
+Ofcourse the matches beeing different also mean that the time spent searching cannot be fully compared in good faith, however having seen the updated "TUI" the partial info do seem to come much faster 
