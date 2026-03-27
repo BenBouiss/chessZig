@@ -134,3 +134,11 @@ sections:
 - {piece}value, WIP way to set the individual piece heuristic values, primarely used in the piece counting phase of the evaluation function
 - more to come as the evaluation gets more complex
 
+Performance profiling:
+Currently the way to test wether a feature accelerates chess operations is to launch a perft and profile the resulting ELF file with [samply]. An exemple of profiling can be found below:
+```
+ samply record ./zig-out/bin/chess
+```
+Samply has been a great tool to debug performance issues, especially the tricky ones (ie: magic table indexing see src/magic.zig getBishopMoves()).
+
+

@@ -143,7 +143,8 @@ pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
 
 pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
     const magic = p_magicTable.bishopMagic[@intFromEnum(sq)];
-    // precomputed then indexing removes the memcpy of indexing then computing then indexing again leading to better perf
+    // precomputed then indexing removes the memcpy(of the entire table) of indexing then computing then indexing a second time leading to better perf
+    // prev: p_magicTable.bishopMoves[@intFromEnum(sq)][(hash >> @intCast(64 - BISHOP_FIXED_BIT))]; or something similar
     // from: Compiler explorer
 
     const _blockers = blockers & magic.mask;
