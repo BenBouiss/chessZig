@@ -126,6 +126,7 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
     p_info.working = true;
     defer p_info.working = false;
     defer p_info.alive = false;
+
     if (depth == 0) {
         p_info.searchStat.n_nodeExplored += 1;
         return;
@@ -150,7 +151,10 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
         p_info.searchStat.n_nodeExplored += 1;
         return 1;
     }
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    //var fmoves: moveContainer = undefined;
+    //fmoves.len = 0;
+    const fmoves = moveGenl.generateLegalMoves(p_state);
+
     if (feats.useBatched and depth == 1) {
         p_info.searchStat.n_nodeExplored += fmoves.len;
         return fmoves.len;

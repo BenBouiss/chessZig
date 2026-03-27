@@ -36,18 +36,25 @@ pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
     const ret: IMove = .{ .m_move = m_move, .m_piece = m_piece };
     return ret;
 }
+pub fn build_move_in(from: u8, to: u8, flag: u8, piece: e_piece, p_out: *moveContainer) *IMove {
+    var m_move: u16 = (flag);
+    var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare));
+    m_piece <<= 8;
+    m_piece |= @intFromEnum(piece);
 
-pub fn build_move_reduce(from: u8, to: u8, flag: e_moveFlags) IMove {
-    var m_move: u16 = (@intFromEnum(flag) & 0xF);
     m_move <<= 6;
-    m_move |= (to & 0x3F);
+    m_move |= (to);
     m_move <<= 6;
-    m_move |= (from & 0x3F);
-    return .{ .m_move = m_move };
+    m_move |= (from);
+    //p_out.moves[p_out.len] = .{ .m_move = (((@as(u16, @intCast(flag)) & 0xF) << 12) | ((@as(u16, @intCast(to)) & 0x3F) << 6) | (@as(u16, @intCast(from)) & 0x3F)), .m_piece = m_piece };
+    p_out.moves[p_out.len] = .{ .m_move = m_move, .m_piece = m_piece };
+    p_out.len += 1;
+    return &p_out.moves[p_out.len - 1];
 }
 
 pub const IMove = struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
+    //tried to breakdown the m_move, into flag: u8, from: u8, to: u8, performance went down in perft ~130141000 nps at the end from ~155481000.
     m_move: u16 = 0,
     // first 8 bits = start_piece, last = capture_piece
     m_piece: u16 = 0,
