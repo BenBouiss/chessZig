@@ -118,19 +118,10 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
     }
     var canFutility: bool = false;
-    var futilityGap: scoreType = 0;
-    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore) {
-        const static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
-        futilityGap = _alpha - static_eval - heuristicl.futilityMargin[1];
-        if (depth <= 1 and futilityGap > 0) {
-            const failLow = heuristicl.e_pieceToHeuristic(p_state.firstPiece(!p_state.whiteToMove()), &heuristicl.globalHeuristic);
-            if (failLow < futilityGap) {
-                return futilityGap;
-            }
-            canFutility = true;
-            // following this discard(or skip) all capture moves where heuristicl.e_pieceToHeuristic(Victim) < futilityGap
-            //
-        }
+    var static_eval: scoreType = 0;
+    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and heuristicl.sideCountScore(p_state, p_state.whiteToMove(), &heuristicl.globalHeuristic) > heuristicl.globalHeuristic.RookValue and depth <= 2) {
+        static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+        canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
@@ -148,7 +139,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         const move: IMove = fmoves.moves[idx];
 
         if (canFutility) {
-            if (move.isCapture() and heuristicl.e_pieceToHeuristic(move.getCapturePiece(), &heuristicl.globalHeuristic) < futilityGap and !moveGenl.moveDeliverCheck(p_state, move)) {
+            if (ply > 4 and !moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion()) {
                 continue;
             }
         }

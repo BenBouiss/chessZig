@@ -246,7 +246,6 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
         .nEmptySquare, .nWhite, .nBlack => {
             return 0;
         },
-
         .nWhiteKing, .nBlackKing => {
             return 100 * values.QueenValue;
         },
@@ -266,6 +265,13 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
             return values.QueenValue;
         },
     }
+}
+pub fn sideCountScore(p_state: *const chess.Board_state, white: bool, values: *const heuristicValues) scoreType {
+    var offset: usize = 0;
+    if (!white) {
+        offset = chess.N_PIECES_TYPES;
+    }
+    return p_state.pieceCount[offset] * values.PawnValue + p_state.pieceCount[offset + 1] * values.BishopValue + p_state.pieceCount[offset + 2] * values.KnightValue + p_state.pieceCount[offset + 3] * values.RookValue + p_state.pieceCount[offset + 4] * values.QueenValue;
 }
 
 pub fn getMaskFromBB(bb: u64) [chess.N_SQUARES]scoreType {

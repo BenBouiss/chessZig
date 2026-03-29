@@ -1,14 +1,15 @@
 [engine1]
-path="engines/bin/engine_29_03_26";
-name="prev quiesc";
+path="engines/bin/engine_29_03_26_n";
+name="no futility";
 "setoption name useHash value false";
-"setoption name useQuiescence value true";
+"setoption name useFutility value false";
 
 [engine2]
 path="engines/bin/engine_29_03_26_n";
-name="new quiesc";
+name="futility";
 "setoption name useHash value false";
-"setoption name useQuiescence value true";
+"setoption name useFutility value true";
+
 
 [match]
 nMatch=4;
