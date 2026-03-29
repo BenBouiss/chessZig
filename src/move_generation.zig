@@ -35,6 +35,7 @@ pub inline fn generateLegalMoves(p_board: *const Board_state) moveContainer {
         var moves: moveContainer = undefined;
         moves.len = 0;
         moveGenBBToMoveContainer(p_board, &bbMoves, &moves);
+        //keeping for debug purposes
         //if (comptime useDebug) {
         //    var otherMove: moveContainer = moveGeneration(p_board);
         //    const f_otherMove = filterMoveLegal(p_board, &otherMove, p_board.whiteToMove());
