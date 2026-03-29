@@ -4,7 +4,6 @@ name="no hash";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value false";
-//"setoption name useNullPruning value true";
 
 [engine2]
 path="zig-out/bin/engine";
@@ -12,11 +11,10 @@ name="hash";
 "setoption name UCI_elo value 3000";
 "setoption name fixedDepth value false";
 "setoption name useHash value true";
-"setoption name hash value 1000";
-//"setoption name useNullPruning value true";
+"setoption name hash value 25";
 
 [match]
-nMatch=2;
+nMatch=10;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

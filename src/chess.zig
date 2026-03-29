@@ -45,7 +45,6 @@ pub const ROW_SIZE: u8 = 8;
 pub const COL_SIZE: u8 = 8;
 pub const N_SQUARES: u8 = ROW_SIZE * COL_SIZE;
 pub const MAX_POSSIBLE_MOVE: u8 = 218;
-// prev 15 due to 6 * 2 + w + b + empt
 pub const N_PIECES = 12;
 pub const N_PIECES_TYPES = 6;
 pub const QUEENSIDECASTLEID = 0;
@@ -421,7 +420,6 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.A
             sanityCheckBoardState(p_board);
         }
     }
-
     if (comptime useStaged) {
         getCheckers(p_board, p_board.whiteToMove());
     }
@@ -1309,6 +1307,34 @@ pub const Board_state = struct {
     pub inline fn getPieceCount(self: Board_state, piece: e_piece) u8 {
         return self.pieceCount[@intFromEnum(piece)];
     }
+    //https://home.hccnet.nl/h.g.muller/deepfut.html
+    pub fn getNthBestPiece(self: *const Board_state, colorOffset: usize, n: u8) e_piece {
+        var _n: i32 = @intCast(n);
+        for (1..N_PIECES_TYPES) |idx| {
+            const pieceIdx = colorOffset + (N_PIECES_TYPES - 1) - idx;
+            const count = self.pieceCount[pieceIdx];
+            _n -= count;
+            if (_n <= 0) {
+                return @enumFromInt(pieceIdx);
+            }
+        }
+        // returns the king if no piece found
+        return @enumFromInt(colorOffset + N_PIECES_TYPES - 1);
+    }
+    pub inline fn firstPiece(self: *const Board_state, white: bool) e_piece {
+        if (white) {
+            return self.getNthBestPiece(0, 1);
+        } else {
+            return self.getNthBestPiece(N_PIECES_TYPES, 1);
+        }
+    }
+    pub inline fn secondPiece(self: *const Board_state, white: bool) e_piece {
+        if (white) {
+            return self.getNthBestPiece(0, 2);
+        } else {
+            return self.getNthBestPiece(N_PIECES_TYPES, 2);
+        }
+    }
     pub inline fn getSidePieceCount(self: Board_state, color: e_color) u8 {
         return l_popcount(self.c_occupiedBB[@intFromEnum(color)]);
     }
@@ -1686,6 +1712,34 @@ pub inline fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
 pub inline fn getKingAttacks(sq: e_square) u64 {
     return tablel.cachedKingTable.KingAttack[@intFromEnum(sq)];
 }
+pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) u64 {
+    switch (piece) {
+        .nWhiteKing, .nBlackKing => {
+            return getKingAttacks(sq);
+        },
+        .nWhiteBishop, .nBlackBishop => {
+            return getBishopAttacks(occ, sq);
+        },
+        .nWhiteRook, .nBlackRook => {
+            return getRookAttacks(occ, sq);
+        },
+        .nWhiteKnight, .nBlackKnight => {
+            return knightAttacks(sqToBitboard(sq));
+        },
+        .nWhitePawn => {
+            return getPawnAttacks(sq, true);
+        },
+        .nBlackPawn => {
+            return getPawnAttacks(sq, false);
+        },
+        .nWhiteQueen, .nBlackQueen => {
+            return getQueenAttacks(occ, sq);
+        },
+        .nWhite, .nBlack, .nEmptySquare => {
+            @panic("???");
+        },
+    }
+}
 
 pub inline fn xrayRookAttacks(occ: u64, blockers: u64, rookSq: e_square) u64 {
     const attacks = getRookAttacks(occ, rookSq);
@@ -1956,7 +2010,8 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
         p_board.pinnedBB = moveGenl.getPinned_avx2(p_board, white);
     } else {
         var pinned: u64 = 0;
-        const rBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedRookAtt) ^ p_board.occupiedBB;
+        //const rBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedRookAtt) ^ p_board.occupiedBB;
+        const rBlockers = (p_board.occupiedBB & cachedRookAtt) ^ p_board.occupiedBB;
         var pinner = (cachedRookAtt ^ getRookAttacks(rBlockers, king_E)) & rq;
         while (pinner != EMPTY) {
             const pinsq = bitscan(pinner);
@@ -1964,7 +2019,8 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
             pinned |= inBetween(@enumFromInt(pinsq), king_E);
         }
 
-        const bBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedBishAtt) ^ p_board.occupiedBB;
+        //const bBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedBishAtt) ^ p_board.occupiedBB;
+        const bBlockers = (p_board.occupiedBB & cachedBishAtt) ^ p_board.occupiedBB;
         pinner = (cachedBishAtt ^ getBishopAttacks(bBlockers, king_E)) & bq;
         while (pinner != EMPTY) {
             const pinsq = bitscan(pinner);
@@ -2093,6 +2149,7 @@ pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square
     return ret_flag;
 }
 pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 {
+    // only used in the algebraic "decoding"
     var ret: u64 = EMPTY;
 
     const destBB = sqToBitboard(X);
@@ -2244,7 +2301,7 @@ pub fn test_scenarios() !void {
 }
 
 pub fn pin_scenario() !void {
-    const fen = "k1p4R/1q2q1rq/8/Q2PP3/q2PKP1q/3PPP2/4q1q1/1q6 b - - 0 0";
+    const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     std.debug.print("[DEBUG] pin scenario: {s}\n", .{fen});
 
     var board = getBoardFromFen(mainl.GLOBAL_ALLOC, fen) catch {
@@ -2263,65 +2320,9 @@ pub fn pin_scenario() !void {
     print_bitboard(board.checkersBB);
     std.debug.print("[DEBUG] _pin_scenario: B pinned \n", .{});
     print_bitboard(board.pinnedBB);
-    var sq: e_square = .a1;
-    var sqInfo: squareInfo = squareInfo.init(sq);
+    std.debug.print("[DEBUG] _pin_scenario: does B5A5 gives check? {} \n", .{moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(e_square.b5), @intFromEnum(e_square.a5), @intFromEnum(e_moveFlags.QUIETMOVE), .nWhiteQueen))});
 
-    std.debug.print("[DEBUG] _pin_scenario: bb for d4\n", .{});
-    sq = .d4;
-    sqInfo = squareInfo.init(sq);
-    var bb: u64 = 0;
-    bb = magicl.getBishopMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    print_bitboard(sqInfo.getDiagBB());
-    print_bitboard(sqInfo.getAntiDiagBB());
-
-    bb = magicl.getRookMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    print_bitboard(sqInfo.getFileBB());
-    print_bitboard(sqInfo.getRankBB());
-
-    //if (true)
-    //    return;
-    std.debug.print("[DEBUG] _pin_scenario: bb for d5\n", .{});
-    sq = .d5;
-    bb = magicl.getBishopMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    bb = magicl.getRookMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    std.debug.print("[DEBUG] _pin_scenario: bb for e5\n", .{});
-    sq = .e5;
-    bb = magicl.getBishopMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    bb = magicl.getRookMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-
-    std.debug.print("[DEBUG] _pin_scenario: bb for f5\n", .{});
-    sq = .f5;
-    bb = magicl.getBishopMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    bb = magicl.getRookMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-
-    std.debug.print("[DEBUG] _pin_scenario: bb for f4\n", .{});
-    sq = .f4;
-    bb = magicl.getBishopMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    bb = magicl.getRookMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-
-    std.debug.print("[DEBUG] _pin_scenario: bb for f3\n", .{});
-    sq = .f3;
-    bb = magicl.getBishopMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    bb = magicl.getRookMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-
-    std.debug.print("[DEBUG] _pin_scenario: bb for e3\n", .{});
-    sq = .e3;
-    bb = magicl.getBishopMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
-    bb = magicl.getRookMoves(sq, board.occupiedBB);
-    print_bitboard(bb);
+    std.debug.print("[DEBUG] _pin_scenario: does C8D6 gives check? {} \n", .{moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(e_square.c8), @intFromEnum(e_square.d6), @intFromEnum(e_moveFlags.QUIETMOVE), .nWhiteKnight))});
 
     utils.askContinue();
 

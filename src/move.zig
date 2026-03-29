@@ -51,6 +51,21 @@ pub fn build_move_in(from: u8, to: u8, flag: u8, piece: e_piece, p_out: *moveCon
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];
 }
+pub fn build_capture_move_in(from: u8, to: u8, flag: u8, fPiece: e_piece, cPiece: e_piece, p_out: *moveContainer) *IMove {
+    var m_move: u16 = (flag);
+    var m_piece: u16 = (@intFromEnum(cPiece));
+    m_piece <<= 8;
+    m_piece |= @intFromEnum(fPiece);
+
+    m_move <<= 6;
+    m_move |= (to);
+    m_move <<= 6;
+    m_move |= (from);
+    //p_out.moves[p_out.len] = .{ .m_move = (((@as(u16, @intCast(flag)) & 0xF) << 12) | ((@as(u16, @intCast(to)) & 0x3F) << 6) | (@as(u16, @intCast(from)) & 0x3F)), .m_piece = m_piece };
+    p_out.moves[p_out.len] = .{ .m_move = m_move, .m_piece = m_piece };
+    p_out.len += 1;
+    return &p_out.moves[p_out.len - 1];
+}
 
 pub const IMove = struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
@@ -501,7 +516,7 @@ pub const moveBBState = struct {
     queenSideCastlingMoves: u64 = 0,
     kingSideCastlingMoves: u64 = 0,
 
-    pub fn resetAll(p_self: *moveBBState) void {
+    pub inline fn resetAll(p_self: *moveBBState) void {
         p_self.* = .{};
     }
     pub fn resetPiece(p_self: *moveBBState, piece: e_piece) void {
@@ -532,20 +547,20 @@ pub const moveBBState = struct {
         }
     }
 
-    pub fn isEmpty(self: moveBBState) bool {
+    pub inline fn isEmpty(self: *const moveBBState) bool {
         return (self.pawnMoves | self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.doubleMoves) == chess.EMPTY;
     }
-    pub fn getAttackedMask(self: moveBBState, occB: u64) u64 {
+    pub inline fn getAttackedMask(self: *const moveBBState, occB: u64) u64 {
         return (self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves) & occB;
     }
-    pub fn andFn(self: moveBBState, bb: u64) moveBBState {
+    pub inline fn andFn(self: *const moveBBState, bb: u64) moveBBState {
         return .{ .pawnMoves = self.pawnMoves & bb, .pawnAttacks = self.pawnAttacks & bb, .doubleMoves = self.doubleMoves & bb, .bishopMoves = self.bishopMoves & bb, .knightMoves = self.knightMoves & bb, .rookMoves = self.rookMoves & bb, .queenMoves = self.queenMoves & bb, .kingMoves = self.kingMoves & bb, .enPassantMoves = self.enPassantMoves & bb, .promotionMoves = self.promotionMoves & bb, .queenSideCastlingMoves = self.queenSideCastlingMoves & bb, .kingSideCastlingMoves = self.kingSideCastlingMoves & bb };
     }
-    pub fn orFn(self: moveBBState, bb: u64) moveBBState {
+    pub inline fn orFn(self: *const moveBBState, bb: u64) moveBBState {
         return .{ .pawnMoves = self.pawnMoves | bb, .pawnAttacks = self.pawnAttacks | bb, .doubleMoves = self.doubleMoves | bb, .bishopMoves = self.bishopMoves | bb, .knightMoves = self.knightMoves | bb, .rookMoves = self.rookMoves | bb, .queenMoves = self.queenMoves | bb, .kingMoves = self.kingMoves | bb, .enPassantMoves = self.enPassantMoves | bb, .promotionMoves = self.promotionMoves | bb, .queenSideCastlingMoves = self.queenSideCastlingMoves | bb, .kingSideCastlingMoves = self.kingSideCastlingMoves | bb };
     }
 
-    pub fn collapse(self: moveBBState) u64 {
+    pub inline fn collapse(self: *const moveBBState) u64 {
         return self.pawnMoves | self.pawnAttacks | self.doubleMoves | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.enPassantMoves | self.promotionMoves | self.queenSideCastlingMoves | self.kingSideCastlingMoves;
     }
 
@@ -608,7 +623,7 @@ pub const moveBBState = struct {
         std.debug.print("King moves: \n", .{});
         chess.print_bitboard(self.kingMoves);
     }
-    pub fn count(self: moveBBState) u64 {
+    pub fn count(self: *const moveBBState) u64 {
         var ret: u64 = @intCast(chess.l_popcount(self.pawnMoves));
         ret += @intCast(chess.l_popcount(self.bishopMoves));
         ret += @intCast(chess.l_popcount(self.doubleMoves));
@@ -623,7 +638,7 @@ pub const moveBBState = struct {
         ret += @intCast(chess.l_popcount(self.rookMoves));
         return ret;
     }
-    pub fn rawCount(p_self: *moveBBState) u64 {
+    pub inline fn rawCount(p_self: *const moveBBState) u64 {
         return @intCast(chess.l_popcount(p_self.collapse()));
     }
 };

@@ -25,7 +25,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, TRACKMETRICS };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, TRACKMETRICS };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -203,7 +203,7 @@ pub const engineMetrics = struct {
     pub fn printMetric(p_self: *const engineMetrics) void {
         const proc: f64 = @as(f64, @floatFromInt(p_self.timeProcessingUs)) / std.time.us_per_ms;
         const search: f64 = @as(f64, @floatFromInt(p_self.timeSearchingUs)) / std.time.us_per_ms;
-        std.debug.print("Time spent processin {d} ms, time spent searching {d} ms\n", .{ proc, search });
+        std.debug.print("Time spent processing {d} ms, time spent searching {d} ms\n", .{ proc, search });
     }
 };
 
@@ -214,6 +214,7 @@ pub const engineOptions = struct {
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useSEE: bool = configl.DEFAULT_USE_SEE,
+    useFutility: bool = configl.DEFAULT_USE_FUTILITY,
 
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
@@ -278,7 +279,6 @@ pub const engine = struct {
         p_self.respond("uciok");
     }
     pub fn initOptions(p_self: *engine) !void {
-        //p_self.addOption(.THREADS, .SPIN,
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
 
         try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
@@ -288,7 +288,9 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
         try p_self.addOption(.{ .name = "useLMR ", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
+
         try p_self.addOption(.{ .name = "useSEE", .optionType = .USESEE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_SEE } } });
+        try p_self.addOption(.{ .name = "useFutility", .optionType = .USEFUTILITY, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_FUTILITY } } });
 
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
@@ -297,6 +299,8 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "useStaticSearch", .optionType = .USESTATICSEARCH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_STATIC_SEARCH } } });
 
         try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
+
+        try p_self.addOption(.{ .name = "printMetric", .optionType = .PRINT_METRIC, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
         try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
@@ -355,7 +359,7 @@ pub const engine = struct {
             p_self.workingThreads.items[i].join();
         }
     }
-    fn executeQuitProcedure(p_self: *engine) bool {
+    pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
         p_self.searcher.interrupt = true;
         if (p_self.trackMetrics()) {
@@ -592,6 +596,16 @@ pub const engine = struct {
                 p_self.options.useSEE = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
+            .USEFUTILITY => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useFutility = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
 
             .HASHTABLESIZE => {
                 const val = getSpinValFromSetOptionCmd(tokens) catch {
@@ -654,6 +668,10 @@ pub const engine = struct {
 
             .CLEAR_HASH => {
                 return p_self.updateHash(p_self.options.hashTableSize);
+            },
+            .PRINT_METRIC => {
+                p_self.metric.printMetric();
+                return true;
             },
             .HEUR_WEIGHTS_PATH => {
                 const path = getStringValFromSetOptionCmd(tokens) catch {
@@ -907,6 +925,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .TRACKMETRICS;
     } else if (utilsl.contains(cmdBuffer, " clearhash", .ignoreCase)) {
         return .CLEAR_HASH;
+    } else if (utilsl.contains(cmdBuffer, " printmetric", .ignoreCase)) {
+        return .PRINT_METRIC;
     } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {
         return .HEUR_WEIGHTS_PATH;
     } else if (utilsl.contains(cmdBuffer, " useQuiescence", .ignoreCase)) {
@@ -916,7 +936,9 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
     } else if (utilsl.contains(cmdBuffer, " useLMR", .ignoreCase)) {
         return .USELATEMOVEREDUC;
     } else if (utilsl.contains(cmdBuffer, " useSEE", .ignoreCase)) {
-        return .USELATEMOVEREDUC;
+        return .USESEE;
+    } else if (utilsl.contains(cmdBuffer, " useFutility", .ignoreCase)) {
+        return .USEFUTILITY;
     }
 
     return .INVALID;

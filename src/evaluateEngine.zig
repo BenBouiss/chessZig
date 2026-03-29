@@ -571,6 +571,7 @@ const guiState = struct {
             }
             return false;
         };
+        p_self.match.nextTurnTrigger = true;
 
         return status;
     }
@@ -716,14 +717,7 @@ const guiState = struct {
         if (!moveArr.items[0].isIn(p_self.match.availableMoves)) {
             return err_gui_bestmove.unknownMove_error;
         }
-        p_self.match.nextTurnTrigger = true;
         p_self.match.nextTurn_move = moveArr.items[0];
-
-        p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
-        p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
-        if (p_self.status.debugMode) {
-            chessl.sanityCheckBoardState(&p_self.match.chessState);
-        }
 
         return true;
     }
@@ -938,12 +932,11 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
 }
 
 fn onNextTurnTrigger(p_self: *guiState) !bool {
-    //p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
-    //p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
-    //if (p_self.status.debugMode) {
-    //    chessl.sanityCheckBoardState(&p_self.match.chessState);
-    //}
-
+    p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
+    p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
+    if (p_self.status.debugMode) {
+        chessl.sanityCheckBoardState(&p_self.match.chessState);
+    }
     try p_self.match.turnComplete(p_self.alloc);
 
     _ = p_self.nextTurn() catch {

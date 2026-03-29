@@ -30,63 +30,6 @@ pub fn getScoreMaskFromTurn(white: bool) scoreType {
     }
     return -1;
 }
-pub const depthCommunication = struct {
-    depth: u16 = 0,
-    line: movel.line = .{},
-    depthSet: bool = false,
-    lock: bool = false,
-    pub fn acquireLock(p_self: *depthCommunication) void {
-        var cumulTime: u64 = 0;
-        while (p_self.lock) {
-            if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
-                std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
-                cumulTime = 0;
-            }
-        }
-        p_self.lock = true;
-    }
-    pub fn releaseLock(p_self: *depthCommunication) void {
-        p_self.lock = false;
-    }
-    pub fn setDepth(p_self: *depthCommunication, depth: u16) void {
-        p_self.acquireLock();
-        if (p_self.depthSet) {
-            // if this hits, it means that a search was already set, and a new one was ordered while the previous one is still ongoing
-            @panic("???");
-        }
-        p_self.depth = depth;
-        p_self.depthSet = true;
-        p_self.releaseLock();
-    }
-    pub fn setLine(p_self: *depthCommunication, line: *const movel.line) void {
-        p_self.acquireLock();
-        p_self.line = line.*;
-        p_self.releaseLock();
-    }
-};
-
-pub fn alphaBetaWaitingRoom(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depthCom: *depthCommunication, feat: searchFeatures) void {
-    // move the iterative deepening here, this saves 7+ back and forth separated by "2" sleeping thread
-    while (p_info.alive) {
-        // for some reason if this function gets updated too fast the scheduler gets bricked in the handleInterrupt method
-        // trying to join on a thread with p_info.alive = false?
-        // FIXME: ???
-
-        std.Thread.sleep(configl.WR_TICKRATE_NS);
-        // wait for a depth to be submitted
-        //std.Thread.sleep(10 * configl.WR_TICKRATE_NS);
-        if (!depthCom.depthSet) {
-            continue;
-        }
-        //std.debug.print("starting search {} depth\n", .{depthCom.depth});
-        depthCom.depthSet = false;
-        if (searchEntrypoint(p_state, p_startingMoves, p_info, depthCom.depth, &feat, &depthCom.line) == 1) {
-            std.debug.print("[ERROR] alphaBetaWaitingRoom: Exiting main thread\n", .{});
-            break;
-        }
-        p_info.working = false;
-    }
-}
 
 pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const searchFeatures, prevLine: *const movel.line) i8 {
     p_info.working = true;
@@ -151,9 +94,9 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
         if (entry.valid) {
             p_info.searchStat.n_hashRetrieve += 1;
-            if (entry.val.search.t == .CUT) {
-                return entry.eval();
-            }
+            //if (entry.val.search.t == .CUT and ply != 0) {
+            //    return entry.eval();
+            //}
             hashMove = entry.val.search.bestMove;
         }
     }
@@ -161,7 +104,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     // null move prunning here
     // R = 3
     const ischeck = p_state.isChecked();
-    if (p_features.useNullPrune) {
+    if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
         const R: u16 = 2 + 1;
         if (depth > R and !ischeck and !p_state.isEndGame() and ply > 0) {
@@ -172,6 +115,21 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
                 p_info.searchStat.n_cutoffs += 1;
                 return score;
             }
+        }
+    }
+    var canFutility: bool = false;
+    var futilityGap: scoreType = 0;
+    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore) {
+        const static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+        futilityGap = _alpha - static_eval - heuristicl.futilityMargin[1];
+        if (depth <= 1 and futilityGap > 0) {
+            const failLow = heuristicl.e_pieceToHeuristic(p_state.firstPiece(!p_state.whiteToMove()), &heuristicl.globalHeuristic);
+            if (failLow < futilityGap) {
+                return futilityGap;
+            }
+            canFutility = true;
+            // following this discard(or skip) all capture moves where heuristicl.e_pieceToHeuristic(Victim) < futilityGap
+            //
         }
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
@@ -189,9 +147,16 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         const idx = order.indexes[i];
         const move: IMove = fmoves.moves[idx];
 
+        if (canFutility) {
+            if (move.isCapture() and heuristicl.e_pieceToHeuristic(move.getCapturePiece(), &heuristicl.globalHeuristic) < futilityGap and !moveGenl.moveDeliverCheck(p_state, move)) {
+                continue;
+            }
+        }
+
         p_state.makeMove(move);
 
         var score: scoreType = 0;
+
         if (useLMR) {
             if (p_state.isChecked()) {
                 score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);

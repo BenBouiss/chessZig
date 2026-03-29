@@ -103,12 +103,24 @@ pub fn test_perft() !void {
     eng.executeBuffer("go perft depth 7 batched");
     waitOnEngine(&eng);
 }
+pub fn test_bench() !void {
+    initAll(false);
+    var eng = try initEngine();
+    defer eng.executeBuffer("quit");
+    //eng.executeBuffer("debug on");
+    eng.executeBuffer("setoption name useHash value true");
+    eng.executeBuffer("benchmark");
+    waitOnEngine(&eng);
+    eng.executeBuffer("setoption name clearhash");
+    eng.executeBuffer("benchmark");
+    waitOnEngine(&eng);
+}
 
 pub fn main() anyerror!void {
-    try test_perft();
+    //try test_bench();
     //try test_speed();
     //try heuristicl.main();
-    //try chessl.main();
+    try chessl.main();
     //try test_bug();
     //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
     //Jdefer path.free(GLOBAL_ALLOC);

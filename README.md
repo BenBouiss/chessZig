@@ -49,7 +49,8 @@ Sources:
 - https://github.com/abulmo/hqperft
 - https://github.com/AndyGrant/Ethereal/tree/master for the texel paper
 
-Values: 
+
+Node types:
 
 | Depth | Nodes     | Capture  | Doublepush | Enpassant | Castling | Promotions |
 |-------|-----------|----------|------------|-----------|----------|------------|
@@ -61,6 +62,7 @@ Values:
 | 6     | 119060324 | 2812008  | 29374680   | 5248      | 0        | 0          |
 | 7     | 3195901860| 108329926| 644115108  | 319617    | 883453   | 0          |
 
+Nodes per second (nps):
 
 | Depth | Nodes      | STD      | Batched   |
 |-------|------------|----------|-----------|
