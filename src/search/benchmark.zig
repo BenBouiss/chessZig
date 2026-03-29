@@ -9,6 +9,7 @@ const schedulerl = @import("scheduler.zig");
 const threadingl = @import("threading.zig");
 const utilsl = @import("../utils.zig");
 const configl = @import("../config.zig");
+const timel = @import("../time.zig");
 
 const engine = enginel.engine;
 
@@ -41,6 +42,9 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
     const benchmarkDepth: u16 = 8;
     std.debug.print("============ Benchmark evaluation ============\n", .{});
     for (0..benchmarkEntries.len) |i| {
+        var stopWatch: timel.stopWatch = .{};
+        stopWatch.startTimeTick();
+        defer stopWatch.stop();
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
 
@@ -56,13 +60,16 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
         sched.setThreadPack(&pack);
         sched.setEngine(p_engine);
         sched.features.fixedDepth = true;
-        sched.reportProgress = false;
+        sched.reportProgress = true;
+
         if (sched.turn) {
             sched.timeM.remainingTimeMs = p_engine.searcher.config.wtime;
         } else {
             sched.timeM.remainingTimeMs = p_engine.searcher.config.btime;
         }
-
+        if (p_engine.trackMetrics()) {
+            p_engine.metric.addTimeToProcessingMs(stopWatch.timeSinceStartMs());
+        }
         const res = sched.entryPointSearch(benchmarkDepth);
         results.append(p_engine.alloc, res) catch unreachable;
     }

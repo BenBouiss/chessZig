@@ -12,15 +12,14 @@ pub const MAX_LINE_LENGTH: usize = 32;
 
 pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
 
-pub const MAX_HASH_BITS = 18;
 pub const MAX_THREAD: u32 = 64;
 pub const MAX_HASHSIZE = 1000; // in MB => 1 GB
 
 pub const DEFAULT_THREAD = 1;
-pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
+pub const DEFAULT_HASHTABLE_SIZE = 25; // in MB
 
-pub const DEFAULT_TRACKMETRICS = false;
-pub const _DEFAULT_TRACKMETRICS = "false";
+pub const DEFAULT_TRACKMETRICS = true;
+pub const _DEFAULT_TRACKMETRICS = "true";
 
 pub const DEFAULT_USEHASHTABLE = false;
 pub const _DEFAULT_USEHASHTABLE = "false";
@@ -56,12 +55,16 @@ pub const DEFAULT_STATIC_SEARCH = false;
 
 pub const DEFAULT_LATE_MOVE_REDUCTION = false;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
+pub const LMR_CST_DEPTH = 2;
 
 pub const DEFAULT_SEARCH_TYPE: searchType = .STD;
 pub const searchType = enum { STD, PVS, ZWS, ASPIRATION };
 
 pub const DEFAULT_USE_SEE = true;
 pub const _DEFAULT_USE_SEE = "true";
+
+pub const DEFAULT_USE_FUTILITY = false;
+pub const _DEFAULT_USE_FUTILITY = "false";
 
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;

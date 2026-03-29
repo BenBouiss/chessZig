@@ -1,24 +1,17 @@
 [engine1]
-path="engines/bin/engine_19_03_26_SEE";
-name="SEE";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+path="engines/bin/engine_29_03_26";
+name="prev quiesc";
 "setoption name useHash value false";
-"setoption name useNullPruning value true";
-"setoption name useSEE value true";
+"setoption name useQuiescence value true";
 
 [engine2]
-path="engines/bin/engine_19_03_26_SEE";
-//path="zig-out/bin/engine";
-name="non see";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+path="engines/bin/engine_29_03_26_n";
+name="new quiesc";
 "setoption name useHash value false";
-"setoption name useNullPruning value true";
-"setoption name useSEE value false";
+"setoption name useQuiescence value true";
 
 [match]
-nMatch=6;
+nMatch=4;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

@@ -64,7 +64,7 @@ pub const heuristicComponents = struct {
         return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure + self.Tempo;
     }
     pub fn print(self: *const heuristicComponents) void {
-        std.debug.print("Score: PQST = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Tempo = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.Tempo, self.total() });
+        std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Tempo = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.Tempo, self.total() });
     }
 };
 pub fn evaluate_debug(p_state: *chess.Board_state, values: *heuristicValues) heuristicComponents {
@@ -94,7 +94,6 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues, _pha
     var score_count: scoreType = 0;
     var score_mg: scoreType = 0;
     var score_eg: scoreType = 0;
-    var phase = totalPhase;
     for (0..chess.N_SQUARES) |sq| {
         const piece = p_state.get_piece(@intCast(sq));
         switch (piece) {
@@ -105,25 +104,21 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues, _pha
                 score_eg += values.Pawn_PSQT[EG][sq];
             },
             .nWhiteBishop => {
-                phase -= bishopPhase;
                 score_count += values.BishopValue;
                 score_mg += values.Bishop_PSQT[MG][sq];
                 score_eg += values.Bishop_PSQT[EG][sq];
             },
             .nWhiteKnight => {
-                phase -= knightPhase;
                 score_count += values.KnightValue;
                 score_mg += values.Knight_PSQT[MG][sq];
                 score_eg += values.Knight_PSQT[EG][sq];
             },
             .nWhiteRook => {
-                phase -= rookPhase;
                 score_count += values.RookValue;
                 score_mg += values.Rook_PSQT[MG][sq];
                 score_eg += values.Rook_PSQT[EG][sq];
             },
             .nWhiteQueen => {
-                phase -= queenPhase;
                 score_count += values.QueenValue;
                 score_mg += values.Queen_PSQT[MG][sq];
                 score_eg += values.Queen_PSQT[EG][sq];
@@ -139,25 +134,21 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues, _pha
                 score_eg -= values.Pawn_PSQT[EG][sq ^ 56];
             },
             .nBlackBishop => {
-                phase -= bishopPhase;
                 score_count -= values.BishopValue;
                 score_mg -= values.Bishop_PSQT[MG][sq ^ 56];
                 score_eg -= values.Bishop_PSQT[EG][sq ^ 56];
             },
             .nBlackKnight => {
-                phase -= knightPhase;
                 score_count -= values.KnightValue;
                 score_mg -= values.Knight_PSQT[MG][sq ^ 56];
                 score_eg -= values.Knight_PSQT[EG][sq ^ 56];
             },
             .nBlackRook => {
-                phase -= rookPhase;
                 score_count -= values.RookValue;
                 score_mg -= values.Rook_PSQT[MG][sq ^ 56];
                 score_eg -= values.Rook_PSQT[EG][sq ^ 56];
             },
             .nBlackQueen => {
-                phase -= queenPhase;
                 score_count -= values.QueenValue;
                 score_mg -= values.Queen_PSQT[MG][sq ^ 56];
                 score_eg -= values.Queen_PSQT[EG][sq ^ 56];
@@ -168,13 +159,8 @@ pub fn evaluate_PSQT(p_state: *chess.Board_state, values: *heuristicValues, _pha
             },
         }
     }
-    phase = @max(phase, 0);
-    if (phase != p_state.getPhase()) {
-        std.debug.print("[PANIC] {d} {d}", .{ phase, p_state.getPhase() });
-        @panic("");
-    }
-    //const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
-    return score_count + computeTapered(score_mg, score_eg, _phase); //@divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
+
+    return score_count + computeTapered(score_mg, score_eg, _phase);
 }
 
 pub fn evaluate_pawnStructure(p_state: *chess.Board_state, values: *heuristicValues, _phase: scoreType) scoreType {
@@ -1068,6 +1054,9 @@ pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !
         skips += configl.N_POSITIONS;
     }
 }
+//https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
+// test for first futility implem
+pub const futilityMargin: [4]scoreType = .{ 0, 100, 150, 300 };
 
 // move heuristic "sections"
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
@@ -1088,13 +1077,13 @@ pub fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];
     killerMoves[ply][0] = move;
 }
-pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
+pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
+    if (move.equal(hashMove)) {
+        return configl.ORDERING_LINE_VALUE + 1;
+    }
     if (move.equal(prevLine.moves[ply])) {
         // previous best move at that ply
         return configl.ORDERING_LINE_VALUE;
-    }
-    if (move.equal(hashMove)) {
-        return configl.ORDERING_LINE_VALUE - 1;
     }
     const fpiece = move.getFromPiece();
     const cpiece = move.getCapturePiece();
@@ -1119,13 +1108,13 @@ pub fn eval_move_heuristic_line(p_state: *chess.Board_state, move: IMove, ply: u
     }
     return 0;
 }
-pub fn eval_move_heuristic(p_state: *chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
+pub inline fn eval_move_heuristic(p_state: *const chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
     if (comptime useLine) {
         return eval_move_heuristic_line(p_state, move, ply, prevLine, hashMove, p_feature);
     }
     return eval_move_heuristic_std(p_state, move, ply, p_feature);
 }
-pub fn eval_move_heuristic_std(p_state: *chess.Board_state, move: IMove, ply: u16, p_feature: *const searchFeatures) scoreType {
+pub fn eval_move_heuristic_std(p_state: *const chess.Board_state, move: IMove, ply: u16, p_feature: *const searchFeatures) scoreType {
     const fpiece = move.getFromPiece();
     const cpiece = move.getCapturePiece();
     const from = move.getFrom();
@@ -1163,13 +1152,13 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
     //return @intCast(depth * 10);
     return 30 * depth - 25;
 }
-pub fn cmp_eval_move(context: [chess.MAX_POSSIBLE_MOVE]scoreType, a: usize, b: usize) bool {
+pub fn cmp_eval_move(context: []const scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn cst_eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) moveOrdering {
-    //var ret: [chess.MAX_POSSIBLE_MOVE]usize = undefined;
+pub fn cst_eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
+
     for (0..p_moves.len) |i| {
         ret.indexes[i] = i;
         scores[i] = eval_move_heuristic(p_state, p_moves.moves[i], ply, prevLine, useLine, hashMove, p_feature);
@@ -1177,7 +1166,8 @@ pub fn cst_eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const m
     ret.len = p_moves.len;
     // could potentially do ret.scores as the context and sort the array of "entries" with where entries contains an idx, score and depth
     // alla struct of arrays vs array of struct (here is struct of arrays)
-    std.mem.sort(usize, ret.indexes[0..p_moves.len], scores, cmp_eval_move);
+    //TODO: changes the scores to slice here and in the cmp func
+    std.mem.sort(usize, ret.indexes[0..p_moves.len], scores[0..p_moves.len], cmp_eval_move);
 
     for (0..ret.len) |idx| {
         ret.scores[idx] = scores[ret.indexes[idx]];
@@ -1205,9 +1195,10 @@ pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrd
         }
         // here "slowly" decrease the depth
 
+        // testing purposes
         //const sum: f32 = 1 + lnd * std.math.log(f32, std.math.e, @floatFromInt(nDecrease)) / 3.14;
         //p_order.depths[i] = depth - @as(u16, @intFromFloat(sum));
-        p_order.depths[i] = depth - 1;
+        //p_order.depths[i] = depth - configl.LMR_CST_DEPTH;
         nDecrease += 1;
     }
     return;
@@ -1227,41 +1218,55 @@ pub inline fn eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *cons
 }
 
 pub fn SEE(p_state: *const chess.Board_state, move: IMove) scoreType {
-    const target = move.getCapturePiece();
-    if (target == .nEmptySquare) {
+    if (!move.isCapture()) {
         return 0;
     }
     const to = move.getTo();
     const from = move.getFrom();
-    return _SEE(p_state, @enumFromInt(to), target, @enumFromInt(from), move.getFromPiece(), p_state.whiteToMove());
+    return _SEE_recalc(p_state, @enumFromInt(to), @enumFromInt(from), p_state.whiteToMove());
 }
+pub const SEE_context = struct {
+    attadef: u64 = 0,
+    diagPiece: u64 = 0,
+    horizPiece: u64 = 0,
+    pub fn init(p_board: *const chess.Board_state, toSq: squarel.e_square) SEE_context {
+        var ret: SEE_context = undefined;
+        ret.horizPiece = (p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] |
+            p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)] |
+            p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
+            p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+        ret.diagPiece = (p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] |
+            p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)] |
+            p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
+            p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+
+        const attacker = chess.getAllAttackerFromSq(p_board, !p_board.whiteToMove(), toSq);
+        const defender = chess.getAllAttackerFromSq(p_board, p_board.whiteToMove(), toSq);
+        ret.attadef = attacker | defender;
+        return ret;
+    }
+};
 
 // source: https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
-pub fn _SEE(p_state: *const chess.Board_state, toSq: squarel.e_square, target: e_piece, fromSq: squarel.e_square, aPiece: e_piece, white: bool) scoreType {
-    var gain: [32]scoreType = undefined;
-    var d: usize = 0;
-    const horizPiece = (p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)] |
-        p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)] |
-        p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
-        p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
-    const diagPiece = (p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] |
-        p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)] |
-        p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
-        p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
-
-    const mayXray: u64 = (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)] | p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)] | diagPiece | horizPiece);
-
+pub inline fn _SEE_recalc(p_state: *const chess.Board_state, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool) scoreType {
+    const ctx: SEE_context = SEE_context.init(p_state, toSq);
+    return _SEE_loop(p_state, toSq, fromSq, white, ctx.attadef, ctx.diagPiece, ctx.horizPiece);
+}
+pub fn _SEE_loop(p_state: *const chess.Board_state, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool, attadef: u64, diagPiece: u64, horizPiece: u64) scoreType {
     var fromSet = chess.sqToBitboard(fromSq);
+    const mayXray = diagPiece | horizPiece;
+    var _attadef = attadef;
 
-    //const toBB = chess.sqToBitboard(toSq);
     const toSqInfo = squarel.squareInfo.init(toSq);
     const toSqDiags = toSqInfo.getDiagonalsBB();
 
     var occ = p_state.occupiedBB;
 
-    const attacker = chess.getAllAttackerFromSq(p_state, !p_state.whiteToMove(), toSq);
-    const defender = chess.getAllAttackerFromSq(p_state, p_state.whiteToMove(), toSq);
-    var attadef = attacker | defender;
+    var gain: [32]scoreType = undefined;
+    var d: usize = 0;
+
+    const target = p_state.get_piece(@intFromEnum(toSq));
+    const aPiece = p_state.get_piece(@intFromEnum(fromSq));
     gain[d] = e_pieceToHeuristic(target, &globalHeuristic);
     var turn = white;
     var _aPiece = aPiece;
@@ -1269,13 +1274,13 @@ pub fn _SEE(p_state: *const chess.Board_state, toSq: squarel.e_square, target: e
         d += 1;
         turn = !turn;
         gain[d] = e_pieceToHeuristic(_aPiece, &globalHeuristic) - gain[d - 1];
-        attadef ^= fromSet;
+        _attadef ^= fromSet;
         occ ^= fromSet;
         if ((fromSet & mayXray) != 0) {
             // update the attadef due to movement
-            attadef |= considerXrays(occ, toSq, toSqDiags, fromSet, diagPiece, horizPiece);
+            _attadef |= considerXrays(occ, toSq, toSqDiags, fromSet, diagPiece, horizPiece);
         }
-        const low = lowestAttackDefPiece(p_state, attadef, turn);
+        const low = lowestAttackDefPiece(p_state, _attadef, turn);
         if (low.sq == .invalid) {
             fromSet = 0;
             continue;
@@ -1284,10 +1289,7 @@ pub fn _SEE(p_state: *const chess.Board_state, toSq: squarel.e_square, target: e
         _aPiece = low.piece;
     }
     d -= 1;
-    //std.debug.print("[DEBUG] SEE: d = {d} {any}\n", .{ d, gain });
     while (d != 0) : (d -= 1) {
-        // gain[4] = -max(--75,  1075) = -1075
-        //std.debug.print("[DEBUG] SEE: gain[{d}] = -max(-{d}, {d}) = {d}\n", .{ d - 1, gain[d - 1], gain[d], -@max(-gain[d - 1], gain[d]) });
         gain[d - 1] = -@max(-gain[d - 1], gain[d]);
     }
     return gain[0];
