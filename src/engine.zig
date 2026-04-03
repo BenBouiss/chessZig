@@ -25,7 +25,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, TRACKMETRICS };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, TRACKMETRICS, SEARCHTYPE };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -226,6 +226,7 @@ pub const engineOptions = struct {
     nOptions: u16 = 0,
     depthLevel: u16 = configl.DEFAULT_DEPTH,
     trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
+    searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
 };
 
 pub const engine = struct {
@@ -303,7 +304,9 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "printMetric", .optionType = .PRINT_METRIC, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
+
         try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
+        try p_self.addOption(.{ .name = "searchType", .optionType = .SEARCHTYPE, .argType = .COMBO, .info = optionInfo{ .str = optionInfo_str{ ._var = "STD PVS ZWS ASP", .default = configl._DEFAULT_SEARCH_TYPE } } });
     }
     pub inline fn trackMetrics(p_self: *engine) bool {
         return p_self.options.trackMetrics;
@@ -682,6 +685,15 @@ pub const engine = struct {
                 }
                 return p_self.updateHeuristicWeights(path);
             },
+            .SEARCHTYPE => {
+                const val = getStringValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                return p_self.updateSearchType(val);
+            },
             .INVALID => {
                 return false;
             },
@@ -744,6 +756,20 @@ pub const engine = struct {
         heuristicl.modifyHeuristicWeight(p_self.alloc, path, p_self.status.debugMode) catch {
             return false;
         };
+        return true;
+    }
+    fn updateSearchType(p_self: *engine, token: []const u8) bool {
+        if (utilsl.contains(token, "std", .ignoreCase)) {
+            p_self.options.searchType = .STD;
+        } else if (utilsl.contains(token, "pvs", .ignoreCase)) {
+            p_self.options.searchType = .PVS;
+        } else if (utilsl.contains(token, "zws", .ignoreCase)) {
+            p_self.options.searchType = .ZWS;
+        } else if (utilsl.contains(token, "asp", .ignoreCase)) {
+            p_self.options.searchType = .ASPIRATION;
+        } else {
+            return false;
+        }
         return true;
     }
     fn updateHash(p_self: *engine, hashSize: spinVarType) bool {
@@ -939,6 +965,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .USESEE;
     } else if (utilsl.contains(cmdBuffer, " useFutility", .ignoreCase)) {
         return .USEFUTILITY;
+    } else if (utilsl.contains(cmdBuffer, " searchType", .ignoreCase)) {
+        return .SEARCHTYPE;
     }
 
     return .INVALID;

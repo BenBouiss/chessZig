@@ -1095,14 +1095,18 @@ pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, 
     const cpiece = move.getCapturePiece();
     const from = move.getFrom();
     const to = move.getTo();
+
     if (move.isCapture()) {
         if (p_feature.useSEE) {
-            return SEE(p_state, move);
+            return SEE(p_state, move) * configl.ORDERING_SEE_MULTI;
         } else {
             return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
         }
     } else {
         //
+        if (move.isPromotion()) {
+            return configl.ORDERING_PROMOTIONS;
+        }
         if (move.equal(killerMoves[ply][0])) {
             return configl.KILLER_0_HEURISTIC_VALUE;
         } else if (move.equal(killerMoves[ply][1])) {
@@ -1180,32 +1184,32 @@ pub fn cst_eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *c
     }
     return ret;
 }
+pub const moveReductionAmount = 4;
 pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer) void {
     const otherKingBB = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingBB);
-    //const lnd = std.math.log(f32, std.math.e, @floatFromInt(depth));
-    var nDecrease: usize = 1;
     for (0..p_order.len) |i| {
-        if (p_order.scores[i] >= configl.MAX_HIST_HEURISTIC_VALUE) {
-            p_order.depths[i] = depth;
+        if (p_order.scores[i] >= configl.MAX_HIST_HEURISTIC_VALUE or i < moveReductionAmount) {
+            //p_order.depths[i] = depth;
+            p_order.depths[i] = depth - 1;
             continue;
         }
         // here we decide what moves are considered to be important as to not sacrifice some depth
         const move = fmoves.moves[p_order.indexes[i]];
         const to = move.getTo();
-        if (SEE(p_state, move) < 0) {
-            //p_order.depths[i] = depth - 2;
-        } else if ((to & safetyArea) != 0 or move.isCapture() or move.isPromotion()) {
-            p_order.depths[i] = depth;
-            continue;
+        const isCapture = move.isCapture();
+        if (isCapture) {
+            if ((to & safetyArea) != 0 or isCapture or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move)) {
+                p_order.depths[i] = depth - 1;
+                continue;
+            }
+            if (p_order.scores[i] < 0) {
+                // this is SEE < 0
+                p_order.depths[i] = depth - 2;
+                continue;
+            }
         }
-        // here "slowly" decrease the depth
-
-        // testing purposes
-        //const sum: f32 = 1 + lnd * std.math.log(f32, std.math.e, @floatFromInt(nDecrease)) / 3.14;
-        //p_order.depths[i] = depth - @as(u16, @intFromFloat(sum));
-        //p_order.depths[i] = depth - configl.LMR_CST_DEPTH;
-        nDecrease += 1;
+        p_order.depths[i] = depth - 2;
     }
     return;
 }

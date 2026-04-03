@@ -36,6 +36,7 @@ pub const searchFeatures = struct {
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useSEE: bool = configl.DEFAULT_USE_SEE,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
+    searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
@@ -48,6 +49,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.fixedDepth = p_engine.options.fixedDepth;
     ret.useSEE = p_engine.options.useSEE;
     ret.useFutility = p_engine.options.useFutility;
+    ret.searchType = p_engine.options.searchType;
     return ret;
 }
 
@@ -388,7 +390,12 @@ pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_inf
     var decision = &p_info.currentBest;
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, decision, &features)) {
         depth += 1;
+        if (sched.isDebugMode()) {
+            std.debug.print("[DEBUG] _startSearch: starting line ", .{});
+            line.print();
+        }
         _ = (alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line));
+        line.copyFromLine(&p_info.currentBest.line);
         decision = &p_info.currentBest;
         if (sched.reportProgress) {
             sendPartial(sched, depth, decision, p_info);
