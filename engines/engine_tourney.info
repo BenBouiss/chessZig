@@ -1,22 +1,14 @@
 [engine1]
-path="engines/bin/engine_20_03_26_tourney";
+path="engines/bin/engine_01_04_26";
 name="1";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
 "setoption name useHash value false";
-"setoption name useTexel value false";
-"setoption name useNullPruning value true";
-"setoption name useSEE value true";
 
 [engine2]
-path="engines/bin/engine_20_03_26_tourney";
+path="engines/bin/engine_01_04_26";
 name="2";
 "setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
 "setoption name useHash value false";
-"setoption name useTexel value false";
-"setoption name useNullPruning value true";
-"setoption name useSEE value true";
 
 [match]
 nMatch=1;
@@ -25,5 +17,5 @@ debugMode=false;
 useOpeningBook=false;
 openingBookPath="opening/8moves_v3.pgn";
 logsLocation="logs/tourney";
-timeFormat=(60000, 0);
+timeFormat=(60000, 100);
 
