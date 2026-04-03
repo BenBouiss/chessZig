@@ -78,7 +78,7 @@ pub fn test_speed() !void {
     //eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
     eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
     //eng.executeBuffer("setoption name useNullPruning value true");
-    eng.executeBuffer("go depth 6");
+    eng.executeBuffer("go depth 7");
     waitOnEngine(&eng);
 }
 pub fn test_bug() !void {
@@ -108,7 +108,8 @@ pub fn test_bench() !void {
     var eng = try initEngine();
     defer eng.executeBuffer("quit");
     //eng.executeBuffer("debug on");
-    eng.executeBuffer("setoption name useHash value true");
+    eng.executeBuffer("setoption name useLMR value true");
+    //eng.executeBuffer("setoption name useHash value true");
     eng.executeBuffer("benchmark");
     waitOnEngine(&eng);
     eng.executeBuffer("setoption name clearhash");
@@ -117,10 +118,11 @@ pub fn test_bench() !void {
 }
 
 pub fn main() anyerror!void {
-    //try test_bench();
+    //try test_perft();
+    try test_bench();
     //try test_speed();
     //try heuristicl.main();
-    try chessl.main();
+    //try chessl.main();
     //try test_bug();
     //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
     //Jdefer path.free(GLOBAL_ALLOC);

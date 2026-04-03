@@ -49,7 +49,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
         if (entry.valid) {
             p_info.searchStat.n_hashRetrieve += 1;
-            //if (entry.val.search.t == .CUT) {
+            //if (entry.val.search.t == .CUT and ply != 0) {
             //    return entry.eval();
             //}
             hashMove = entry.val.search.bestMove;
@@ -58,11 +58,11 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     // null move prunning here
     // R = 3
-    if (p_features.useNullPrune) {
+    const ischeck = p_state.isChecked();
+    if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
         const R: u16 = 2 + 1;
-        const ischeck = p_state.isChecked();
-        if (depth > R and !ischeck and !p_state.isEndGame() and ply > 0) {
+        if (depth > R and !ischeck and !p_state.isEndGame()) {
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine, .NonPV);
             p_state.undoNullMove();
@@ -73,11 +73,17 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
     }
 
+    var canFutility: bool = false;
+    var static_eval: scoreType = 0;
+    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and heuristicl.sideCountScore(p_state, p_state.whiteToMove(), &heuristicl.globalHeuristic) > heuristicl.globalHeuristic.RookValue and depth <= 2) {
+        static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+        canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
+    }
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
-    if (p_features.useLMR and depth > 3) {
+    if (p_features.useLMR and depth > 3 and !ischeck) {
         heuristicl.computeLateMoveReduc(p_state, &order, depth, &fmoves);
         useLMR = true;
     }
@@ -87,6 +93,12 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     for (0..fmoves.len) |i| {
         const idx = order.indexes[i];
         const move: IMove = fmoves.moves[idx];
+
+        if (canFutility) {
+            if (ply > 4 and !moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion()) {
+                continue;
+            }
+        }
 
         _ = p_state.makeMove(move);
 
@@ -123,9 +135,15 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
         if (_alpha >= beta) {
             // save here the killer moves
-            if (!isCapture) {
-                heuristicl.killerMoves[ply][1] = heuristicl.killerMoves[ply][0];
-                heuristicl.killerMoves[ply][0] = move;
+            heuristicl.onKillerMove(move, ply);
+
+            const bonus = heuristicl.computeHistoryBonus(depth);
+            heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), bonus);
+            for (0..fmoves.len) |j| {
+                const _move = fmoves.moves[j];
+                if (!_move.isCapture() and j != i) {
+                    heuristicl.updateHistoryHeurist(p_state.whiteToMove(), _move.getFrom(), _move.getTo(), -bonus);
+                }
             }
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .CUT, move);
@@ -146,5 +164,5 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .PV, bestMove);
         _ = hashl.hashTable.storeEntry(&s_entry);
     }
-    return finalScore;
+    return _alpha;
 }

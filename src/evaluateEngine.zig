@@ -171,6 +171,7 @@ const matchResultContainer = struct {
         for (0..p_self.items.len) |i| {
             const res = p_self.items[i];
 
+            // add the results from white and black for each engines
             const nwins = res.res[0].win + res.res[1].win;
             const nloses = res.res[0].lose + res.res[1].lose;
             const ndraws = res.res[0].draw + res.res[1].draw;

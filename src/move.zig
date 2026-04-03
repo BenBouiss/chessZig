@@ -41,7 +41,6 @@ pub fn build_move_in(from: u8, to: u8, flag: u8, piece: e_piece, p_out: *moveCon
     var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare));
     m_piece <<= 8;
     m_piece |= @intFromEnum(piece);
-
     m_move <<= 6;
     m_move |= (to);
     m_move <<= 6;
@@ -61,7 +60,6 @@ pub fn build_capture_move_in(from: u8, to: u8, flag: u8, fPiece: e_piece, cPiece
     m_move |= (to);
     m_move <<= 6;
     m_move |= (from);
-    //p_out.moves[p_out.len] = .{ .m_move = (((@as(u16, @intCast(flag)) & 0xF) << 12) | ((@as(u16, @intCast(to)) & 0x3F) << 6) | (@as(u16, @intCast(from)) & 0x3F)), .m_piece = m_piece };
     p_out.moves[p_out.len] = .{ .m_move = m_move, .m_piece = m_piece };
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];
@@ -651,11 +649,23 @@ pub const line = struct {
             try writer.print("{s} ", .{utilsl.trimStr(&self.moves[i].getStr())});
         }
     }
+    pub fn print(self: *const line) void {
+        for (0..self.len) |i| {
+            std.debug.print("{s} ", .{self.moves[i].getStr()});
+        }
+        std.debug.print("\n", .{});
+    }
     pub fn setLineFromPV(self: *line, pv: *pvContainer) void {
         self.len = pv.pv_len[0];
         for (0..self.len) |i| {
             self.moves[i] = pv.pv_arr[i][i];
         }
+    }
+    pub fn copyFromLine(self: *line, other: *line) void {
+        for (0..other.len) |i| {
+            self.moves[i] = other.moves[i];
+        }
+        self.len = other.len;
     }
 };
 pub const pvContainer = struct {

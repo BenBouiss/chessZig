@@ -41,7 +41,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 
     var score: scoreType = 0;
 
-    switch (configl.DEFAULT_SEARCH_TYPE) {
+    switch (p_features.searchType) {
         .STD => {
             score = searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
         },
@@ -53,7 +53,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
         },
 
         .ASPIRATION => {
-            score = searchLoop_aspirationPvs(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine);
+            score = searchLoop_aspirationPvs(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
         },
     }
 
@@ -107,7 +107,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
         const R: u16 = 2 + 1;
-        if (depth > R and !ischeck and !p_state.isEndGame() and ply > 0) {
+        if (depth > R and !ischeck and !p_state.isEndGame()) {
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine, .NonPV);
             p_state.undoNullMove();
@@ -149,10 +149,18 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         var score: scoreType = 0;
 
         if (useLMR) {
-            if (p_state.isChecked()) {
+            if (p_state.isChecked() or i <= 4) {
                 score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
             } else {
-                score = -searchLoop(p_state, p_info, order.depths[i] - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+                if (order.depths[i] != (depth - 1)) {
+                    //score = -searchLoop(p_state, p_info, order.depths[i], -(_alpha + 1), -_alpha, p_features, ply + 1, pv, prevLine, t);
+                    score = -searchLoop(p_state, p_info, order.depths[i], -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+                    if (score > _alpha) {
+                        score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+                    }
+                } else {
+                    score = -searchLoop(p_state, p_info, order.depths[i], -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+                }
             }
         } else {
             score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
@@ -175,7 +183,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
                 pv.onBestMove(move, ply);
             }
             if (!isCapture) {
-                heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), depth * depth);
+                heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
             }
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .PV, bestMove);
@@ -216,8 +224,10 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 }
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line) scoreType {
-    pv.setLen(ply);
+fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
+    if (comptime t == .PV) {
+        pv.setLen(ply);
+    }
     var _alpha = alpha;
 
     if (p_state.isStaleMateRepetition()) {
@@ -272,10 +282,12 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
     const firstM: IMove = fmoves.moves[order.indexes[0]];
 
     p_state.makeMove(firstM);
-    var finalScore = -searchLoop_aspirationPvs(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine);
+    var finalScore = -searchLoop_aspirationPvs(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
     _ = p_state.undoMove();
     if (ply == 0) {
-        pv.onBestMove(firstM, ply);
+        if (comptime t == .PV) {
+            pv.onBestMove(firstM, ply);
+        }
     }
     if (finalScore > _alpha) {
         if (finalScore >= beta) {
@@ -286,6 +298,9 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
             return finalScore;
         }
         _alpha = finalScore;
+        if (comptime t == .PV) {
+            pv.onBestMove(firstM, ply);
+        }
     }
 
     for (1..fmoves.len) |i| {
@@ -294,13 +309,15 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
         const isCapture = move.isCapture();
         p_state.makeMove(move);
 
-        var score = -searchLoop_aspirationPvs(p_state, p_info, depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine);
+        var score = -searchLoop_aspirationPvs(p_state, p_info, depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, t);
 
         if (score > _alpha and score < beta) {
-            score = -searchLoop_aspirationPvs(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine);
+            score = -searchLoop_aspirationPvs(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
             if (score > _alpha) {
                 _alpha = score;
-                pv.onBestMove(move, ply);
+                if (comptime t == .PV) {
+                    pv.onBestMove(move, ply);
+                }
                 if (!isCapture) {
                     heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
                 }

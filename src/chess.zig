@@ -389,7 +389,7 @@ pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Boar
     board.halfMoveClock = @intCast(getBoardFromFen_clockMove(tokens.items[4]));
     board.turn_count = @intCast(getBoardFromFen_clockMove(tokens.items[5]));
     if (comptime useStaged) {
-        getCheckers(&board, board.whiteToMove());
+        onMoveStaged(&board, board.whiteToMove());
     }
     return board;
 }
@@ -421,7 +421,7 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.A
         }
     }
     if (comptime useStaged) {
-        getCheckers(p_board, p_board.whiteToMove());
+        onMoveStaged(p_board, p_board.whiteToMove());
     }
 }
 pub fn getEmptyMoveListFromStr(strBuffer: []const u8, alloc: std.mem.Allocator) !movel.matchMoveContainer {
@@ -603,16 +603,10 @@ pub const Board_state = struct {
     checkersBB: u64 = 0,
 
     occupiedBB: u64 = 0,
+
     key: hashl.Key = .{},
     halfMoveClock: u8 = 0,
     enPassantIdx: u8 = 0,
-
-    // big structures might be better to alloc then and
-    // only store the pointers(?)
-    // 184KB current size need better way
-    //s_stack: *board_statusl.statusStack = undefined,
-    //move_history: *matchMoveContainer = undefined,
-    //stack: *boardStack = undefined,
 
     s_stack: board_statusl.statusStack = .{},
     move_history: matchMoveContainer = .{},
@@ -625,7 +619,6 @@ pub const Board_state = struct {
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,
     seed: u64 = 42,
-    //isInit: bool = false,
 
     pub fn init() Board_state {
         var ret: Board_state = undefined;
@@ -855,12 +848,20 @@ pub const Board_state = struct {
 
     pub inline fn undoMove(p_self: *Board_state) bool {
         if (p_self.whiteToMove()) {
-            return undoMove_cst(p_self, false);
+            return _undoMove(p_self, false);
         } else {
-            return undoMove_cst(p_self, true);
+            return _undoMove(p_self, true);
         }
     }
-    pub fn undoMove_cst(p_self: *Board_state, comptime white: bool) bool {
+    pub inline fn _undoMove(p_self: *Board_state, comptime white: bool) bool {
+        const move = p_self.getLastMove();
+        if (move.isCapture()) {
+            return undoMoveCapture_cst(p_self, move, white);
+        } else {
+            return undoMoveQuiet_cst(p_self, move, white);
+        }
+    }
+    pub fn undoMoveCapture_cst(p_self: *Board_state, move: IMove, comptime white: bool) bool {
         // test to reduce the undoMove load
 
         if (comptime useDebug) {
@@ -870,14 +871,76 @@ pub const Board_state = struct {
         const s_popped = (p_self.s_stack.pop());
         p_self.stat = s_popped;
 
-        const popped_move = p_self.getLastMove();
         const victim = p_self.victim;
 
-        const toSq: u8 = popped_move.getTo();
+        const toSq: u8 = move.getTo();
         const toBB = xToBitboard(toSq);
 
-        const fromSq: u8 = popped_move.getFrom();
+        const fromSq: u8 = move.getFrom();
         const fromBB = xToBitboard(fromSq);
+
+        var piece = p_self.get_piece(toSq);
+
+        p_self.pieceBB[@intFromEnum(piece)] ^= toBB;
+        if (move.isPromotion()) {
+            // this is the promotion piece
+            p_self.pieceCount[@intFromEnum(piece)] -= 1;
+            piece = move.getFromPiece();
+            // fromPiece is the pawn
+            p_self.pieceCount[@intFromEnum(piece)] += 1;
+        }
+        p_self.pieceBB[@intFromEnum(piece)] ^= fromBB;
+        p_self.c_occupiedBB[@intFromBool(white)] ^= (fromBB | toBB);
+        p_self.occupiedBB ^= (fromBB);
+        p_self.pieceArray[fromSq] = piece;
+
+        p_self.pieceBB[@intFromEnum(victim)] ^= toBB;
+        p_self.c_occupiedBB[@intFromBool(!white)] ^= toBB;
+
+        p_self.pieceArray[toSq] = victim;
+        p_self.pieceCount[@intFromEnum(victim)] += 1;
+
+        if (move.isEnpassant()) {
+            const victimSq: e_square = getSqFromCoord(getSqIdxRank(fromSq), getSqIdxFile(toSq));
+            const victimBB: u64 = sqToBitboard(victimSq);
+            const bisBB = victimBB | toBB;
+            p_self.pieceArray[toSq] = .nEmptySquare;
+            p_self.pieceArray[@intFromEnum(victimSq)] = victim;
+            p_self.pieceBB[@intFromEnum(victim)] ^= bisBB;
+            p_self.c_occupiedBB[@intFromBool(!white)] ^= bisBB;
+            p_self.occupiedBB ^= bisBB;
+        } else if (isKingPiece(piece)) {
+            if (comptime white) {
+                // white called thus black king moved
+                p_self.wKingSq = @enumFromInt(fromSq);
+            } else {
+                p_self.bKingSq = @enumFromInt(fromSq);
+            }
+        }
+        if (comptime useDebug) {
+            sanityCheckBoardState(p_self);
+        }
+        p_self.move_history.popMoveVoid();
+        const popped = (p_self.stack.pop());
+        p_self.loadFrame(&popped);
+        return true;
+    }
+    pub fn undoMoveQuiet_cst(p_self: *Board_state, move: IMove, comptime white: bool) bool {
+        // test to reduce the undoMove load
+
+        if (comptime useDebug) {
+            sanityCheckBoardState(p_self);
+        }
+        p_self.turn_count -= 1;
+        const s_popped = (p_self.s_stack.pop());
+        p_self.stat = s_popped;
+
+        const toSq: u8 = move.getTo();
+        const toBB = xToBitboard(toSq);
+
+        const fromSq: u8 = move.getFrom();
+        const fromBB = xToBitboard(fromSq);
+        const moveBB = fromBB | toBB;
 
         var castlePiece: e_piece = .nWhiteRook;
         if (comptime !white) {
@@ -886,38 +949,20 @@ pub const Board_state = struct {
         var piece = p_self.get_piece(toSq);
 
         p_self.pieceBB[@intFromEnum(piece)] ^= toBB;
-        if (popped_move.isPromotion()) {
+        if (move.isPromotion()) {
             // this is the promotion piece
             p_self.pieceCount[@intFromEnum(piece)] -= 1;
-            piece = popped_move.getFromPiece();
+            piece = move.getFromPiece();
             // fromPiece is the pawn
             p_self.pieceCount[@intFromEnum(piece)] += 1;
         }
         p_self.pieceBB[@intFromEnum(piece)] ^= fromBB;
-        p_self.c_occupiedBB[@intFromBool(white)] ^= (fromBB | toBB);
-        p_self.occupiedBB ^= (fromBB | toBB);
+        p_self.c_occupiedBB[@intFromBool(white)] ^= moveBB;
+        p_self.occupiedBB ^= moveBB;
         p_self.pieceArray[toSq] = .nEmptySquare;
         p_self.pieceArray[fromSq] = piece;
 
-        if (victim != .nEmptySquare) {
-            p_self.pieceBB[@intFromEnum(victim)] ^= toBB;
-            p_self.c_occupiedBB[@intFromBool(!white)] ^= toBB;
-            p_self.occupiedBB ^= toBB;
-            p_self.pieceArray[toSq] = victim;
-            p_self.pieceCount[@intFromEnum(victim)] += 1;
-        }
-        if (popped_move.isEnpassant()) {
-            const victimSq: e_square = getSqFromCoord(getSqIdxRank(fromSq), getSqIdxFile(toSq));
-            const victimBB: u64 = sqToBitboard(victimSq);
-            const bisBB = victimBB | toBB;
-            p_self.pieceArray[toSq] = .nEmptySquare;
-            p_self.pieceArray[@intFromEnum(victimSq)] = victim;
-
-            p_self.pieceBB[@intFromEnum(victim)] ^= bisBB;
-            p_self.c_occupiedBB[@intFromBool(!white)] ^= bisBB;
-
-            p_self.occupiedBB ^= bisBB;
-        } else if (isKingPiece(piece)) {
+        if (isKingPiece(piece)) {
             if (comptime white) {
                 // white called thus black king moved
                 p_self.wKingSq = @enumFromInt(fromSq);
@@ -950,6 +995,7 @@ pub const Board_state = struct {
         p_self.loadFrame(&popped);
         return true;
     }
+
     pub inline fn undoNullMove(p_self: *Board_state) void {
         if (p_self.whiteToMove()) {
             p_self.undoNullMove_cst(true);
@@ -987,7 +1033,7 @@ pub const Board_state = struct {
         p_self.invert_turn();
         p_self.turn_count += 1;
         if (comptime useStaged) {
-            getCheckers_cst(p_self, !white);
+            onMoveStaged(p_self, !white);
         }
     }
     pub inline fn makeMove(p_self: *Board_state, move: IMove) void {
@@ -1104,7 +1150,7 @@ pub const Board_state = struct {
             sanityCheckBoardState(p_self);
         }
         if (comptime useStaged) {
-            getCheckers_cst(p_self, !white);
+            onMoveStaged(p_self, !white);
         }
     }
     pub fn makeMoveQuiet_cst(p_self: *Board_state, move: IMove, comptime white: bool) void {
@@ -1219,7 +1265,7 @@ pub const Board_state = struct {
             sanityCheckBoardState(p_self);
         }
         if (comptime useStaged) {
-            getCheckers_cst(p_self, !white);
+            onMoveStaged(p_self, !white);
         }
     }
 
@@ -1702,10 +1748,13 @@ pub inline fn getQueenAttacks(occBB: u64, sq: e_square) u64 {
 
 pub inline fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
     const sqBB = sqToBitboard(sq);
+    return getPawnAttacksFromBB(sqBB, white);
+}
+pub inline fn getPawnAttacksFromBB(bb: u64, comptime white: bool) u64 {
     if (comptime white) {
-        return ((sqBB << 7) & notHFile) | ((sqBB << 9) & notAFile);
+        return ((bb << 7) & notHFile) | ((bb << 9) & notAFile);
     } else {
-        return ((sqBB >> 7) & notAFile) | ((sqBB >> 9) & notHFile);
+        return ((bb >> 7) & notAFile) | ((bb >> 9) & notHFile);
     }
 }
 
@@ -1958,6 +2007,7 @@ pub inline fn getCheckers(p_board: *Board_state, white: bool) void {
     } else {
         getCheckers_cst(p_board, false);
     }
+    //p_board.beeingAttacked = getAllAttackMask(p_board, p_board.occupiedBB ^ p_board.getKingBB(white), !white);
     return;
 }
 //pub fn getPartialCheckers(p_board: *Board_state, whiteMoved: bool, lastMove: IMove) void {
@@ -1973,6 +2023,11 @@ pub inline fn getCheckers(p_board: *Board_state, white: bool) void {
 //
 //    return;
 //}
+
+pub inline fn onMoveStaged(p_board: *Board_state, white: bool) void {
+    getCheckers(p_board, white);
+    return;
+}
 
 pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
     var rq: u64 = undefined;
@@ -2010,7 +2065,6 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
         p_board.pinnedBB = moveGenl.getPinned_avx2(p_board, white);
     } else {
         var pinned: u64 = 0;
-        //const rBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedRookAtt) ^ p_board.occupiedBB;
         const rBlockers = (p_board.occupiedBB & cachedRookAtt) ^ p_board.occupiedBB;
         var pinner = (cachedRookAtt ^ getRookAttacks(rBlockers, king_E)) & rq;
         while (pinner != EMPTY) {
@@ -2019,7 +2073,6 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
             pinned |= inBetween(@enumFromInt(pinsq), king_E);
         }
 
-        //const bBlockers = (p_board.c_occupiedBB[@intFromBool(white)] & cachedBishAtt) ^ p_board.occupiedBB;
         const bBlockers = (p_board.occupiedBB & cachedBishAtt) ^ p_board.occupiedBB;
         pinner = (cachedBishAtt ^ getBishopAttacks(bBlockers, king_E)) & bq;
         while (pinner != EMPTY) {

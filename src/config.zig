@@ -29,9 +29,12 @@ pub const _DEFAULT_USE_NULLPRUNE = "true";
 
 pub const ORDERING_LINE_VALUE = 9999;
 
+//https://www.chessprogramming.org/Move_Ordering
+pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
+pub const ORDERING_SEE_MULTI = 10;
+
 pub const KILLER_0_HEURISTIC_VALUE = 900;
 pub const KILLER_1_HEURISTIC_VALUE = 800;
-
 pub const MAX_HIST_HEURISTIC_VALUE = 700;
 
 pub const DEFAULT_USEQUIESC = false;
@@ -57,7 +60,9 @@ pub const DEFAULT_LATE_MOVE_REDUCTION = false;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
 pub const LMR_CST_DEPTH = 2;
 
-pub const DEFAULT_SEARCH_TYPE: searchType = .STD;
+pub const DEFAULT_SEARCH_TYPE: searchType = .PVS;
+pub const _DEFAULT_SEARCH_TYPE = "PVS";
+
 pub const searchType = enum { STD, PVS, ZWS, ASPIRATION };
 
 pub const DEFAULT_USE_SEE = true;

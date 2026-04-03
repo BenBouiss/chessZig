@@ -80,7 +80,7 @@ pub fn printResults(fens: []const []const u8, reports: *const std.ArrayList(sche
     for (0..fens.len) |i| {
         const curr: schedulerl.searchReport = reports.items[i];
         const _time: u64 = @intCast(curr.timeTakenMs);
-        const nps = 1000 * @divFloor(curr.searchStat.n_nodeExplored, _time);
+        const nps = 1000 * @divFloor(curr.searchStat.n_nodeExplored, _time + 1);
         const cuttoffF: f64 = 100 * @as(f64, @floatFromInt(curr.searchStat.n_cutoffs)) / @as(f64, @floatFromInt(curr.searchStat.n_nodeExplored));
         if (curr.searchStat.n_hashRetrieve != 0) {
             std.debug.print("{s} nps: {d} nodes: {d} cutoff {d} cutoff {d:4.1}% move {s} cp {d} retrieved: {d}\n", .{ fens[i], nps, curr.searchStat.n_nodeExplored, curr.searchStat.n_cutoffs, cuttoffF, curr.move.getStr(), curr.score, curr.searchStat.n_hashRetrieve });

@@ -54,9 +54,9 @@ pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20
 
 // optionnal pre filled heuristic values
 // ============ presets ============
-const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = -12, .PassedPawnValue = 93, .IsolatedPawnValue = 6, .SafetyKnightValue = 36, .SafetyBishopValue = 8, .SafetyRookValue = -5, .SafetyQueenValue = 44, .StructureProtectionValue = 1, .MobilityValue = -4 };
+const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = .{ -12, -12 }, .PassedPawnValue = .{ 93, 93 }, .IsolatedPawnValue = .{ 6, 6 }, .SafetyKnightValue = .{ 36, 36 }, .SafetyBishopValue = .{ 8, 8 }, .SafetyRookValue = .{ -5, -5 }, .SafetyQueenValue = .{ 44, 44 }, .StructureProtectionValue = .{ 1, 1 }, .MobilityValue = .{ -4, -4 } };
 
-const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = -16, .PassedPawnValue = -12, .IsolatedPawnValue = 27, .SafetyKnightValue = 6, .SafetyBishopValue = 5, .SafetyRookValue = -7, .SafetyQueenValue = 12, .StructureProtectionValue = 2, .MobilityValue = -2 };
+const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = .{ .{-16}, -16, .{-16}, -16 }, .PassedPawnValue = .{ -12, -12 }, .IsolatedPawnValue = .{ 27, 27 }, .SafetyKnightValue = .{ 6, 6 }, .SafetyBishopValue = .{ 5, 5 }, .SafetyRookValue = .{ -7, -7 }, .SafetyQueenValue = .{ 12, 12 }, .StructureProtectionValue = .{ 2, 2 }, .MobilityValue = .{ -2, -2 } };
 
 //https://www.chessprogramming.org/Futility_Pruning
 // ============ futility prunning ============

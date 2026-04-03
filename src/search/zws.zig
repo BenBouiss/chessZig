@@ -54,10 +54,10 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     // null move prunning here
     // R = 3
     const ischeck = p_state.isChecked();
-    if (p_features.useNullPrune) {
+    if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
         const R: u16 = 2 + 1;
-        if (depth > R and !ischeck and !p_state.isEndGame() and ply > 0) {
+        if (depth > R and !ischeck and !p_state.isEndGame()) {
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine, .NonPV);
             p_state.undoNullMove();
@@ -88,9 +88,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         if (i == 0) {
             score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
             bestMove = move;
-            if (comptime t == .PV) {
-                pv.onBestMove(move, ply);
-            }
             finalScore = score;
         } else {
             score = -searchLoop(p_state, p_info, depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
@@ -117,9 +114,15 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), score, .CUT, move);
                 _ = hashl.hashTable.storeEntry(&s_entry);
             }
-            if (!isCapture) {
-                heuristicl.killerMoves[ply][1] = heuristicl.killerMoves[ply][0];
-                heuristicl.killerMoves[ply][0] = move;
+            heuristicl.onKillerMove(move, ply);
+
+            const bonus = heuristicl.computeHistoryBonus(depth);
+            heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), bonus);
+            for (0..fmoves.len) |j| {
+                const _move = fmoves.moves[j];
+                if (!_move.isCapture() and j != i) {
+                    heuristicl.updateHistoryHeurist(p_state.whiteToMove(), _move.getFrom(), _move.getTo(), -bonus);
+                }
             }
             p_info.searchStat.n_cutoffs += 1;
             return score;
