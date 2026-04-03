@@ -60,8 +60,8 @@ pub const DEFAULT_LATE_MOVE_REDUCTION = false;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
 pub const LMR_CST_DEPTH = 2;
 
-pub const DEFAULT_SEARCH_TYPE: searchType = .PVS;
-pub const _DEFAULT_SEARCH_TYPE = "PVS";
+pub const DEFAULT_SEARCH_TYPE: searchType = .ZWS;
+pub const _DEFAULT_SEARCH_TYPE = "ZWS";
 
 pub const searchType = enum { STD, PVS, ZWS, ASPIRATION };
 

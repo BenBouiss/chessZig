@@ -172,7 +172,15 @@ pub const engineIdentification = struct {
 pub const engineMetrics = struct {
     timeSearchingUs: i64 = 0,
     timeProcessingUs: i64 = 0,
+    computedPlies: u64 = 0,
+    nPlyCompute: usize = 0,
     lock: bool = false,
+    pub fn addPlies(p_self: *engineMetrics, plies: u64) void {
+        p_self.acquireLock();
+        p_self.computedPlies += plies;
+        p_self.nPlyCompute += 1;
+        p_self.releaseLock();
+    }
     pub fn addTimeToSearchingMs(p_self: *engineMetrics, timeMs: i64) void {
         p_self.acquireLock();
         p_self.timeSearchingUs += timeMs * std.time.us_per_ms;
@@ -203,7 +211,8 @@ pub const engineMetrics = struct {
     pub fn printMetric(p_self: *const engineMetrics) void {
         const proc: f64 = @as(f64, @floatFromInt(p_self.timeProcessingUs)) / std.time.us_per_ms;
         const search: f64 = @as(f64, @floatFromInt(p_self.timeSearchingUs)) / std.time.us_per_ms;
-        std.debug.print("Time spent processing {d} ms, time spent searching {d} ms\n", .{ proc, search });
+        const avg: f64 = @as(f64, @floatFromInt(p_self.computedPlies)) / @as(f64, @floatFromInt(@max(p_self.nPlyCompute, 1)));
+        std.debug.print("Time spent processing {d} ms, time spent searching {d} ms. Average computed ply {d:.2}\n", .{ proc, search, avg });
     }
 };
 

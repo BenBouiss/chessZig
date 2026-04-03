@@ -6,23 +6,17 @@ const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
 const weightl = @import("../weights.zig");
 const hashl = @import("../hashTable.zig");
-const utilsl = @import("../utils.zig");
 const configl = @import("../config.zig");
-
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const alphaBetal = @import("alphaBeta.zig");
-const zwsl = @import("zws.zig");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const pvContainer = movel.pvContainer;
-
 const scoreType = heuristicl.scoreType;
-
 const moveDecisionExt = schedulerl.moveDecisionExt;
 const searchFeatures = schedulerl.searchFeatures;
-
 const threadInfo = threadingl.threadInfo;
 
 pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: alphaBetal.searchType) scoreType {
@@ -31,12 +25,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
     var _alpha = alpha;
     if (p_state.isStaleMateRepetition()) {
-        if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
-            _ = hashl.hashTable.storeEntry(&s_entry);
-            // might be useful for late game
-            //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
-        }
         return weightl.simpleStalemateScore;
     }
 
@@ -49,9 +37,11 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
         if (entry.valid) {
             p_info.searchStat.n_hashRetrieve += 1;
-            //if (entry.val.search.t == .CUT and ply != 0) {
-            //    return entry.eval();
-            //}
+            if (comptime t == .NonPV) {
+                if (entry.val.search.t == .CUT and ply != 0) {
+                    return entry.eval();
+                }
+            }
             hashMove = entry.val.search.bestMove;
         }
     }
@@ -73,12 +63,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
     }
 
-    var canFutility: bool = false;
-    var static_eval: scoreType = 0;
-    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and heuristicl.sideCountScore(p_state, p_state.whiteToMove(), &heuristicl.globalHeuristic) > heuristicl.globalHeuristic.RookValue and depth <= 2) {
-        static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
-        canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
-    }
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
     var useLMR: bool = false;
@@ -93,20 +77,21 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     for (0..fmoves.len) |i| {
         const idx = order.indexes[i];
         const move: IMove = fmoves.moves[idx];
-
-        if (canFutility) {
-            if (ply > 4 and !moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion()) {
-                continue;
-            }
-        }
-
         _ = p_state.makeMove(move);
 
         var score: scoreType = 0;
         if (i == 0) {
             score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
         } else {
-            score = -searchLoop(p_state, p_info, depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, t);
+            if (useLMR) {
+                score = -searchLoop(p_state, p_info, order.depths[i], -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, t);
+            } else {
+                score = _alpha + 1;
+            }
+            if (score > _alpha) {
+                score = -searchLoop(p_state, p_info, depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, t);
+            }
+
             if (score > _alpha and ((beta - _alpha) > 1)) {
                 score = -searchLoop(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
             }
@@ -128,7 +113,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
-
             if (!isCapture) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
             }
@@ -146,23 +130,26 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .CUT, move);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), beta, .CUT, move);
                 _ = hashl.hashTable.storeEntry(&s_entry);
             }
+
             p_info.searchStat.n_cutoffs += 1;
             return beta;
         }
     }
     if (fmoves.len == 0) {
         if (!p_state.isLegal(p_state.whiteToMove())) {
-            finalScore = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(depth)));
+            _alpha = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(depth)));
         } else {
-            finalScore = weightl.simpleStalemateScore;
+            _alpha = weightl.simpleStalemateScore;
         }
     }
+
     if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .PV, bestMove);
+        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), _alpha, .PV, bestMove);
         _ = hashl.hashTable.storeEntry(&s_entry);
     }
+
     return _alpha;
 }

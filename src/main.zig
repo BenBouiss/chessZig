@@ -108,11 +108,8 @@ pub fn test_bench() !void {
     var eng = try initEngine();
     defer eng.executeBuffer("quit");
     //eng.executeBuffer("debug on");
-    eng.executeBuffer("setoption name useLMR value true");
+    eng.executeBuffer("setoption name useQuiescence value true");
     //eng.executeBuffer("setoption name useHash value true");
-    eng.executeBuffer("benchmark");
-    waitOnEngine(&eng);
-    eng.executeBuffer("setoption name clearhash");
     eng.executeBuffer("benchmark");
     waitOnEngine(&eng);
 }

@@ -401,6 +401,9 @@ pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_inf
             sendPartial(sched, depth, decision, p_info);
         }
     }
+    if (sched.p_engine.options.trackMetrics) {
+        sched.p_engine.metric.addPlies(depth);
+    }
 }
 
 pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, decision: *const moveDecisionExt, p_features: *const searchFeatures) bool {

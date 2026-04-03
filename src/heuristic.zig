@@ -1118,36 +1118,7 @@ pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, 
     }
     return 0;
 }
-pub inline fn eval_move_heuristic(p_state: *const chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
-    if (comptime useLine) {
-        return eval_move_heuristic_line(p_state, move, ply, prevLine, hashMove, p_feature);
-    }
-    return eval_move_heuristic_std(p_state, move, ply, p_feature);
-}
-pub fn eval_move_heuristic_std(p_state: *const chess.Board_state, move: IMove, ply: u16, p_feature: *const searchFeatures) scoreType {
-    const fpiece = move.getFromPiece();
-    const cpiece = move.getCapturePiece();
-    const from = move.getFrom();
-    const to = move.getTo();
-    if (move.isCapture()) {
-        if (p_feature.useSEE) {
-            return SEE(p_state, move);
-        } else {
-            return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
-        }
-    } else {
-        // quiet moves
-        if (move.equal(killerMoves[ply][0])) {
-            return 90;
-        } else if (move.equal(killerMoves[ply][1])) {
-            return 80;
-        } else {
-            const w = @intFromEnum(fpiece) <= @intFromEnum(e_piece.nWhiteKing);
-            return historyHeuristic[@intFromBool(w)][from][to];
-        }
-    }
-    return 0;
-}
+
 pub fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) void {
     const _bonus = @max(-configl.MAX_HIST_HEURISTIC_VALUE, @min(configl.MAX_HIST_HEURISTIC_VALUE, bonus));
 
@@ -1159,24 +1130,21 @@ pub fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) voi
 }
 //https://www.chessprogramming.org/History_Heuristic#Update
 pub inline fn computeHistoryBonus(depth: u16) scoreType {
-    //return @intCast(depth * 10);
     return 30 * depth - 25;
 }
 pub fn cmp_eval_move(context: []const scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn cst_eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, comptime useLine: bool, hashMove: IMove, p_feature: *const searchFeatures) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
 
     for (0..p_moves.len) |i| {
         ret.indexes[i] = i;
-        scores[i] = eval_move_heuristic(p_state, p_moves.moves[i], ply, prevLine, useLine, hashMove, p_feature);
+        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, prevLine, hashMove, p_feature);
     }
     ret.len = p_moves.len;
-    // could potentially do ret.scores as the context and sort the array of "entries" with where entries contains an idx, score and depth
-    // alla struct of arrays vs array of struct (here is struct of arrays)
-    //TODO: changes the scores to slice here and in the cmp func
+
     std.mem.sort(usize, ret.indexes[0..p_moves.len], scores[0..p_moves.len], cmp_eval_move);
 
     for (0..ret.len) |idx| {
@@ -1186,10 +1154,10 @@ pub fn cst_eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *c
 }
 pub const moveReductionAmount = 4;
 pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer) void {
-    const otherKingBB = p_state.getKingSq(!p_state.whiteToMove());
-    const safetyArea = chess.safetyArea(otherKingBB);
+    const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
+    const safetyArea = chess.safetyArea(otherKingSq);
     for (0..p_order.len) |i| {
-        if (p_order.scores[i] >= configl.MAX_HIST_HEURISTIC_VALUE or i < moveReductionAmount) {
+        if (p_order.scores[i] >= (3 * configl.MAX_HIST_HEURISTIC_VALUE / 4) or i < moveReductionAmount) {
             //p_order.depths[i] = depth;
             p_order.depths[i] = depth - 1;
             continue;
@@ -1199,7 +1167,7 @@ pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrd
         const to = move.getTo();
         const isCapture = move.isCapture();
         if (isCapture) {
-            if ((to & safetyArea) != 0 or isCapture or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move)) {
+            if ((to & safetyArea) != 0 or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move)) {
                 p_order.depths[i] = depth - 1;
                 continue;
             }
@@ -1219,13 +1187,6 @@ pub const moveOrdering = struct {
     scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
     len: u8 = 0,
 };
-
-pub inline fn eval_move_sorting_mask(p_state: *chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) moveOrdering {
-    if (!p_feature.useStaticSearch) {
-        return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, true, hashMove, p_feature);
-    }
-    return cst_eval_move_sorting_mask(p_state, p_moves, ply, prevLine, false, hashMove, p_feature);
-}
 
 pub fn SEE(p_state: *const chess.Board_state, move: IMove) scoreType {
     if (!move.isCapture()) {
