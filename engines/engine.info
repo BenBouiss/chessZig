@@ -1,30 +1,24 @@
 [engine1]
-path="engines/bin/engine_15_03_26";
-name="'newest'";
-//"debug on"
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+path="engines/bin/engine_03_04_26";
+name="non LMR";
 "setoption name useHash value false";
-"setoption name heuristicWeightsPath value test/test_1773586952.winfo"
-"setoption name useNullPruning value true";
+"setoption name searchType value pvs";
+"setoption name useLMR value false";
 
 [engine2]
-path="engines/bin/engine_15_03_26";
-name="'newer'";
-//"debug on"
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+path="engines/bin/engine_03_04_26";
+name="LMR";
 "setoption name useHash value false";
-"setoption name heuristicWeightsPath value test/test_1773585498.winfo"
-"setoption name useNullPruning value true";
+"setoption name searchType value pvs";
+"setoption name useLMR value true";
 
 [match]
-nMatch=4;
+nMatch=8;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-timeFormat=(60000, 1000);
+timeFormat=(60000, 100);
 logsLocation="logs/ben/ben";
 //saveLogs=true;
 
