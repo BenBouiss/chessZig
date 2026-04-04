@@ -35,14 +35,14 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     var hashMove: IMove = .{};
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
-        if (entry.valid) {
+        if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             if (comptime t == .NonPV) {
-                if (entry.val.search.t == .CUT and ply != 0) {
-                    return entry.eval();
+                if (_entry.val.search.t == .CUT and ply != 0) {
+                    return _entry.eval();
                 }
             }
-            hashMove = entry.val.search.bestMove;
+            hashMove = _entry.val.search.bestMove;
         }
     }
 

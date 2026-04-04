@@ -92,12 +92,12 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var hashMove: IMove = .{};
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
-        if (entry.valid) {
+        if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             //if (entry.val.search.t == .CUT and ply != 0) {
             //    return entry.eval();
             //}
-            hashMove = entry.val.search.bestMove;
+            hashMove = _entry.val.search.bestMove;
         }
     }
 
@@ -352,6 +352,14 @@ pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alp
             return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, t);
         }
     }
+    if (p_features.useHash) {
+        const entry = hashl.getEntryFromMatch(p_state.key, 0);
+        if (entry) |_entry| {
+            p_info.searchStat.n_hashRetrieve += 1;
+            return color_mask * _entry.eval();
+        }
+    }
+
     const score = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
     return score;
 }
@@ -362,18 +370,21 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         pv.setLen(ply);
     }
     var _alpha = alpha;
-    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
-    const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+    const static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
 
     if (depth == 0 or !p_info.alive) {
+        const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
         p_info.searchStat.n_nodeExplored += 1;
-        return static_eval;
+        return color_mask * static_eval;
     }
     var best_value = static_eval;
     if (best_value >= beta) {
         p_info.searchStat.n_cutoffs += 1;
         return best_value;
     }
+    //https://www.chessprogramming.org/Delta_Pruning
+    //var BIG_DELTA = weightl.simpleQueenScore;
+
     if (best_value > _alpha) {
         if (comptime t == .PV) {
             pv.onBestMove(p_state.getLastMove(), ply - 1);

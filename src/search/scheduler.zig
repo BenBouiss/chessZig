@@ -377,7 +377,7 @@ pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_inf
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
     p_info.working = true;
     defer p_info.working = false;
-    var depth: u16 = 0;
+    var depth: u16 = 1;
     if (features.useStaticSearch) {
         depth = maxDepth;
     }
@@ -388,6 +388,9 @@ pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_inf
 
     _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line);
     var decision = &p_info.currentBest;
+    if (sched.reportProgress) {
+        sendPartial(sched, depth, decision, p_info);
+    }
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, decision, &features)) {
         depth += 1;
         if (sched.isDebugMode()) {
