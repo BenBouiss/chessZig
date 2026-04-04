@@ -191,6 +191,10 @@ class templateSelectionAlgo(object):
         for cb in self.callbacks:
             cb.on_eval(positions)
 
+    def on_eval_end(self, scores: list[float]) -> None:
+        for cb in self.callbacks:
+            cb.on_eval_end(scores)
+
     def getCurrentPositions(self) -> list[npt.NDArray[np.float64]]:
         return [x.position for x in self.population]
 
@@ -305,4 +309,8 @@ class callback(ABC):
         | list[list[float]],
     ):
         _ = positions
+        pass
+
+    def on_eval_end(self, scores: list[float]):
+        _ = scores
         pass

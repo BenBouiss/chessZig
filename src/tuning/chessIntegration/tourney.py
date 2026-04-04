@@ -31,11 +31,55 @@ SLEEP_STDOUT_S = 1
 
 
 @dataclass
+class stopwatch:
+    started: bool = False
+    startTime: float = 0.0
+    # in seconds
+
+    def start(self) -> None:
+        assert not self.started, "Stopwatch is already running"
+        self.started = True
+        self.startTime = time.time()
+
+    def reset(self) -> None:
+        assert self.started, "Stopwatch is not running running"
+        self.started = False
+        self.startTime = 0.0
+
+    def stop(self) -> None:
+        assert self.started, "Stopwatch is not running running"
+        self.started = False
+
+    def timeSinceStart(self) -> float:
+        assert self.started, "Stopwatch is not running running"
+        return time.time() - self.startTime
+
+
+@dataclass
+class roundStatus:
+    nMatch: int = 0
+    nFinished: int = 0
+    nRunning: int = 0
+
+    def isOver(self) -> bool:
+        return self.nMatch == self.nFinished
+
+    def reset(self) -> None:
+        self.nMatch = 0
+        self.nFinished = 0
+        self.nRunning = 0
+
+
+@dataclass
 class scoreBoard:
     lock: bool = False
     gui = gui.windowCtx()
+    mh: templateSelectionAlgo | None = None
+    sw: stopwatch = stopwatch()
+    roundStat: roundStatus = roundStatus()
 
     def onTournamentStart(self, mh: templateSelectionAlgo) -> None:
+        self.mh = mh
         self.gui.onTournamentBegin(mh)
 
     def updateScoreBoard(self, matchInv: matchContainerInfo) -> None:
@@ -51,9 +95,11 @@ class scoreBoard:
                 case matchStatus.FINISHED:
                     nFinished += 1
                 case matchStatus.ERROR:
-                    pass
+                    nFinished += 1
                 case _:
                     pass
+        self.roundStat.nFinished = nFinished
+        self.roundStat.nRunning = nRunning
         self.gui.onMatchEnd(
             nMatch=nFinished, nMax=len(matchInv.status), nRunning=nRunning
         )
@@ -70,6 +116,7 @@ class scoreBoard:
 
 global_scoreBoard = scoreBoard()
 global_scoreBoard.gui = gui.setupWindow()
+global_scoreBoard.sw.start()
 
 
 @dataclass
@@ -135,7 +182,7 @@ standardTimeFormat = timeFormat(time=300_000, inc=5000)
 blitzTimeFormat = timeFormat(time=300_000, inc=0)
 
 
-class match(object):
+class matchO(object):
     def __init__(
         self,
         conf1: heuristicEntry,
@@ -168,36 +215,36 @@ class match(object):
                 file.write(
                     f'"setoption name heuristicWeightsPath value {heuristics[i]}";\n'
                 )
-
             file.write(f"[match]\n")
             allCmd = "\n".join(setting.matchSettings)
             file.write(f"{allCmd}\n")
         return newInfoPath
 
-    def launchAndWaitResults(self, evalPath, tmpFolder: str) -> list[score]:
-        ret: list[score] = []
-        newInfo = self.generateFiles(tmpFolder)
-        proc = subprocess.Popen(
-            [evalPath, newInfo],
-            stdin=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        assert proc.stdout is not None
-        for line in iter(proc.stdout.readline, ""):
-            _line = line.rstrip()
-            tokens = _line.split(" ")
-            if self.debugMode:
-                print(
-                    f"[DEBUG] from launchAndWaitResults: line found: '{line}' tokens: '{tokens}'\n"
-                )
-            if len(tokens) != 3:
-                continue
-            ret.append(
-                score(win=int(tokens[0]), lose=int(tokens[1]), draw=int(tokens[2]))
+
+def launchAndWaitResults(
+    m: matchO, evalPath: str, tmpFolder: str, info: threadInfo
+) -> list[score]:
+    ret: list[score] = []
+    newInfo = m.generateFiles(tmpFolder)
+    info.runningProc = subprocess.Popen(
+        [evalPath, newInfo],
+        stdin=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert info.runningProc.stdout is not None
+    for line in iter(info.runningProc.stdout.readline, ""):
+        _line = line.rstrip()
+        tokens = _line.split(" ")
+        if m.debugMode:
+            print(
+                f"[DEBUG] from launchAndWaitResults: line found: '{line}' tokens: '{tokens}'\n"
             )
-        return ret
+        if len(tokens) != 3:
+            continue
+        ret.append(score(win=int(tokens[0]), lose=int(tokens[1]), draw=int(tokens[2])))
+    return ret
 
 
 class matchStatus(Enum):
@@ -321,23 +368,23 @@ class matchContainerInfo(object):
     def releaseLock(self):
         self.lock = False
 
-    def getMatch(self) -> matchFetch:
+    def getMatch(self) -> matchFetchResult:
         self.acquireLock()
         for i in range(len(self.order)):
             if self.status[i] == matchStatus.PENDING:
                 # or error here also to retry
                 self.status[i] == matchStatus.DISPATCHED
                 self.releaseLock()
-                return matchFetch(
+                return matchFetchResult(
                     matchOrder=self.order[i], status=matchFetchStatus.FOUND, idx=i
                 )
 
         self.releaseLock()
-        return matchFetch(status=matchFetchStatus.EMPTY)
+        return matchFetchResult(status=matchFetchStatus.EMPTY)
 
 
 @dataclass
-class matchFetch:
+class matchFetchResult:
     matchOrder: tuple[int, int] = (0, 0)
     status: matchFetchStatus = matchFetchStatus.EMPTY
     idx: int = -1
@@ -354,7 +401,8 @@ class threadStatus(Enum):
 class threadInfo:
     status: threadStatus = threadStatus.PENDING
     interrupt: bool = False
-    currentMatch: matchFetch = matchFetch()
+    currentMatch: matchFetchResult = matchFetchResult()
+    runningProc: subprocess.Popen | None = None
 
 
 class tournament(object):
@@ -367,6 +415,7 @@ class tournament(object):
         debugMode: bool = False,
         nThread: int = 1,
         type: tournamentType = tournamentType.CLASSIC,
+        useGUIWait: bool = True,
     ):
         self.timeFormat: timeFormat = timeF
         self.type = type
@@ -381,6 +430,7 @@ class tournament(object):
         self.logDir: str = logDir
         self.setThread(nThread)
         self.logs: dict = {}
+        self.useGUIWait = useGUIWait
 
     def saveArgsToDict(self) -> dict:
         ret = {}
@@ -400,27 +450,38 @@ class tournament(object):
     def dispatchMatch(self, matchInfo: matchContainerInfo) -> None:
         self.matchInv = matchInfo
         workingThreads: list[threading.Thread] = []
+        threadInfos: list[threadInfo] = []
         # for threadId, idx in enumerate(indexes):
         global_scoreBoard.updateScoreBoard(self.matchInv)
         for threadId in range(self.nThread):
+            threadInfos.append(threadInfo())
             workingThreads.append(
-                threading.Thread(target=self.thread_dispatchMatch, args=([threadId]))
+                threading.Thread(
+                    target=self.thread_dispatchMatch, args=([threadId, threadInfos[-1]])
+                )
             )
             workingThreads[-1].start()
-        for x in workingThreads:
-            x.join()
+        if self.useGUIWait:
+            GUIWaitLoop(self, workingThreads, threadInfos)
+        else:
+            for x in workingThreads:
+                x.join()
+
         # check for the ERROR match and retry
-        self.retryErrors()
+        # self.retryErrors(threadInfos[0])
 
     def thread_dispatchMatch(self, threadId: int, info: threadInfo) -> None:
         assert self.population is not None
         assert self.templatePath is not None
+        assert self.evalBin is not None
         info.status = threadStatus.RUNNING
         while not info.interrupt:
             res = self.matchInv.getMatch()
             info.currentMatch = res
+
             if res.status == matchFetchStatus.EMPTY:
                 break
+
             pair = res.matchOrder
             opp1 = self.population[pair[0]].position
             if self.type == tournamentType.BASELINE:
@@ -429,16 +490,20 @@ class tournament(object):
                 opp2 = self.population[pair[1]].position
 
             self.matchInv.status[res.idx] = matchStatus.IN_PROGRESS
+
             global_scoreBoard.updateScoreBoard(self.matchInv)
 
-            currentMatch: match = match(
+            currentMatch: matchO = matchO(
                 conf1=opp1,
                 conf2=opp2,
                 infoFilePath=self.templatePath,
                 extra=f"T{threadId}",
                 debugMode=self.debugMode,
             )
-            scoreList = currentMatch.launchAndWaitResults(self.evalBin, self.logDir)
+
+            scoreList = launchAndWaitResults(
+                currentMatch, self.evalBin, self.logDir, info
+            )
 
             if len(scoreList) == 0:
                 self.matchInv.status[res.idx] = matchStatus.ERROR
@@ -449,9 +514,10 @@ class tournament(object):
 
         info.status = threadStatus.FINISHED
 
-    def retryErrors(self) -> None:
+    def retryErrors(self, info: threadInfo) -> None:
         assert self.population is not None
         assert self.templatePath is not None
+        assert self.evalBin is not None
         for i in range(len(self.matchInv.status)):
             if self.matchInv.status[i] != matchStatus.ERROR:
                 continue
@@ -465,14 +531,16 @@ class tournament(object):
             self.matchInv.status[i] = matchStatus.IN_PROGRESS
             global_scoreBoard.updateScoreBoard(self.matchInv)
 
-            currentMatch: match = match(
+            currentMatch: matchO = matchO(
                 conf1=opp1,
                 conf2=opp2,
                 infoFilePath=self.templatePath,
                 extra=f"T0r",
                 debugMode=self.debugMode,
             )
-            scoreList = currentMatch.launchAndWaitResults(self.evalBin, self.logDir)
+            scoreList = launchAndWaitResults(
+                currentMatch, self.evalBin, self.logDir, info
+            )
 
             if len(scoreList) == 0:
                 self.matchInv.status[i] = matchStatus.ERROR
@@ -499,6 +567,34 @@ class tournament(object):
                 print(
                     f"[DEBUG] \t {self.population[i].scoring}, id: {self.population[i].uid}\n"
                 )
+
+
+def killAndWait(threads: list[threading.Thread], infos: list[threadInfo]) -> None:
+    for e in infos:
+        e.interrupt = True
+        assert e.runningProc is not None
+        e.runningProc.kill()
+
+    for t in threads:
+        t.join()
+
+
+def GUIWaitLoop(
+    tourney: tournament, threads: list[threading.Thread], infos: list[threadInfo]
+) -> None:
+    assert global_scoreBoard.gui.stdscr is not None
+    global_scoreBoard.gui.stdscr.nodelay(True)
+    while True:
+        time.sleep(1)
+        c = global_scoreBoard.gui.stdscr.getch()
+        if c == ord("q"):
+            killAndWait(threads, infos)
+            assert global_scoreBoard.mh is not None
+            global_scoreBoard.mh.running = False
+            break
+
+        if global_scoreBoard.roundStat.isOver():
+            break
 
 
 class chessObjective(obj.objective):
@@ -539,6 +635,7 @@ class chessObjective(obj.objective):
             chessIndividual(position=pos, uid=x, scoring=score(0, 0, 0, False))
             for x, pos in enumerate(self.baseline)
         ]
+        global_scoreBoard.roundStat.nMatch = len(matchInv.status)
         self.tourney.dispatchMatch(matchInv)
         return [x.scoring.getScore() for x in self.tourney.population]
 
@@ -593,9 +690,6 @@ class chessObjective(obj.objective):
 
 
 def tournamentFromConfigFile(config: dict) -> tournament:
-
-    # assert os.path.exists(config["evalBin"])
-
     return tournament(
         timeF=timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
         templatePath=config["templatePath"],
@@ -738,3 +832,4 @@ if __name__ == "__main__":
     )
 
     mh.optimize()
+    gui.restoreWindow(global_scoreBoard.gui)

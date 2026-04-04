@@ -29,7 +29,9 @@ Plan of gui implementation.
     - Possibility to interact with the optimization:
         - Quit the search "gracefully"
         - Other
+
 """
+
 from curses import wrapper
 from curses.textpad import Textbox, rectangle
 
@@ -65,7 +67,7 @@ class windowCtx:
             mh.population[0].position, indexes=indexes
         )
 
-        windowOffset = (4, 2)
+        windowOffset = (4, 0)
         self.stdscr.addstr(
             windowOffset[0] - 1,
             windowOffset[1],
@@ -90,41 +92,43 @@ class windowCtx:
         self.stdscr.refresh()
 
     def onMatchEnd(self, nMatch: int, nMax: int, nRunning: int):
-        #
+        assert self.stdscr is not None
+
         barOffset = (24, 2)
         totalSize = 64
         currSize = int((nMatch / nMax) * totalSize)
-        self.stdscr.addstr(
-            barOffset[0] - 1,
-            barOffset[1],
-            f"{nMatch} / {nMax}(eta: ??? s) {nRunning} running  ",
+        _addstr(
+            self.stdscr,
+            posY=barOffset[0] - 1,
+            posX=barOffset[1],
+            attr=[
+                (f"{nMatch} ", curses.color_pair(1)),
+                f"/ {nMax} ",
+                (f"{nRunning} running ", curses.color_pair(2)),
+            ],
         )
         self.stdscr.refresh()
-        win = curses.newwin(
-            2,
-            totalSize,
-            barOffset[0],
-            barOffset[1],
-        )
-        win.attrset(curses.color_pair(0))
-        win.border()
-        win.refresh()
-        if nMatch == 0:
-            return
-        win = curses.newwin(
-            2,
-            currSize,
-            barOffset[0],
-            barOffset[1],
-        )
-        win.attrset(curses.color_pair(1))
-        win.border()
-        win.refresh()
-        # self.stdscr.refresh()
+        if not (nRunning + nMatch >= nMax):
+            win = curses.newwin(2, totalSize, barOffset[0], barOffset[1])
+            win.attrset(curses.color_pair(0))
+            win.border()
+            win.refresh()
+        if nMatch != 0:
+            if nRunning != 0:
+                win = curses.newwin(2, currSize + 1, barOffset[0], barOffset[1])
+            else:
+                win = curses.newwin(2, currSize, barOffset[0], barOffset[1])
+            win.attrset(curses.color_pair(1))
+            win.border()
+            win.refresh()
 
-    def loop(self):
-        while True:
-            pass
+        if nRunning != 0:
+            runningSize = int((nRunning / nMax) * totalSize)
+            win = curses.newwin(2, runningSize, barOffset[0], currSize + barOffset[1])
+            win.attrset(curses.color_pair(2))
+            win.border()
+            win.refresh()
+            return
 
 
 def setupWindow() -> windowCtx:
@@ -137,9 +141,45 @@ def setupWindow() -> windowCtx:
     curses.curs_set(False)
     curses.noecho()
     curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-    curses.curs_set(True)
+    curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)
 
     return ret
+
+
+def restoreWindow(windowCtx):
+    _ = windowCtx
+    clear()
+    curses.curs_set(True)
+    curses.endwin()
+    print("")
+    # curses.reset_shell_mode()
+
+
+def _addstr(stdscr, posY, posX, attr: list[str | tuple[str, int]]):
+    assert len(attr) != 0
+    for i in range(len(attr)):
+        frame = attr[i]
+        modif = False
+        if type(frame) is str:
+            _str = frame
+        elif type(frame) is tuple:
+            _str = frame[0]
+            if len(frame) == 2:
+                modif = True
+        else:
+            assert False, f"type: {type(frame)} unhandled"
+        assert type(_str) is str
+
+        if i == 0:
+            if modif:
+                stdscr.addstr(posY, posX, f"{_str}", frame[1])
+            else:
+                stdscr.addstr(posY, posX, f"{_str}")
+        else:
+            if modif:
+                stdscr.addstr(f"{_str}", frame[1])
+            else:
+                stdscr.addstr(f"{_str}")
 
 
 def main(stdscr):
