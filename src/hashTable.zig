@@ -80,8 +80,25 @@ pub const Hash_bucket = struct {
         _ = p_self;
     }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
-        p_self.entries[p_self.len] = p_entry.*;
-        p_self.len = ((p_self.len + 1) % configl.ITEM_PER_BUCKET);
+        var idxS: usize = 0;
+        var sDepth = p_self.entries[0].exploredDeph;
+        // if a better entry exists for this hash key we exit
+        for (0..p_self.len) |i| {
+            const entry = p_self.entries[i];
+            if (entry.key.code == p_entry.key.code) {
+                if (entry.exploredDeph > p_entry.exploredDeph) {
+                    return;
+                }
+                p_self.entries[i] = p_entry.*;
+                return;
+            }
+            if (entry.exploredDeph < sDepth) {
+                idxS = i;
+                sDepth = entry.exploredDeph;
+            }
+        }
+        p_self.entries[idxS] = p_entry.*;
+        //p_self.len = ((p_self.len + 1) % configl.ITEM_PER_BUCKET);
     }
 
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
@@ -96,25 +113,16 @@ pub const Hash_bucket = struct {
         //p_self.releaseLock();
         return .{ .valid = false };
     }
-    pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
-        var ret_idx: usize = 0;
-        var entry_found: bool = false;
+    pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?*Hash_entry {
         for (0..p_self.len) |i| {
             const entry = &p_self.entries[i];
             // >= to select an entry that was explored to current depth or deeper
+            // now that only one instance of the key gets stored, the highest depth is the first one to get hit
             if (entry.key.code == hash and entry.exploredDeph >= depth) {
-                if (entry_found and p_self.entries[ret_idx].exploredDeph < entry.exploredDeph) {
-                    ret_idx = i;
-                    continue;
-                }
-                entry_found = true;
-                ret_idx = i;
+                return entry;
             }
         }
-        if (!entry_found) {
-            return .{ .valid = false };
-        }
-        return p_self.entries[ret_idx];
+        return null;
     }
     fn acquireLock(p_self: *Hash_bucket) void {
         while (p_self.lock) {}
@@ -189,9 +197,8 @@ pub const Hash_table = struct {
         }
     }
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry) bool {
-        const index = p_entry.key.code;
         p_self.n_insertion += 1;
-        var p_bucket = p_self.getBucketFromFullHashIndex(index);
+        var p_bucket = p_self.getBucketFromFullHashIndex(p_entry.key.code);
         if (p_bucket.len == configl.ITEM_PER_BUCKET) {
             _ = strategyEntryRemoval(p_bucket, p_entry);
         }
@@ -211,7 +218,7 @@ pub fn getEntryFromPerft(key: Key, depth: u8) Hash_entry {
     const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
     return p_bucket.getEntryPerft(key.code, depth);
 }
-pub fn getEntryFromMatch(key: Key, depth: u8) Hash_entry {
+pub inline fn getEntryFromMatch(key: Key, depth: u8) ?*Hash_entry {
     const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
     return p_bucket.getEntryMatch(key.code, depth);
 }
