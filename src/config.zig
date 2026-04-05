@@ -71,6 +71,9 @@ pub const _DEFAULT_USE_SEE = "true";
 pub const DEFAULT_USE_FUTILITY = false;
 pub const _DEFAULT_USE_FUTILITY = "false";
 
+pub const DEFAULT_USE_RAZORING = false;
+pub const _DEFAULT_USE_RAZORING = "false";
+
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
 

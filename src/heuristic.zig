@@ -266,6 +266,9 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
         },
     }
 }
+pub inline fn materialImbalance(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
+    return sideCountScore(p_state, true, values) - sideCountScore(p_state, false, values);
+}
 pub fn sideCountScore(p_state: *const chess.Board_state, white: bool, values: *const heuristicValues) scoreType {
     var offset: usize = 0;
     if (!white) {

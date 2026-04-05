@@ -344,19 +344,19 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
 }
 pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
+    if (p_features.useHash) {
+        const entry = hashl.getEntryFromMatch(p_state.key, 0);
+        if (entry) |_entry| {
+            p_info.searchStat.n_hashRetrieve += 1;
+            return color_mask * _entry.eval();
+        }
+    }
     p_info.searchStat.n_nodeExplored += 1;
     if (p_features.useQuiescence) {
         const ischeck = p_state.isChecked();
         if (p_state.getLastMove().isCapture() or ischeck) {
             // perform quiesc
             return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, t);
-        }
-    }
-    if (p_features.useHash) {
-        const entry = hashl.getEntryFromMatch(p_state.key, 0);
-        if (entry) |_entry| {
-            p_info.searchStat.n_hashRetrieve += 1;
-            return color_mask * _entry.eval();
         }
     }
 
@@ -383,7 +383,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         return best_value;
     }
     //https://www.chessprogramming.org/Delta_Pruning
-    //var BIG_DELTA = weightl.simpleQueenScore;
+    const BIG_DELTA = weightl.simpleQueenScore;
 
     if (best_value > _alpha) {
         if (comptime t == .PV) {
@@ -397,14 +397,21 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     for (0..fmoves.len) |i| {
         const idx = indexes.indexes[i];
         const move: IMove = fmoves.moves[idx];
+        var _delta = BIG_DELTA;
+        if (move.isPromotion()) {
+            _delta += weightl.simpleQueenScore - 200;
+        }
+        if (static_eval < (_alpha - _delta)) {
+            return _alpha;
+        }
 
         // if move nor capture nor checking
         // problem here where a checking sequence ie
         // black checked -> white not checked nor capture = end of quiescence, the search might need to continue
 
-        //if (!move.isCapture() and !wasChecked) {
-        //    continue;
-        //}
+        if (!move.isCapture()) {
+            continue;
+        }
         p_state.makeMove(move);
 
         const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, wasChecked, pv, prevLine, t);

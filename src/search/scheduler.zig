@@ -36,6 +36,7 @@ pub const searchFeatures = struct {
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useSEE: bool = configl.DEFAULT_USE_SEE,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
+    useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
@@ -50,6 +51,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.useSEE = p_engine.options.useSEE;
     ret.useFutility = p_engine.options.useFutility;
     ret.searchType = p_engine.options.searchType;
+    ret.useRazoring = p_engine.options.useRazoring;
     return ret;
 }
 

@@ -116,10 +116,10 @@ pub fn test_bench() !void {
 
 pub fn main() anyerror!void {
     //try test_perft();
-    try test_bench();
+    //try test_bench();
     //try test_speed();
     //try heuristicl.main();
-    //try chessl.main();
+    try chessl.main();
     //try test_bug();
     //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
     //Jdefer path.free(GLOBAL_ALLOC);
