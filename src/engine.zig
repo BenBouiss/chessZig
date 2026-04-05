@@ -25,7 +25,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, TRACKMETRICS, SEARCHTYPE };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, USERAZORING, TRACKMETRICS, SEARCHTYPE };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -224,6 +224,7 @@ pub const engineOptions = struct {
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useSEE: bool = configl.DEFAULT_USE_SEE,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
+    useRazoring: bool = configl.DEFAULT_USE_RAZORING,
 
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
@@ -301,6 +302,8 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "useSEE", .optionType = .USESEE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_SEE } } });
         try p_self.addOption(.{ .name = "useFutility", .optionType = .USEFUTILITY, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_FUTILITY } } });
+
+        try p_self.addOption(.{ .name = "useRazoring", .optionType = .USERAZORING, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RAZORING } } });
 
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
@@ -616,6 +619,16 @@ pub const engine = struct {
                     return false;
                 }
                 p_self.options.useFutility = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .USERAZORING => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useRazoring = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
 
@@ -974,6 +987,8 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .USESEE;
     } else if (utilsl.contains(cmdBuffer, " useFutility", .ignoreCase)) {
         return .USEFUTILITY;
+    } else if (utilsl.contains(cmdBuffer, " useRazoring", .ignoreCase)) {
+        return .USERAZORING;
     } else if (utilsl.contains(cmdBuffer, " searchType", .ignoreCase)) {
         return .SEARCHTYPE;
     }

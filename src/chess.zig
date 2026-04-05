@@ -23,6 +23,7 @@ const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const board_statusl = @import("board_status.zig");
 const stringl = @import("string.zig");
+const schedulerl = @import("search/scheduler.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
@@ -31,6 +32,7 @@ const matchMoveContainer = movel.matchMoveContainer;
 const cachedTables = tablel.cachedTables;
 const status = board_statusl.status;
 const string = stringl.string;
+const searchFeatures = schedulerl.searchFeatures;
 
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
@@ -1353,10 +1355,18 @@ pub const Board_state = struct {
     pub inline fn getPieceCount(self: Board_state, piece: e_piece) u8 {
         return self.pieceCount[@intFromEnum(piece)];
     }
+
+    pub inline fn getBigPieceCount(self: *const Board_state, white: bool) u8 {
+        if (white) {
+            return self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
+        }
+        return self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
+    }
     //https://home.hccnet.nl/h.g.muller/deepfut.html
     pub fn getNthBestPiece(self: *const Board_state, colorOffset: usize, n: u8) e_piece {
         var _n: i32 = @intCast(n);
         for (1..N_PIECES_TYPES) |idx| {
+            // 1: skips the king
             const pieceIdx = colorOffset + (N_PIECES_TYPES - 1) - idx;
             const count = self.pieceCount[pieceIdx];
             _n -= count;
@@ -2515,20 +2525,23 @@ pub fn test_safety() !void {
     print_bitboard(safetyArea(e_square.e8));
 }
 pub fn test_move_heur() !void {
-    var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "1nbqkbnr/2pppppp/8/1p6/Rp6/2P5/4PPPP/1NBQKBNR b Hh b6 0 10");
+    //var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "1nbqkbnr/2pppppp/8/1p6/Rp6/2P5/4PPPP/1NBQKBNR b Hh b6 0 10");
+    var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
     print_boardstate(&tmp);
     const moves = moveGenl.generateLegalMoves(&tmp);
+    const pv: movel.line = .{};
+    const feat: searchFeatures = .{};
+    var order = heuristicl.eval_move_sorting_mask(&tmp, &moves, 0, &pv, &feat, undefined);
+
+    heuristicl.computeLateMoveReduc(&tmp, &order, 4, &moves);
     for (0..moves.len) |i| {
-        const move = moves.moves[i];
-        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic_std(move, 0) });
+        const idx = order.indexes[i];
+        const move = moves.moves[idx];
+        const score = order.scores[i];
+        const depth = order.depths[i];
+        std.debug.print("{s} : i:{d} idx:{d} score:{d} depth:{d}\n", .{ move.getStr(), i, idx, score, depth });
     }
     std.debug.print("ben\n", .{});
-    const indexes = heuristicl.eval_move_sorting_mask(&moves, 0);
-    for (0..moves.len) |i| {
-        const idx = indexes.indexes[i];
-        const move = moves.moves[idx];
-        std.debug.print("{s} : {d} \n", .{ move.getStr(), heuristicl.eval_move_heuristic_std(move, 0) });
-    }
 }
 
 pub fn main() !void {
@@ -2538,9 +2551,9 @@ pub fn main() !void {
     //try test_passed();
     //try test_safety();
     //try test_stackedPawn();
-    try test_scenarios();
+    //try test_scenarios();
     //try test_single_algebraic();
     //try test_line_algebraic();
-    //try test_move_heur();
+    try test_move_heur();
     return;
 }
