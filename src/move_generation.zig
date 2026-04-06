@@ -29,12 +29,22 @@ const useMagic = build_options.useMagic;
 const useStaged = build_options.useStaged;
 const useDebug = build_options.useDebug;
 
+// move ordering section?
+pub fn generateLegalMoves_capture(p_board: *const Board_state) moveContainer {
+    var bbMoves = moveGenBB(p_board);
+    var moves: moveContainer = undefined;
+    moves.len = 0;
+    moveGenBBToMoveContainer(p_board, &bbMoves, &moves, .CAPTURES);
+    return moves;
+}
+
 pub inline fn generateLegalMoves(p_board: *const Board_state) moveContainer {
     if (comptime useStaged) {
         var bbMoves = moveGenBB(p_board);
         var moves: moveContainer = undefined;
         moves.len = 0;
-        moveGenBBToMoveContainer(p_board, &bbMoves, &moves);
+        moveGenBBToMoveContainer(p_board, &bbMoves, &moves, .ALL);
+        //moveGenBBToMoveContainer(p_board, &bbMoves, &moves);
         //keeping for debug purposes
         //if (true) {
         //    var otherMove: moveContainer = moveGeneration(p_board);
@@ -57,7 +67,7 @@ pub inline fn generateLegalMoves(p_board: *const Board_state) moveContainer {
 pub inline fn generateLegalMovesCut(p_board: *const Board_state, p_out: *moveContainer) void {
     if (comptime useStaged) {
         var bbMoves = moveGenBB(p_board);
-        return moveGenBBToMoveContainer(p_board, &bbMoves, p_out);
+        return moveGenBBToMoveContainer(p_board, &bbMoves, p_out, .ALL);
     } else {
         @panic("Not implemented");
     }
@@ -70,6 +80,350 @@ pub fn generateMoveCountLegalMoves(p_board: *const Board_state, white: bool) usi
     } else {
         var moves = black_moveGeneration(p_board);
         return filterCountMoveLegal(p_board, &moves, white);
+    }
+}
+
+pub fn moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *moveBBState, p_out: *moveContainer, comptime extra: generationModifiers) void {
+    if (p_board.whiteToMove()) {
+        return cst_moveGenBBToMoveContainer_ordered(p_board, p_moveBB, true, p_out, extra);
+    }
+    return cst_moveGenBBToMoveContainer_ordered(p_board, p_moveBB, false, p_out, extra);
+}
+
+pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const Board_state, p_moveBB: *moveBBState, comptime white: bool, p_out: *moveContainer, comptime extra: generationModifiers) void {
+    var pawnDir: i8 = 8;
+    var pPawn: e_piece = .nWhitePawn;
+    var opPawn: e_piece = .nBlackPawn;
+    var pBishop: e_piece = .nWhiteBishop;
+    var pRook: e_piece = .nWhiteRook;
+    var pQueen: e_piece = .nWhiteQueen;
+    var pKnight: e_piece = .nWhiteKnight;
+    var pKing: e_piece = .nWhiteKing;
+    var kingSq = p_board.wKingSq;
+    var emptyOrEnem: u64 = ~p_board.c_occupiedBB[@intFromBool(true)];
+    const opp = !white;
+    if (comptime !white) {
+        pawnDir = -8;
+        pPawn = .nBlackPawn;
+        opPawn = .nWhitePawn;
+        pBishop = .nBlackBishop;
+        pRook = .nBlackRook;
+        pQueen = .nBlackQueen;
+        pKnight = .nBlackKnight;
+        pKing = .nBlackKing;
+        kingSq = p_board.bKingSq;
+        emptyOrEnem = ~p_board.c_occupiedBB[@intFromBool(false)];
+    }
+
+    const allAttacks = chess.getAllAttackMask(p_board, p_board.occupiedBB ^ p_board.pieceBB[@intFromEnum(pKing)], opp);
+
+    const kingSqInfo = squarel.squareInfo.init(kingSq);
+
+    //source: https://www.codeproject.com/articles/Worlds-Fastest-Bitboard-Chess-Movegenerator
+    const kingDiags = kingSqInfo.getDiagonalsBB();
+    const kingLines = kingSqInfo.getHorizontalBB();
+    const pinHV = p_board.pinnedBB & kingLines;
+    const pinD12 = p_board.pinnedBB & kingDiags;
+
+    const unPinnedBB = ~p_board.pinnedBB;
+    const inCheck: bool = p_board.checkersBB != 0;
+    const generateCapture = comptime (extra == .CAPTURES or extra == .ALL);
+    const generateQuiet = comptime (extra == .QUIETMOVE or extra == .ALL);
+    if (inCheck) {
+        const doubleCheck: bool = chess.l_popcount(p_board.checkersBB & p_board.occupiedBB) > 1;
+        if (doubleCheck) {
+            // only king moves
+            const kingBB = p_moveBB.kingMoves;
+            p_moveBB.resetAll();
+            p_moveBB.kingMoves = kingBB;
+        } else {
+            // only blocking / capturing moves for non king pieces
+            const kingBB = p_moveBB.kingMoves;
+
+            if (generateCapture) {
+                if (comptime white) {
+                    p_moveBB.enPassantMoves = p_moveBB.enPassantMoves >> 8;
+                    p_moveBB.andEq(p_board.checkersBB);
+                    p_moveBB.enPassantMoves = p_moveBB.enPassantMoves << 8;
+                } else {
+                    p_moveBB.enPassantMoves = p_moveBB.enPassantMoves << 8;
+                    p_moveBB.andEq(p_board.checkersBB);
+                    p_moveBB.enPassantMoves = p_moveBB.enPassantMoves >> 8;
+                }
+            }
+
+            p_moveBB.kingMoves = kingBB;
+            // if in check no castling allowed
+            p_moveBB.kingSideCastlingMoves = chess.EMPTY;
+            p_moveBB.queenSideCastlingMoves = chess.EMPTY;
+        }
+    } else {
+        // move generate the pinned pieces here
+        // a pinned piece cannot clear a check
+
+        // bishop and queen
+        var pinnedPiece = (p_board.pieceBB[@intFromEnum(pBishop)] | p_board.pieceBB[@intFromEnum(pQueen)]) & pinD12;
+        while (pinnedPiece != chess.EMPTY) {
+            const from: u8 = chess.bitscan(pinnedPiece);
+            const piece = p_board.get_piece(from);
+            pinnedPiece &= pinnedPiece - 1;
+            const permittedMoves = chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(from)) & kingDiags & emptyOrEnem;
+
+            if (comptime generateQuiet) {
+                genericStagedMovePushQuiet(p_out, permittedMoves & (~p_board.occupiedBB), from, piece);
+            }
+            if (comptime generateCapture) {
+                genericStagedMovePushCapture(p_board, p_out, permittedMoves & p_board.occupiedBB, from, piece);
+            }
+        }
+        // rook and queen
+        pinnedPiece = (p_board.pieceBB[@intFromEnum(pRook)] | p_board.pieceBB[@intFromEnum(pQueen)]) & pinHV;
+        while (pinnedPiece != chess.EMPTY) {
+            const from: u8 = chess.bitscan(pinnedPiece);
+            const piece = p_board.get_piece(from);
+            pinnedPiece &= pinnedPiece - 1;
+            const permittedMoves = chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(from)) & kingLines & emptyOrEnem;
+
+            if (comptime generateQuiet) {
+                genericStagedMovePushQuiet(p_out, permittedMoves & (~p_board.occupiedBB), from, piece);
+            }
+            if (comptime generateCapture) {
+                genericStagedMovePushCapture(p_board, p_out, permittedMoves & p_board.occupiedBB, from, piece);
+            }
+        }
+
+        // pawn pin handling
+        // push only possible if to in pinHV
+        // capture only if to in pinD12
+        // enPassant never okay
+        // promotion only when capturing
+        // pinnedPiece = p_moveBB.pawnMoves & pinHV;
+        if (comptime generateQuiet) {
+            pinnedPiece = (p_board.pieceBB[@intFromEnum(pPawn)] & pinHV);
+            while (pinnedPiece != chess.EMPTY) {
+                const from: u8 = chess.bitscan(pinnedPiece);
+                pinnedPiece &= pinnedPiece - 1;
+                const to: i8 = @as(i8, @intCast(from)) + pawnDir;
+                const _to: u8 = @intCast(to);
+                if (chess.xToBitboard(_to) & pinHV != chess.EMPTY) {
+                    _ = movel.build_move_in(from, _to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
+                }
+            }
+            pinnedPiece = p_moveBB.doubleMoves & pinHV;
+            while (pinnedPiece != chess.EMPTY) {
+                const to: u8 = chess.bitscan(pinnedPiece);
+                pinnedPiece &= pinnedPiece - 1;
+                const from: i8 = @as(i8, @intCast(to)) - (pawnDir << 1);
+                _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
+            }
+        }
+        if (comptime generateCapture) {
+            pinnedPiece = p_board.pieceBB[@intFromEnum(pPawn)] & pinD12;
+            while (pinnedPiece != chess.EMPTY) {
+                const from: u8 = chess.bitscan(pinnedPiece);
+                pinnedPiece &= pinnedPiece - 1;
+
+                const att = chess.getPawnAttacks(@enumFromInt(from), white);
+                const toAtt_bb = att & kingDiags & p_board.c_occupiedBB[@intFromBool(!white)];
+                genericStagedMovePushCapture(p_board, p_out, toAtt_bb, from, pPawn);
+            }
+            pinnedPiece = p_moveBB.promotionMoves & p_board.occupiedBB & pinD12;
+            const validPawnAttLoc: u64 = chess.EMPTY;
+            while (pinnedPiece != chess.EMPTY) {
+                const to: u8 = chess.bitscan(pinnedPiece);
+                pinnedPiece &= pinnedPiece - 1;
+                var att = chess.getPawnAttacks(@enumFromInt(to), opp) & validPawnAttLoc;
+                const cPiece = p_board.get_piece(to);
+                if (att != chess.EMPTY) {
+                    const from: u8 = chess.bitscan(att);
+                    att &= att - 1;
+                    push_promotion_capture(from, to, pPawn, cPiece, p_out);
+                }
+            }
+        }
+    }
+
+    const validPawnLoc = unPinnedBB & p_board.pieceBB[@intFromEnum(pPawn)];
+    if (comptime generateQuiet) {
+        var bb: u64 = undefined;
+        if (comptime white) {
+            bb = (p_moveBB.pawnMoves & (unPinnedBB << 8));
+        } else {
+            bb = (p_moveBB.pawnMoves & (unPinnedBB >> 8));
+        }
+        while (bb != chess.EMPTY) {
+            const to: u8 = chess.bitscan(bb);
+            bb &= bb - 1;
+            const from: i8 = @as(i8, @intCast(to)) - pawnDir;
+            _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
+        }
+    }
+
+    if (comptime generateCapture) {
+        var bb = p_moveBB.promotionMoves & p_board.occupiedBB;
+        while (bb != chess.EMPTY) {
+            const to: u8 = chess.bitscan(bb);
+            bb &= bb - 1;
+            var att = chess.getPawnAttacks(@enumFromInt(to), opp) & validPawnLoc;
+            const cPiece = p_board.get_piece(to);
+            while (att != chess.EMPTY) {
+                const from: u8 = chess.bitscan(att);
+                att &= att - 1;
+                push_promotion_capture(from, to, pPawn, cPiece, p_out);
+            }
+        }
+    }
+
+    if (comptime generateQuiet) {
+        var bb: u64 = 0;
+        if (comptime white) {
+            bb = (p_moveBB.promotionMoves & ~p_board.occupiedBB & (unPinnedBB << 8));
+        } else {
+            bb = (p_moveBB.promotionMoves & ~p_board.occupiedBB & (unPinnedBB >> 8));
+        }
+        while (bb != chess.EMPTY) {
+            const to: u8 = chess.bitscan(bb);
+            const from: i8 = @as(i8, @intCast(to)) - pawnDir;
+            bb &= bb - 1;
+            push_promotion(@intCast(from), to, pPawn, p_out);
+        }
+
+        if (comptime white) {
+            bb = (p_moveBB.doubleMoves & (unPinnedBB << 16));
+        } else {
+            bb = (p_moveBB.doubleMoves & (unPinnedBB >> 16));
+        }
+        while (bb != chess.EMPTY) {
+            const to: u8 = chess.bitscan(bb);
+            const from: i8 = @as(i8, @intCast(to)) - (pawnDir << 1);
+            bb &= bb - 1;
+            _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
+        }
+    }
+
+    if (comptime generateCapture) {
+        const validPawnAtt = chess.getPawnAttacksFromBB(validPawnLoc, white);
+        var bb = p_moveBB.enPassantMoves & validPawnAtt;
+        while (bb != chess.EMPTY) {
+            const to: u8 = chess.bitscan(bb);
+            bb &= bb - 1;
+
+            const att = chess.getPawnAttacks(@enumFromInt(to), opp);
+            var toAtt_bb = att & validPawnLoc;
+            while (toAtt_bb != chess.EMPTY) {
+                const from: u8 = chess.bitscan(toAtt_bb);
+                toAtt_bb &= toAtt_bb - 1;
+                _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.ENPASSANT), pPawn, opPawn, p_out);
+            }
+        }
+
+        bb = p_moveBB.pawnAttacks & validPawnAtt;
+        while (bb != chess.EMPTY) {
+            const to: u8 = chess.bitscan(bb);
+            const cPiece = p_board.get_piece(to);
+            bb &= bb - 1;
+            const att = chess.getPawnAttacks(@enumFromInt(to), opp);
+            var toAtt_bb = att & validPawnLoc;
+
+            while (toAtt_bb != chess.EMPTY) {
+                const from: u8 = chess.bitscan(toAtt_bb);
+                toAtt_bb &= toAtt_bb - 1;
+                _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pPawn, cPiece, p_out);
+            }
+        }
+    }
+
+    // bishop BB
+    var pieceBB = p_board.pieceBB[@intFromEnum(pBishop)] & unPinnedBB;
+    while (pieceBB != chess.EMPTY) {
+        const from: u8 = chess.bitscan(pieceBB);
+        pieceBB &= pieceBB - 1;
+        const allAtt = chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(from)) & p_moveBB.bishopMoves;
+
+        if (comptime generateCapture) {
+            genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pBishop);
+        }
+        if (comptime generateQuiet) {
+            genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pBishop);
+        }
+    }
+
+    // rook BB
+    pieceBB = p_board.pieceBB[@intFromEnum(pRook)] & unPinnedBB;
+    while (pieceBB != chess.EMPTY) {
+        const from: u8 = chess.bitscan(pieceBB);
+        pieceBB &= pieceBB - 1;
+        const allAtt = chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(from)) & p_moveBB.rookMoves;
+        if (comptime generateCapture) {
+            genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pRook);
+        }
+        if (comptime generateQuiet) {
+            genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pRook);
+        }
+    }
+
+    // queen BB
+    pieceBB = p_board.pieceBB[@intFromEnum(pQueen)] & unPinnedBB;
+    while (pieceBB != chess.EMPTY) {
+        const from: u8 = chess.bitscan(pieceBB);
+        pieceBB &= pieceBB - 1;
+        const allAtt = (chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(from)) | chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(from))) & p_moveBB.queenMoves;
+        if (comptime generateCapture) {
+            genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pQueen);
+        }
+        if (comptime generateQuiet) {
+            genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pQueen);
+        }
+    }
+
+    // knight BB
+    pieceBB = p_board.pieceBB[@intFromEnum(pKnight)] & unPinnedBB;
+    while (pieceBB != chess.EMPTY) {
+        const from: u8 = chess.bitscan(pieceBB);
+        pieceBB &= pieceBB - 1;
+        const fromBB = chess.xToBitboard(from);
+        const allAtt = chess.knightAttacks(fromBB) & p_moveBB.knightMoves;
+
+        if (comptime generateCapture) {
+            genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pKnight);
+        }
+        if (comptime generateQuiet) {
+            genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pKnight);
+        }
+    }
+    // king BB
+    p_moveBB.kingMoves &= ~allAttacks;
+    pieceBB = p_board.pieceBB[@intFromEnum(pKing)];
+
+    const from: u8 = chess.bitscan(pieceBB);
+
+    if (comptime generateCapture) {
+        genericStagedMovePushCapture(p_board, p_out, p_moveBB.kingMoves & p_board.occupiedBB, from, pKing);
+    }
+    if (comptime generateQuiet) {
+        genericStagedMovePushQuiet(p_out, p_moveBB.kingMoves & (~p_board.occupiedBB), from, pKing);
+        if ((p_moveBB.kingSideCastlingMoves != chess.EMPTY) and p_board.canKingSideCastleAtt(white, allAttacks)) {
+            _ = movel.build_move_in(from, from + 2, @intFromEnum(e_moveFlags.KINGCASTLE), pKing, p_out);
+        }
+        if ((p_moveBB.queenSideCastlingMoves != chess.EMPTY) and p_board.canQueenSideCastleAtt(white, allAttacks)) {
+            _ = movel.build_move_in(from, from - 2, @intFromEnum(e_moveFlags.QUEENCASTLE), pKing, p_out);
+        }
+    }
+}
+pub fn genericStagedMovePushQuiet(p_out: *moveContainer, iterBB: u64, from: u8, fromPiece: e_piece) void {
+    var _iter = iterBB;
+    while (_iter != chess.EMPTY) {
+        const to: u8 = chess.bitscan(_iter);
+        _iter &= _iter - 1;
+        _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), fromPiece, p_out);
+    }
+}
+pub fn genericStagedMovePushCapture(p_board: *const chess.Board_state, p_out: *moveContainer, iterBB: u64, from: u8, fromPiece: e_piece) void {
+    var _iter = iterBB;
+    while (_iter != chess.EMPTY) {
+        const to: u8 = chess.bitscan(_iter);
+        _iter &= _iter - 1;
+        _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), fromPiece, p_board.get_piece(to), p_out);
     }
 }
 
@@ -96,304 +450,6 @@ pub fn push_promotion_capture(from: u8, to: u8, piece: e_piece, cPiece: e_piece,
     p_out.append(move);
     move.setFlag(@intFromEnum(e_moveFlags.QUEENPROMOCAPTURE));
     p_out.append(move);
-}
-
-pub inline fn moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *moveBBState, p_out: *moveContainer) void {
-    if (p_board.whiteToMove()) {
-        return cst_moveGenBBToMoveContainer(p_board, p_moveBB, true, p_out);
-    }
-    return cst_moveGenBBToMoveContainer(p_board, p_moveBB, false, p_out);
-}
-pub fn cst_moveGenBBToMoveContainer(p_board: *const Board_state, p_moveBB: *moveBBState, comptime white: bool, p_out: *moveContainer) void {
-    var pawnDir: i8 = 8;
-    var pPawn: e_piece = .nWhitePawn;
-    var opPawn: e_piece = .nBlackPawn;
-    var pBishop: e_piece = .nWhiteBishop;
-    var pRook: e_piece = .nWhiteRook;
-    var pQueen: e_piece = .nWhiteQueen;
-    var pKnight: e_piece = .nWhiteKnight;
-    var pKing: e_piece = .nWhiteKing;
-    var kingSq = p_board.wKingSq;
-    var emptyOrEnem: u64 = ~p_board.c_occupiedBB[@intFromBool(true)];
-    const opp = !white;
-    if (comptime !white) {
-        pawnDir = -8;
-        pPawn = .nBlackPawn;
-        opPawn = .nWhitePawn;
-        pBishop = .nBlackBishop;
-        pRook = .nBlackRook;
-        pQueen = .nBlackQueen;
-        pKnight = .nBlackKnight;
-        pKing = .nBlackKing;
-        kingSq = p_board.bKingSq;
-        emptyOrEnem = ~p_board.c_occupiedBB[@intFromBool(false)];
-    }
-
-    //const allAttacks = p_board.beeingAttacked;
-    const allAttacks = chess.getAllAttackMask(p_board, p_board.occupiedBB ^ p_board.pieceBB[@intFromEnum(pKing)], opp);
-
-    const kingSqInfo = squarel.squareInfo.init(kingSq);
-
-    //source: https://www.codeproject.com/articles/Worlds-Fastest-Bitboard-Chess-Movegenerator
-    const kingDiags = kingSqInfo.getDiagonalsBB();
-    const kingLines = kingSqInfo.getHorizontalBB();
-    const pinHV = p_board.pinnedBB & kingLines;
-    const pinD12 = p_board.pinnedBB & kingDiags;
-
-    const unPinnedBB = ~p_board.pinnedBB;
-    const inCheck: bool = p_board.checkersBB != 0;
-    if (inCheck) {
-        const doubleCheck: bool = chess.l_popcount(p_board.checkersBB & p_board.occupiedBB) > 1;
-        if (doubleCheck) {
-            // only king moves
-            const kingBB = p_moveBB.kingMoves;
-            p_moveBB.resetAll();
-            p_moveBB.kingMoves = kingBB;
-        } else {
-            // only blocking / capturing moves for non king pieces
-            const kingBB = p_moveBB.kingMoves;
-            if (comptime white) {
-                p_moveBB.enPassantMoves = p_moveBB.enPassantMoves >> 8;
-                p_moveBB.andEq(p_board.checkersBB);
-                p_moveBB.enPassantMoves = p_moveBB.enPassantMoves << 8;
-            } else {
-                p_moveBB.enPassantMoves = p_moveBB.enPassantMoves << 8;
-                p_moveBB.andEq(p_board.checkersBB);
-                p_moveBB.enPassantMoves = p_moveBB.enPassantMoves >> 8;
-            }
-
-            p_moveBB.kingMoves = kingBB;
-            // if in check no castling allowed
-            p_moveBB.kingSideCastlingMoves = chess.EMPTY;
-            p_moveBB.queenSideCastlingMoves = chess.EMPTY;
-        }
-    } else {
-        // move generate the pinned pieces here
-        // a pinned piece cannot clear a check
-
-        // bishop and queen
-        var pinnedPiece = (p_board.pieceBB[@intFromEnum(pBishop)] | p_board.pieceBB[@intFromEnum(pQueen)]) & pinD12;
-        while (pinnedPiece != chess.EMPTY) {
-            const from: u8 = chess.bitscan(pinnedPiece);
-            const piece = p_board.get_piece(from);
-            pinnedPiece &= pinnedPiece - 1;
-            const permittedMoves = chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(from)) & kingDiags & emptyOrEnem;
-
-            genericStagedMovePushQuiet(p_out, permittedMoves & (~p_board.occupiedBB), from, piece);
-            genericStagedMovePushCapture(p_board, p_out, permittedMoves & p_board.occupiedBB, from, piece);
-        }
-        // rook and queen
-        pinnedPiece = (p_board.pieceBB[@intFromEnum(pRook)] | p_board.pieceBB[@intFromEnum(pQueen)]) & pinHV;
-        while (pinnedPiece != chess.EMPTY) {
-            const from: u8 = chess.bitscan(pinnedPiece);
-            const piece = p_board.get_piece(from);
-            pinnedPiece &= pinnedPiece - 1;
-            const permittedMoves = chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(from)) & kingLines & emptyOrEnem;
-
-            genericStagedMovePushQuiet(p_out, permittedMoves & (~p_board.occupiedBB), from, piece);
-            genericStagedMovePushCapture(p_board, p_out, permittedMoves & p_board.occupiedBB, from, piece);
-        }
-
-        // pawn pin handling
-        // push only possible if to in pinHV
-        // capture only if to in pinD12
-        // enPassant never okay
-        // promotion only when capturing
-        // pinnedPiece = p_moveBB.pawnMoves & pinHV;
-        pinnedPiece = (p_board.pieceBB[@intFromEnum(pPawn)] & pinHV);
-        while (pinnedPiece != chess.EMPTY) {
-            const from: u8 = chess.bitscan(pinnedPiece);
-            pinnedPiece &= pinnedPiece - 1;
-            const to: i8 = @as(i8, @intCast(from)) + pawnDir;
-            const _to: u8 = @intCast(to);
-            if (chess.xToBitboard(_to) & pinHV != chess.EMPTY) {
-                _ = movel.build_move_in(from, _to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
-            }
-        }
-        pinnedPiece = p_moveBB.doubleMoves & pinHV;
-        while (pinnedPiece != chess.EMPTY) {
-            const to: u8 = chess.bitscan(pinnedPiece);
-            pinnedPiece &= pinnedPiece - 1;
-            const from: i8 = @as(i8, @intCast(to)) - (pawnDir << 1);
-            _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
-        }
-
-        pinnedPiece = p_board.pieceBB[@intFromEnum(pPawn)] & pinD12;
-        while (pinnedPiece != chess.EMPTY) {
-            const from: u8 = chess.bitscan(pinnedPiece);
-            pinnedPiece &= pinnedPiece - 1;
-
-            const att = chess.getPawnAttacks(@enumFromInt(from), white);
-            const toAtt_bb = att & kingDiags & p_board.c_occupiedBB[@intFromBool(!white)];
-            genericStagedMovePushCapture(p_board, p_out, toAtt_bb, from, pPawn);
-        }
-        pinnedPiece = p_moveBB.promotionMoves & p_board.occupiedBB & pinD12;
-        const validPawnAttLoc: u64 = chess.EMPTY;
-        while (pinnedPiece != chess.EMPTY) {
-            const to: u8 = chess.bitscan(pinnedPiece);
-            pinnedPiece &= pinnedPiece - 1;
-            var att = chess.getPawnAttacks(@enumFromInt(to), opp) & validPawnAttLoc;
-            const cPiece = p_board.get_piece(to);
-            if (att != chess.EMPTY) {
-                const from: u8 = chess.bitscan(att);
-                att &= att - 1;
-                push_promotion_capture(from, to, pPawn, cPiece, p_out);
-            }
-        }
-    }
-
-    const validPawnLoc = unPinnedBB & p_board.pieceBB[@intFromEnum(pPawn)];
-    var bb: u64 = undefined;
-    if (comptime white) {
-        bb = (p_moveBB.pawnMoves & (unPinnedBB << 8));
-    } else {
-        bb = (p_moveBB.pawnMoves & (unPinnedBB >> 8));
-    }
-    while (bb != chess.EMPTY) {
-        const to: u8 = chess.bitscan(bb);
-        bb &= bb - 1;
-        const from: i8 = @as(i8, @intCast(to)) - pawnDir;
-        _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.QUIETMOVE), pPawn, p_out);
-    }
-
-    bb = p_moveBB.promotionMoves & p_board.occupiedBB;
-    while (bb != chess.EMPTY) {
-        const to: u8 = chess.bitscan(bb);
-        bb &= bb - 1;
-        var att = chess.getPawnAttacks(@enumFromInt(to), opp) & validPawnLoc;
-        const cPiece = p_board.get_piece(to);
-        while (att != chess.EMPTY) {
-            const from: u8 = chess.bitscan(att);
-            att &= att - 1;
-            push_promotion_capture(from, to, pPawn, cPiece, p_out);
-        }
-    }
-    if (comptime white) {
-        bb = (p_moveBB.promotionMoves & ~p_board.occupiedBB & (unPinnedBB << 8));
-    } else {
-        bb = (p_moveBB.promotionMoves & ~p_board.occupiedBB & (unPinnedBB >> 8));
-    }
-    while (bb != chess.EMPTY) {
-        const to: u8 = chess.bitscan(bb);
-        const from: i8 = @as(i8, @intCast(to)) - pawnDir;
-        bb &= bb - 1;
-        push_promotion(@intCast(from), to, pPawn, p_out);
-    }
-
-    if (comptime white) {
-        bb = (p_moveBB.doubleMoves & (unPinnedBB << 16));
-    } else {
-        bb = (p_moveBB.doubleMoves & (unPinnedBB >> 16));
-    }
-    while (bb != chess.EMPTY) {
-        const to: u8 = chess.bitscan(bb);
-        const from: i8 = @as(i8, @intCast(to)) - (pawnDir << 1);
-        bb &= bb - 1;
-        _ = movel.build_move_in(@intCast(from), to, @intFromEnum(e_moveFlags.DOUBLEPAWN), pPawn, p_out);
-    }
-
-    const validPawnAtt = chess.getPawnAttacksFromBB(validPawnLoc, white);
-    bb = p_moveBB.enPassantMoves & validPawnAtt;
-    while (bb != chess.EMPTY) {
-        const to: u8 = chess.bitscan(bb);
-        bb &= bb - 1;
-
-        const att = chess.getPawnAttacks(@enumFromInt(to), opp);
-        var toAtt_bb = att & validPawnLoc;
-        while (toAtt_bb != chess.EMPTY) {
-            const from: u8 = chess.bitscan(toAtt_bb);
-            toAtt_bb &= toAtt_bb - 1;
-            _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.ENPASSANT), pPawn, opPawn, p_out);
-        }
-    }
-
-    bb = p_moveBB.pawnAttacks & validPawnAtt;
-    while (bb != chess.EMPTY) {
-        const to: u8 = chess.bitscan(bb);
-        const cPiece = p_board.get_piece(to);
-        bb &= bb - 1;
-        const att = chess.getPawnAttacks(@enumFromInt(to), opp);
-        var toAtt_bb = att & validPawnLoc;
-
-        while (toAtt_bb != chess.EMPTY) {
-            const from: u8 = chess.bitscan(toAtt_bb);
-            toAtt_bb &= toAtt_bb - 1;
-            _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), pPawn, cPiece, p_out);
-        }
-    }
-
-    // bishop BB
-    var pieceBB = p_board.pieceBB[@intFromEnum(pBishop)] & unPinnedBB;
-    while (pieceBB != chess.EMPTY) {
-        const from: u8 = chess.bitscan(pieceBB);
-        pieceBB &= pieceBB - 1;
-        const allAtt = chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(from)) & p_moveBB.bishopMoves;
-
-        genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pBishop);
-        genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pBishop);
-    }
-
-    // rook BB
-    pieceBB = p_board.pieceBB[@intFromEnum(pRook)] & unPinnedBB;
-    while (pieceBB != chess.EMPTY) {
-        const from: u8 = chess.bitscan(pieceBB);
-        pieceBB &= pieceBB - 1;
-        const allAtt = chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(from)) & p_moveBB.rookMoves;
-        genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pRook);
-        genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pRook);
-    }
-
-    // queen BB
-    pieceBB = p_board.pieceBB[@intFromEnum(pQueen)] & unPinnedBB;
-    while (pieceBB != chess.EMPTY) {
-        const from: u8 = chess.bitscan(pieceBB);
-        pieceBB &= pieceBB - 1;
-        const allAtt = (chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(from)) | chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(from))) & p_moveBB.queenMoves;
-        genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pQueen);
-        genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pQueen);
-    }
-
-    // knight BB
-    pieceBB = p_board.pieceBB[@intFromEnum(pKnight)] & unPinnedBB;
-    while (pieceBB != chess.EMPTY) {
-        const from: u8 = chess.bitscan(pieceBB);
-        pieceBB &= pieceBB - 1;
-        const fromBB = chess.xToBitboard(from);
-        const allAtt = chess.knightAttacks(fromBB) & p_moveBB.knightMoves;
-
-        genericStagedMovePushCapture(p_board, p_out, allAtt & p_board.occupiedBB, from, pKnight);
-        genericStagedMovePushQuiet(p_out, allAtt & (~p_board.occupiedBB), from, pKnight);
-    }
-    // king BB
-    p_moveBB.kingMoves &= ~allAttacks;
-    pieceBB = p_board.pieceBB[@intFromEnum(pKing)];
-
-    const from: u8 = chess.bitscan(pieceBB);
-
-    if ((p_moveBB.kingSideCastlingMoves != chess.EMPTY) and p_board.canKingSideCastleAtt(white, allAttacks)) {
-        _ = movel.build_move_in(from, from + 2, @intFromEnum(e_moveFlags.KINGCASTLE), pKing, p_out);
-    }
-    if ((p_moveBB.queenSideCastlingMoves != chess.EMPTY) and p_board.canQueenSideCastleAtt(white, allAttacks)) {
-        _ = movel.build_move_in(from, from - 2, @intFromEnum(e_moveFlags.QUEENCASTLE), pKing, p_out);
-    }
-    genericStagedMovePushCapture(p_board, p_out, p_moveBB.kingMoves & p_board.occupiedBB, from, pKing);
-    genericStagedMovePushQuiet(p_out, p_moveBB.kingMoves & (~p_board.occupiedBB), from, pKing);
-}
-pub fn genericStagedMovePushQuiet(p_out: *moveContainer, iterBB: u64, from: u8, fromPiece: e_piece) void {
-    var _iter = iterBB;
-    while (_iter != chess.EMPTY) {
-        const to: u8 = chess.bitscan(_iter);
-        _iter &= _iter - 1;
-        _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.QUIETMOVE), fromPiece, p_out);
-    }
-}
-pub fn genericStagedMovePushCapture(p_board: *const chess.Board_state, p_out: *moveContainer, iterBB: u64, from: u8, fromPiece: e_piece) void {
-    var _iter = iterBB;
-    while (_iter != chess.EMPTY) {
-        const to: u8 = chess.bitscan(_iter);
-        _iter &= _iter - 1;
-        _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), fromPiece, p_board.get_piece(to), p_out);
-    }
 }
 
 pub inline fn moveGeneration(p_board: *const Board_state) moveContainer {
@@ -450,7 +506,6 @@ pub fn moveBitBoardToIMove_pawn(p_board: *const Board_state, piece: e_piece, pie
     }
     const sq: u8 = chess.bitscan(piece_bb);
     var _bb = attack_bb;
-    var _curr_move: IMove = undefined;
     var c_piece: e_piece = .nEmptySquare;
     var enpass_capture_pawn: e_piece = e_piece.nBlackPawn;
     if (comptime !white) {
@@ -464,7 +519,7 @@ pub fn moveBitBoardToIMove_pawn(p_board: *const Board_state, piece: e_piece, pie
         } else {
             c_piece = p_board.get_piece(lsb);
         }
-        _curr_move = movel.build_move(sq, lsb, flags, piece);
+        const _curr_move = movel.build_move(sq, lsb, flags, piece);
         _curr_move.setCapture(c_piece);
         p_out.append(_curr_move);
     }
@@ -477,13 +532,11 @@ pub fn moveBitBoardToIMove(p_board: *const Board_state, piece: e_piece, piece_bb
     _ = white;
     const sq: u8 = chess.bitscan(piece_bb);
     var _bb = attack_bb;
-    var _curr_move: IMove = undefined;
-    var c_piece: e_piece = undefined;
     while (_bb != 0) {
         const lsb: u8 = chess.bitscan(_bb);
         _bb &= _bb - 1;
-        _curr_move = movel.build_move(sq, lsb, flags, piece);
-        c_piece = p_board.get_piece(lsb);
+        const _curr_move = movel.build_move(sq, lsb, flags, piece);
+        const c_piece = p_board.get_piece(lsb);
         _curr_move.setCapture(c_piece);
         p_out.append(_curr_move);
     }
@@ -561,17 +614,14 @@ pub fn _PieceMoveKnightMask(p_board: *const Board_state, bb_piece: u64, comptime
     while (_bb_piece != 0) {
         const sq = chess.bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-        const one_pos = chess.xToBitboard(sq);
-        const att = chess.knightAttacks(one_pos) & emptyOrEnemy;
-        moveBitBoardToIMove(p_board, piece, one_pos, att & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE), p_out, white);
-        moveBitBoardToIMove(p_board, piece, one_pos, att & p_board.occupiedBB, @intFromEnum(e_moveFlags.CAPTURE), p_out, white);
+        const att = chess.knightAttacks(chess.xToBitboard(sq)) & emptyOrEnemy;
+        genericStagedMovePushCapture(p_board, p_out, att & p_board.occupiedBB, sq, piece);
+        genericStagedMovePushQuiet(p_board, p_out, att & ~p_board.occupiedBB, sq, piece);
     }
     return;
 }
 
 pub fn _PieceMoveBishopMask(p_board: *const Board_state, bb_piece: u64, comptime white: bool, emptyOrEnemy: u64, p_out: *moveContainer) void {
-    var curr_att: u64 = chess.EMPTY;
-
     var piece = e_piece.nWhiteBishop;
     if (comptime !white) {
         piece = e_piece.nBlackBishop;
@@ -581,19 +631,15 @@ pub fn _PieceMoveBishopMask(p_board: *const Board_state, bb_piece: u64, comptime
         const sq = chess.bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
         const sq_e: e_square = @enumFromInt(sq);
-        const bb_pos = chess.xToBitboard(sq);
-        curr_att = chess.antiDiagAttacks(p_board.occupiedBB, sq_e);
-        curr_att |= chess.diagonalAttacks(p_board.occupiedBB, sq_e);
-        curr_att &= emptyOrEnemy;
-        moveBitBoardToIMove(p_board, piece, bb_pos, curr_att & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE), p_out, white);
+        const att = chess.getBishopAttacks(p_board.occupiedBB, sq_e) & emptyOrEnemy;
 
-        moveBitBoardToIMove(p_board, piece, bb_pos, curr_att & p_board.occupiedBB, @intFromEnum(e_moveFlags.CAPTURE), p_out, white);
+        genericStagedMovePushCapture(p_board, p_out, att & p_board.occupiedBB, sq, piece);
+        genericStagedMovePushQuiet(p_board, p_out, att & ~p_board.occupiedBB, sq, piece);
     }
     return;
 }
 
 pub fn _PieceMoveRookMask(p_board: *const Board_state, bb_piece: u64, comptime white: bool, emptyOrEnemy: u64, p_out: *moveContainer) void {
-    var att_mask: u64 = chess.EMPTY;
     var piece = e_piece.nWhiteRook;
     if (comptime !white) {
         piece = e_piece.nBlackRook;
@@ -603,20 +649,16 @@ pub fn _PieceMoveRookMask(p_board: *const Board_state, bb_piece: u64, comptime w
         const sq = chess.bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
 
-        const bb_pos = chess.xToBitboard(sq);
         const sq_e: e_square = @enumFromInt(sq);
-        att_mask = chess.fileAttacks(p_board.occupiedBB, sq_e);
-        att_mask |= chess.rankAttacks(p_board.occupiedBB, sq_e);
-        att_mask &= emptyOrEnemy;
+        const att = chess.getRookAttacks(p_board.occupiedBB, sq_e) & emptyOrEnemy;
 
-        moveBitBoardToIMove(p_board, piece, bb_pos, att_mask & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE), p_out, white);
-        moveBitBoardToIMove(p_board, piece, bb_pos, att_mask & p_board.occupiedBB, @intFromEnum(e_moveFlags.CAPTURE), p_out, white);
+        genericStagedMovePushCapture(p_board, p_out, att & p_board.occupiedBB, sq, piece);
+        genericStagedMovePushQuiet(p_board, p_out, att & ~p_board.occupiedBB, sq, piece);
     }
     return;
 }
 
 pub fn _PieceMoveQueenMask(p_board: *const Board_state, bb_piece: u64, comptime white: bool, emptyOrEnemy: u64, p_out: *moveContainer) void {
-    var att_mask: u64 = chess.EMPTY;
     var piece = e_piece.nWhiteQueen;
     if (comptime !white) {
         piece = e_piece.nBlackQueen;
@@ -625,17 +667,12 @@ pub fn _PieceMoveQueenMask(p_board: *const Board_state, bb_piece: u64, comptime 
     while (_bb_piece != 0) {
         const sq: u8 = chess.bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-
-        const bb_pos = chess.xToBitboard(sq);
         const sq_e: e_square = @enumFromInt(sq);
 
-        att_mask = chess.fileAttacks(p_board.occupiedBB, sq_e);
-        att_mask |= chess.rankAttacks(p_board.occupiedBB, sq_e);
-        att_mask |= chess.antiDiagAttacks(p_board.occupiedBB, sq_e);
-        att_mask |= chess.diagonalAttacks(p_board.occupiedBB, sq_e);
-        att_mask &= emptyOrEnemy;
-        moveBitBoardToIMove(p_board, piece, bb_pos, att_mask & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE), p_out, white);
-        moveBitBoardToIMove(p_board, piece, bb_pos, att_mask & p_board.occupiedBB, @intFromEnum(e_moveFlags.CAPTURE), p_out, white);
+        const att = chess.getQueenAttacks(p_board.occupiedBB, sq_e) & emptyOrEnemy;
+
+        genericStagedMovePushCapture(p_board, p_out, att & p_board.occupiedBB, sq, piece);
+        genericStagedMovePushQuiet(p_board, p_out, att & ~p_board.occupiedBB, sq, piece);
     }
 
     return;
@@ -647,11 +684,10 @@ pub fn _PieceMoveKingMask(p_board: *const Board_state, bb_piece: u64, comptime w
         piece = e_piece.nWhiteKing;
     }
     const sq = p_board.getKingSq(white);
-    const bb_pos = chess.sqToBitboard(sq);
-    const att_mask = chess.getKingAttacks(sq) & emptyOrEnemy;
+    const att = chess.getKingAttacks(sq) & emptyOrEnemy;
 
-    moveBitBoardToIMove(p_board, piece, bb_pos, att_mask & (~p_board.occupiedBB), @intFromEnum(e_moveFlags.QUIETMOVE), p_out, white);
-    moveBitBoardToIMove(p_board, piece, bb_pos, att_mask & p_board.occupiedBB, @intFromEnum(e_moveFlags.CAPTURE), p_out, white);
+    genericStagedMovePushCapture(p_board, p_out, att & p_board.occupiedBB, sq, piece);
+    genericStagedMovePushQuiet(p_board, p_out, att & ~p_board.occupiedBB, sq, piece);
     if (p_board.canKingSideCastle(white)) {
         moveBitBoardToIMove(p_board, piece, bb_piece, bb_piece << 2, @intFromEnum(e_moveFlags.KINGCASTLE), p_out, white);
     }
@@ -758,7 +794,6 @@ pub fn moveGenPawnBB(p_board: *const Board_state, comptime white: bool, emptyOrE
 
         p_out.enPassantMoves |= p_out.pawnAttacks & enPassantBB & chess.blackPawnEnpassantRank;
 
-        //p_out.pawnAttacks &= (emptyOrEnemy & p_board.occupiedBB);
         p_out.pawnAttacks &= (p_board.c_occupiedBB[@intFromBool(true)]);
 
         p_out.promotionMoves |= ((p_out.pawnMoves | p_out.pawnAttacks) & chess.blackPawnPromoRank);
@@ -838,12 +873,12 @@ pub inline fn moveGenQueenBB(p_board: *const Board_state, comptime white: bool, 
     p_out.queenMoves &= emptyOrEnemy;
 }
 
-pub const generationModifiers = enum { NORMAL, QUIETMOVE, CAPTURES, ALL };
+pub const generationModifiers = enum { NONE, NORMAL, QUIETMOVE, CAPTURES, ALL };
 pub fn cst_moveGenBB_extra(p_board: *const Board_state, comptime white: bool, comptime extra: generationModifiers) moveBBState {
     var ret: moveBBState = .{};
     var EmptyOrEnemy: u64 = 0;
     switch (extra) {
-        .NORMAL => {
+        .NORMAL, .NONE => {
             EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(white)];
         },
         .QUIETMOVE => {
@@ -866,21 +901,22 @@ pub fn cst_moveGenBB_extra(p_board: *const Board_state, comptime white: bool, co
 }
 
 pub inline fn moveGenBB(p_board: *const Board_state) moveBBState {
-    if (p_board.whiteToMove()) {
-        return cst_moveGenBB(p_board, true);
-    }
-    return cst_moveGenBB(p_board, false);
-}
-pub fn cst_moveGenBB(p_board: *const Board_state, comptime white: bool) moveBBState {
     var ret: moveBBState = .{};
-    const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(white)];
-    moveGenPawnBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenKnightBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenBishopBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenRookBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenQueenBB(p_board, white, EmptyOrEnemy, &ret);
-    moveGenKingBB(p_board, white, EmptyOrEnemy, &ret);
+    if (p_board.whiteToMove()) {
+        cst_moveGenBB(p_board, true, &ret);
+        return ret;
+    }
+    cst_moveGenBB(p_board, false, &ret);
     return ret;
+}
+pub fn cst_moveGenBB(p_board: *const Board_state, comptime white: bool, p_out: *moveBBState) void {
+    const EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(white)];
+    moveGenPawnBB(p_board, white, EmptyOrEnemy, p_out);
+    moveGenKnightBB(p_board, white, EmptyOrEnemy, p_out);
+    moveGenBishopBB(p_board, white, EmptyOrEnemy, p_out);
+    moveGenRookBB(p_board, white, EmptyOrEnemy, p_out);
+    moveGenQueenBB(p_board, white, EmptyOrEnemy, p_out);
+    moveGenKingBB(p_board, white, EmptyOrEnemy, p_out);
 }
 
 pub const qbb = struct {
@@ -1065,53 +1101,7 @@ pub fn getPinned_(p_state: *const Board_state, comptime white: bool, king_E: e_s
     }
     return pinned;
 }
-// move ordering section?
-pub fn generateLegalMoves_ordered(p_board: *const Board_state, captureOnly: bool) moveContainer {
-    //
-    if (captureOnly) {
-        return _generateLegalMoves_ordered(p_board, true);
-    }
-    return _generateLegalMoves_ordered(p_board, false);
-}
-pub inline fn _generateLegalMoves_ordered(p_board: *const Board_state, comptime captureOnly: bool) moveContainer {
-    //
-    if (p_board.whiteToMove()) {
-        return cst_generateLegalMoves_ordered(p_board, captureOnly, true);
-    }
-    return cst_generateLegalMoves_ordered(p_board, captureOnly, false);
-}
-pub fn cst_generateLegalMoves_ordered(p_board: *const Board_state, comptime captureOnly: bool, comptime white: bool) moveContainer {
-    //
-    var ret: moveBBState = .{};
-    if (comptime white) {
-        var EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(true)];
-        if (comptime captureOnly) {
-            EmptyOrEnemy = p_board.c_occupiedBB[@intFromBool(false)];
-        }
-        moveGenPawnBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenKnightBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenBishopBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenRookBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenQueenBB(p_board, true, EmptyOrEnemy, &ret);
-        moveGenKingBB(p_board, true, EmptyOrEnemy, &ret);
-    } else {
-        var EmptyOrEnemy = ~p_board.c_occupiedBB[@intFromBool(false)];
-        if (comptime captureOnly) {
-            EmptyOrEnemy = p_board.c_occupiedBB[@intFromBool(true)];
-        }
-        moveGenPawnBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenKnightBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenBishopBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenRookBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenQueenBB(p_board, false, EmptyOrEnemy, &ret);
-        moveGenKingBB(p_board, false, EmptyOrEnemy, &ret);
-    }
-    var moves: moveContainer = undefined;
-    moves.len = 0;
 
-    moveGenBBToMoveContainer(p_board, &ret, &moves);
-    return moves;
-}
 // Kogge-stone algo section
 // source: https://www.chessprogramming.org/Kogge-Stone_Algorithm
 

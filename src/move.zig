@@ -410,7 +410,7 @@ pub const matchMoveContainer = struct {
 
         p_self.len = p_other.len;
     }
-    pub fn getRepetitions(self: *matchMoveContainer) u8 {
+    pub fn getRepetitions(self: *const matchMoveContainer) u8 {
         var count: u8 = 0;
         if (self.len >= (self.lastIrreversibleMoveIndex + 4)) {
             const keyRepet = self.keyCodes[self.len - 1];
@@ -425,7 +425,7 @@ pub const matchMoveContainer = struct {
         }
         return count;
     }
-    pub fn checkRepetitions(self: *matchMoveContainer) bool {
+    pub fn checkRepetitions(self: *const matchMoveContainer) bool {
         const count = self.getRepetitions();
         return count >= 2;
     }
@@ -455,7 +455,7 @@ pub const matchMoveContainer = struct {
     }
     pub fn popMoveVoid(p_self: *matchMoveContainer) void {
         if (comptime useDebug) {
-            if (p_self.len <= 1) {
+            if (p_self.len < 1) {
                 //@panic("list is empty");
                 p_self.len = 0;
             }

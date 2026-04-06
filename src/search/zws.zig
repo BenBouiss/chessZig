@@ -201,3 +201,4 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     return _alpha;
 }
+

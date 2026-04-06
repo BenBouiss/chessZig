@@ -11,6 +11,7 @@ const configl = @import("../config.zig");
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const zwsl = @import("zws.zig");
+const zwslI = @import("zws_I.zig");
 const pvsl = @import("pvs.zig");
 
 const IMove = movel.IMove;
@@ -41,6 +42,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 
     var score: scoreType = 0;
 
+    //std.debug.print("[DEBUG] searchEntrypoint: {}\n", .{p_features.searchType});
     switch (p_features.searchType) {
         .STD => {
             score = searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
@@ -51,7 +53,9 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
         .ZWS => {
             score = zwsl.searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
         },
-
+        .ZWSI => {
+            score = zwslI.searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
+        },
         .ASPIRATION => {
             score = searchLoop_aspirationPvs(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
         },
@@ -391,7 +395,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         }
         _alpha = best_value;
     }
-    const fmoves: moveContainer = moveGenl.generateLegalMoves_ordered(p_state, true);
+    const fmoves: moveContainer = moveGenl.generateLegalMoves_capture(p_state);
 
     const indexes = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, .{});
     for (0..fmoves.len) |i| {
