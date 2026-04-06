@@ -2079,7 +2079,7 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
     directChecks |= knightAttacks(sqToBitboard(king_E)) & n;
 
     if (comptime useAVX2) {
-        p_board.pinnedBB = moveGenl.getPinned_avx2(p_board, white);
+        @panic("");
     } else {
         var pinned: u64 = 0;
         const rBlockers = (p_board.occupiedBB & cachedRookAtt) ^ p_board.occupiedBB;

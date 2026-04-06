@@ -33,8 +33,8 @@ const searchFeatures = schedulerl.searchFeatures;
 pub const texel_err = error{board_err};
 
 pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
-    const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
-    const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
+    const allwhiteMoveBB = moveGenl._cst_moveGenBB(p_state, true);
+    const allblackMoveBB = moveGenl._cst_moveGenBB(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
 
@@ -68,8 +68,8 @@ pub const heuristicComponents = struct {
     }
 };
 pub fn evaluate_debug(p_state: *const chess.Board_state, values: *heuristicValues) heuristicComponents {
-    const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
-    const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
+    const allwhiteMoveBB = moveGenl._cst_moveGenBB(p_state, true);
+    const allblackMoveBB = moveGenl._cst_moveGenBB(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
 
@@ -633,8 +633,8 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
 
         // mobility
 
-        const allwhiteMoveBB = moveGenl.cst_moveGenBB_extra(p_state, true, .ALL);
-        const allblackMoveBB = moveGenl.cst_moveGenBB_extra(p_state, false, .ALL);
+        const allwhiteMoveBB = moveGenl._cst_moveGenBB(p_state, true);
+        const allblackMoveBB = moveGenl._cst_moveGenBB(p_state, false);
         const moveW = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
         const moveB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
 

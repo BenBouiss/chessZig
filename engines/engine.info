@@ -1,16 +1,14 @@
 [engine1]
 path="engines/bin/engine_03_04_26";
-name="non LMR";
-"setoption name useHash value false";
-"setoption name searchType value pvs";
-"setoption name useLMR value false";
+name="prev hash";
+"setoption name useHash value true";
+"setoption name searchType value zws";
 
 [engine2]
-path="engines/bin/engine_03_04_26";
-name="LMR";
-"setoption name useHash value false";
-"setoption name searchType value pvs";
-"setoption name useLMR value true";
+path="engines/bin/engine_04_04_26";
+name="new hash";
+"setoption name useHash value true";
+"setoption name searchType value zws";
 
 [match]
 nMatch=8;
