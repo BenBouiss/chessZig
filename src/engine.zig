@@ -318,7 +318,7 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
-        try p_self.addOption(.{ .name = "searchType", .optionType = .SEARCHTYPE, .argType = .COMBO, .info = optionInfo{ .str = optionInfo_str{ ._var = "STD PVS ZWS ASP", .default = configl._DEFAULT_SEARCH_TYPE } } });
+        try p_self.addOption(.{ .name = "searchType", .optionType = .SEARCHTYPE, .argType = .COMBO, .info = optionInfo{ .str = optionInfo_str{ ._var = "STD PVS ZWS ZWSI ASP", .default = configl._DEFAULT_SEARCH_TYPE } } });
     }
     pub inline fn trackMetrics(p_self: *engine) bool {
         return p_self.options.trackMetrics;
@@ -785,6 +785,8 @@ pub const engine = struct {
             p_self.options.searchType = .STD;
         } else if (utilsl.contains(token, "pvs", .ignoreCase)) {
             p_self.options.searchType = .PVS;
+        } else if (utilsl.contains(token, "zwsi", .ignoreCase)) {
+            p_self.options.searchType = .ZWSI;
         } else if (utilsl.contains(token, "zws", .ignoreCase)) {
             p_self.options.searchType = .ZWS;
         } else if (utilsl.contains(token, "asp", .ignoreCase)) {

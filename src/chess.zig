@@ -240,7 +240,7 @@ pub fn print_board(p_board: *const Board_state) void {
     return;
 }
 
-pub fn printBoardValidity(p_state: *Board_state) void {
+pub fn printBoardValidity(p_state: *const Board_state) void {
     const valid_w = p_state.isLegal(true);
     const valid_b = p_state.isLegal(false);
     var v: bool = true;
@@ -711,7 +711,7 @@ pub const Board_state = struct {
         std.debug.print("\n", .{});
     }
 
-    pub fn get_fen(self: *Board_state) [MAX_FEN_LENGTH]u8 {
+    pub fn get_fen(self: *const Board_state) [MAX_FEN_LENGTH]u8 {
         var ret = std.mem.zeroes([MAX_FEN_LENGTH]u8);
         var miscOffset: u8 = 0;
         var emptyNumber: u8 = 0;
@@ -1395,12 +1395,12 @@ pub const Board_state = struct {
         return l_popcount(self.c_occupiedBB[@intFromEnum(color)]);
     }
 
-    pub fn isLegal(p_self: *Board_state, white: bool) bool {
+    pub fn isLegal(p_self: *const Board_state, white: bool) bool {
         // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
         const king_attacks = getAllAttackerFromKing(p_self, white);
         return king_attacks == 0;
     }
-    pub inline fn isChecked(p_self: *Board_state) bool {
+    pub inline fn isChecked(p_self: *const Board_state) bool {
         if (comptime useStaged) {
             return p_self.checkersBB != 0;
         }
@@ -1460,13 +1460,13 @@ pub const Board_state = struct {
         return (isNotPinned and isToSecure);
     }
 
-    pub inline fn isFiftyMoveRepetition(self: *Board_state) bool {
+    pub inline fn isFiftyMoveRepetition(self: *const Board_state) bool {
         return self.halfMoveClock >= 50;
     }
-    pub inline fn isStaleThreeFold(self: *Board_state) bool {
+    pub inline fn isStaleThreeFold(self: *const Board_state) bool {
         return self.move_history.checkRepetitions();
     }
-    pub inline fn isStaleMateRepetition(p_self: *Board_state) bool {
+    pub inline fn isStaleMateRepetition(p_self: *const Board_state) bool {
         return p_self.isFiftyMoveRepetition() or p_self.isStaleThreeFold();
     }
 
@@ -1487,7 +1487,7 @@ pub fn pieceArrayToBB(pieceArray: [N_SQUARES]e_piece) u64 {
     }
     return ret;
 }
-pub fn sanityCheckBoardState(p_board_state: *Board_state) void {
+pub fn sanityCheckBoardState(p_board_state: *const Board_state) void {
     var panic: bool = false;
     // white checks
     const n_white_p = p_board_state.getPieceCount(e_piece.nWhitePawn) + p_board_state.getPieceCount(e_piece.nWhiteBishop) + p_board_state.getPieceCount(e_piece.nWhiteKnight) + p_board_state.getPieceCount(e_piece.nWhiteRook) + p_board_state.getPieceCount(e_piece.nWhiteQueen) + p_board_state.getPieceCount(e_piece.nWhiteKing);
@@ -1561,7 +1561,7 @@ pub fn sanityCheckBoardState(p_board_state: *Board_state) void {
     }
 }
 
-pub fn print_boardstate(p_board_state: *Board_state) void {
+pub fn print_boardstate(p_board_state: *const Board_state) void {
     if (p_board_state.whiteToMove()) {
         std.debug.print("Current turn: White\n", .{});
     } else {
@@ -1576,6 +1576,13 @@ pub fn print_boardstate(p_board_state: *Board_state) void {
     std.debug.print("Fen code: {s}\n", .{fen});
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len, moves.len });
+    moves.print();
+
+    //var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
+    //gen.fetchNext(p_board_state);
+    //gen.moves.print();
+    //gen.fetchNext(p_board_state);
+    //gen.moves.print();
 
     printBoardValidity(p_board_state);
 

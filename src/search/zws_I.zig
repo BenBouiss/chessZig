@@ -64,34 +64,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             }
         }
     }
-
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
-    var useLMR: bool = false;
-    //https://www.chessprogramming.org/Late_Move_Reductions
-    if (p_features.useLMR and _depth > 3 and !ischeck) {
-        heuristicl.computeLateMoveReduc(p_state, &order, _depth, &fmoves);
-        useLMR = true;
-    }
-    const futilityPrune: bool = false;
-    var reverseFutilityP: bool = false;
-    var static_eval: scoreType = 0;
-    var mb: scoreType = 0;
-    if (p_features.useFutility) {
-        //if (_depth > 1 and _depth <= 4 and !ischeck) {
-        //    static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
-        //    if (static_eval <= (_alpha - heuristicl.e_pieceToHeuristic(p_state.firstPiece(!p_state.whiteToMove()), &heuristicl.globalHeuristic) - heuristicl.e_pieceToHeuristic(p_state.secondPiece(!p_state.whiteToMove()), &heuristicl.globalHeuristic) - 2 * heuristicl.futilityMargin[_depth])) {
-        //        futilityPrune = true;
-        //    }
-        //}
-        if (!ischeck and t != .PV and _depth == 3 and @abs(beta) < weightl.simpleCheckMateScore) {
-            reverseFutilityP = true;
-            if (!futilityPrune) {
-                static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
-            }
-            mb = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic);
-        }
-    }
     if (p_features.useRazoring) {
         //https://www.chessprogramming.org/Razoring limited razoring
         const eval = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin[2];
@@ -110,19 +82,36 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     var finalScore: scoreType = 0;
     var bestMove: IMove = .{};
-    const margin = 150 * _depth;
-    for (0..fmoves.len) |i| {
-        const idx = order.indexes[i];
-        const move: IMove = fmoves.moves[idx];
-        if (futilityPrune and !moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion()) {
-            continue;
-        }
-        if (reverseFutilityP) {
-            const _see = heuristicl.SEE(p_state, move);
-            if ((mb + _see) >= (beta + margin)) {
-                return (mb + _see);
+
+    // staged
+    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
+    gen.fetchNext(p_state);
+    // captures are now in
+    var useLMR = false;
+    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove);
+    if (p_features.useLMR and _depth > 3 and !ischeck) {
+        heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
+        useLMR = true;
+    }
+
+    var i: usize = 0;
+    var tot: usize = 0;
+    var captureOnly: bool = true;
+    if (gen.moves.len == 0) {
+        gen.fetchNext(p_state);
+        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove);
+        captureOnly = false;
+    }
+    while (gen.pickNext(&order)) |move| : (i += 1) {
+        if (i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
+            gen.fetchNext(p_state);
+            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove);
+            i = 0;
+            if (useLMR) {
+                heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
             }
         }
+
         _ = p_state.makeMove(move);
 
         var score: scoreType = 0;
@@ -138,30 +127,28 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 score = -searchLoop(p_state, p_info, _depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
             }
 
-            //if (score > _alpha and ((beta - _alpha) > 1)) {
             //https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html
             if (score > _alpha and score < beta) {
+                //if (score > _alpha and ((beta - _alpha) > 1)) {
                 score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, .PV);
             }
         }
 
         _ = p_state.undoMove();
 
-        const isCapture = move.isCapture();
-        if (i == 0 or finalScore < score) {
+        if (tot == 0 or finalScore < score) {
             finalScore = score;
             bestMove = move;
-            if (i == 0 and ply == 0 and comptime t == .PV) {
+            if (tot == 0 and ply == 0 and comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
         }
-        // under no possible scenario can this become >=, the resulting engines only produce drawn games amongst themselves
         if (finalScore > _alpha) {
             _alpha = finalScore;
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
-            if (!isCapture) {
+            if (captureOnly) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(_depth));
             }
         }
@@ -171,8 +158,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
             const bonus = heuristicl.computeHistoryBonus(_depth);
             heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), bonus);
-            for (0..fmoves.len) |j| {
-                const _move = fmoves.moves[j];
+            for (0..gen.moves.len) |j| {
+                const _move = gen.moves.moves[j];
                 if (!_move.isCapture() and j != i) {
                     heuristicl.updateHistoryHeurist(p_state.whiteToMove(), _move.getFrom(), _move.getTo(), -bonus);
                 }
@@ -183,10 +170,11 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             }
 
             p_info.searchStat.n_cutoffs += 1;
-            return beta;
+            return _alpha;
         }
+        tot += 1;
     }
-    if (fmoves.len == 0) {
+    if (tot == 0) {
         if (!p_state.isLegal(p_state.whiteToMove())) {
             _alpha = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(_depth)));
         } else {
@@ -201,4 +189,3 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     return _alpha;
 }
-

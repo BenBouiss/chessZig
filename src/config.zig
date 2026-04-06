@@ -60,10 +60,10 @@ pub const DEFAULT_LATE_MOVE_REDUCTION = false;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
 pub const LMR_CST_DEPTH = 2;
 
-pub const DEFAULT_SEARCH_TYPE: searchType = .ZWS;
-pub const _DEFAULT_SEARCH_TYPE = "ZWS";
+pub const DEFAULT_SEARCH_TYPE: searchType = .ZWSI;
+pub const _DEFAULT_SEARCH_TYPE = "ZWSI";
 
-pub const searchType = enum { STD, PVS, ZWS, ASPIRATION };
+pub const searchType = enum { STD, PVS, ZWS, ZWSI, ASPIRATION };
 
 pub const DEFAULT_USE_SEE = true;
 pub const _DEFAULT_USE_SEE = "true";
