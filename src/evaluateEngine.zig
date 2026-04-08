@@ -12,6 +12,7 @@ const bookl = @import("book.zig");
 const filel = @import("file.zig");
 const heuristicl = @import("heuristic.zig");
 const mathl = @import("math.zig");
+const timel = @import("time.zig");
 
 const stringl = @import("string.zig");
 const std = @import("std");
@@ -214,12 +215,9 @@ const matchStatus = struct {
     nextTurnTrigger: bool = false,
     nextTurn_move: movel.IMove = .{},
     positionUpdated: bool = false,
-
-    prevTick: i64 = 0,
-    prevTurnTick: i64 = 0,
+    turnSW: timel.stopWatch = .{},
 
     pub fn reset(p_self: *matchStatus) void {
-        //
         p_self.playerInv[0].reset();
         p_self.playerInv[1].reset();
         p_self.status = .Continue;
@@ -231,27 +229,31 @@ const matchStatus = struct {
         const matchStr = try std.fmt.allocPrint(alloc, "wtime {d} btime {d} winc {d} binc {d}", .{ wP.time, bP.time, wP.time_inc, bP.time_inc });
         return matchStr;
     }
+    pub fn getGuiStr(self: *matchStatus, alloc: std.mem.Allocator) ![]const u8 {
+        var wP = self.playerInv[@intFromEnum(e_color.WHITE)].time;
+        var bP = self.playerInv[@intFromEnum(e_color.BLACK)].time;
+        if (self.chessState.whiteToMove()) {
+            wP -= self.turnSW.timeSinceStartMs();
+        } else {
+            bP -= self.turnSW.timeSinceStartMs();
+        }
+        const guiStr = try std.fmt.allocPrint(alloc, "wtime {d} btime {d} ", .{ wP, bP });
+        return guiStr;
+    }
     pub fn timeTick(p_self: *matchStatus) bool {
-        const curr = std.time.milliTimestamp();
-        p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())].time -= (curr - p_self.prevTick);
-        if (p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())].time < 0) {
+        if (p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())].time < p_self.turnSW.timeSinceStartMs()) {
             return false;
         }
-        p_self.prevTick = curr;
         return true;
     }
-    pub fn startTime(p_self: *matchStatus) void {
-        p_self.prevTick = std.time.milliTimestamp();
-        p_self.prevTurnTick = std.time.milliTimestamp();
-    }
     pub fn turnComplete(p_self: *matchStatus, alloc: std.mem.Allocator) !void {
-        const curr = std.time.milliTimestamp();
-        // the other player(!whiteToMove()) is used as the chess state was already updated with the matchOnBestMove
-        var p = &p_self.playerInv[@intFromBool(!p_self.chessState.whiteToMove())];
-        try p.timeTaken.append(alloc, (curr - p_self.prevTurnTick));
+        // turnComplete now before makemove thus whitetomove()
+        var p = &p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())];
+        try p.timeTaken.append(alloc, p_self.turnSW.timeSinceStartMs());
+        //std.debug.print("[DEBUG] turnComplete: removing {d} ms from {} player\n", .{ p_self.turnSW.timeSinceStartMs(), p_self.chessState.whiteToMove() });
+        //p_self.turnSW.print();
+        p.time -= p_self.turnSW.timeSinceStartMs();
         p.time += p.time_inc;
-
-        p_self.prevTurnTick = curr;
     }
 };
 
@@ -573,12 +575,12 @@ const guiState = struct {
             return false;
         };
         p_self.match.nextTurnTrigger = true;
+        p_self.match.turnSW.stop();
 
         return status;
     }
     pub fn startMatch(p_self: *guiState) !void {
         p_self.match.reset();
-        p_self.match.startTime();
         p_self.status.phase = .MATCH;
         try p_self.respondAll("ucinewgame");
         var line = try p_self.match.chessState.move_history.getLineString(p_self.alloc);
@@ -671,6 +673,8 @@ const guiState = struct {
             std.debug.assert(p_self.match.availableMoves.len != 0);
         }
 
+        p_self.match.turnSW.reset();
+        p_self.match.turnSW.startTimeTick();
         const msgMatch = try p_self.match.getGoStr(p_self.alloc);
         const msg = try std.fmt.allocPrint(p_self.alloc, "go {s} ", .{msgMatch});
 
@@ -923,7 +927,7 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
     //
     utilsl.clear();
     chessl.print_board(&p_self.match.chessState);
-    const times = try p_self.match.getGoStr(p_self.alloc);
+    const times = try p_self.match.getGuiStr(p_self.alloc);
     defer (p_self.alloc.free(times));
     std.debug.print("{s}\n", .{times});
 
@@ -933,12 +937,13 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
 }
 
 fn onNextTurnTrigger(p_self: *guiState) !bool {
+    try p_self.match.turnComplete(p_self.alloc);
+
     p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
     p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
     if (p_self.status.debugMode) {
         chessl.sanityCheckBoardState(&p_self.match.chessState);
     }
-    try p_self.match.turnComplete(p_self.alloc);
 
     _ = p_self.nextTurn() catch {
         p_self.close();
