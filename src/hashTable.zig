@@ -98,7 +98,6 @@ pub const Hash_bucket = struct {
                 sDepth = entry.exploredDeph;
             }
         }
-        //std.debug.print("[DEBUG] addEntry: overwriting the {d} entry\n", .{idxS});
         p_self.entries[idxS] = p_entry.*;
         p_self.len = @min(p_self.len + 1, p_self.entries.len);
     }
@@ -170,8 +169,10 @@ pub const Hash_table = struct {
         }
         return ret;
     }
-    pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator) void {
-        std.debug.print("[FREE] Freeing the entries in the hashtable \n", .{});
+    pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator, verbose: bool) void {
+        if (verbose) {
+            std.debug.print("[FREE] Freeing the entries in the hashtable \n", .{});
+        }
         if (p_self.initialized) {
             alloc.free(p_self.entries);
             p_self.initialized = false;
@@ -264,7 +265,7 @@ pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32, ver
         std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
     }
     if (hashTable.initialized) {
-        hashTable.free(alloc);
+        hashTable.free(alloc, verbose);
     }
     hashTable = Hash_table.init(alloc, sizeHashTable, verbose) catch |err| {
         std.debug.print("[ERROR] _initHash: memory error during alloc {}\n", .{err});

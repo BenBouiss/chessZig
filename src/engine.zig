@@ -494,7 +494,7 @@ pub const engine = struct {
         p_self.input.free(p_self.alloc);
         p_self.workingThreads.deinit(p_self.alloc);
         p_self.options.setOptions.deinit(p_self.alloc);
-        hashTablel.hashTable.free(p_self.alloc);
+        hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {

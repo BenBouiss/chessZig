@@ -1388,14 +1388,21 @@ pub const Board_state = struct {
         }
         return p_self.isLegal(p_self.whiteToMove());
     }
-    pub fn isInsufficientMaterial(p_self: *Board_state) bool {
-        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhitePawn)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackPawn)]) != 0) {
+    pub fn isInsufficientMaterial(p_self: *const Board_state) bool {
+        return p_self.isInsufficientMaterialSide(false) or p_self.isInsufficientMaterialSide(true);
+    }
+    pub fn isInsufficientMaterialSide(p_self: *const Board_state, white: bool) bool {
+        var color_offset: usize = 0;
+        if (!white) {
+            color_offset = N_PIECES_TYPES;
+        }
+        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]) != 0) {
             return false;
         }
-        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackQueen)]) != 0) {
+        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteQueen) + color_offset]) != 0) {
             return false;
         }
-        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_self.pieceBB[@intFromEnum(e_piece.nBlackRook)]) != 0) {
+        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteRook)]) + color_offset != 0) {
             return false;
         }
         // TODO: add the cases KBB vs K or others

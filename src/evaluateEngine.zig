@@ -87,13 +87,14 @@ const matchResultContainer = struct {
             },
 
             .Flagged => {
-                p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
                 p_self.items[currEngine].res[@intFromBool(p)].flagged += 1;
-                p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
-
-                //p_self.items[currEngine].lose += 1;
-                //p_self.items[currEngine].flagged += 1;
-                //p_self.items[otherEngine].win += 1;
+                if (match.chessState.isInsufficientMaterialSide(!p)) {
+                    p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
+                    p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
+                } else {
+                    p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
+                    p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
+                }
             },
             .StaleMate, .StaleMateRepetition, .Dnf => {
                 p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
@@ -105,9 +106,6 @@ const matchResultContainer = struct {
             .StaleMateInsuficientMaterial => {
                 p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
                 p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
-
-                //p_self.items[currEngine].draw += 1;
-                //p_self.items[otherEngine].draw += 1;
             },
         }
         for (0..2) |i| {
