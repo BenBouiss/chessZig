@@ -19,7 +19,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 test "entry retrievale" {
     mainl.initAll(false);
     hashl._initOrReallocHashTable(GLOBAL_ALLOC, 25, false);
-    defer hashl.hashTable.free(GLOBAL_ALLOC);
+    defer hashl.hashTable.free(GLOBAL_ALLOC, false);
     for (0..100) |i| {
         const entry: hashl.Hash_entry = .{ .exploredDeph = 1, .key = .{ .code = @intCast(i) }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
         try std.testing.expect(hashl.hashTable.storeEntry(&entry));
@@ -43,7 +43,7 @@ test "entry retrievale" {
 test "entry overwriting" {
     mainl.initAll(false);
     hashl._initOrReallocHashTable(GLOBAL_ALLOC, 25, false);
-    defer hashl.hashTable.free(GLOBAL_ALLOC);
+    defer hashl.hashTable.free(GLOBAL_ALLOC, false);
 
     const CODE = 42;
     const entry: hashl.Hash_entry = .{ .exploredDeph = 1, .key = .{ .code = CODE }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
