@@ -80,8 +80,8 @@ pub const Hash_bucket = struct {
         _ = p_self;
     }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
-        var idxS: usize = 0;
-        var sDepth = p_self.entries[0].exploredDeph;
+        var idxS: usize = p_self.len;
+        var sDepth: u8 = 0;
         // if a better entry exists for this hash key we exit
         for (0..p_self.len) |i| {
             const entry = p_self.entries[i];
@@ -92,13 +92,15 @@ pub const Hash_bucket = struct {
                 p_self.entries[i] = p_entry.*;
                 return;
             }
+
             if (entry.exploredDeph < sDepth) {
                 idxS = i;
                 sDepth = entry.exploredDeph;
             }
         }
+        //std.debug.print("[DEBUG] addEntry: overwriting the {d} entry\n", .{idxS});
         p_self.entries[idxS] = p_entry.*;
-        //p_self.len = ((p_self.len + 1) % configl.ITEM_PER_BUCKET);
+        p_self.len = @min(p_self.len + 1, p_self.entries.len);
     }
 
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
@@ -199,9 +201,9 @@ pub const Hash_table = struct {
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry) bool {
         p_self.n_insertion += 1;
         var p_bucket = p_self.getBucketFromFullHashIndex(p_entry.key.code);
-        if (p_bucket.len == configl.ITEM_PER_BUCKET) {
-            _ = strategyEntryRemoval(p_bucket, p_entry);
-        }
+        //if (p_bucket.len == configl.ITEM_PER_BUCKET) {
+        //    _ = strategyEntryRemoval(p_bucket, p_entry);
+        //}
         //p_bucket.hashTableOffset = p_self.getHashIndex(p_entry.key.code);
         p_bucket.addEntry(p_entry);
         return true;

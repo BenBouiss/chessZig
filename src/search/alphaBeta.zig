@@ -128,7 +128,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove, depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
     if (p_features.useLMR and depth > 3 and !ischeck) {
@@ -269,7 +269,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, undefined);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, undefined, depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
     if (p_features.useLMR and depth > 3) {
@@ -397,7 +397,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves_capture(p_state);
 
-    const indexes = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, .{});
+    const indexes = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, .{}, depth);
     for (0..fmoves.len) |i| {
         const idx = indexes.indexes[i];
         const move: IMove = fmoves.moves[idx];

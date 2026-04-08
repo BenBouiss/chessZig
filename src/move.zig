@@ -356,7 +356,7 @@ pub const matchMoveContainer = struct {
     //lastMove: IMove = .{},
     len: usize = 0,
 
-    pub fn print(p_self: *matchMoveContainer) void {
+    pub fn print(p_self: *const matchMoveContainer) void {
         // FOR DEBUG ONLY
         var line_str = p_self.getLineString(GLOBAL_ALLOC) catch {
             return;

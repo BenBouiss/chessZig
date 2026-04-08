@@ -64,7 +64,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove, depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
     if (p_features.useLMR and depth > 3 and !ischeck) {
