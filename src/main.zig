@@ -100,7 +100,7 @@ pub fn test_perft() !void {
     var eng = try initEngine();
     defer eng.free();
     eng.executeBuffer("position startpos");
-    eng.executeBuffer("go perft depth 7 batched");
+    eng.executeBuffer("go perft depth 6 batched");
     waitOnEngine(&eng);
 }
 pub fn test_bench() !void {
@@ -109,14 +109,15 @@ pub fn test_bench() !void {
     defer eng.executeBuffer("quit");
     //eng.executeBuffer("debug on");
     //eng.executeBuffer("setoption name useQuiescence value true");
-    eng.executeBuffer("setoption name useHash value true");
+    //eng.executeBuffer("setoption name useHash value true");
+    eng.executeBuffer("setoption name searchType value zws");
     eng.executeBuffer("benchmark");
     waitOnEngine(&eng);
 }
 
 pub fn main() anyerror!void {
-    try test_perft();
-    //try test_bench();
+    //try test_perft();
+    try test_bench();
     //try test_speed();
     //try heuristicl.main();
     //try chessl.main();
