@@ -1,22 +1,22 @@
 [engine1]
-path="engines/bin/engine_03_04_26";
-name="prev hash";
-"setoption name useHash value true";
-"setoption name searchType value zws";
+path="engines/bin/engine_08_04_26";
+name="no hash";
+"setoption name useHash value false";
+"setoption name searchType value zwsi";
 
 [engine2]
-path="engines/bin/engine_04_04_26";
-name="new hash";
+path="engines/bin/engine_08_04_26";
+name="hash";
 "setoption name useHash value true";
-"setoption name searchType value zws";
+"setoption name searchType value zwsi";
 
 [match]
-nMatch=8;
+nMatch=2;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-timeFormat=(60000, 100);
+timeFormat=(15000, 100);
 logsLocation="logs/ben/ben";
 //saveLogs=true;
 
