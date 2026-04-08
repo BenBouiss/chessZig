@@ -26,14 +26,18 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
     var _alpha = alpha;
     var _depth = depth;
+    if (false) {
+        _depth += 1;
+    }
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
     }
-
     if (_depth <= 0 or !p_info.alive) {
         return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine, t);
     }
 
+    var finalScore: scoreType = 0;
+    var bestMove: IMove = .{};
     var hashMove: IMove = .{};
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(_depth));
@@ -47,7 +51,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             hashMove = _entry.val.search.bestMove;
         }
     }
-
     // null move prunning here
     // R = 3
     const ischeck = p_state.isChecked();
@@ -64,31 +67,14 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             }
         }
     }
-    if (p_features.useRazoring) {
-        //https://www.chessprogramming.org/Razoring limited razoring
-        const eval = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin[2];
-        if (_depth == 3 and eval <= _alpha and p_state.getBigPieceCount(!p_state.whiteToMove()) > 3) {
-            _depth = 2;
-        }
-        //const eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
-        //if (eval < (_alpha - 512 - 293 * depth * depth)) {
-        //    const value = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, p_features, ply, p_state.isChecked(), pv, prevLine, .NonPV);
-        //    if (value < _alpha and @abs(value) < weightl.simpleCheckMateScore) {
-        //        return value;
-        //    }
-        //}
-
-    }
-
-    var finalScore: scoreType = 0;
-    var bestMove: IMove = .{};
 
     // staged
     var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
     gen.fetchNext(p_state);
     // captures are now in
     var useLMR = false;
-    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
+
     if (p_features.useLMR and _depth > 3 and !ischeck) {
         heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
         useLMR = true;
@@ -99,23 +85,29 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     var captureOnly: bool = true;
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
-        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove);
+        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
         captureOnly = false;
+        if (useLMR) {
+            heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
+        }
     }
     while (gen.pickNext(&order)) |move| : (i += 1) {
+        //std.debug.assert(move.isValid());
         if (i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
-            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove);
-            i = 0;
+            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
+
             if (useLMR) {
                 heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
             }
+            i = 0;
         }
 
         _ = p_state.makeMove(move);
 
         var score: scoreType = 0;
         if (i == 0) {
+            //std.debug.print("First i {s} {d} ply {d} a {d} b {d}\n", .{ move.getStr(), _depth - 1, ply + 1, -beta, -_alpha });
             score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
         } else {
             if (useLMR and (order.depths[i] != (_depth - 1))) {
@@ -124,11 +116,13 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 score = _alpha + 1;
             }
             if (score > _alpha) {
+                //std.debug.print("other i {s} nonPv({d}) {d} ply {d} a {d} b {d}\n", .{ move.getStr(), i, _depth - 1, ply + 1, -beta, -_alpha });
                 score = -searchLoop(p_state, p_info, _depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
             }
 
             //https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html
             if (score > _alpha and score < beta) {
+                //std.debug.print("other i {d}\n", .{_depth - 1});
                 //if (score > _alpha and ((beta - _alpha) > 1)) {
                 score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, .PV);
             }
@@ -159,7 +153,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             const bonus = heuristicl.computeHistoryBonus(_depth);
             heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), bonus);
             for (0..gen.moves.len) |j| {
-                const _move = gen.moves.moves[j];
+                const idx = order.indexes[j];
+                const _move = gen.moves.moves[idx];
                 if (!_move.isCapture() and j != i) {
                     heuristicl.updateHistoryHeurist(p_state.whiteToMove(), _move.getFrom(), _move.getTo(), -bonus);
                 }
@@ -175,16 +170,12 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         tot += 1;
     }
     if (tot == 0) {
+        //if (p_state.isChecked()) {
         if (!p_state.isLegal(p_state.whiteToMove())) {
             _alpha = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(_depth)));
         } else {
             _alpha = weightl.simpleStalemateScore;
         }
-    }
-
-    if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .PV, bestMove);
-        _ = hashl.hashTable.storeEntry(&s_entry);
     }
 
     return _alpha;

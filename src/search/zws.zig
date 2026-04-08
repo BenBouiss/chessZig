@@ -26,6 +26,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
     var _alpha = alpha;
     var _depth = depth;
+    if (false)
+        _depth += 1;
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
     }
@@ -66,7 +68,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove, _depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
     if (p_features.useLMR and _depth > 3 and !ischeck) {
@@ -110,30 +112,31 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     var finalScore: scoreType = 0;
     var bestMove: IMove = .{};
-    const margin = 150 * _depth;
+    //const margin = 150 * _depth;
     for (0..fmoves.len) |i| {
         const idx = order.indexes[i];
         const move: IMove = fmoves.moves[idx];
-        if (futilityPrune and !moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion()) {
-            continue;
-        }
-        if (reverseFutilityP) {
-            const _see = heuristicl.SEE(p_state, move);
-            if ((mb + _see) >= (beta + margin)) {
-                return (mb + _see);
-            }
-        }
+        //if (futilityPrune and !moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion()) {
+        //    continue;
+        //}
+        //if (reverseFutilityP) {
+        //    const _see = heuristicl.SEE(p_state, move);
+        //    if ((mb + _see) >= (beta + margin)) {
+        //        return (mb + _see);
+        //    }
+        //}
         _ = p_state.makeMove(move);
 
         var score: scoreType = 0;
         if (i == 0) {
             score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
         } else {
-            if (useLMR and (order.depths[i] != (_depth - 1))) {
-                score = -searchLoop(p_state, p_info, order.depths[i], -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
-            } else {
-                score = _alpha + 1;
-            }
+            //if (useLMR and (order.depths[i] != (_depth - 1))) {
+            //    score = -searchLoop(p_state, p_info, order.depths[i], -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
+            //} else {
+            //    score = _alpha + 1;
+            //}
+            score = _alpha + 1;
             if (score > _alpha) {
                 score = -searchLoop(p_state, p_info, _depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
             }
@@ -201,4 +204,3 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     return _alpha;
 }
-

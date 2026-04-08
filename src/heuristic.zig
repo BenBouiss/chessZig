@@ -266,7 +266,7 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
         },
     }
 }
-pub inline fn materialImbalance(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
+pub fn materialImbalance(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
     return sideCountScore(p_state, true, values) - sideCountScore(p_state, false, values);
 }
 pub fn sideCountScore(p_state: *const chess.Board_state, white: bool, values: *const heuristicValues) scoreType {
@@ -1138,7 +1138,7 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: usize, b: usize) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove, depth: u16) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
 
@@ -1152,6 +1152,7 @@ pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const
 
     for (0..ret.len) |idx| {
         ret.scores[idx] = scores[ret.indexes[idx]];
+        ret.depths[idx] = depth;
     }
     return ret;
 }
@@ -1160,27 +1161,28 @@ pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrd
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     for (0..p_order.len) |i| {
-        if (p_order.scores[i] >= (3 * configl.MAX_HIST_HEURISTIC_VALUE / 4) or i < moveReductionAmount or depth == 1) {
+        if (p_order.scores[i] >= (3 * configl.MAX_HIST_HEURISTIC_VALUE / 4) or i < moveReductionAmount or depth < 2) {
             p_order.depths[i] = depth - 1;
             continue;
         }
         // here we decide what moves are considered to be important as to not sacrifice some depth
+
         const move = fmoves.moves[p_order.indexes[i]];
         const to = move.getTo();
         const isCapture = move.isCapture();
         if (isCapture) {
-            if ((to & safetyArea) != 0 or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move)) {
-                p_order.depths[i] = depth - 1;
-                continue;
-            }
-            if (p_order.scores[i] < 0) {
-                // this is SEE < 0
-                p_order.depths[i] = depth - 2;
-                continue;
-            }
+            p_order.depths[i] = depth - 1;
+            continue;
         }
+        if ((to & safetyArea) != 0 or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move) or chess.isPawnPiece(move.getFromPiece())) {
+            p_order.depths[i] = depth - 1;
+            continue;
+        }
+
         p_order.depths[i] = depth - 2;
     }
+
+    //std.debug.print("[DEBUG] computeLateMoveReduc: LMR new depths: {any}", .{p_order.depths[0..p_order.len]});
     return;
 }
 pub const moveOrdering = struct {
@@ -1196,6 +1198,9 @@ pub const moveGenerator = struct {
     idx: usize = 0,
 
     pub fn init() moveGenerator {
+        if (comptime !useStaged) {
+            @panic("Cannot use without staged movegen");
+        }
         var ret: moveGenerator = .{};
         ret.moves.len = 0;
         ret.idx = 0;
