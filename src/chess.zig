@@ -5,7 +5,6 @@ const assert = std.debug.assert;
 const build_options = @import("build_options");
 
 pub const fastBitscan = build_options.fastBitscan;
-const ignoreChecks = build_options.fastBitscan;
 const useMagic = build_options.useMagic;
 const useStaged = build_options.useStaged;
 const useDebug = build_options.useDebug;
@@ -102,16 +101,7 @@ pub fn strFromLERF(sq: e_square) [2]u8 {
     return ret;
 }
 
-pub fn stringToLERF(sq: *[2]u8) e_square {
-    if ((sq[0] < 'a') or (sq[0] > 'h')) {
-        return .invalid;
-    }
-    if ((sq[1] < '1') or (sq[1] > '9')) {
-        return .invalid;
-    }
-    return @enumFromInt((sq[0] - 'a') + ((sq[1] - '1') * ROW_SIZE));
-}
-pub fn cst_stringToLERF(sq: *const [2]u8) e_square {
+pub fn stringToLERF(sq: *const [2]u8) e_square {
     if ((sq[0] < 'a') or (sq[0] > 'h')) {
         return .invalid;
     }
@@ -183,14 +173,6 @@ pub fn bitscanK(b: u64) u8 {
     return count;
 }
 
-///*
-// bitScanReverse
-// @authors Kim Walisch, Mark Dickinson
-// @param bb bitboard to scan
-// @precondition bb != 0
-// @return index (0..63) of most significant one bit
-///
-/// This function and the one above are branchless version of bitScan and r_bitScan, function are from chessprogramming.org
 pub inline fn r_bitscan(bb: u64) u8 {
     if (comptime fastBitscan) {
         var ret: u32 = undefined;
@@ -363,7 +345,7 @@ pub fn getBoardFromFen_enPassant(p_state: *Board_state, turnToken: []const u8) b
         p_state.enPassantIdx = 0;
     } else {
         assert(turnToken.len == 2);
-        const sq = cst_stringToLERF(turnToken[0..2]);
+        const sq = stringToLERF(turnToken[0..2]);
         p_state.enPassantIdx = @intFromEnum(sq);
     }
     return true;
@@ -435,8 +417,8 @@ pub fn getEmptyMoveListFromStr(strBuffer: []const u8, alloc: std.mem.Allocator) 
         if (cmd.len != 4 and cmd.len != 5) {
             continue;
         }
-        const from = cst_stringToLERF(cmd[0..2]);
-        const to = cst_stringToLERF(cmd[2..4]);
+        const from = stringToLERF(cmd[0..2]);
+        const to = stringToLERF(cmd[2..4]);
         if (from == .invalid or to == .invalid) {
             continue;
         }
@@ -473,8 +455,8 @@ pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: s
         if (cmd.len != 4 and cmd.len != 5) {
             continue;
         }
-        from = cst_stringToLERF(cmd[0..2]);
-        to = cst_stringToLERF(cmd[2..4]);
+        from = stringToLERF(cmd[0..2]);
+        to = stringToLERF(cmd[2..4]);
         if (from == .invalid or to == .invalid) {
             continue;
         }
@@ -536,7 +518,7 @@ pub const Board_stateContainer = struct {
     }
 };
 
-pub fn getEmptyBoardState() Board_state {
+pub inline fn getEmptyBoardState() Board_state {
     return Board_state.init();
 }
 
@@ -1039,7 +1021,6 @@ pub const Board_state = struct {
         }
     }
     pub inline fn makeMove(p_self: *Board_state, move: IMove) void {
-        // FIXME: Look into makeMove capture specific method for better perf
         if (p_self.whiteToMove()) {
             p_self._makeMove(move, true);
         } else {
@@ -1307,7 +1288,7 @@ pub const Board_state = struct {
         }
         return self.pieceBB[@intFromEnum(e_piece.nBlackKing)];
     }
-    pub inline fn getKingSq(self: Board_state, white: bool) e_square {
+    pub inline fn getKingSq(self: *const Board_state, white: bool) e_square {
         if (white) {
             return self.wKingSq;
         }
@@ -1356,7 +1337,8 @@ pub const Board_state = struct {
         return self.pieceCount[@intFromEnum(piece)];
     }
 
-    pub inline fn getBigPieceCount(self: *const Board_state, white: bool) u8 {
+    pub fn getBigPieceCount(self: *const Board_state, white: bool) u8 {
+        // putting inline in front of this causes the razoring in zws to segfault even if the razoring is not used ???
         if (white) {
             return self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
         }
@@ -1400,7 +1382,7 @@ pub const Board_state = struct {
         const king_attacks = getAllAttackerFromKing(p_self, white);
         return king_attacks == 0;
     }
-    pub inline fn isChecked(p_self: *const Board_state) bool {
+    pub fn isChecked(p_self: *const Board_state) bool {
         if (comptime useStaged) {
             return p_self.checkersBB != 0;
         }
@@ -1466,7 +1448,7 @@ pub const Board_state = struct {
     pub inline fn isStaleThreeFold(self: *const Board_state) bool {
         return self.move_history.checkRepetitions();
     }
-    pub inline fn isStaleMateRepetition(p_self: *const Board_state) bool {
+    pub fn isStaleMateRepetition(p_self: *const Board_state) bool {
         return p_self.isFiftyMoveRepetition() or p_self.isStaleThreeFold();
     }
 
@@ -1489,6 +1471,7 @@ pub fn pieceArrayToBB(pieceArray: [N_SQUARES]e_piece) u64 {
 }
 pub fn sanityCheckBoardState(p_board_state: *const Board_state) void {
     var panic: bool = false;
+
     // white checks
     const n_white_p = p_board_state.getPieceCount(e_piece.nWhitePawn) + p_board_state.getPieceCount(e_piece.nWhiteBishop) + p_board_state.getPieceCount(e_piece.nWhiteKnight) + p_board_state.getPieceCount(e_piece.nWhiteRook) + p_board_state.getPieceCount(e_piece.nWhiteQueen) + p_board_state.getPieceCount(e_piece.nWhiteKing);
     const n_white_g = p_board_state.getSidePieceCount(e_color.WHITE);
@@ -1555,7 +1538,8 @@ pub fn sanityCheckBoardState(p_board_state: *const Board_state) void {
         print_board(p_board_state);
         const move = p_board_state.getLastMove();
         std.debug.print("[PANIC] sanityCheckBoardState: last move performed: {s}-{}-{}-{} turn: {}\n", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece(), p_board_state.whiteToMove() });
-        //p_board_state.move_history.print();
+        std.debug.print("[PANIC] sanityCheckBoardState: history:\n", .{});
+        p_board_state.move_history.print();
 
         @panic("Sanity check(s) failed");
     }
@@ -1578,11 +1562,13 @@ pub fn print_boardstate(p_board_state: *const Board_state) void {
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len, moves.len });
     moves.print();
 
-    //var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
-    //gen.fetchNext(p_board_state);
-    //gen.moves.print();
-    //gen.fetchNext(p_board_state);
-    //gen.moves.print();
+    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
+    std.debug.print("Captures: ", .{});
+    gen.fetchNext(p_board_state);
+    gen.moves.print();
+    std.debug.print("Quiets: ", .{});
+    gen.fetchNext(p_board_state);
+    gen.moves.print();
 
     printBoardValidity(p_board_state);
 
@@ -2027,19 +2013,6 @@ pub inline fn getCheckers(p_board: *Board_state, white: bool) void {
     //p_board.beeingAttacked = getAllAttackMask(p_board, p_board.occupiedBB ^ p_board.getKingBB(white), !white);
     return;
 }
-//pub fn getPartialCheckers(p_board: *Board_state, whiteMoved: bool, lastMove: IMove) void {
-//    // this method assumes that the previous move performed was legal, as the moveGen should not let it go through
-//    // thus the current player who made the move should not be in check
-//    const to: u8 = lastMove.getTo();
-//    const toPiece: e_piece = p_board.
-//    if (whiteMoved) {
-//        p_board.wCheckersBB = EMPTY;
-//    } else {
-//        p_board.bCheckersBB = EMPTY;
-//    }
-//
-//    return;
-//}
 
 pub inline fn onMoveStaged(p_board: *Board_state, white: bool) void {
     getCheckers(p_board, white);
@@ -2290,13 +2263,13 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
     var startXPos = moveStr.len - 2;
     while (startXPos >= 0) {
         const posSq = moveStr._slice()[startXPos .. startXPos + 2];
-        if (cst_stringToLERF(posSq[0..2]) != .invalid) {
+        if (stringToLERF(posSq[0..2]) != .invalid) {
             break;
         }
         startXPos -= 1;
     }
     const posSq = moveStr._slice()[startXPos .. startXPos + 2];
-    const xSq = cst_stringToLERF(posSq[0..2]);
+    const xSq = stringToLERF(posSq[0..2]);
     if (xSq == .invalid) {
         return .{};
     }
