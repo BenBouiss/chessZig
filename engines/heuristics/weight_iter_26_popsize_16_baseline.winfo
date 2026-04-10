@@ -1,0 +1,9 @@
+stackedPawnScore = -16.0;
+passedPawnScore = -12.0;
+isolatedPawnScore = 27;
+safetyKnight = 6;
+safetyBishop = 5;
+safetyRook = -7;
+safetyQueen = 12;
+structureProtection = 2;
+mobilityScore = -2;

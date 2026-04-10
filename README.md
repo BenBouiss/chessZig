@@ -29,12 +29,19 @@ build script:
 
 
 Tasklist:
-- (?)Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
+- [?] Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
     - Still on the fence on this one
-- Convert evaluation to use centiPawn represention(use larger int instead of lower floats?)
-- Heuristic to add to evaluation
-    - King safety (use the one present in the texel coeffs see .zig file)
+- [x] Convert evaluation to use centiPawn represention(use larger int instead of lower floats?) 
+- [ ] Heuristic to add to evaluation
+    - [x] King safety (use the one present in the texel coeffs see .zig file)
     - Add complexity
+
+- [ ] Search optimization 
+    - [ ] Late move reduction
+        - in the move ordering search the "best" moves to deeper depth than the lower owns
+        - heuristics for the depth decays dependant of the state of the game
+    - [ ] Futility pruning ?
+    - [ ] History ordering debug
 
 Sources: 
 - https://www.chessprogramming.org/
@@ -42,33 +49,31 @@ Sources:
 - https://github.com/abulmo/hqperft
 - https://github.com/AndyGrant/Ethereal/tree/master for the texel paper
 
-Values: 
 
-|Nodes|Capture|Doublepush|Enpassant|castling|promotions|
+Node types:
 
-|=====|=======|==========|=========|========|==========|
+| Depth | Nodes     | Capture  | Doublepush | Enpassant | Castling | Promotions |
+|-------|-----------|----------|------------|-----------|----------|------------|
+| 1     | 20        | 0        | 8          | 0         | 0        | 0          |
+| 2     | 400       | 0        | 160        | 0         | 0        | 0          |
+| 3     | 8902      | 34       | 2800       | 0         | 0        | 0          |
+| 4     | 197281    | 1576     | 61730      | 0         | 0        | 0          |
+| 5     | 4865609   | 82719    | 1211076    | 258       | 0        | 0          |
+| 6     | 119060324 | 2812008  | 29374680   | 5248      | 0        | 0          |
+| 7     | 3195901860| 108329926| 644115108  | 319617    | 883453   | 0          |
 
-|20|0|8|0|0|0|
+Nodes per second (nps):
 
-|400|0|160|0|0|0|
+| Depth | Nodes      | STD      | Batched   |
+|-------|------------|----------|-----------|
+| 1     | 20         | 101522   | 116959    |
+| 2     | 400        | 1550387  | 1970443   |
+| 3     | 8902       | 19564835 | 35466135  |
+| 4     | 197281     | 24604764 | 144846549 |
+| 5     | 4865609    | 27785062 | 179894590 |
+| 6     | 119060324  | 27714873 | 172445727 |
+| 7     | 3195901860 | 25547703 | 166346967 |
 
-|8902|34|2800|0|0|0|
-
-|197281|1576|61730|0|0|0|
-
-|4865609|82719|1211076|258|0|0|
-
-|119060324|2812008|29374680|5248|0|0|
-
-|3195901860|108329926|644115108|319617|883453|0|
-
-- depth = 1: 0 ms for 20 nodes (20000 nodes/s)
-- depth = 2: 0 ms for 400 nodes (400000 nodes/s)
-- depth = 3: 1 ms for 8902 nodes (4451000 nodes/s)
-- depth = 4: 8 ms for 197281 nodes (21920000 nodes/s)
-- depth = 5: 182 ms for 4865609 nodes (26588000 nodes/s)
-- depth = 6: 4127 ms for 119060324 nodes (28842000 nodes/s)
-- depth = 7: 118382 ms for 3195901860 nodes (26996000 nodes/s)
 
 Supported UCI commands:
 - uci
@@ -126,4 +131,12 @@ sections:
 - {piece}ScoreArr, cmd = '{piece}ScoreArr = [{d}, {d}, ..., {d}];' where piece is a chess piece, the content here is an array of 64 float values separeted by ',' to be used in the evaluation function. If the number of elements isnt 64, the line will be ignored
 - {piece}value, WIP way to set the individual piece heuristic values, primarely used in the piece counting phase of the evaluation function
 - more to come as the evaluation gets more complex
+
+Performance profiling:
+Currently the way to test wether a feature accelerates chess operations is to launch a perft and profile the resulting ELF file with [samply]. An exemple of profiling can be found below:
+```
+ samply record ./zig-out/bin/chess
+```
+Samply has been a great tool to debug performance issues, especially the tricky ones (ie: magic table indexing see src/magic.zig getBishopMoves()).
+
 

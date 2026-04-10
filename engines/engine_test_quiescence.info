@@ -1,26 +1,22 @@
 [engine1]
-path="engines/bin/engine_quiesc_capt";
-name="capture";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value true";
-"setoption name useHash value false";
-"setoption name useQuiescence value true";
+path="engines/bin/engine_09_04_26";
+name="norm";
+"setoption name searchType value zwsi";
+"setoption name useQuiescence value false";
 
 [engine2]
-path="engines/bin/engine_quiesc_capt_check";
-name="capture + check";
-//"debug on";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value true";
-"setoption name useHash value false";
+path="engines/bin/engine_09_04_26";
+name="quiesc + no delta pruning";
+"setoption name searchType value zwsi";
 "setoption name useQuiescence value true";
 
 [match]
-nMatch=2;
+nMatch=4;
 playerSwitch=true;
 //debugMode=true;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
+timeFormat=(60000, 1000);
 
 logsLocation="logs/ben/ben";
 //saveLogs=true;

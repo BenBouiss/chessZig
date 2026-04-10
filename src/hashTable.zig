@@ -13,21 +13,35 @@ const e_piece = chess.e_piece;
 const e_square = squarel.e_square;
 const useHash = build_options.useHash;
 const scoreType = heuristicl.scoreType;
+const IMove = movel.IMove;
 
 pub const Key = struct {
     code: u64 = 0,
 };
 
-// note the gain in space is not visible in the debug build
-const entryVal = union { moveAmount: u64, evaluation: scoreType };
+// note: the gain in space is not visible in the debug build
+// will try to implement the chess programming version where way more stuff is stored
+const entryComponents = union { moveAmount: u64, search: searchEntry };
+
+// Types of nodes:
+//  ALL: Upper bound: less than alpha
+//  PV: or Exact Complete evaluation of a position done a depth 0
+//  CUT: Lower bound: greater or equal than beta. Induced a beta cutoff
+//
+pub const nodeType = enum { PV, ALL, CUT };
+
+pub const searchEntry = struct {
+    evaluation: scoreType = 0,
+    t: nodeType = .ALL,
+    // bestMove also known as hash move (I think) is to be explored first
+    bestMove: IMove = .{},
+    // this is for the replacing strat, might be optionnal with alway replace
+    //age: usize,
+};
 
 pub const Hash_entry = struct {
     key: Key = .{},
-
-    val: entryVal = undefined,
-    //moveAmount: u64 = 0,
-    //evaluation: scoreType = 0,
-
+    val: entryComponents = undefined,
     exploredDeph: u8 = 0,
     age: u8 = 0,
 
@@ -38,17 +52,19 @@ pub const Hash_entry = struct {
     }
 
     pub inline fn eval(self: Hash_entry) scoreType {
-        return self.val.evaluation;
+        return self.val.search.evaluation;
     }
 };
 
 pub fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    //return .{ .key = key, .exploredDeph = depth, .moveAmount = moveAmount, .valid = true };
     return .{ .key = key, .exploredDeph = depth, .val = .{ .moveAmount = moveAmount }, .valid = true };
 }
 pub fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
-    //return .{ .key = key, .exploredDeph = depth, .valid = true, .evaluation = eval };
-    return .{ .key = key, .exploredDeph = depth, .val = .{ .evaluation = eval }, .valid = true };
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .search = .{ .evaluation = eval } }, .valid = true };
+}
+
+pub fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: IMove) Hash_entry {
+    return .{ .key = key, .exploredDeph = depth, .val = .{ .search = .{ .evaluation = eval, .t = nodeT, .bestMove = bestMove } }, .valid = true };
 }
 pub const Hash_bucket = struct {
     entries: [configl.ITEM_PER_BUCKET]Hash_entry,
@@ -60,12 +76,30 @@ pub const Hash_bucket = struct {
     pub fn printSize(p_self: *Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
         std.debug.print("[DEBUG] printSize: entries size is {d} bytes\n", .{@sizeOf(Hash_entry)});
-        std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryVal)});
+        std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryComponents)});
         _ = p_self;
     }
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
-        p_self.entries[p_self.len] = p_entry.*;
-        p_self.len = ((p_self.len + 1) % configl.ITEM_PER_BUCKET);
+        var idxS: usize = p_self.len;
+        var sDepth: u8 = 0;
+        // if a better entry exists for this hash key we exit
+        for (0..p_self.len) |i| {
+            const entry = p_self.entries[i];
+            if (entry.key.code == p_entry.key.code) {
+                if (entry.exploredDeph > p_entry.exploredDeph) {
+                    return;
+                }
+                p_self.entries[i] = p_entry.*;
+                return;
+            }
+
+            if (entry.exploredDeph < sDepth) {
+                idxS = i;
+                sDepth = entry.exploredDeph;
+            }
+        }
+        p_self.entries[idxS] = p_entry.*;
+        p_self.len = @min(p_self.len + 1, p_self.entries.len);
     }
 
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
@@ -80,14 +114,16 @@ pub const Hash_bucket = struct {
         //p_self.releaseLock();
         return .{ .valid = false };
     }
-    pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
+    pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?*Hash_entry {
         for (0..p_self.len) |i| {
-            const entry = p_self.entries[i];
+            const entry = &p_self.entries[i];
+            // >= to select an entry that was explored to current depth or deeper
+            // now that only one instance of the key gets stored, the highest depth is the first one to get hit
             if (entry.key.code == hash and entry.exploredDeph >= depth) {
                 return entry;
             }
         }
-        return .{ .valid = false };
+        return null;
     }
     fn acquireLock(p_self: *Hash_bucket) void {
         while (p_self.lock) {}
@@ -98,14 +134,20 @@ pub const Hash_bucket = struct {
     }
 };
 
+pub const hashTableStat = struct {
+    hit: u64 = 0,
+    miss: u64 = 0,
+    collision: u64 = 0,
+};
 pub const Hash_table = struct {
     entries: []Hash_bucket,
     MBsize: u32 = 0,
     size: u64 = 0,
     n_insertion: u64 = 0,
     initialized: bool = false,
+    stat: hashTableStat = .{},
 
-    pub fn init(alloc: std.mem.Allocator, MBsize: u32) !Hash_table {
+    pub fn init(alloc: std.mem.Allocator, MBsize: u32, verbose: bool) !Hash_table {
         var total_size: u64 = @intCast(MBsize * 1000000);
         total_size = @divFloor(total_size, @sizeOf(Hash_bucket));
         var ret: Hash_table = undefined;
@@ -121,12 +163,16 @@ pub const Hash_table = struct {
         }
         ret.initialized = true;
 
-        std.debug.print("[PRE] Initializing hash table with a size of {d} buckets !\n", .{total_size});
-        ret.entries[0].printSize();
+        if (verbose) {
+            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets !\n", .{total_size});
+            ret.entries[0].printSize();
+        }
         return ret;
     }
-    pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator) void {
-        std.debug.print("[FREE] Freeing the entries in the hashtable \n", .{});
+    pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator, verbose: bool) void {
+        if (verbose) {
+            std.debug.print("[FREE] Freeing the entries in the hashtable \n", .{});
+        }
         if (p_self.initialized) {
             alloc.free(p_self.entries);
             p_self.initialized = false;
@@ -149,17 +195,16 @@ pub const Hash_table = struct {
         for (0..p_bucket.len) |i| {
             var ent = &p_bucket.entries[i];
             if (ent.key.code == p_entry.key.code) {
-                ent.val.evaluation = score;
+                ent.val.search.evaluation = score;
             }
         }
     }
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry) bool {
-        const index = p_entry.key.code;
         p_self.n_insertion += 1;
-        var p_bucket = p_self.getBucketFromFullHashIndex(index);
-        if (p_bucket.len == configl.ITEM_PER_BUCKET) {
-            _ = strategyEntryRemoval(p_bucket, p_entry);
-        }
+        var p_bucket = p_self.getBucketFromFullHashIndex(p_entry.key.code);
+        //if (p_bucket.len == configl.ITEM_PER_BUCKET) {
+        //    _ = strategyEntryRemoval(p_bucket, p_entry);
+        //}
         //p_bucket.hashTableOffset = p_self.getHashIndex(p_entry.key.code);
         p_bucket.addEntry(p_entry);
         return true;
@@ -176,7 +221,7 @@ pub fn getEntryFromPerft(key: Key, depth: u8) Hash_entry {
     const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
     return p_bucket.getEntryPerft(key.code, depth);
 }
-pub fn getEntryFromMatch(key: Key, depth: u8) Hash_entry {
+pub inline fn getEntryFromMatch(key: Key, depth: u8) ?*Hash_entry {
     const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
     return p_bucket.getEntryMatch(key.code, depth);
 }
@@ -213,14 +258,16 @@ pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
 pub fn isHashTable_init() bool {
     return hashTable.initialized;
 }
-pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32) void {
+pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32, verbose: bool) void {
     // size in MB
 
-    std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
-    if (hashTable.initialized) {
-        hashTable.free(alloc);
+    if (verbose) {
+        std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
     }
-    hashTable = Hash_table.init(alloc, sizeHashTable) catch |err| {
+    if (hashTable.initialized) {
+        hashTable.free(alloc, verbose);
+    }
+    hashTable = Hash_table.init(alloc, sizeHashTable, verbose) catch |err| {
         std.debug.print("[ERROR] _initHash: memory error during alloc {}\n", .{err});
         @panic("Mem error");
     };

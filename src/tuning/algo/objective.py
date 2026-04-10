@@ -5,25 +5,9 @@ import numpy as np
 class objective(object):
     def __init__(self, maximize: bool, bounds: npt.NDArray[np.float64] | list[list[float]], steps: npt.NDArray[np.float64] | list[float]):
         assert len(bounds) == len(steps)
-
         self.maximize: bool = maximize
-
         self.bounds: npt.NDArray[np.float64]  = np.array(bounds)
-        #self.bounds : npt.NDArray[np.float64] | list[list[float]] = []
-        #if type(bounds) is list:
-        #    self.bounds = np.array(bounds)
-        #elif type(bounds) is np.array:
-        #    self.bounds = bounds
-
-
         self.steps: npt.NDArray[np.float64] = np.array(steps)
-        #if type(steps) is list:
-        #    self.steps= np.array(steps)
-        #elif type(steps) is np.array:
-        #    assert type(steps) is not list
-        #    self.steps = steps
-
-        #self.steps: npt.NDArray[np.float64] = steps
         self.nDims: int = len(self.steps)
 
     def evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
@@ -35,6 +19,35 @@ class objective(object):
     def _evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
         _ = positions
         raise NotImplementedError("this function needs to be implemented")
+
+    def saveToFile(self) -> dict:
+        ret = {}
+        ret["bounds"] = self.bounds.tolist()
+        ret["steps"] = self.steps.tolist()
+        ret["maximize"] = self.maximize
+        self._saveToFile(ret)
+        return ret
+
+    def _saveToFile(self, log: dict) -> None:
+        _ = log
+        return 
+
+    def loadFromFile(self, config: dict) -> None:
+        if config.get("bounds") is not None:
+            self.bounds = np.array(config["bounds"])
+        if config.get("steps") is not None:
+            self.steps = np.array(config["steps"])
+        if config.get("maximize") is not None:
+            self.maximize = config["minimize"]
+        self._loadFromFile(config)
+
+    def _loadFromFile(self, config: dict) -> None:
+        # to be overloaded
+        # load information from a config dict, used by objectives keeping internal informations during the optimization process
+        _ = config
+        pass
+
+
 
 def dummyObjectiveFunction(position: npt.NDArray[np.float64], target: npt.NDArray[np.float64]):
     return np.sum(np.absolute(position - target))

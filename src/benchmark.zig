@@ -125,11 +125,11 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread:
         _start = std.time.milliTimestamp();
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
         const res = perftl.perftThreadStart(p_state, @intCast(depth), nThread, batched) catch unreachable;
-        const _node: i64 = @intCast(res.n_nodeExplored);
+        const _node: i64 = @intCast(res.searchStat.n_nodeExplored);
         _end = std.time.milliTimestamp();
-        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, res.n_nodeExplored, @divFloor(_node, (_end - _start + 1)) * 1000 });
-        if (res.n_nodeExplored != ExpectedBenchmarkResults[depth]) {
-            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], res.n_nodeExplored, ExpectedBenchmarkResults[depth] - _node });
+        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, res.searchStat.n_nodeExplored, @divFloor(_node, (_end - _start + 1)) * 1000 });
+        if (res.searchStat.n_nodeExplored != ExpectedBenchmarkResults[depth]) {
+            std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], res.searchStat.n_nodeExplored, ExpectedBenchmarkResults[depth] - _node });
         }
         if (comptime useHash) {
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{res.n_hashRetrieve});
@@ -159,11 +159,12 @@ pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool
 }
 
 pub fn test_benchmark() void {
-    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, KIWIPETE_FEN) catch unreachable;
+    //var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, KIWIPETE_FEN) catch unreachable;
+    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch unreachable;
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 6, 1, true);
+    nodeExplorationBenchmark(&game_state, 7, 1, true);
     //nodeBenchmark_debug(&game_state, 6, false);
 }
 

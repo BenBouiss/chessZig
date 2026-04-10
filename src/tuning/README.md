@@ -1,19 +1,61 @@
-This folder will contain files around the subject of tuning the chess engine's parameters.
+This folder contains files used for the tuning of the engine's parameters. 
 
-Objective:
-- Isolate a number of engine parameters to be tuned
-- Implement a "tournament" type of script
-- Implement optimization algorithms
-    - Simulated annealing
-    - Meta heuristic!!!!
-    - Other?
+#Summary
+The current idea is to:
+    - Optimize the "single" weights using the "tournament" + mh method. See mh section for further information.
+    - Take a good guess from the first step and perform a texel optimization to tune the PSQT weights.
+The tournament is set with the following time format: (time = 60s, inc = 0.1s). The match is one round where the player switch side after a chess game ends, effectively a round is 2 chess matches. See the engines/engine_tourney.info file which is the base file currently used.
+
+#Metaheuristic parameter optimization
+
+As computationnal power is currently an issue, tuning 64 * 6 * 2 PSQT weights and performing the required chess matches is too expensive.
 
 
-Implication:
-- Move the array score somewhere easily modifiable
-- Set up option setoption to modify parameters
-    - pawnScoreArr ...
+##Problem's dimension vs population size
+As most MH algo performs random walk either in the direction of the current best(s) (exploitation) or random direction (exploration). 
+The more dimension are added to the problem the less likely a random walk will produce a competitive set of weights given a constant sized population. 
+In this case it is generaly advised to increase the population size, however doing so increases the number of calls to the evaluation function that is intended to be optimized.
+In our problem the evaluation function is very expensive requiring multiple matches per configuration per currently known baseline. 
+This motivated the removal of the PSQT weights from the tuned parameters. For tuning using MH a currently known good set of PSQT weights will be fixed and the engine produced by the MH will use these.
 
+##Algo choice
+There is an abundance of MH algo out there mainly motivated by the good results of state of the art algo (GWO, PSO, ACO, ...). These algorithms demonstrated good performance in various fields of study where performing "raw" gradient descents is impossible or non feasible compution wise. //Hence the name gradient free optimization algorithms
+GWO was picked as the default algo in this project but more may come soon(tm).
+
+#Texel
+...
+
+#Engine's modification
+To facilitate this process, the engine's various weights were made modifiable trought the use of the setoption name heuristicWeightsPath value <path>. This is done with the .winfo "nomenclature" in mind which can be found in the first README.md of the repo.
+
+The currently modifiable fields:
+-PSQT
+    -pawn...
+    -bishop...
+    -knight...
+    -rook...
+    -queen...
+    -king...
+
+-singles
+    -isolatedPawn...
+    -mobility...
+    -stackedPawn...
+    -passedPawn...
+    -safetyKnight...
+    -safetyBishop...
+    -safetyRook...
+    -safetyQueen...
+    -structureProtection...
+
+In singles, the value is extracted after the "="
+Note: All fields are case incensitive, the "..." indicates that the rest is ignored.
+Note2: The differentation between singles and PSQT is done via the PSQT value format which is " field_name = \[val1, val2, ..., valn\];"
+The "=" can be replaced by anything else, the only required "fields" are field_name to identify the array to modify and the \[ and \] to extract the values separated by a comma.
+
+Since the engine uses a tapered evaluation, all of these parameter can be specified with "\_MG" or "\_EG" inside the field's name. If none of "\_MG" or "\_EG" is found, the value is set for both the MG(mid game), EG(end game) slots.
+
+## Misc / prototype section
 Idea: 
 - Set the time format to low and searchDepth / engineElo to low, makes the iter faster, but result still good?
     - Need to test if good heuristic found on shallow search == good on deep search
@@ -32,7 +74,6 @@ Refactor:
         -  
 
 Callback saving section:
-
 Save the evolution of the population from one iter to the next
 save mh params for loading and tuning continuation
 2 possibilities:
@@ -98,4 +139,4 @@ round idea:
         - For path (2) if all matches are played against a "good" baseline, useGreedy can be either/or. 
             - useGreedy = true, nMatch increasing and allowing the scoring to keep increasing (ie: more potential draws/wins) could be a way to refresh outdated scoring 
             - useGreedy = false, no refreshing needed as each step is a refresh. potential bad optim step
-    
+

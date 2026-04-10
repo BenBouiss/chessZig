@@ -39,7 +39,7 @@ pub fn initAll(verbose: bool) void {
 fn initEngine() !enginel.engine {
     var engine: enginel.engine = try enginel.engine.init(GLOBAL_ALLOC);
     engine.executeBuffer("uci");
-    engine.executeBuffer("debug on");
+    //engine.executeBuffer("debug on");
     engine.executeBuffer("isready");
     return engine;
 }
@@ -74,9 +74,11 @@ pub fn test_decision() !void {
 pub fn test_speed() !void {
     var eng = try initEngine();
     defer eng.free();
-    eng.executeBuffer("setoption name useTexel value true");
-    eng.executeBuffer("position startpos");
-    eng.executeBuffer("go depth 6");
+    //eng.executeBuffer("setoption name useQuiescence value true");
+    //eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+    eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+    //eng.executeBuffer("setoption name useNullPruning value true");
+    eng.executeBuffer("go depth 7");
     waitOnEngine(&eng);
 }
 pub fn test_bug() !void {
@@ -93,8 +95,29 @@ pub fn test_bug() !void {
     eng.executeBuffer("go wtime 300000 btime 300000 winc 5000 binc 5000");
     waitOnEngine(&eng);
 }
+pub fn test_perft() !void {
+    initAll(false);
+    var eng = try initEngine();
+    defer eng.free();
+    eng.executeBuffer("position startpos");
+    eng.executeBuffer("go perft depth 6 batched");
+    waitOnEngine(&eng);
+}
+pub fn test_bench() !void {
+    initAll(false);
+    var eng = try initEngine();
+    defer eng.executeBuffer("quit");
+    //eng.executeBuffer("debug on");
+    //eng.executeBuffer("setoption name useQuiescence value true");
+    //eng.executeBuffer("setoption name useHash value true");
+    eng.executeBuffer("setoption name searchType value zws");
+    eng.executeBuffer("benchmark");
+    waitOnEngine(&eng);
+}
 
 pub fn main() anyerror!void {
+    //try test_perft();
+    try test_bench();
     //try test_speed();
     //try heuristicl.main();
     //try chessl.main();
@@ -103,5 +126,5 @@ pub fn main() anyerror!void {
     //Jdefer path.free(GLOBAL_ALLOC);
     //Jtry bookl.main(&path);
 
-    try benchl.main();
+    //try benchl.main();
 }

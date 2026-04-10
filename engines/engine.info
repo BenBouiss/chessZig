@@ -1,29 +1,22 @@
 [engine1]
-path="zig-out/bin/engine";
-name="prev";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
+path="engines/bin/engine_08_04_26";
+name="no lmr";
 "setoption name useHash value false";
-//"debug on";
+"setoption name searchType value zwsi";
 
 [engine2]
-path="zig-out/bin/engine";
-name="new";
-"setoption name UCI_elo value 3000";
-"setoption name fixedDepth value false";
-"setoption name useHash value false";
-//"debug on";
+path="engines/bin/engine_08_04_26";
+name="LMR";
+"setoption name searchType value zwsi";
+"setoption name useLMR value true";
 
 [match]
-nMatch=1;
+nMatch=2;
 playerSwitch=true;
 debugMode=false;
-useOpeningBook=false;
+useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-infinite=false;
-
-timeFormat=(60000, 0);
-
+timeFormat=(10000, 0);
 logsLocation="logs/ben/ben";
 //saveLogs=true;
 
