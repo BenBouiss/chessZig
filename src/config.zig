@@ -110,7 +110,7 @@ pub const UPDATE_TICKRATE: u16 = 360; // 1 ticks/second
 pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 
 pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
-pub const WAIT_TICKRATE_NS = 2_777_777;
+pub const WAIT_TICKRATE_NS = 500_000;
 pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
 pub const ENGINE_LOCK_TICKRATE_NS = 1_000;
 
