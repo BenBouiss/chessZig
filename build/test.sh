@@ -9,5 +9,6 @@ export ZIG_LOCAL_CACHE_DIR="$tmp_folder/.zig-cache"
 export ZIG_GLOBAL_CACHE_DIR="$tmp_folder/.zig-cache"
 
 #zig build test -Doptimize=ReleaseFast -DfastBitscan=true -DuseMagic=true
+#zig build test -Doptimize=ReleaseFast -DfastBitscan=true -DuseMagic=true --summary all
 zig build test -Doptimize=ReleaseFast -DfastBitscan=true -DuseMagic=true -DuseStaged=true --summary all
 #zig build test -DfastBitscan=true -DuseMagic=true -DuseStaged=true --summary all

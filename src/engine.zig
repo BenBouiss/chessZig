@@ -11,7 +11,9 @@ const speedTestl = @import("speedTest.zig");
 const heuristicl = @import("heuristic.zig");
 const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
+const benchmarkl = @import("search/benchmark.zig");
 const filel = @import("file.zig");
+const timel = @import("time.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -23,7 +25,7 @@ pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, CLEAR_HASH, HEUR_WEIGHTS_PATH, USETEXEL, USEQUIESCENCE };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, USERAZORING, TRACKMETRICS, SEARCHTYPE };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const goArgStruct = struct {
@@ -64,11 +66,11 @@ pub const inputChannel = struct {
     }
     fn acquireLock(p_self: *inputChannel) void {
         while (p_self.lock) {
-            std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+            std.Thread.sleep(configl.ENGINE_LOCK_TICKRATE_NS);
         }
         p_self.lock = true;
     }
-    fn releaseLock(p_self: *inputChannel) void {
+    inline fn releaseLock(p_self: *inputChannel) void {
         p_self.lock = false;
     }
     pub fn nonEmpty(p_self: *inputChannel) bool {
@@ -154,7 +156,7 @@ pub const setOptionEntry = struct {
 
 pub const engineStatus = struct {
     running: bool = false,
-    // FIX ME useless for now
+    // FIXME: useless for now
     // searching vvv
     searching: bool = false,
     debugMode: bool = false,
@@ -167,20 +169,74 @@ pub const engineIdentification = struct {
     code: []const u8 = configl.VERSION,
     setLater: bool = false,
 };
+pub const engineMetrics = struct {
+    timeSearchingUs: i64 = 0,
+    timeProcessingUs: i64 = 0,
+    computedPlies: u64 = 0,
+    nPlyCompute: usize = 0,
+    lock: bool = false,
+    pub fn addPlies(p_self: *engineMetrics, plies: u64) void {
+        p_self.acquireLock();
+        p_self.computedPlies += plies;
+        p_self.nPlyCompute += 1;
+        p_self.releaseLock();
+    }
+    pub fn addTimeToSearchingMs(p_self: *engineMetrics, timeMs: i64) void {
+        p_self.acquireLock();
+        p_self.timeSearchingUs += timeMs * std.time.us_per_ms;
+        p_self.releaseLock();
+    }
+    pub fn addTimeToProcessingMs(p_self: *engineMetrics, timeMs: i64) void {
+        p_self.acquireLock();
+        p_self.timeProcessingUs += timeMs * std.time.us_per_ms;
+        p_self.releaseLock();
+    }
+    pub fn addTimeToSearchingUs(p_self: *engineMetrics, timeUs: i64) void {
+        p_self.acquireLock();
+        p_self.timeSearchingUs += timeUs;
+        p_self.releaseLock();
+    }
+    pub fn addTimeToProcessingUs(p_self: *engineMetrics, timeUs: i64) void {
+        p_self.acquireLock();
+        p_self.timeProcessingUs += timeUs;
+        p_self.releaseLock();
+    }
+    pub fn acquireLock(p_self: *engineMetrics) void {
+        while (p_self.lock) {}
+        p_self.lock = true;
+    }
+    pub inline fn releaseLock(p_self: *engineMetrics) void {
+        p_self.lock = false;
+    }
+    pub fn printMetric(p_self: *const engineMetrics) void {
+        const proc: f64 = @as(f64, @floatFromInt(p_self.timeProcessingUs)) / std.time.us_per_ms;
+        const search: f64 = @as(f64, @floatFromInt(p_self.timeSearchingUs)) / std.time.us_per_ms;
+        const avg: f64 = @as(f64, @floatFromInt(p_self.computedPlies)) / @as(f64, @floatFromInt(@max(p_self.nPlyCompute, 1)));
+        std.debug.print("Time spent processing {d} ms, time spent searching {d} ms. Average computed ply {d:.2}\n", .{ proc, search, avg });
+    }
+};
 
 pub const engineOptions = struct {
     nThreads: spinVarType = configl.DEFAULT_THREAD,
     useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
-    useTexelEvaluation: bool = configl.DEFAULT_USETEXEL,
     useQuiescence: bool = configl.DEFAULT_USEQUIESC,
+    useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
+    useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
+    useSEE: bool = configl.DEFAULT_USE_SEE,
+    useFutility: bool = configl.DEFAULT_USE_FUTILITY,
+    useRazoring: bool = configl.DEFAULT_USE_RAZORING,
+
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
-    fixDepth: bool = configl.DEFAULT_FIXED_DEPTH,
+    fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
+    useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
 
     engineElo: spinVarType = configl.DEFAULT_ELO,
     setOptions: std.ArrayList(setOptionEntry) = undefined,
     nOptions: u16 = 0,
     depthLevel: u16 = configl.DEFAULT_DEPTH,
+    trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
+    searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
 };
 
 pub const engine = struct {
@@ -194,6 +250,8 @@ pub const engine = struct {
     uciMode: bool = false,
     id: engineIdentification = .{},
     options: engineOptions = .{},
+    stopWatch: timel.stopWatch = .{},
+    metric: engineMetrics = .{},
 
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
@@ -203,6 +261,8 @@ pub const engine = struct {
         ret.id = .{};
         ret.searcher = .{};
         ret.options = .{};
+        ret.stopWatch = .{};
+        ret.metric = .{};
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
@@ -230,22 +290,38 @@ pub const engine = struct {
         p_self.respond("uciok");
     }
     pub fn initOptions(p_self: *engine) !void {
-        //p_self.addOption(.THREADS, .SPIN,
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
 
         try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
-        try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "true" } } });
-        try p_self.addOption(.{ .name = "useTexel", .optionType = .USETEXEL, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USETEXEL } } });
+        try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEHASHTABLE } } });
 
         try p_self.addOption(.{ .name = "useQuiescence", .optionType = .USEQUIESCENCE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEQUIESC } } });
+
+        try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
+        try p_self.addOption(.{ .name = "useLMR ", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
+
+        try p_self.addOption(.{ .name = "useSEE", .optionType = .USESEE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_SEE } } });
+        try p_self.addOption(.{ .name = "useFutility", .optionType = .USEFUTILITY, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_FUTILITY } } });
+
+        try p_self.addOption(.{ .name = "useRazoring", .optionType = .USERAZORING, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RAZORING } } });
 
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
         try p_self.addOption(.{ .name = "fixedDepth", .optionType = .FIXED_DEPTH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_FIXED_DEPTH } } });
+        try p_self.addOption(.{ .name = "useStaticSearch", .optionType = .USESTATICSEARCH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_STATIC_SEARCH } } });
+
         try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
+        try p_self.addOption(.{ .name = "printMetric", .optionType = .PRINT_METRIC, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
+
         try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
+
+        try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
+        try p_self.addOption(.{ .name = "searchType", .optionType = .SEARCHTYPE, .argType = .COMBO, .info = optionInfo{ .str = optionInfo_str{ ._var = "STD PVS ZWS ZWSI ASP", .default = configl._DEFAULT_SEARCH_TYPE } } });
+    }
+    pub inline fn trackMetrics(p_self: *engine) bool {
+        return p_self.options.trackMetrics;
     }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
@@ -265,6 +341,7 @@ pub const engine = struct {
         var buffer: [configl.MAX_USER_INPUT]u8 = undefined;
         var f_reader = std.fs.File.stdin().reader(&buffer);
         const reader = &f_reader.interface;
+        //_ = p_self.input.putCmd(p_self.alloc, "uci");
         while (p_self.status.running) {
             const inputBuffer = try getMsgStdin(reader);
             const msg = utilsl.trimStr(&inputBuffer);
@@ -297,9 +374,12 @@ pub const engine = struct {
             p_self.workingThreads.items[i].join();
         }
     }
-    fn executeQuitProcedure(p_self: *engine) bool {
+    pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
         p_self.searcher.interrupt = true;
+        if (p_self.trackMetrics()) {
+            p_self.metric.printMetric();
+        }
         p_self.waitOnWorkingThreads();
         p_self.respond("its ovah");
         p_self.free();
@@ -333,6 +413,9 @@ pub const engine = struct {
                 return p_self.executeGoCmd(cmdBuffer);
             },
             .POSITION => {
+                if (!p_self.status.initializedInternals) {
+                    _ = p_self.initInternals();
+                }
                 return p_self.executePositionCmd(cmdBuffer, p_self.alloc);
             },
             .UCINEWGAME => {
@@ -357,6 +440,9 @@ pub const engine = struct {
             },
             .BENCHMARK => {
                 // by default single threaded will probably just use the engine options maybe
+                if (!p_self.status.initializedInternals) {
+                    _ = p_self.initInternals();
+                }
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINT => {
@@ -408,7 +494,7 @@ pub const engine = struct {
         p_self.input.free(p_self.alloc);
         p_self.workingThreads.deinit(p_self.alloc);
         p_self.options.setOptions.deinit(p_self.alloc);
-        hashTablel.hashTable.free(p_self.alloc);
+        hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
@@ -484,16 +570,7 @@ pub const engine = struct {
                 p_self.options.useHashTable = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
-            .USETEXEL => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
-                    return false;
-                };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useTexelEvaluation = utilsl.contains(val, "true", .ignoreCase);
-                return true;
-            },
+
             .USEQUIESCENCE => {
                 const val = getCheckValFromSetOptionCmd(tokens) catch {
                     return false;
@@ -502,6 +579,56 @@ pub const engine = struct {
                     return false;
                 }
                 p_self.options.useQuiescence = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .USENULLPRUNE => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useNullPrune = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .USELATEMOVEREDUC => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useLMR = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .USESEE => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useSEE = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .USEFUTILITY => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useFutility = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .USERAZORING => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useRazoring = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
 
@@ -540,11 +667,36 @@ pub const engine = struct {
                 if (!entry.info.str.validateValue(val)) {
                     return false;
                 }
-                p_self.options.fixDepth = utilsl.contains(val, "true", .ignoreCase);
+                p_self.options.fixedDepth = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
+            .USESTATICSEARCH => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.useStaticSearch = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+            .TRACKMETRICS => {
+                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                p_self.options.trackMetrics = utilsl.contains(val, "true", .ignoreCase);
+                return true;
+            },
+
             .CLEAR_HASH => {
                 return p_self.updateHash(p_self.options.hashTableSize);
+            },
+            .PRINT_METRIC => {
+                p_self.metric.printMetric();
+                return true;
             },
             .HEUR_WEIGHTS_PATH => {
                 const path = getStringValFromSetOptionCmd(tokens) catch {
@@ -554,6 +706,15 @@ pub const engine = struct {
                     return false;
                 }
                 return p_self.updateHeuristicWeights(path);
+            },
+            .SEARCHTYPE => {
+                const val = getStringValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+                if (!entry.info.str.validateValue(val)) {
+                    return false;
+                }
+                return p_self.updateSearchType(val);
             },
             .INVALID => {
                 return false;
@@ -594,6 +755,9 @@ pub const engine = struct {
         p_self.status.positionProvided = true;
         return true;
     }
+    pub fn setFen(p_self: *engine, fen: []const u8) void {
+        p_self.state = chess.getBoardFromFen(p_self.alloc, fen) catch unreachable;
+    }
 
     fn initInternals(p_self: *engine) bool {
         p_self.status.initializedInternals = true;
@@ -601,7 +765,7 @@ pub const engine = struct {
 
         moveTablel._initTables(p_self.status.debugMode);
         hashTablel._initZobrist(p_self.alloc, configl.SEED);
-        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
+        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
 
         _ = p_self.updateElo(p_self.options.engineElo);
         return true;
@@ -616,6 +780,22 @@ pub const engine = struct {
         };
         return true;
     }
+    fn updateSearchType(p_self: *engine, token: []const u8) bool {
+        if (utilsl.contains(token, "std", .ignoreCase)) {
+            p_self.options.searchType = .STD;
+        } else if (utilsl.contains(token, "pvs", .ignoreCase)) {
+            p_self.options.searchType = .PVS;
+        } else if (utilsl.contains(token, "zwsi", .ignoreCase)) {
+            p_self.options.searchType = .ZWSI;
+        } else if (utilsl.contains(token, "zws", .ignoreCase)) {
+            p_self.options.searchType = .ZWS;
+        } else if (utilsl.contains(token, "asp", .ignoreCase)) {
+            p_self.options.searchType = .ASPIRATION;
+        } else {
+            return false;
+        }
+        return true;
+    }
     fn updateHash(p_self: *engine, hashSize: spinVarType) bool {
         if (p_self.searcher.searching) {
             p_self.searcher.interrupt = true;
@@ -625,7 +805,7 @@ pub const engine = struct {
         }
 
         p_self.options.hashTableSize = hashSize;
-        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize);
+        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
         return true;
     }
     fn updateElo(p_self: *engine, elo: spinVarType) bool {
@@ -661,6 +841,12 @@ pub const engine = struct {
         p_self.searcher.config = goArg;
         p_self.searcher.nThreads = p_self.options.nThreads;
         p_self.status.positionProvided = false;
+        if (p_self.searcher.config.depth == 0) {
+            if (p_self.status.debugMode) {
+                std.debug.print("[DEBUG] dispatchUciGoThreads: No depth found in the cmd string using the default engine option \n", .{});
+            }
+            p_self.searcher.config.depth = p_self.options.depthLevel;
+        }
         return schedulerl.dispatchUciGoCmd(p_self, cmdBuffer);
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -668,7 +854,9 @@ pub const engine = struct {
         if (p_self.searcher.searching) {
             return false;
         }
-        @panic("speedtest missing");
+        p_self.searcher.reset();
+        return benchmarkl.dispatchUciBenchmark(p_self);
+        //@panic("speedtest missing");
     }
 };
 pub fn getLastMoveFromUci(p_board: *Board_state, cmdBuffer: []const u8, alloc: std.mem.Allocator) !IMove {
@@ -755,6 +943,8 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
                 tokenIndex += 1;
                 continue;
             };
+            goArgs.wtime = goArgs.movetime;
+            goArgs.btime = goArgs.movetime;
         } else if (utilsl.contains(arg, "infinite", .ignoreCase)) {
             goArgs.infinite = true;
         } else {
@@ -779,14 +969,30 @@ pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
         return .UCI_ELO;
     } else if (utilsl.contains(cmdBuffer, " fixeddepth", .ignoreCase)) {
         return .FIXED_DEPTH;
+    } else if (utilsl.contains(cmdBuffer, " usestaticsearch", .ignoreCase)) {
+        return .USESTATICSEARCH;
+    } else if (utilsl.contains(cmdBuffer, " trackmetrics", .ignoreCase)) {
+        return .TRACKMETRICS;
     } else if (utilsl.contains(cmdBuffer, " clearhash", .ignoreCase)) {
         return .CLEAR_HASH;
+    } else if (utilsl.contains(cmdBuffer, " printmetric", .ignoreCase)) {
+        return .PRINT_METRIC;
     } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {
         return .HEUR_WEIGHTS_PATH;
-    } else if (utilsl.contains(cmdBuffer, " useTexel", .ignoreCase)) {
-        return .USETEXEL;
     } else if (utilsl.contains(cmdBuffer, " useQuiescence", .ignoreCase)) {
         return .USEQUIESCENCE;
+    } else if (utilsl.contains(cmdBuffer, " useNullPruning", .ignoreCase)) {
+        return .USENULLPRUNE;
+    } else if (utilsl.contains(cmdBuffer, " useLMR", .ignoreCase)) {
+        return .USELATEMOVEREDUC;
+    } else if (utilsl.contains(cmdBuffer, " useSEE", .ignoreCase)) {
+        return .USESEE;
+    } else if (utilsl.contains(cmdBuffer, " useFutility", .ignoreCase)) {
+        return .USEFUTILITY;
+    } else if (utilsl.contains(cmdBuffer, " useRazoring", .ignoreCase)) {
+        return .USERAZORING;
+    } else if (utilsl.contains(cmdBuffer, " searchType", .ignoreCase)) {
+        return .SEARCHTYPE;
     }
 
     return .INVALID;
@@ -834,17 +1040,22 @@ fn inputThreading(p_self: *engine) void {
     var cumulTime: u64 = 0;
     while (p_self.status.running) {
         while (p_self.input.cmdBuffer.items.len != 0 and p_self.status.running) {
+            p_self.stopWatch.startTimeTick();
             const cmdBuffer = p_self.input.readBuffer();
             defer p_self.alloc.free(cmdBuffer);
             p_self.executeBuffer(cmdBuffer);
             cumulTime = 0;
+            if (p_self.trackMetrics()) {
+                p_self.metric.addTimeToProcessingUs(p_self.stopWatch.timeSinceStartUs());
+            }
+            p_self.stopWatch.stop();
         }
         if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
             std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
             cumulTime = 0;
         }
-        std.Thread.sleep(configl.WAIT_TICKRATE_NS);
-        cumulTime += configl.WAIT_TICKRATE_NS;
+        std.Thread.sleep(configl.ENGINE_SERVING_TICKRATE_NS);
+        cumulTime += configl.ENGINE_SERVING_TICKRATE_NS;
     }
 }
 
@@ -895,12 +1106,7 @@ pub fn launch_engine(debugMode: bool) !void {
     mainThread(debugMode);
     return;
 }
-pub fn launch_engine_shell(p_engine: *engine) !std.Thread {
-    p_engine.status.running = true;
-    const inputThread = try std.Thread.spawn(.{}, inputThreading, .{p_engine});
-    try p_engine.workingThreads.append(p_engine.alloc, inputThread);
-    return inputThread;
-}
+
 pub fn main() anyerror!void {
     try launch_engine(false);
 }

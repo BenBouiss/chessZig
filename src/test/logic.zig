@@ -1,6 +1,9 @@
 const chessl = @import("../chess.zig");
 const utilsl = @import("../utils.zig");
 const moveTablel = @import("../moveTables.zig");
+const movel = @import("../move.zig");
+const squarel = @import("../square.zig");
+const heuristicl = @import("../heuristic.zig");
 
 const std = @import("std");
 
@@ -37,4 +40,19 @@ test "find" {
     try std.testing.expectEqual(1, utilsl.findM(u8, "[engine]", "engine"));
     try std.testing.expectEqual(-1, utilsl.findM(u8, "[engine]", "a"));
     std.debug.print("[TEST]: find passed\n", .{});
+}
+
+test "SEE" {
+    // source https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm#cite_note-3
+    const fen = "1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - - 0 1";
+    var move = movel.build_move(@intFromEnum(squarel.e_square.e1), @intFromEnum(squarel.e_square.e5), @intFromEnum(movel.e_moveFlags.CAPTURE), .nWhiteRook);
+    var state = try chessl.getBoardFromFen(GLOBAL_ALLOC, fen);
+    move.setCapture(state.get_piece(move.getTo()));
+    try std.testing.expectEqual(heuristicl.SEE(&state, move), 100);
+
+    const fen2 = "1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - - 0 1";
+    move = movel.build_move(@intFromEnum(squarel.e_square.d3), @intFromEnum(squarel.e_square.e5), @intFromEnum(movel.e_moveFlags.CAPTURE), .nWhiteKnight);
+    state = try chessl.getBoardFromFen(GLOBAL_ALLOC, fen2);
+    move.setCapture(state.get_piece(move.getTo()));
+    try std.testing.expectEqual(heuristicl.SEE(&state, move), -200);
 }

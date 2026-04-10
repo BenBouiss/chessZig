@@ -17,7 +17,6 @@ const engine = enginel.engine;
 const IMove = movel.IMove;
 const Board_state = chessl.Board_state;
 const threadInfo = threadingl.threadInfo;
-const threadInfo_container = threadingl.threadInfo_container;
 const threadPackageArray = threadingl.threadPackageArray;
 const scoreType = heuristicl.scoreType;
 const moveDecisionExt = schedulerl.moveDecisionExt;

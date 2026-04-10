@@ -12,7 +12,7 @@ cmd
 *.vscode/
 
 engines/bin/*
-engines/heuristics/*
+engines/heuristics/tmp/*
 engines/tmp/*
 test/*
 opening

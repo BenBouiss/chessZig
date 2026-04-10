@@ -14,15 +14,15 @@ const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 // TODO Implement fancy bitboard https://www.chessprogramming.org/Magic_Bitboards
 // related(?) link: http://pradu.us/old/Nov27_2008/Buzz/
 
-const magic_err = error{noMagicFound};
-const BISHOP_MOVE_SIZE: usize = 512;
-const BISHOP_FIXED_BIT: usize = 9;
+pub const magic_err = error{noMagicFound};
+pub const BISHOP_MOVE_SIZE: usize = 512;
+pub const BISHOP_FIXED_BIT: usize = 9;
 
-const ROOK_MOVE_SIZE: usize = 4096;
-const ROOK_FIXED_BIT: usize = 12;
+pub const ROOK_MOVE_SIZE: usize = 4096;
+pub const ROOK_FIXED_BIT: usize = 12;
 
-const MAX_MASK_SIZE: usize = 4096;
-const N_SQUARES: usize = 64;
+pub const MAX_MASK_SIZE: usize = 4096;
+pub const N_SQUARES: usize = 64;
 
 var rngIntGenerator = std.Random.DefaultPrng.init(42);
 const randInt = rngIntGenerator.random();
@@ -143,7 +143,8 @@ pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
 
 pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
     const magic = p_magicTable.bishopMagic[@intFromEnum(sq)];
-    // precomputed then indexing removes the memcpy of indexing then computing then indexing again leading to better perf
+    // precomputed then indexing removes the memcpy(of the entire table) of indexing then computing then indexing a second time leading to better perf
+    // prev: p_magicTable.bishopMoves[@intFromEnum(sq)][(hash >> @intCast(64 - BISHOP_FIXED_BIT))]; or something similar
     // from: Compiler explorer
 
     const _blockers = blockers & magic.mask;

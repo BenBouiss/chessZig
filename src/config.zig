@@ -12,20 +12,30 @@ pub const MAX_LINE_LENGTH: usize = 32;
 
 pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
 
-pub const MAX_HASH_BITS = 18;
 pub const MAX_THREAD: u32 = 64;
 pub const MAX_HASHSIZE = 1000; // in MB => 1 GB
 
 pub const DEFAULT_THREAD = 1;
-pub const DEFAULT_HASHTABLE_SIZE = 1; // in MB
-pub const DEFAULT_USEHASHTABLE = true;
-pub const DEFAULT_USETEXEL = false;
-pub const _DEFAULT_USETEXEL = "false";
+pub const DEFAULT_HASHTABLE_SIZE = 25; // in MB
 
-pub const DEFAULT_USE_NULLPRUNE = false;
-pub const DEFAULT_USE_HISTORY = false;
-pub const MAX_HIST_HEURISTIC_VALUE = 70;
+pub const DEFAULT_TRACKMETRICS = true;
+pub const _DEFAULT_TRACKMETRICS = "true";
+
+pub const DEFAULT_USEHASHTABLE = false;
+pub const _DEFAULT_USEHASHTABLE = "false";
+
+pub const DEFAULT_USE_NULLPRUNE = true;
+pub const _DEFAULT_USE_NULLPRUNE = "true";
+
 pub const ORDERING_LINE_VALUE = 9999;
+
+//https://www.chessprogramming.org/Move_Ordering
+pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
+pub const ORDERING_SEE_MULTI = 10;
+
+pub const KILLER_0_HEURISTIC_VALUE = 900;
+pub const KILLER_1_HEURISTIC_VALUE = 800;
+pub const MAX_HIST_HEURISTIC_VALUE = 700;
 
 pub const DEFAULT_USEQUIESC = false;
 pub const _DEFAULT_USEQUIESC = "false";
@@ -34,14 +44,35 @@ pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
 pub const MAX_DEPTH: u16 = 6;
 pub const MAXIMUM_SEARCH_DEPTH: u16 = 64;
-pub const MAX_QUIESC_DEPTH: u16 = 6;
+pub const MAX_QUIESC_DEPTH: u16 = 4;
 
 pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;
 pub const DEFAULT_ELO: u32 = 2500;
 
-pub const _DEFAULT_FIXED_DEPTH = "true";
-pub const DEFAULT_FIXED_DEPTH = true;
+pub const _DEFAULT_FIXED_DEPTH = "false";
+pub const DEFAULT_FIXED_DEPTH = false;
+
+pub const _DEFAULT_STATIC_SEARCH = "false";
+pub const DEFAULT_STATIC_SEARCH = false;
+
+pub const DEFAULT_LATE_MOVE_REDUCTION = false;
+pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
+pub const LMR_CST_DEPTH = 2;
+
+pub const DEFAULT_SEARCH_TYPE: searchType = .ZWSI;
+pub const _DEFAULT_SEARCH_TYPE = "ZWSI";
+
+pub const searchType = enum { STD, PVS, ZWS, ZWSI, ASPIRATION };
+
+pub const DEFAULT_USE_SEE = true;
+pub const _DEFAULT_USE_SEE = "true";
+
+pub const DEFAULT_USE_FUTILITY = false;
+pub const _DEFAULT_USE_FUTILITY = "false";
+
+pub const DEFAULT_USE_RAZORING = false;
+pub const _DEFAULT_USE_RAZORING = "false";
 
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
@@ -52,13 +83,14 @@ pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
 pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
 pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
 pub var SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR: u16 = 3;
+
 // estimate of the time increase when increasing the depth by 1
 pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
 pub const SCHEDULER_TICKRATE_NS = (std.math.pow(u64, 10, 6));
 pub const WR_TICKRATE_NS = (std.math.pow(u64, 10, 5));
 
 // hashTable constants
-pub const ITEM_PER_BUCKET = 4;
+pub const ITEM_PER_BUCKET = 3;
 
 // inactivity timers:
 //
@@ -78,14 +110,18 @@ pub const UPDATE_TICKRATE: u16 = 360; // 1 ticks/second
 pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 
 pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
-pub const WAIT_TICKRATE_NS = 2_777_777;
+pub const WAIT_TICKRATE_NS = 500_000;
+pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
+pub const ENGINE_LOCK_TICKRATE_NS = 1_000;
+
 pub const UPDATE_TICKRATE_NS = 2777777;
 pub const READING_TICKRATE_NS = (2) * (std.math.pow(u64, 10, 6));
 
 pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";
 
 // Tuner settings
-pub const N_POSITIONS: usize = 800000;
+//pub const N_POSITIONS: usize = 800000;
+pub const N_POSITIONS: usize = 300000;
 //pub const N_POSITIONS: usize = 8;
 pub const EPOCH: usize = 2048;
 pub const BATCH_SIZE: usize = 16;
@@ -106,10 +142,12 @@ pub const e_residue_type = enum(u4) { MSE = 0, RMSE };
 pub const TUNE_RESIDUE: e_residue_type = .MSE;
 
 pub const TUNE_NORMAL: bool = true; // 392 weights
-pub const TUNE_COMPLEXITY: bool = false; // ? weights
 pub const TUNE_SAFETY: bool = true; // > 5 weights
+pub const TUNE_COMPLEXITY: bool = false; // ? weights
+pub const TUNE_PSQT: bool = true; // > 5 weights
 
-pub const N_TERMS: usize = 392 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
+//pub const N_TERMS: usize = 392 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
+pub const N_TERMS: usize = 396 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
 
 // TEXEL indexes
 pub const TEXEL_PAWN_COUNT_IDX: usize = 0;
@@ -119,18 +157,25 @@ pub const TEXEL_ROOK_COUNT_IDX: usize = 3;
 pub const TEXEL_QUEEN_COUNT_IDX: usize = 4;
 
 pub const TEXEL_MOVE_COUNT_IDX: usize = 5;
-pub const TEXEL_PAWN_ISOL_IDX: usize = 6;
-pub const TEXEL_PAWN_STACKED_IDX: usize = 7;
+pub const TEXEL_KINGMOVE_COUNT_IDX: usize = 6;
 
-pub const TEXEL_PAWN_PSQT_IDX: usize = 8;
-pub const TEXEL_BISHOP_PSQT_IDX: usize = 72;
-pub const TEXEL_KNIGHT_PSQT_IDX: usize = 136;
-pub const TEXEL_ROOK_PSQT_IDX: usize = 200;
-pub const TEXEL_QUEEN_PSQT_IDX: usize = 264;
-pub const TEXEL_KING_PSQT_IDX: usize = 328;
+pub const TEXEL_PROTECTION_COUNT_IDX: usize = 7;
 
-pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 392;
-pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 393;
-pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 394;
-pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 395;
-pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 396;
+pub const TEXEL_PAWN_ISOL_IDX: usize = 8;
+pub const TEXEL_PAWN_STACKED_IDX: usize = 9;
+pub const TEXEL_PAWN_PASSED_IDX: usize = 10;
+
+pub const TEXEL_TEMPO_CHECKS_IDX: usize = 11;
+
+pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 12;
+pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 13;
+pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 14;
+pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 15;
+pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 16;
+
+pub const TEXEL_PAWN_PSQT_IDX: usize = 17;
+pub const TEXEL_BISHOP_PSQT_IDX: usize = 81;
+pub const TEXEL_KNIGHT_PSQT_IDX: usize = 145;
+pub const TEXEL_ROOK_PSQT_IDX: usize = 209;
+pub const TEXEL_QUEEN_PSQT_IDX: usize = 273;
+pub const TEXEL_KING_PSQT_IDX: usize = 337;
