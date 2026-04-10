@@ -913,7 +913,9 @@ fn matchRoutine(p_self: *guiState) !void {
         if (((std.time.milliTimestamp() - lastUpated) > configl.EVALUTATION_GUI_WAIT_MS) or (p_self.match.positionUpdated)) {
             p_self.match.positionUpdated = false;
             lastUpated = std.time.milliTimestamp();
-            try timeTickUserFacingInterface(p_self);
+            if (p_self.config.printToScreen) {
+                try timeTickUserFacingInterface(p_self);
+            }
         }
     }
     if (p_self.status.debugMode) {
@@ -1033,6 +1035,7 @@ const guiSetting = struct {
     engineOptions: [chessl.NUMBER_PLAYER]std.ArrayList(string) = undefined,
     nEngines: u8 = 0,
     debugMode: bool = false,
+    printToScreen: bool = true,
     pub fn init(alloc: std.mem.Allocator) !guiSetting {
         var ret: guiSetting = .{};
         ret.engineOptions[0] = try std.ArrayList(string).initCapacity(alloc, 2);
@@ -1080,6 +1083,7 @@ const guiSetting = struct {
 
         std.debug.print("\t save logs {}\n", .{p_self.match.saveLogs});
         std.debug.print("\t logs path {s}\n", .{p_self.match.logPath._slice()});
+        std.debug.print("\t print to screen {}\n", .{p_self.printToScreen});
     }
     pub fn writeSummary(p_self: *guiSetting, fd: *const std.fs.File) !void {
         var strBuffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
@@ -1209,6 +1213,17 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             settings.match.saveLogs = true;
         } else if (utilsl.equal(u8, boolStr, "false")) {
             settings.match.saveLogs = false;
+        } else {
+            return false;
+        }
+    } else if (buffer.containsE("printToScreen", .ignoreCase)) {
+        const boolStr = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        if (utilsl.equal(u8, boolStr, "true")) {
+            settings.printToScreen = true;
+        } else if (utilsl.equal(u8, boolStr, "false")) {
+            settings.printToScreen = false;
         } else {
             return false;
         }
