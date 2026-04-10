@@ -114,6 +114,13 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
         }
         threadingl.joinOnThreadPack(p_threadPack);
     }
+
+    const res = threadingl.getCombinedFromPack(p_threadPack);
+    const msg = std.fmt.allocPrint(p_engine.alloc, "info depth: {d} nodes {d} retrieved: {d} stored: {d}", .{ p_engine.searcher.config.depth, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+        return true;
+    };
+    defer p_engine.alloc.free(msg);
+    p_engine.respond(msg);
     return true;
 }
 
@@ -163,7 +170,6 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
         const entry = hashl.getEntryFromPerft(p_state.key, depth);
         if (entry.valid) {
             p_info.searchStat.n_hashRetrieve += @intCast(entry.moveA());
-
             p_info.searchStat.n_nodeExplored += entry.moveA();
             return entry.moveA();
         }

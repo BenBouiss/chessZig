@@ -1389,20 +1389,20 @@ pub const Board_state = struct {
         return p_self.isLegal(p_self.whiteToMove());
     }
     pub fn isInsufficientMaterial(p_self: *const Board_state) bool {
-        return p_self.isInsufficientMaterialSide(false) or p_self.isInsufficientMaterialSide(true);
+        return p_self.isInsufficientMaterialSide(false) and p_self.isInsufficientMaterialSide(true);
     }
     pub fn isInsufficientMaterialSide(p_self: *const Board_state, white: bool) bool {
         var color_offset: usize = 0;
         if (!white) {
             color_offset = N_PIECES_TYPES;
         }
-        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]) != 0) {
+        if (p_self.getPieceCount(@enumFromInt(@intFromEnum(e_piece.nWhitePawn) + color_offset)) != 0) {
             return false;
         }
-        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteQueen) + color_offset]) != 0) {
+        if (p_self.getPieceCount(@enumFromInt(@intFromEnum(e_piece.nWhiteQueen) + color_offset)) != 0) {
             return false;
         }
-        if (l_popcount(p_self.pieceBB[@intFromEnum(e_piece.nWhiteRook)]) + color_offset != 0) {
+        if (p_self.getPieceCount(@enumFromInt(@intFromEnum(e_piece.nWhiteRook) + color_offset)) != 0) {
             return false;
         }
         // TODO: add the cases KBB vs K or others
@@ -1568,14 +1568,6 @@ pub fn print_boardstate(p_board_state: *const Board_state) void {
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len, moves.len });
     moves.print();
-
-    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
-    std.debug.print("Captures: ", .{});
-    gen.fetchNext(p_board_state);
-    gen.moves.print();
-    std.debug.print("Quiets: ", .{});
-    gen.fetchNext(p_board_state);
-    gen.moves.print();
 
     printBoardValidity(p_board_state);
 
