@@ -45,6 +45,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             p_info.searchStat.n_hashRetrieve += 1;
             if (comptime t == .NonPV) {
                 if (_entry.val.search.t == .CUT and ply != 0) {
+                    //if (ply != 0) {
                     return _entry.eval();
                 }
             }
@@ -79,6 +80,13 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
         useLMR = true;
     }
+    if (p_features.useRazoring) {
+        //https://www.chessprogramming.org/Razoring limited razoring
+        const eval = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin[2];
+        if (_depth == 3 and eval <= _alpha and p_state.getBigPieceCount(!p_state.whiteToMove()) > 3) {
+            _depth = 2;
+        }
+    }
 
     var i: usize = 0;
     var tot: usize = 0;
@@ -95,6 +103,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         //std.debug.assert(move.isValid());
         if (i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
+            captureOnly = false;
             order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
 
             if (useLMR) {
@@ -110,7 +119,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             //std.debug.print("First i {s} {d} ply {d} a {d} b {d}\n", .{ move.getStr(), _depth - 1, ply + 1, -beta, -_alpha });
             score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
         } else {
-            if (useLMR and (order.depths[i] != (_depth - 1))) {
+            if (useLMR and (order.depths[i] < (_depth - 1))) {
+                //std.debug.assert(order.depths[i] <= _depth);
                 score = -searchLoop(p_state, p_info, order.depths[i], -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
             } else {
                 score = _alpha + 1;
@@ -142,13 +152,15 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
-            if (captureOnly) {
+            if (!captureOnly) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(_depth));
             }
         }
         if (_alpha >= beta) {
             // save here the killer moves
-            heuristicl.onKillerMove(move, ply);
+            if (!captureOnly) {
+                heuristicl.onKillerMove(move, ply);
+            }
 
             const bonus = heuristicl.computeHistoryBonus(_depth);
             heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), bonus);
@@ -170,8 +182,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         tot += 1;
     }
     if (tot == 0) {
-        //if (p_state.isChecked()) {
-        if (!p_state.isLegal(p_state.whiteToMove())) {
+        if (p_state.isChecked()) {
+            //if (!p_state.isLegal(p_state.whiteToMove())) {
             _alpha = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(_depth)));
         } else {
             _alpha = weightl.simpleStalemateScore;

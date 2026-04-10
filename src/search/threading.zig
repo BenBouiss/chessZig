@@ -72,6 +72,7 @@ pub const threadInfo_container = struct {
 };
 
 // FIXME: this is getting very anoying to use with the .items(._tInfo)[_]... . the initial idea was to not use a std.ArrayList of this to test the more compact in memory use. use 'packed' to fix if needed
+// The original idea behind this was that a threadPackage was supposed to run alongside other threadPackages thus moves was necessary to properly distrube the work among the running packages. In current version of the scheduler this feature is not used and moves is defaulted to undefined as the search is currently single threaded.
 
 pub const threadPackageFrame = struct {
     chessState: Board_state,

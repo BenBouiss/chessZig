@@ -348,13 +348,13 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
 }
 pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
-    if (p_features.useHash) {
-        const entry = hashl.getEntryFromMatch(p_state.key, 0);
-        if (entry) |_entry| {
-            p_info.searchStat.n_hashRetrieve += 1;
-            return color_mask * _entry.eval();
-        }
-    }
+    //if (p_features.useHash) {
+    //    const entry = hashl.getEntryFromMatch(p_state.key, 0);
+    //    if (entry) |_entry| {
+    //        p_info.searchStat.n_hashRetrieve += 1;
+    //        return color_mask * _entry.eval();
+    //    }
+    //}
     p_info.searchStat.n_nodeExplored += 1;
     if (p_features.useQuiescence) {
         const ischeck = p_state.isChecked();
@@ -405,9 +405,10 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         if (move.isPromotion()) {
             _delta += weightl.simpleQueenScore - 200;
         }
-        if (static_eval < (_alpha - _delta)) {
-            return _alpha;
-        }
+        // delta pruning
+        //if (static_eval < (_alpha - _delta)) {
+        //    return _alpha;
+        //}
 
         // if move nor capture nor checking
         // problem here where a checking sequence ie
