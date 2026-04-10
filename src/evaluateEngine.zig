@@ -640,7 +640,7 @@ const guiState = struct {
         var sent: bool = false;
         p_engine.ready = false;
         while (!p_engine.ready) {
-            std.Thread.sleep(configl.LIFE_TICKRATE_NS);
+            std.Thread.sleep(configl.WAIT_TICKRATE_NS);
             if (!sent) {
                 sent = true;
                 try p_self.respond("ISREADY", p_player.engineUsed);
@@ -725,8 +725,9 @@ const guiState = struct {
         return true;
     }
     pub fn executeInfoCmd(p_self: *guiState, cmdBuffer: signedCmd) void {
-        _ = p_self;
-        std.debug.print("{d}: {s}\n", .{ cmdBuffer.engine, cmdBuffer.str });
+        if (p_self.config.printToScreen) {
+            std.debug.print("{d}: {s}\n", .{ cmdBuffer.engine, cmdBuffer.str });
+        }
     }
     pub fn executeOptionCmd(p_self: *guiState, cmdBuffer: signedCmd) bool {
         var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer.str, ' ') catch {
