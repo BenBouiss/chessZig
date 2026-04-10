@@ -22,7 +22,11 @@ from algo import template
 sys.path.append(os.path.dirname(__file__))
 from chessSpec import heuristicEntry, score, chessIndividual
 import chessSpec
-import texel, gui
+import texel
+import gui as guil
+
+
+import lock as lockl
 
 baseWeightPath = "engines/heuristics/baseOldWeights.info"
 
@@ -32,8 +36,10 @@ SLEEP_STDOUT_S = 1
 
 @dataclass
 class stopwatch:
+    # carbon copy of the implementation found in time.zig
     started: bool = False
     startTime: float = 0.0
+    savedTime: float = 0.0
     # in seconds
 
     def start(self) -> None:
@@ -42,17 +48,20 @@ class stopwatch:
         self.startTime = time.time()
 
     def reset(self) -> None:
-        assert self.started, "Stopwatch is not running running"
         self.started = False
         self.startTime = 0.0
+        self.savedTime = 0.0
 
     def stop(self) -> None:
-        assert self.started, "Stopwatch is not running running"
         self.started = False
+        self.savedTime = time.time()
 
     def timeSinceStart(self) -> float:
-        assert self.started, "Stopwatch is not running running"
-        return time.time() - self.startTime
+        assert self.startTime != 0, "Stopwatch was never started"
+        if self.started:
+            return time.time() - self.startTime
+        else:
+            return self.savedTime
 
 
 @dataclass
@@ -72,18 +81,12 @@ class roundStatus:
 
 @dataclass
 class scoreBoard:
-    lock: bool = False
-    gui = gui.windowCtx()
-    mh: templateSelectionAlgo | None = None
+    l: lockl.lock = lockl.lock()
     sw: stopwatch = stopwatch()
     roundStat: roundStatus = roundStatus()
 
-    def onTournamentStart(self, mh: templateSelectionAlgo) -> None:
-        self.mh = mh
-        self.gui.onTournamentBegin(mh)
-
     def updateScoreBoard(self, matchInv: matchContainerInfo) -> None:
-        self.acquireLock()
+        self.l.acquire()
         nRunning = 0
         nFinished = 0
         for j in range(len(matchInv.status)):
@@ -100,23 +103,134 @@ class scoreBoard:
                     pass
         self.roundStat.nFinished = nFinished
         self.roundStat.nRunning = nRunning
-        self.gui.onMatchEnd(
-            nMatch=nFinished, nMax=len(matchInv.status), nRunning=nRunning
+
+        self.l.release()
+
+
+class tuiGUI:
+    gui = guil.windowCtx()
+    l: lockl.lock = lockl.lock()
+    scoreB: scoreBoard = scoreBoard()
+    mh: templateSelectionAlgo | None = None
+
+    running: bool = False
+    needUpdate: bool = False
+    debugMode: bool = False
+    sw: stopwatch = stopwatch()
+    mainThread: threading.Thread | None = None
+    interruptReceived: bool = False
+    tick: int = 0
+
+    def __init__(self, debugMode: bool = False) -> None:
+        self.debugMode = debugMode
+
+    def shouldClose(self) -> bool:
+        return self.interruptReceived
+
+    def setScoreBoard(self, sb: scoreBoard) -> None:
+        self.scoreB = sb
+
+    def setMH(self, mh: templateSelectionAlgo) -> None:
+        self.mh = mh
+
+    def dispatch(self) -> None:
+        self.gui = guil.setupWindow()
+        self.mainThread = threading.Thread(target=self.start, args=([]))
+        self.running = True
+        self.mainThread.start()
+
+    def start(self) -> None:
+        self.running = True
+        self.sw.start()
+        self.pingUpdate()
+        while self.running:
+            try:
+                # mainly used to handle the case where the terminal is resized
+                self.updateWindow()
+                guil.loadingSymbolWindow(self.gui.stdscr, self.tick)
+            except Exception as e:
+                self.l.release()
+                _ = e
+                continue
+            time.sleep(SLEEP_STDOUT_S)
+
+            c = self.gui.stdscr.getch()
+            if c == ord("q"):
+                print("INTERRUPT RECEIVED")
+                self.interruptReceived = True
+                global_tui.close()
+            self.tick += 1
+
+    def pingUpdate(self) -> None:
+        self.l.acquire()
+        self.needUpdate = True
+        self.l.release()
+
+    def close(self) -> None:
+        # clean up the necessary things
+        self.running = False
+        guil.restoreWindow(self.gui)
+
+    def updateWindow(self) -> None:
+        self.l.acquire()
+        if not self.needUpdate or not self.running:
+            if self.debugMode:
+                pass
+                # print("No update needed")
+            self.l.release()
+            return
+        self.needUpdate = False
+        self.updateMHWindow()
+        self.updateProgress()
+        self.lastUpdatedWin()
+        self.settingsWindow()
+        self.l.release()
+
+    def lastUpdatedWin(self) -> None:
+        assert self.gui.active
+        guil.lastUpdateWindow(self.gui.stdscr, self.sw)
+
+    def settingsWindow(self) -> None:
+        assert type(mh.objective) is chessObjective
+        txt: list[str] = []
+        txt.append(f"Tournament settings: ")
+        txt.append(f"Number of baseline: {len(mh.objective.tourney.baseline)}")
+        txt.append(
+            f"Time format: {mh.objective.tourney.timeFormat.time} ms + {mh.objective.tourney.timeFormat.inc} "
         )
-        self.releaseLock()
+        self.gui.settingsWindow(txt)
 
-    def releaseLock(self) -> None:
-        self.lock = False
+    def updateMHWindow(self) -> None:
+        assert self.gui.active
+        if self.mh is None:
+            return
+        self.gui.mainWindow(self.mh)
+        self.gui.onTournamentBegin(self.mh)
+        self.gui.mhHealthMarkers(self.mh)
 
-    def acquireLock(self) -> None:
-        while self.lock:
-            time.sleep(SLEEP_LOCK_S)
-        self.lock = True
+    def updateProgress(self) -> None:
+        if self.scoreB.roundStat.nMatch != 0:
+            self.gui.onMatchEnd(
+                nFinished=self.scoreB.roundStat.nFinished,
+                nMatch=self.scoreB.roundStat.nMatch,
+                nRunning=self.scoreB.roundStat.nRunning,
+            )
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.debugMode:
+            print("__exit__ invoked")
+        if self.running:
+            self.running = False
+            self.close()
+        guil.restoreWindow(self.gui)
 
-global_scoreBoard = scoreBoard()
-global_scoreBoard.gui = gui.setupWindow()
-global_scoreBoard.sw.start()
+    # def __del__(self):
+    #    if self.debugMode:
+    #        print("__del__ invoked")
+    #    if self.running:
+    #        self.running = False
+    #        self.close()
+    #    guil.restoreWindow(self.gui)
 
 
 @dataclass
@@ -322,7 +436,7 @@ def scheduleMatchesBaseline(popsize: int, popBase: int) -> list[tuple[int, int]]
 class matchContainerInfo(object):
     order: list[tuple[int, int]]
     status: list[matchStatus]
-    lock: bool
+    l: lockl.lock = lockl.lock()
 
     def __init__(
         self,
@@ -360,26 +474,18 @@ class matchContainerInfo(object):
             ret[x].append(index)
         return ret
 
-    def acquireLock(self) -> None:
-        while self.lock:
-            pass
-        self.lock = True
-
-    def releaseLock(self):
-        self.lock = False
-
     def getMatch(self) -> matchFetchResult:
-        self.acquireLock()
+        self.l.acquire()
         for i in range(len(self.order)):
             if self.status[i] == matchStatus.PENDING:
                 # or error here also to retry
                 self.status[i] == matchStatus.DISPATCHED
-                self.releaseLock()
+                self.l.release()
                 return matchFetchResult(
                     matchOrder=self.order[i], status=matchFetchStatus.FOUND, idx=i
                 )
 
-        self.releaseLock()
+        self.l.release()
         return matchFetchResult(status=matchFetchStatus.EMPTY)
 
 
@@ -453,6 +559,7 @@ class tournament(object):
         threadInfos: list[threadInfo] = []
         # for threadId, idx in enumerate(indexes):
         global_scoreBoard.updateScoreBoard(self.matchInv)
+        global_tui.pingUpdate()
         for threadId in range(self.nThread):
             threadInfos.append(threadInfo())
             workingThreads.append(
@@ -492,6 +599,7 @@ class tournament(object):
             self.matchInv.status[res.idx] = matchStatus.IN_PROGRESS
 
             global_scoreBoard.updateScoreBoard(self.matchInv)
+            global_tui.pingUpdate()
 
             currentMatch: matchO = matchO(
                 conf1=opp1,
@@ -511,6 +619,7 @@ class tournament(object):
                 self.matchInv.status[res.idx] = matchStatus.FINISHED
                 self.updateScore(pair=pair, score=scoreList)
             global_scoreBoard.updateScoreBoard(self.matchInv)
+            global_tui.pingUpdate()
 
         info.status = threadStatus.FINISHED
 
@@ -530,6 +639,7 @@ class tournament(object):
 
             self.matchInv.status[i] = matchStatus.IN_PROGRESS
             global_scoreBoard.updateScoreBoard(self.matchInv)
+            global_tui.pingUpdate()
 
             currentMatch: matchO = matchO(
                 conf1=opp1,
@@ -548,6 +658,7 @@ class tournament(object):
                 self.matchInv.status[i] = matchStatus.FINISHED
                 self.updateScore(pair=pair, score=scoreList)
             global_scoreBoard.updateScoreBoard(self.matchInv)
+            global_tui.pingUpdate()
 
     def updateScore(self, pair: tuple[int, int], score: list[score]) -> None:
         if self.debugMode:
@@ -582,19 +693,22 @@ def killAndWait(threads: list[threading.Thread], infos: list[threadInfo]) -> Non
 def GUIWaitLoop(
     tourney: tournament, threads: list[threading.Thread], infos: list[threadInfo]
 ) -> None:
-    assert global_scoreBoard.gui.stdscr is not None
-    global_scoreBoard.gui.stdscr.nodelay(True)
-    while True:
+    assert global_tui.gui.stdscr is not None
+    global_tui.gui.stdscr.nodelay(True)
+    while not global_tui.shouldClose():
         time.sleep(1)
-        c = global_scoreBoard.gui.stdscr.getch()
-        if c == ord("q"):
-            killAndWait(threads, infos)
-            assert global_scoreBoard.mh is not None
-            global_scoreBoard.mh.running = False
-            break
-
         if global_scoreBoard.roundStat.isOver():
             break
+    if global_tui.shouldClose():
+        assert global_tui.mh is not None
+        global_tui.mh.running = False
+        killAndWait(threads, infos)
+
+
+global_scoreBoard = scoreBoard()
+global_tui: tuiGUI = tuiGUI(debugMode=True)
+global_tui.setScoreBoard(global_scoreBoard)
+global_tui.dispatch()
 
 
 class chessObjective(obj.objective):
@@ -628,11 +742,11 @@ class chessObjective(obj.objective):
                         np.array(positions[i]), indexes=self.indexesTemplate
                     ),
                     uid=i,
-                    scoring=score(0, 0, 0, False),
+                    scoring=score(0, 0, 0),
                 )
             )
         self.tourney.baseline = [
-            chessIndividual(position=pos, uid=x, scoring=score(0, 0, 0, False))
+            chessIndividual(position=pos, uid=x, scoring=score(0, 0, 0))
             for x, pos in enumerate(self.baseline)
         ]
         global_scoreBoard.roundStat.nMatch = len(matchInv.status)
@@ -762,7 +876,7 @@ class guiUpdateCallback(template.callback):
     ):
         assert self.mh is not None
         _ = positions
-        global_scoreBoard.onTournamentStart(self.mh)
+        global_tui.pingUpdate()
 
 
 if __name__ == "__main__":
@@ -784,6 +898,8 @@ if __name__ == "__main__":
         saveOpt=saveOpt,
         cbs=cbs,
     )
+    global_tui.setMH(mh)
+
     tourn = tournament(
         standardTimeFormat,
         templatePath=path,
@@ -832,4 +948,3 @@ if __name__ == "__main__":
     )
 
     mh.optimize()
-    gui.restoreWindow(global_scoreBoard.gui)

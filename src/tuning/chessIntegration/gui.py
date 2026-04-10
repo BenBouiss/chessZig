@@ -14,6 +14,32 @@ def clear() -> None:
     print("\x1b[2J\x1b[H", end="\r")
 
 
+# TUI PLAN
+"""
+*: spinning thingy
+|#############################################################|
+|#*# MH Name current iter / maxiter #        #Last gui update#|
+|####################################        #################|
+|                                                             |
+|######################   ################   ################ |
+|#Tournament settings #   # Current best #   #   MH health   #|
+|#                    #   #              #   #    metrics    #|
+|#                    #   #              #   #               #|
+|#                    #   #              #   #               #|
+|#                    #   #              #   #               #|
+|#                    #   #              #   #               #|
+|######################   ################   ################ |
+|                                                             |
+|#log location?                                               |
+|                                                             |
+|                                                             |
+|  cur / tot running  (ETA)                                   |
+|#############################################################|
+|                        Progress bar                         |
+|#############################################################|
+
+"""
+
 """
 Plan of gui implementation.
 
@@ -25,6 +51,7 @@ Plan of gui implementation.
         - Current best individual
         - Number of baselines(?)
         - Score distribution if possible inside one terminal screen size
+        - Decouple it from the update coming from the tourney
 
     - Possibility to interact with the optimization:
         - Quit the search "gracefully"
@@ -37,18 +64,25 @@ from curses.textpad import Textbox, rectangle
 
 
 class windowCtx:
-    def __init__(self, stdscr=None):
+    def __init__(self, stdscr=None, useCurses: bool = True):
         self.stdscr = stdscr
+        self.useCurses = useCurses
+        self.active = False
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         curses.curs_set(True)
+        if self.active:
+            restoreWindow(self)
 
     def mainWindow(self, mh: template.templateSelectionAlgo):
         assert self.stdscr is not None
         titleStr = f"Running {mh.name} {mh.iter} / {mh.maxiter} iter"
-        rectangle(self.stdscr, 0, 0, 1 + 1, 1 + len(titleStr))
-        self.stdscr.addstr(1, 1, f"{titleStr}")
-        self.stdscr.refresh()
+        if self.useCurses:
+            rectangle(self.stdscr, 0, 2, 1 + 1, 1 + len(titleStr))
+            self.stdscr.addstr(1, 3, f"{titleStr}")
+            self.stdscr.refresh()
+        else:
+            print(f"{titleStr}")
 
     def objectiveSection(self, mh: template.templateSelectionAlgo) -> None:
         assert self.stdscr is not None
@@ -59,15 +93,34 @@ class windowCtx:
             f"Objective info: ",
         )
 
+    def settingsWindow(self, txt: list[str]) -> None:
+        assert self.stdscr is not None
+        if (len(txt)) == 0:
+            return
+        windowOffset = (10, 0)
+        maxLength = max([len(s) for s in txt])
+        rectangle(
+            self.stdscr,
+            windowOffset[0],
+            windowOffset[1],
+            windowOffset[0] + len(txt) + 2,
+            windowOffset[1] + 1 + maxLength,
+        )
+        for i, s in enumerate(txt):
+            self.stdscr.addstr(
+                windowOffset[0] + i + 1,
+                windowOffset[1] + 1,
+                f"{s}",
+            )
+
     def onTournamentBegin(self, mh: template.templateSelectionAlgo) -> None:
         assert self.stdscr is not None
-        self.mainWindow(mh)
         indexes = mh.objective.indexesTemplate
         best_indiv = chessSpec.entryFrom1dArray(
             mh.population[0].position, indexes=indexes
         )
 
-        windowOffset = (4, 0)
+        windowOffset = (10, 50)
         self.stdscr.addstr(
             windowOffset[0] - 1,
             windowOffset[1],
@@ -91,44 +144,93 @@ class windowCtx:
 
         self.stdscr.refresh()
 
-    def onMatchEnd(self, nMatch: int, nMax: int, nRunning: int):
+    def mhHealthMarkers(self, mh: template.templateSelectionAlgo) -> None:
         assert self.stdscr is not None
+        windowOffset = (10, 100)
+        txt: list[str] = []
 
-        barOffset = (24, 2)
+        scores = [e.score for e in mh.population]
+
+        txt.append("MetaHeuristics health metrics:")
+        txt.append(
+            f"Score max: {mh.population[0].score} min: {mh.population[-1].score} mean: {round(sum(scores) / mh.popsize, 2)}"
+        )
+
+        maxLength = max([len(e) for e in txt])
+
+        rectangle(
+            self.stdscr,
+            windowOffset[0],
+            windowOffset[1],
+            windowOffset[0] + len(txt) + 2,
+            windowOffset[1] + 1 + maxLength,
+        )
+        for i, s in enumerate(txt):
+            self.stdscr.addstr(
+                windowOffset[0] + i + 1,
+                windowOffset[1] + 1,
+                f"{s}",
+            )
+
+    def onMatchEnd(self, nFinished: int, nMatch: int, nRunning: int):
+        assert self.stdscr is not None
+        assert nMatch != 0
+
+        barOffset = (36, 0)
         totalSize = 64
-        currSize = int((nMatch / nMax) * totalSize)
+        currSize = int((nFinished / nMatch) * totalSize)
         _addstr(
             self.stdscr,
             posY=barOffset[0] - 1,
             posX=barOffset[1],
             attr=[
-                (f"{nMatch} ", curses.color_pair(1)),
-                f"/ {nMax} ",
+                (f"{nFinished} ", curses.color_pair(1)),
+                f"/ {nMatch} ",
                 (f"{nRunning} running ", curses.color_pair(2)),
             ],
         )
         self.stdscr.refresh()
-        if not (nRunning + nMatch >= nMax):
-            win = curses.newwin(2, totalSize, barOffset[0], barOffset[1])
-            win.attrset(curses.color_pair(0))
-            win.border()
-            win.refresh()
-        if nMatch != 0:
+        if not (nRunning + nFinished >= nMatch):
+            drawBar(
+                size_YX=(2, totalSize),
+                offset_YX=(barOffset[0], barOffset[1]),
+                color=curses.color_pair(0),
+            )
+        if nFinished != 0:
             if nRunning != 0:
-                win = curses.newwin(2, currSize + 1, barOffset[0], barOffset[1])
+                drawBar(
+                    size_YX=(2, currSize + 1),
+                    offset_YX=(barOffset[0], barOffset[1]),
+                    color=curses.color_pair(1),
+                )
             else:
-                win = curses.newwin(2, currSize, barOffset[0], barOffset[1])
-            win.attrset(curses.color_pair(1))
-            win.border()
-            win.refresh()
+                drawBar(
+                    size_YX=(2, currSize),
+                    offset_YX=(barOffset[0], barOffset[1]),
+                    color=curses.color_pair(1),
+                )
 
         if nRunning != 0:
-            runningSize = int((nRunning / nMax) * totalSize)
-            win = curses.newwin(2, runningSize, barOffset[0], currSize + barOffset[1])
-            win.attrset(curses.color_pair(2))
-            win.border()
-            win.refresh()
+            runningSize = int((nRunning / nMatch) * totalSize)
+            drawBar(
+                size_YX=(2, runningSize),
+                offset_YX=(barOffset[0], currSize + barOffset[1]),
+                color=curses.color_pair(2),
+            )
             return
+
+
+def drawBar(
+    size_YX: tuple[int, int],
+    offset_YX: tuple[int, int],
+    color: int | None = None,
+) -> None:
+    win = curses.newwin(size_YX[0], size_YX[1], offset_YX[0], offset_YX[1])
+    # win.attrset(curses.color_pair(color))
+    if color is not None:
+        win.attrset(color)
+    win.border()
+    win.refresh()
 
 
 def setupWindow() -> windowCtx:
@@ -136,6 +238,7 @@ def setupWindow() -> windowCtx:
 
     def _setup(stdscr):
         ret.stdscr = stdscr
+        ret.active = True
 
     wrapper(_setup)
     curses.curs_set(False)
@@ -155,7 +258,7 @@ def restoreWindow(windowCtx):
     # curses.reset_shell_mode()
 
 
-def _addstr(stdscr, posY, posX, attr: list[str | tuple[str, int]]):
+def _addstr(stdscr, posY: int, posX: int, attr: list[str | tuple[str, int]]):
     assert len(attr) != 0
     for i in range(len(attr)):
         frame = attr[i]
@@ -180,6 +283,24 @@ def _addstr(stdscr, posY, posX, attr: list[str | tuple[str, int]]):
                 stdscr.addstr(f"{_str}", frame[1])
             else:
                 stdscr.addstr(f"{_str}")
+
+
+def lastUpdateWindow(stdscr, sw):
+    txt = f"Last updated at {round(sw.timeSinceStart(), 2)} s"
+    xOffset = 116
+    rectangle(stdscr, 0, xOffset, 2, 1 + xOffset + len(txt))
+    stdscr.addstr(1, xOffset + 1, f"{txt}")
+    stdscr.refresh()
+
+
+LOADING_SYMBOL = ["/", "-", "\\", "|"]
+
+
+def loadingSymbolWindow(stdscr, tick: int):
+    xOffset = 116
+    rectangle(stdscr, 0, 0, 2, 2)
+    stdscr.addstr(1, 1, f"{LOADING_SYMBOL[tick % len(LOADING_SYMBOL)]}")
+    stdscr.refresh()
 
 
 def main(stdscr):

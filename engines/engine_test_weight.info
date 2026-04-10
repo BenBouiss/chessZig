@@ -1,26 +1,21 @@
 [engine1]
-path="zig-out/bin/engine";
-name="baseline";
-"setoption name fixedDepth value false";
-"setoption name useHash value false";
-"setoption name useNullPruning value true";
+path="engines/bin/engine_08_04_26";
+name="old";
+"setoption name searchType value ZWSI";
 
 [engine2]
-path="zig-out/bin/engine";
-name="test";
-"setoption name useHash value false";
-//"setoption name heuristicWeightsPath value test/test_1774509788.winfo";
-"setoption name useNullPruning value true";
-"setoption name trackMetrics value true";
-"setoption name useQuiescence value true";
+path="engines/bin/engine_08_04_26";
+name="new";
+"setoption name searchType value ZWSI";
+"setoption name heuristicWeightsPath value engines/heuristics/weight_test.winfo";
 
 [match]
-nMatch=4;
+nMatch=10;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-timeFormat=(60000, 1000);
+timeFormat=(10000, 0);
 
 logsLocation="logs/ben/ben";
 //saveLogs=true;
