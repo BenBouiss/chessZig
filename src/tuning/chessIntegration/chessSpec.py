@@ -10,6 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import texel
 from algo import template
+import lock as lockl
 
 SLEEP_LOCK_S = 0.01
 
@@ -19,30 +20,22 @@ class score:
     win: int = 0
     lose: int = 0
     draw: int = 0
-    lock: bool = False
-
-    def realeaseLock(self) -> None:
-        self.lock = False
-
-    def acquireLock(self) -> None:
-        while self.lock:
-            time.sleep(SLEEP_LOCK_S)
-        self.lock = True
+    l = lockl.lock()
 
     def getScore(self) -> float:
-        self.acquireLock()
+        self.l.acquire()
         ret: float = 0.0
         ret += self.draw / 2
         ret += self.win
-        self.realeaseLock()
+        self.l.release()
         return ret
 
     def addEq(self, other: score) -> None:
-        self.acquireLock()
+        self.l.acquire()
         self.win += other.win
         self.draw += other.draw
         self.lose += other.lose
-        self.realeaseLock()
+        self.l.release()
 
     def __repr__(self) -> str:
         return f"win: {self.win} lose: {self.lose} draw: {self.draw} score: {self.getScore()}"
@@ -84,14 +77,18 @@ class heuristicEntry:
             for i in range(len(phases)):
                 file.write(texel.texelWeightToFileStr(self.weights[i], phases[i]))
 
-    def print(self) -> None:
+    def print(self, fileFormat: bool = False) -> None:
         phases = ["_MG", "_EG"]
         weights = [[], []]
         for i in range(len(phases)):
             weights[i] = self.weights[i].getArray(fullLength=True)
         for w in range(len(weights[0])):
             if weights[MG][w] != texel.INVALID_VALUE:
-                print(f"{strWeightNames[w]}: {weights[MG][w]} {weights[EG][w]}")
+                if fileFormat:
+                    print(f"{strWeightNames[w]}{phases[MG]} = {weights[MG][w]};")
+                    print(f"{strWeightNames[w]}{phases[EG]} = {weights[EG][w]};")
+                else:
+                    print(f"{strWeightNames[w]}: {weights[MG][w]} {weights[EG][w]}")
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
         return np.concatenate(
@@ -205,7 +202,7 @@ class callbackSave(template.callback):
             if len(iterList) != 0:
                 savingDict["populationHistory"].append(iterBuffer)
 
-        print(f"Saving dict {savingDict} to file: {path}")
+        # print(f"Saving dict {savingDict} to file: {path}")
 
         with open(path, "w") as file:
             yaml.dump(savingDict, file)
@@ -223,7 +220,7 @@ class callbackBaseline(template.callback):
         best = self.mh.getBestIndiv()
         nBaseline = len(self.mh.objective.baseline)
         if best.score == nBaseline * 2:
-            print("[DEBUG] callbackBaseline: adding the current best to the baseline")
+            # print("[DEBUG] callbackBaseline: adding the current best to the baseline")
             self.mh.objective.appendBaseline(entryFrom1dArray(best.position))
 
 

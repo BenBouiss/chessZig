@@ -57,6 +57,7 @@ class templateSelectionAlgo(object):
         saveLog: bool = False,
         saveOpt: saveOptions = saveOptions(),
         useGreedy: bool = True,
+        debugMode: bool = False,
     ):
         self.objective: objective.objective | None = None
 
@@ -77,6 +78,7 @@ class templateSelectionAlgo(object):
         self.populationHistory: list[list[individual]] = []
         self.best_indiv_list: list[individual] = []
         self.callbacks: list[callback] = []
+        self.debugMode = debugMode
         if cbs is not None:
             for cb in cbs:
                 self.addCallback(cb)
@@ -138,7 +140,10 @@ class templateSelectionAlgo(object):
         while self.running and self.iter < self.maxiter:
             self.step()
 
-            print(f"[DEBUG] template.optimize: best indiv: {self.best_indiv_list[-1]}")
+            if self.debugMode:
+                print(
+                    f"[DEBUG] template.optimize: best indiv: {self.best_indiv_list[-1]}"
+                )
 
             self.iter += 1
 
@@ -231,7 +236,10 @@ class templateSelectionAlgo(object):
             self.objective.loadFromFile(valDict)
 
         lastFrame = valDict.get("populationHistory", [])
-        self.populationHistory = valDict.get("populationHistory", [])
+        # self.populationHistory = valDict.get("populationHistory", [])
+        self.populationHistory = loadPopulationHistory(
+            valDict.get("populationHistory", [])
+        )
 
         if len(lastFrame) == 0:
             return
@@ -268,6 +276,8 @@ class templateSelectionAlgo(object):
 
         savingDict["fmtCode"] = list(self.population[0].position.shape)
         for itr, iterList in enumerate(self.populationHistory):
+            # save format: idx: 0 = mh iteration
+
             iterBuffer = [[], [], [], []]
             for indiv in iterList:
                 frame = indiv.saveFrame()
@@ -278,9 +288,30 @@ class templateSelectionAlgo(object):
             if len(iterList) != 0:
                 savingDict["populationHistory"].append(iterBuffer)
 
-        print(f"Saving dict {savingDict} to file: {path}")
+        # print(f"Saving dict {savingDict} to file: {path}")
         with open(path, "w") as file:
             yaml.dump(savingDict, file)
+
+
+def loadPopulationHistory(
+    l: list[typing.Any],
+) -> list[list[individual]]:
+    ret: list[list[individual]] = []
+    for itr in range(len(l)):
+        frame = l[itr]
+        nIndiv = len(frame[0])
+        ret.append([])
+        for i in range(nIndiv):
+            ret[itr].append(
+                individual(
+                    position=np.array(frame[FRAME_POSITION_IDX][i]),
+                    uid=frame[FRAME_UID_IDX][i],
+                    score=frame[FRAME_SCORE_IDX][i],
+                    frozen=frame[FRAME_FROZEN_IDX][i],
+                )
+            )
+
+    return ret
 
 
 class callback(ABC):

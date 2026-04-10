@@ -291,14 +291,15 @@ class texelWeights:
             ret.append(e.idx)
         return ret
 
-    def getArray(self, fullLength: bool = False) -> list[float]:
+    def getArray(
+        self, fullLength: bool = False, fillValue: float = INVALID_VALUE
+    ) -> list[float]:
         assert len(self.elem) > 0
         assert self.elem[-1].val is not None
         if fullLength:
-            ret = [INVALID_VALUE] * (total_idx)
+            ret = [fillValue] * (total_idx)
         else:
-            # ret = [0.0] * (self.elem[-1].idx + len(self.elem[-1].val))
-            ret = [INVALID_VALUE] * self.len()
+            ret = [fillValue] * self.len()
 
         self.sort()
         assert self.checkBounds(), "Checkbound failed: overlaping weights were found"
@@ -621,16 +622,6 @@ def saveWeightToFile(
             if convertToCP:
                 w = (w * 100).astype(int)
             f.write(weightToFileStr(w, ph))
-            # f.write(f"pawnCountScore{ph} = {w[countPawn_idx]};\nbishopCountScore{ph} = {w[countBishop_idx]};\nknightCountScore{ph} = {w[countKnight_idx]};\nrookCountScore{ph} = {w[countRook_idx]};\nqueenCountScore{ph} = {w[countQueen_idx]};\n")
-            # f.write(f"mobilityScore{ph} = {w[mobility_idx]};\nstructureProtectionScore{ph} = {w[structureProtection_idx]};\n")
-            # f.write(f"isolatedPawnScore{ph} = {w[isolatedPawnScore_idx]};\nstackedPawnScore{ph} = {w[stackedPawnScore_idx]};\npassedPawnScore{ph} = {w[passedPawnScore_idx]};\n")
-
-            # f.write(f"pawnPSQT{ph}: {floatArrToString(w[PSQT_Pawn_idx:PSQT_Bishop_idx])};\n")
-            # f.write(f"bishopPSQT{ph}: {floatArrToString(w[PSQT_Bishop_idx:PSQT_Knight_idx])};\n")
-            # f.write(f"knightPSQT{ph}: {floatArrToString(w[PSQT_Knight_idx:PSQT_Rook_idx])};\n")
-            # f.write(f"rookPSQT{ph}: {floatArrToString(w[PSQT_Rook_idx:PSQT_Queen_idx])};\n")
-            # f.write(f"queenPSQT{ph}: {floatArrToString(w[PSQT_Queen_idx:PSQT_King_idx])};\n")
-            # f.write(f"kingPSQT{ph}: {floatArrToString(w[PSQT_King_idx:PSQT_King_idx+64])};\n")
 
 
 def floatArrToString(arr) -> str:
