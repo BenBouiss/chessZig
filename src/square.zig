@@ -46,7 +46,13 @@ pub const squareInfo = struct {
     pub inline fn getDiagonalsBB(self: squareInfo) u64 {
         return self.getDiagBB() | self.getAntiDiagBB();
     }
+    pub fn computeBenDistance(self: squareInfo, other: squareInfo) i8 {
+        const deltaF: i8 = @as(i8, @intCast(self.file)) - @as(i8, @intCast(other.file));
+        const deltaR: i8 = @as(i8, @intCast(self.rank)) - @as(i8, @intCast(other.rank));
+        return @as(i8, @intCast(@abs(deltaF) + @abs(deltaR)));
+    }
 };
+pub const maxBenDistance = 14;
 
 pub const checkContainer = struct {
     squares: [MAX_CHECKS]squareInfo = std.mem.zeroes([MAX_CHECKS]squareInfo),

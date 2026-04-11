@@ -1,17 +1,17 @@
 [engine1]
 path="engines/bin/engine_11_04_26";
-name="no lmr";
+name="no prox";
 "setoption name useHash value false";
 "setoption name searchType value zwsi";
 
 [engine2]
-path="engines/bin/engine_11_04_26";
-name="quiescense";
+path="engines/bin/engine_11_04_26_prox";
+name="prox";
+"setoption name useHash value false";
 "setoption name searchType value zwsi";
-"setoption name useQuiescence value true";
 
 [match]
-nMatch=16;
+nMatch=4;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

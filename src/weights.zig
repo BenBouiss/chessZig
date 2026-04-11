@@ -30,10 +30,14 @@ pub const simpleStructureProtectionScore: scoreType = 1;
 pub const simpleTempoChecksScore: scoreType = 25;
 
 // source: https://www.chessprogramming.org/King_Safety
+// ============ safety ============
 pub const simpleSafetyBishopScore: scoreType = 20;
 pub const simpleSafetyKnightScore: scoreType = 20;
 pub const simpleSafetyRookScore: scoreType = 40;
 pub const simpleSafetyQueenScore: scoreType = 80;
+
+// ============ king ============
+pub const simpleKingProximity: scoreType = 5;
 
 pub var weights: heuristicl.coeffTuple = .{ .val = [_]NVector{ .{ .val = undefined }, .{ .val = undefined } } };
 

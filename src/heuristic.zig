@@ -45,6 +45,8 @@ pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType
     score += evaluate_PSQT(p_state, values, _phase);
 
     score += evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
+    score += evaluate_king(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
+
     score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
     score += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
     score += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
@@ -60,11 +62,12 @@ pub const heuristicComponents = struct {
     Safety: scoreType = 0,
     Structure: scoreType = 0,
     Tempo: scoreType = 0,
+    King: scoreType = 0,
     pub fn total(self: *const heuristicComponents) scoreType {
-        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure + self.Tempo;
+        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure + self.Tempo + self.King;
     }
     pub fn print(self: *const heuristicComponents) void {
-        std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Tempo = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.Tempo, self.total() });
+        std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Tempo = {d}, King = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.Tempo, self.King, self.total() });
     }
 };
 pub fn evaluate_debug(p_state: *const chess.Board_state, values: *heuristicValues) heuristicComponents {
@@ -78,6 +81,7 @@ pub fn evaluate_debug(p_state: *const chess.Board_state, values: *heuristicValue
     const ret: heuristicComponents = .{
         .PSQT = evaluate_PSQT(p_state, values, _phase),
         .Mobility = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
+        .King = evaluate_king(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
 
         .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
         .Structure = evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase),
@@ -200,6 +204,15 @@ pub fn evaluate_mobility(p_state: *const chess.Board_state, p_whiteMoveBB: *cons
     //const moveW = moveGenl.generateMoveCountLegalMoves(p_state, true);
     //const moveB = moveGenl.generateMoveCountLegalMoves(p_state, false);
     //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
+}
+pub fn evaluate_king(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
+    _ = p_whiteMoveBB;
+    _ = p_blackMoveBB;
+    const wKing = squarel.squareInfo.init(p_state.wKingSq);
+    const bKing = squarel.squareInfo.init(p_state.bKingSq);
+    const distance: scoreType = @intCast(wKing.computeBenDistance(bKing));
+    const bonus = squarel.maxBenDistance - distance;
+    return computeTapered(bonus * values.KingProximityValue[MG], bonus * values.KingProximityValue[EG], _phase);
 }
 pub fn evaluate_safety(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
     // counting negative for white as the best safety is not attackers => 0 heuristic
@@ -433,6 +446,7 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
 
 pub const heuristicValues = struct {
     // container storing every heuristics/ weights to evaluate a given board
+    // "COUNTS
     PawnValue: scoreType = weightl.simplePawnScore,
     BishopValue: scoreType = weightl.simpleBishopScore,
     KnightValue: scoreType = weightl.simpleKnightScore,
@@ -454,6 +468,8 @@ pub const heuristicValues = struct {
     SafetyQueenValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyQueenScore, weightl.simpleSafetyQueenScore },
 
     StructureProtectionValue: [N_PHASES]scoreType = .{ weightl.simpleStructureProtectionScore, weightl.simpleStructureProtectionScore },
+
+    KingProximityValue: [N_PHASES]scoreType = .{ weightl.simpleKingProximity, weightl.simpleKingProximity },
 
     Pawn_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.pawnScoreArr, weightl.pawnScoreArr },
     Bishop_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.bishopScoreArr, weightl.bishopScoreArr },
@@ -706,6 +722,14 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.il_popcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @intCast(chess.il_popcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
         std.debug.assert(idx == configl.TEXEL_SAFETY_QUEEN_PROX_IDX);
+        idx += 1;
+
+        const wKing = squarel.squareInfo.init(p_state.wKingSq);
+        const bKing = squarel.squareInfo.init(p_state.bKingSq);
+        const distance: scoreType = squarel.maxBenDistance - @as(scoreType, @intCast(wKing.computeBenDistance(bKing)));
+
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = distance, .bcoeff = distance });
+        std.debug.assert(idx == configl.TEXEL_KING_PROXIMITY_IDX);
         idx += 1;
     }
 
@@ -1413,7 +1437,7 @@ pub fn main() !void {
     //try test_main();
     mainl.initAll(false);
     var path: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "opening/E12.33-1M-D12-Resolved.book");
-    var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights_int_filter_quiesc+endFen_red.csv");
+    var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights_int_filter_quiesc+endFen_red_prox.csv");
 
     defer path.free(mainl.GLOBAL_ALLOC);
     defer savePath.free(mainl.GLOBAL_ALLOC);

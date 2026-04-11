@@ -173,9 +173,11 @@ pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 14;
 pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 15;
 pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 16;
 
-pub const TEXEL_PAWN_PSQT_IDX: usize = 17;
-pub const TEXEL_BISHOP_PSQT_IDX: usize = 81;
-pub const TEXEL_KNIGHT_PSQT_IDX: usize = 145;
-pub const TEXEL_ROOK_PSQT_IDX: usize = 209;
-pub const TEXEL_QUEEN_PSQT_IDX: usize = 273;
-pub const TEXEL_KING_PSQT_IDX: usize = 337;
+pub const TEXEL_KING_PROXIMITY_IDX: usize = 17;
+
+pub const TEXEL_PAWN_PSQT_IDX: usize = 18;
+pub const TEXEL_BISHOP_PSQT_IDX: usize = 82;
+pub const TEXEL_KNIGHT_PSQT_IDX: usize = 146;
+pub const TEXEL_ROOK_PSQT_IDX: usize = 210;
+pub const TEXEL_QUEEN_PSQT_IDX: usize = 274;
+pub const TEXEL_KING_PSQT_IDX: usize = 338;
