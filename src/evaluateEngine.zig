@@ -75,13 +75,15 @@ const matchResultContainer = struct {
         const p = match.chessState.whiteToMove();
         const currEngine = match.playerInv[@intFromBool(p)].engineUsed;
         const otherEngine = match.playerInv[@intFromBool(!p)].engineUsed;
+        const oneEngine: bool = (currEngine == otherEngine);
+
         switch (match.status) {
             .Continue, .Error => {
                 @panic("???");
             },
             .CheckMate => {
-                p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
                 p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
+                p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
                 //p_self.items[currEngine].lose += 1;
                 //p_self.items[otherEngine].win += 1;
             },
@@ -92,23 +94,28 @@ const matchResultContainer = struct {
                     p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
                     p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
                 } else {
-                    p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
                     p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
+                    p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
                 }
             },
             .StaleMate, .StaleMateRepetition, .Dnf => {
                 p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
                 p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
-
-                //p_self.items[currEngine].draw += 1;
-                //p_self.items[otherEngine].draw += 1;
             },
             .StaleMateInsuficientMaterial => {
                 p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
                 p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
             },
         }
-        for (0..2) |i| {
+
+        //if (true) {
+        //    std.debug.print("VALUE {}\n", .{oneEngine});
+        //    @panic("");
+        //}
+        //if (oneEngine) {
+        //    std.debug.print("VALUE {d}\n", .{2 - @as(usize, @intCast(@intFromBool(oneEngine)))});
+        //}
+        for (0..2 - @as(usize, @intCast(@intFromBool(oneEngine)))) |i| {
             const currEng = match.playerInv[i].engineUsed;
             p_self.items[currEng].nMatch += 1;
             var timeTaken: i64 = 0;
@@ -136,13 +143,19 @@ const matchResultContainer = struct {
         defer alloc.free(fileName);
         defer file.close();
 
-        for (0..2) |i| {
+        for (0..settings.nEngines) |i| {
             const engIdx = match.playerInv[i].engineUsed;
             const res = p_self.items[engIdx];
-            const nwins = res.res[0].win + res.res[1].win;
-            const nloses = res.res[0].lose + res.res[1].lose;
-            const ndraws = res.res[0].draw + res.res[1].draw;
-            const nflags = res.res[0].flagged + res.res[1].flagged;
+            var nwins = res.res[0].win + res.res[1].win;
+            var nloses = res.res[0].lose + res.res[1].lose;
+            var ndraws = res.res[0].draw + res.res[1].draw;
+            var nflags = res.res[0].flagged + res.res[1].flagged;
+            if (settings.nEngines == 1) {
+                nwins = res.res[0].win;
+                nloses = res.res[0].lose;
+                ndraws = res.res[0].draw;
+                nflags = res.res[0].flagged;
+            }
 
             const scoreStr = try std.fmt.allocPrint(alloc, "engine: {s}, {d} matches, win: {d}, lose: {d}, draw: {d}, flagged: {d}, speed: {d}(+-{d}) ms/move;\n", .{ settings.engineNames[engIdx]._slice(), res.nMatch, nwins, nloses, ndraws, nflags, res.avgTimePerTurn, res.stdTimePerTurn });
             defer alloc.free(scoreStr);
@@ -700,7 +713,7 @@ const guiState = struct {
         return self.engineInventory.items.items[p.engineUsed];
     }
     pub fn allPlayersConnected(self: *guiState) bool {
-        return self.engineInventory.items.items[0].alive and self.engineInventory.items.items[1].alive;
+        return self.engineInventory.items.items[self.match.playerInv[0].engineUsed].alive and self.engineInventory.items.items[self.match.playerInv[1].engineUsed].alive;
     }
     pub fn executeBestMove(p_self: *guiState, cmdBuffer: []const u8) err_gui_bestmove!bool {
         var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer, ' ') catch {
@@ -790,7 +803,7 @@ fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u
     }
 }
 
-fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLAYER]std.ArrayList(string)) void {
+fn mainGuiThread(p_self: *guiState) void {
     mainl.initAll(p_self.status.debugMode);
     if (p_self.config.match.useOpeningBook) {
         // init the db or smth
@@ -808,8 +821,8 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
     };
 
     p_self.respondAll("ISREADY") catch unreachable;
-    for (0..engines_opts.len) |i| {
-        sendOptions(p_self, engines_opts[i], @intCast(i)) catch {
+    for (0..p_self.config.nEngines) |i| {
+        sendOptions(p_self, p_self.config.engineOptions[i], @intCast(i)) catch {
             p_self.close();
             return;
         };
@@ -820,7 +833,7 @@ fn mainGuiThread(p_self: *guiState, nMatch: u8, engines_opts: [chessl.NUMBER_PLA
         return;
     };
     var matchCount: u8 = 0;
-    var _nMatch = nMatch;
+    var _nMatch = p_self.config.match.nMatch;
     if (p_self.config.match.playerSwitch) {
         _nMatch = _nMatch * 2;
     }
@@ -976,10 +989,21 @@ pub fn launch_gui(infoPath: []const u8) !void {
     var ret: guiState = try guiState.init();
     ret.config = &settings;
 
-    _ = try ret.addEngine(settings.enginePaths[0]._slice());
-    _ = try ret.addEngine(settings.enginePaths[1]._slice());
+    if (settings.enginePaths[0].valid) {
+        _ = try ret.addEngine(settings.enginePaths[0].path._slice());
+    }
 
-    ret.match.playerInv[0] = try player.init(ret.alloc, settings.match.timeF, .BLACK, 1);
+    if (settings.enginePaths[1].valid) {
+        if (!settings.enginePaths[0].valid) {
+            @panic("First engine missing a path\n");
+        }
+        _ = try ret.addEngine(settings.enginePaths[1].path._slice());
+    }
+    if (ret.engineInventory.len == 0) {
+        @panic("No valid path found\n");
+    }
+
+    ret.match.playerInv[0] = try player.init(ret.alloc, settings.match.timeF, .BLACK, ret.engineInventory.len - 1);
     ret.match.playerInv[1] = try player.init(ret.alloc, settings.match.timeF, .WHITE, 0);
 
     ret.status.running = true;
@@ -989,7 +1013,7 @@ pub fn launch_gui(infoPath: []const u8) !void {
     const servingThread = try std.Thread.spawn(.{}, entrypointServingThreading, .{&ret});
     try ret.workingThreads.append(ret.alloc, servingThread);
 
-    mainGuiThread(&ret, settings.match.nMatch, settings.engineOptions);
+    mainGuiThread(&ret);
 
     return;
 }
@@ -1028,10 +1052,14 @@ const configMatch = struct {
         p_self.logPath = try string.initFromSlice(alloc, path);
     }
 };
+const engineSettingS = struct {
+    path: string = undefined,
+    valid: bool = false,
+};
 
 const guiSetting = struct {
     match: configMatch = .{},
-    enginePaths: [chessl.NUMBER_PLAYER]string = undefined,
+    enginePaths: [chessl.NUMBER_PLAYER]engineSettingS = std.mem.zeroes([chessl.NUMBER_PLAYER]engineSettingS),
     engineNames: [chessl.NUMBER_PLAYER]string = undefined,
     engineOptions: [chessl.NUMBER_PLAYER]std.ArrayList(string) = undefined,
     nEngines: u8 = 0,
@@ -1047,7 +1075,11 @@ const guiSetting = struct {
         p_self.engineNames[engineIndex] = try string.initFromSlice(alloc, engineName);
     }
     pub fn setEnginePath(p_self: *guiSetting, alloc: std.mem.Allocator, engineIndex: u8, enginePath: []const u8) !void {
-        p_self.enginePaths[engineIndex] = try string.initFromSlice(alloc, enginePath);
+        const exists = filel.fileExists(enginePath);
+        p_self.enginePaths[engineIndex].valid = exists;
+        if (exists) {
+            p_self.enginePaths[engineIndex].path = try string.initFromSlice(alloc, enginePath);
+        }
     }
 
     pub fn addEngineOption(p_self: *guiSetting, alloc: std.mem.Allocator, engineIndex: u8, enginePath: []const u8) !void {
@@ -1055,19 +1087,19 @@ const guiSetting = struct {
         try p_self.engineOptions[engineIndex].append(alloc, strOption);
     }
     pub fn free(p_self: *guiSetting, alloc: std.mem.Allocator) void {
-        for (0..chessl.NUMBER_PLAYER) |i| {
+        for (0..p_self.nEngines) |i| {
             p_self.engineNames[i].free(alloc);
-            p_self.enginePaths[i].free(alloc);
+            p_self.enginePaths[i].path.free(alloc);
             for (p_self.engineOptions[i].items) |*opt| {
                 opt.free(alloc);
             }
         }
     }
     pub fn print(p_self: *guiSetting) void {
-        for (0..chessl.NUMBER_PLAYER) |i| {
+        for (0..p_self.nEngines) |i| {
             std.debug.print("Engine #{d}\n", .{i});
             std.debug.print("\t name: {s}\n", .{p_self.engineNames[i]._slice()});
-            std.debug.print("\t path: {s}\n", .{p_self.enginePaths[i]._slice()});
+            std.debug.print("\t path: {s}\n", .{p_self.enginePaths[i].path._slice()});
 
             for (p_self.engineOptions[i].items) |*opt| {
                 std.debug.print("\t option: {s}\n", .{opt.*._slice()});
@@ -1088,14 +1120,14 @@ const guiSetting = struct {
     }
     pub fn writeSummary(p_self: *guiSetting, fd: *const std.fs.File) !void {
         var strBuffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-        for (0..chessl.NUMBER_PLAYER) |i| {
+        for (0..p_self.nEngines) |i| {
             const engineNbr = try std.fmt.bufPrint(&strBuffer, "Engine #{d}\n", .{i});
             _ = try fd.write(engineNbr);
 
             const engineName = try std.fmt.bufPrint(&strBuffer, "\t name: {s}\n", .{p_self.engineNames[i]._slice()});
             _ = try fd.write(engineName);
 
-            const enginePath = try std.fmt.bufPrint(&strBuffer, "\t path: {s}\n", .{p_self.enginePaths[i]._slice()});
+            const enginePath = try std.fmt.bufPrint(&strBuffer, "\t path: {s}\n", .{p_self.enginePaths[i].path._slice()});
             _ = try fd.write(enginePath);
 
             for (p_self.engineOptions[i].items) |*opt| {
@@ -1278,7 +1310,6 @@ fn handleInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: 
             return false;
         }
         settings.nEngines += 1;
-
         return true;
     } else if (buffer.startsWith("name")) {
         const name = buffer.extractFromBounds("\"", "\"") catch {

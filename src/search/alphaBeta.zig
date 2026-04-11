@@ -395,33 +395,31 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         }
         _alpha = best_value;
     }
-    const fmoves: moveContainer = moveGenl.generateLegalMoves_capture(p_state);
 
-    const indexes = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, .{}, depth);
-    for (0..fmoves.len) |i| {
-        const idx = indexes.indexes[i];
-        const move: IMove = fmoves.moves[idx];
+    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
+    gen.fetchNext(p_state);
+    const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, .{}, depth);
+    var i: usize = 0;
+    while (gen.pickNext(&order)) |move| : (i += 1) {
         var _delta = BIG_DELTA;
         if (move.isPromotion()) {
             _delta += weightl.simpleQueenScore - 200;
         }
         // delta pruning
-        //if (static_eval < (_alpha - _delta)) {
-        //    return _alpha;
-        //}
+        if (static_eval < (_alpha - _delta)) {
+            return _alpha;
+        }
 
         // if move nor capture nor checking
         // problem here where a checking sequence ie
         // black checked -> white not checked nor capture = end of quiescence, the search might need to continue
 
-        if (!move.isCapture()) {
-            continue;
-        }
         p_state.makeMove(move);
 
         const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, wasChecked, pv, prevLine, t);
 
         _ = p_state.undoMove();
+
         if (i == 0 or score > best_value) {
             best_value = score;
         }
