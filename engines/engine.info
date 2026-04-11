@@ -1,22 +1,22 @@
 [engine1]
-path="engines/bin/engine_08_04_26";
+path="engines/bin/engine_11_04_26";
 name="no lmr";
 "setoption name useHash value false";
 "setoption name searchType value zwsi";
 
 [engine2]
-path="engines/bin/engine_08_04_26";
-name="LMR";
+path="engines/bin/engine_11_04_26";
+name="quiescense";
 "setoption name searchType value zwsi";
-"setoption name useLMR value true";
+"setoption name useQuiescence value true";
 
 [match]
-nMatch=8;
+nMatch=16;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-timeFormat=(15000, 0);
+timeFormat=(10000, 0);
 logsLocation="out/logs/evaluate";
 //saveLogs=true;
 

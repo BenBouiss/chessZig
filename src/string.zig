@@ -11,12 +11,13 @@ pub const string = struct {
     len: usize,
     capacity: usize,
     data: []u8,
-    //freed: bool = false,
+    freed: bool = false,
     pub fn initFromSlice(alloc: std.mem.Allocator, slice: []const u8) !string {
         var ret: string = undefined;
         ret.len = slice.len;
         ret.capacity = slice.len;
         ret.data = try alloc.alloc(u8, ret.capacity);
+        ret.freed = false;
         try ret.copyFromSlice(slice);
         return ret;
     }
@@ -26,11 +27,12 @@ pub const string = struct {
         ret.data = try alloc.alloc(u8, cap);
         ret.capacity = cap;
         ret.len = 0;
+        ret.freed = false;
         return ret;
     }
     pub inline fn initFromBuffer(buffer: []u8) string {
         // this str does not take ownership of the data use carefully
-        return .{ .len = buffer.len, .data = buffer, .capacity = buffer.len };
+        return .{ .len = buffer.len, .data = buffer, .capacity = buffer.len, .freed = false };
     }
 
     pub fn copyFromSlice(p_self: *string, slice: []const u8) string_err!void {
