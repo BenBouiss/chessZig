@@ -104,7 +104,22 @@ UCI setoption options:
 - clearHash: [button] clears the hashTable's entries
 - useTexel: [check] enable the texel evaluation method
 - heuristicWeightsPath: [string] path to the file containing the weights to be used
+- useQuiescence: [check] enables or disables the quiescence search at quiescent terminal nodes
+- useNullPruning: [check] enables or disables the null move pruning optimisation method
+- useLMR : [check] enables or disables the late move reduction optimisation method
+- useSEE: [check] enables or disables the static exchange evaluation used in the move ordering heuristic. Places good exchange in front of bad ones
+- useFutility: [check] enables or disables the futility optimisation method
+- useRazoring: [check] enables or disables the razoring optimisation method
+- useStaticSearch: [check] enables or disables static searches. Static searches bypass the iterative deepening method and launches the search directly to the depth set in the engine.
+- printMetric: [button] prints the metrics kept in the engine's internals
+- trackMetrics: [check] enables or disables the tracking of metrics in the engine's internals
 
+- searchType: [combo] type of searches to be performed. Currently supported search types:
+    - STD: Standard alpha-beta implementation
+    - PVS: Principal Variation Searches
+    - ZWS: Zero Width Search
+    - ZWSI: Zero Width Search but with capture moves explored first. This tech will be applied to other in due time and become just ZWS.
+    - ASP: (Experimental) Aspiration window searches
 
 File structures:
 A running theme here, a line will be ignored if it is malformed and/or doest correspond to the wanted format. Same behavior as the uci engine when in a similar position
