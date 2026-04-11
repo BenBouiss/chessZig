@@ -84,8 +84,6 @@ const matchResultContainer = struct {
             .CheckMate => {
                 p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
                 p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
-                //p_self.items[currEngine].lose += 1;
-                //p_self.items[otherEngine].win += 1;
             },
 
             .Flagged => {
@@ -108,13 +106,6 @@ const matchResultContainer = struct {
             },
         }
 
-        //if (true) {
-        //    std.debug.print("VALUE {}\n", .{oneEngine});
-        //    @panic("");
-        //}
-        //if (oneEngine) {
-        //    std.debug.print("VALUE {d}\n", .{2 - @as(usize, @intCast(@intFromBool(oneEngine)))});
-        //}
         for (0..2 - @as(usize, @intCast(@intFromBool(oneEngine)))) |i| {
             const currEng = match.playerInv[i].engineUsed;
             p_self.items[currEng].nMatch += 1;

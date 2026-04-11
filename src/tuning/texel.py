@@ -213,6 +213,9 @@ total_idx += 1
 safetyQueen_idx = total_idx
 total_idx += 1
 
+kingProximity = total_idx
+total_idx += 1
+
 PSQT_Pawn_idx = total_idx
 total_idx += 64
 PSQT_Bishop_idx = total_idx
