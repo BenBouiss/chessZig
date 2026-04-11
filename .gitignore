@@ -4,6 +4,7 @@ src/extern/*
 secrets/*
 
 logs
+out
 cmd
 *.out
 *.c
@@ -16,3 +17,4 @@ engines/heuristics/tmp/*
 engines/tmp/*
 test/*
 opening
+

@@ -130,7 +130,7 @@ const matchResultContainer = struct {
         if (settings.match.logPathProvided) {
             fileName = try std.fmt.allocPrint(alloc, "{s}/match_logs_{d}.txt", .{ settings.match.logPath._slice(), std.time.timestamp() });
         } else {
-            fileName = try std.fmt.allocPrint(alloc, "logs/match_logs_{d}.txt", .{std.time.timestamp()});
+            fileName = try std.fmt.allocPrint(alloc, "out/logs/match_logs_{d}.txt", .{std.time.timestamp()});
         }
         const file = try std.fs.cwd().createFile(fileName, .{ .read = true });
         defer alloc.free(fileName);

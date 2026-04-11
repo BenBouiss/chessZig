@@ -881,7 +881,7 @@ class guiUpdateCallback(template.callback):
 
 if __name__ == "__main__":
     path = "engines/engine_tourney.info"
-    tmpFolder = f"engines/heuristics/tmp/tmp_{int(time.time())}"
+    tmpFolder = f"out/heuristics/MH/tmp_{int(time.time())}"
     evaluationBinPath = "zig-out/bin/evaluate"
     os.makedirs(tmpFolder, exist_ok=True)
 

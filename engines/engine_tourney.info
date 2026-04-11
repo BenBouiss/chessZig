@@ -14,6 +14,6 @@ playerSwitch=true;
 debugMode=false;
 useOpeningBook=false;
 openingBookPath="opening/8moves_v3.pgn";
-logsLocation="logs/tourney";
+logsLocation="out/logs/tourney";
 timeFormat=(10000, 0);
 printToScreen=false;
