@@ -374,12 +374,12 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         pv.setLen(ply);
     }
     var _alpha = alpha;
-    const static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
+    const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
 
     if (depth == 0 or !p_info.alive) {
-        const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
         p_info.searchStat.n_nodeExplored += 1;
-        return color_mask * static_eval;
+        return static_eval;
     }
     var best_value = static_eval;
     if (best_value >= beta) {
@@ -406,9 +406,9 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
             _delta += weightl.simpleQueenScore - 200;
         }
         // delta pruning
-        if (static_eval < (_alpha - _delta)) {
-            return _alpha;
-        }
+        //if (static_eval < (_alpha - _delta)) {
+        //    return _alpha;
+        //}
 
         // if move nor capture nor checking
         // problem here where a checking sequence ie

@@ -140,3 +140,7 @@ round idea:
             - useGreedy = true, nMatch increasing and allowing the scoring to keep increasing (ie: more potential draws/wins) could be a way to refresh outdated scoring 
             - useGreedy = false, no refreshing needed as each step is a refresh. potential bad optim step
 
+    - SPRT inspired tech. Instead of 100% wr against the current bestline use a 95% LOS(likelyhood of superiority) or a SPRT against the current baselines.
+        - This would require more games to be played. 
+            - Idea each time a solutions is 95% LOS better than the baselines, we add the said config to a fixed! buffer of known baseline. Each addition to said buffer increase nMatch by 1. Increasing the accuracy of LOS and also providing a more accurate score for the MH optim
+            - Score = sum(LOS_i * N_i)

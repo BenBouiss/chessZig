@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import time, typing, copy, os, sys
+import time, typing, copy, os, sys, math
 import numpy as np
 import numpy.typing as npt
 import yaml
+from enum import Enum
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -21,6 +22,9 @@ class score:
     lose: int = 0
     draw: int = 0
     l = lockl.lock()
+
+    def nMatch(self) -> int:
+        return self.win + self.lose + self.draw
 
     def getScore(self) -> float:
         self.l.acquire()
@@ -85,10 +89,12 @@ class heuristicEntry:
         for w in range(len(weights[0])):
             if weights[MG][w] != texel.INVALID_VALUE:
                 if fileFormat:
-                    print(f"{strWeightNames[w]}{phases[MG]} = {weights[MG][w]};")
-                    print(f"{strWeightNames[w]}{phases[EG]} = {weights[EG][w]};")
+                    print(f"{texel.strWeightNames[w]}{phases[MG]} = {weights[MG][w]};")
+                    print(f"{texel.strWeightNames[w]}{phases[EG]} = {weights[EG][w]};")
                 else:
-                    print(f"{strWeightNames[w]}: {weights[MG][w]} {weights[EG][w]}")
+                    print(
+                        f"{texel.strWeightNames[w]}: {weights[MG][w]} {weights[EG][w]}"
+                    )
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
         return np.concatenate(
@@ -208,20 +214,74 @@ class callbackSave(template.callback):
             yaml.dump(savingDict, file)
 
 
-class callbackBaseline(template.callback):
-    """ """
+# https://www.chessprogramming.org/Match_Statistics#cite_note-26
+def computeLOS(wins: int, losses: int):
+    if (wins + losses) == 0:
+        return 0
+    return 0.5 * (1 + math.erf((wins - losses) / math.sqrt(2 * wins + 2 * losses)))
 
-    def __init__(self):
-        super().__init__()
 
-    def on_iter_end(self):
-        assert self.mh is not None
-        assert self.mh.objective is not None
-        best = self.mh.getBestIndiv()
-        nBaseline = len(self.mh.objective.baseline)
-        if best.score == nBaseline * 2:
-            # print("[DEBUG] callbackBaseline: adding the current best to the baseline")
-            self.mh.objective.appendBaseline(entryFrom1dArray(best.position))
+def LL(x: int) -> float:
+    """
+    https://www.chessprogramming.org/Match_Statistics#cite_note-26
+        E = 1 / ( 1 + 10-Δ/400)
+    """
+    return 1 / (1 + 10 ** (-x / 400))
+
+
+def LLR(elo_0: int, elo_1, wins: int, draws: int, losses: int) -> float:
+    """
+    s0 = LL(elo0)
+    s1 = LL(elo1)
+    LLR ~= 0.5 * (( s1 - s0 ) * (2 * score - s0 - s1)) / (Var(score))
+    where Var(score) = (-score**2 + (draws * 0.5**2 + wins * 1**2)) / N
+    where N = wins + draws + losses
+
+    """
+    N = wins + draws + losses
+    if N == 0:
+        return 0.0
+    score = wins + 0.5 * draws
+    varScore = ((draws * 0.25 + wins) - (score**2)) / N
+    if varScore == 0:
+        return 0.0
+    s0 = LL(elo_0)
+    s1 = LL(elo_1)
+    return 0.5 * ((s1 - s0) * (2 * score - s0 - s1)) / (varScore)
+
+
+def computeSPRT(
+    elo_0: int, elo_1: int, alpha: int, beta: int, wins: int, draws: int, losses: int
+) -> SPRT_result:
+    """
+    elo_0, elo_1 elo bound to check gain in elo
+    might be nice elo_0 = 0, 10 for mh thingy
+
+    https://www.chessprogramming.org/Sequential_Probability_Ratio_Test
+    alpha, beta default 0.05 both?
+
+    H0 : Elo_Player1 ≤ Elo_Player2
+    H1 : Elo_Player1 > Elo_Player2
+
+    """
+    llr = LLR(elo_0, elo_1, wins, draws, losses)
+    LA = math.log(beta / (1 - alpha))
+    LB = math.log((1 - beta) / (alpha))
+    if llr > LB:
+        return SPRT_result.H1
+    if llr < LA:
+        return SPRT_result.H0
+    return SPRT_result.NULL
+
+
+class SPRT_result(Enum):
+    H0 = 1
+    H1 = 2
+    NULL = 3
+
+    def __repr__(self) -> str:
+        self_name = self.__class__.__name__
+        return f"{self_name}.{self.name}"
 
 
 # p , n, b, r, q
@@ -245,6 +305,9 @@ currentIndexes.remove(texel.safetyPawn_idx)
 defaultWeights: heuristicEntry = entryFromListDup(
     arr=[5, 10, 1, 1, 1, 2, 25, 20, 20, 40, 80], indexes=currentIndexes
 )
+
+newIndexes = list(range(texel.mobility_idx, texel.kingProximityScore_idx + 1))
+newIndexes.remove(texel.safetyPawn_idx)
 # texel.INVALID_VALUE, #pawn safety is not used
 
 simpleBaselineWeights: heuristicEntry = entryFromListDup(
@@ -266,22 +329,3 @@ newWeight_1: heuristicEntry = entryFrom2dList(
     ],
     indexes=prevIndexes,
 )
-strWeightNames = [
-    "pawnCountScore",
-    "bishopCountScore",
-    "knightCountScore",
-    "rookCountScore",
-    "queenCountScore",
-    "mobilityScore",
-    "mobilityKingScore",
-    "structureProtectionScore",
-    "isolatedPawnScore",
-    "stackedPawnScore",
-    "passedPawnScore",
-    "tempoChecksScore",
-    "safetyPawn",
-    "safetyKnight",
-    "safetyBishop",
-    "safetyRook",
-    "safetyQueen",
-]

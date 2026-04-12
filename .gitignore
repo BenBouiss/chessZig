@@ -15,6 +15,6 @@ cmd
 engines/bin/*
 engines/heuristics/tmp/*
 engines/tmp/*
-test/*
+#test/*
 opening
 

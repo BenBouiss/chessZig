@@ -138,7 +138,7 @@ class windowCtx:
         for x, idx in enumerate(indexes):
             assert best_indiv.weights[0].elem[x].val is not None
             assert best_indiv.weights[1].elem[x].val is not None
-            param = f"{chessSpec.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
+            param = f"{texel.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
 
             self.stdscr.addstr(windowOffset[0] + x + 1, windowOffset[1] + 1, f"{param}")
 
