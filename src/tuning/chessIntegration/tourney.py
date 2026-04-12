@@ -24,6 +24,7 @@ from chessSpec import heuristicEntry, score, chessIndividual
 import chessSpec
 import texel
 import gui as guil
+import utils as utilsl
 
 
 import lock as lockl
@@ -109,6 +110,7 @@ class scoreBoard:
 
 class tuiGUI:
     gui = guil.windowCtx()
+    useCurses: bool = True
     l: lockl.lock = lockl.lock()
     scoreB: scoreBoard = scoreBoard()
     mh: templateSelectionAlgo | None = None
@@ -121,8 +123,9 @@ class tuiGUI:
     interruptReceived: bool = False
     tick: int = 0
 
-    def __init__(self, debugMode: bool = False) -> None:
+    def __init__(self, debugMode: bool = False, useCurses: bool = True) -> None:
         self.debugMode = debugMode
+        self.useCurses = useCurses
 
     def shouldClose(self) -> bool:
         return self.interruptReceived
@@ -134,7 +137,9 @@ class tuiGUI:
         self.mh = mh
 
     def dispatch(self) -> None:
-        self.gui = guil.setupWindow()
+        if self.useCurses:
+            self.gui = guil.setupWindow()
+            self.gui.stdscr.nodelay(True)
         self.mainThread = threading.Thread(target=self.start, args=([]))
         self.running = True
         self.mainThread.start()
@@ -147,18 +152,18 @@ class tuiGUI:
             try:
                 # mainly used to handle the case where the terminal is resized
                 self.updateWindow()
-                guil.loadingSymbolWindow(self.gui.stdscr, self.tick)
             except Exception as e:
                 self.l.release()
                 _ = e
                 continue
             time.sleep(SLEEP_STDOUT_S)
 
-            c = self.gui.stdscr.getch()
-            if c == ord("q"):
-                print("INTERRUPT RECEIVED")
-                self.interruptReceived = True
-                global_tui.close()
+            if self.useCurses:
+                c = self.gui.stdscr.getch()
+                if c == ord("q"):
+                    print("INTERRUPT RECEIVED")
+                    self.interruptReceived = True
+                    global_tui.close()
             self.tick += 1
 
     def pingUpdate(self) -> None:
@@ -173,10 +178,19 @@ class tuiGUI:
 
     def updateWindow(self) -> None:
         self.l.acquire()
+        if not self.useCurses:
+            if not self.needUpdate or not self.running:
+                self.l.release()
+                return
+            self.needUpdate = False
+            self.liteUpdateWindow()
+            self.l.release()
+            return
+
+        guil.loadingSymbolWindow(self.gui.stdscr, self.tick)
         if not self.needUpdate or not self.running:
             if self.debugMode:
                 pass
-                # print("No update needed")
             self.l.release()
             return
         self.needUpdate = False
@@ -185,6 +199,44 @@ class tuiGUI:
         self.lastUpdatedWin()
         self.settingsWindow()
         self.l.release()
+
+    def liteUpdateWindow(self) -> None:
+        clear()
+        assert self.mh is not None
+        assert type(self.mh.objective) is chessObjective
+        assert self.mh.objective.tourney.settings is not None
+        indexes = self.mh.objective.indexesTemplate
+        best_indiv = chessSpec.entryFrom1dArray(
+            self.mh.population[0].position, indexes=indexes
+        )
+        print(f"Iteration: {self.mh.iter} / {self.mh.maxiter}")
+
+        if self.mh.objective.tourney.type == tournamentType.LOS:
+            totalMatch = (
+                self.mh.objective.tourney.settings.matchSettings.nMatch
+                * 2
+                * len(self.mh.objective.tourney.baseline)
+            )
+            print(
+                f"Current best score = {self.mh.population[0].score}, total LOS = {self.mh.population[0].score / totalMatch}, total match: {totalMatch}"
+            )
+        else:
+            print(f"Current best score = {self.mh.population[0].score}")
+
+        for x, idx in enumerate(indexes):
+            assert best_indiv.weights[0].elem[x].val is not None
+            assert best_indiv.weights[1].elem[x].val is not None
+            param = f"{texel.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
+
+            print(f"{param}")
+
+        print(
+            f"Progress {self.scoreB.roundStat.nFinished} / {self.scoreB.roundStat.nMatch} with {self.scoreB.roundStat.nRunning} running"
+        )
+
+        print(
+            f"Tournament info nMatch = {self.mh.objective.tourney.settings.matchSettings.nMatch}, nBaselines = {len(self.mh.objective.tourney.baseline)}"
+        )
 
     def lastUpdatedWin(self) -> None:
         assert self.gui.active
@@ -240,11 +292,40 @@ class timeFormat:
     inc: int
 
 
+standardTimeFormat = timeFormat(time=300_000, inc=5000)
+blitzTimeFormat = timeFormat(time=300_000, inc=0)
+hyperBulletTimeFormat = timeFormat(time=10_000, inc=0)
+
+
+@dataclass
+class matchInfoSettings:
+    nMatch: int = 1
+    playerSwitch: bool = False
+    debugMode: bool = False
+    useOpeningBook: bool = False
+    openingBookPath: str = ""
+    timeF: timeFormat = hyperBulletTimeFormat
+    saveLogs: bool = True
+    logsLocation: str = "out/logs"
+
+    def __repr__(self) -> str:
+        ret = ""
+        ret += f"nMatch={self.nMatch};\n"
+        ret += f"playerSwitch={self.playerSwitch};\n"
+        ret += f"debugMode={self.debugMode};\n"
+        ret += f"useOpeningBook={self.useOpeningBook};\n"
+        ret += f"openingBookPath={self.openingBookPath};\n"
+        ret += f"timeFormat=({self.timeF.time}, {self.timeF.inc});\n"
+        ret += f"saveLogs={self.saveLogs};\n"
+        ret += f"logsLocation={self.logsLocation};\n"
+        return ret
+
+
 @dataclass
 class infoFile:
     engineSettings: list[list[str]]
     engineNames: list[str]
-    matchSettings: list[str]
+    matchSettings: matchInfoSettings
 
     def print(self) -> None:
         print("engine settings: ")
@@ -257,7 +338,7 @@ class infoFile:
 
 
 def readInfoFile(path: str) -> infoFile:
-    ret = infoFile([[]], [], [])
+    ret = infoFile([[]], [], matchInfoSettings())
     matchSection: bool = False
     engineIndex = 0
     with open(path, "r") as file:
@@ -275,10 +356,39 @@ def readInfoFile(path: str) -> infoFile:
                     ret.engineSettings.append([])
                 continue
             if matchSection:
-                ret.matchSettings.append(_line.rstrip())
+                readMatchSettingLine(ret.matchSettings, _line)
             else:
                 ret.engineSettings[engineIndex].append(_line.rstrip())
     return ret
+
+
+def readMatchSettingLine(setting: matchInfoSettings, line: str) -> None:
+    _line = line.lower()
+    if "nmatch" in _line:
+        setting.nMatch = int(
+            utilsl.strExtractFromBounds(s=_line, lbound="=", rbound=";")
+        )
+    elif "playerswitch" in _line:
+        setting.playerSwitch = "true" in _line
+    elif "debugmode" in _line:
+        setting.debugMode = "true" in _line
+    elif "useopeningbook" in _line:
+        setting.useOpeningBook = "true" in _line
+    elif "openingbookpath" in _line:
+        setting.openingBookPath = utilsl.strExtractFromBounds(
+            s=_line, lbound='"', rbound='"'
+        )
+    elif "timeformat" in _line:
+        vals: str = utilsl.strExtractFromBounds(s=_line, lbound="(", rbound=")")
+        tokens = vals.split(",")
+        if (len(tokens)) == 2:
+            setting.timeF = timeFormat(time=int(tokens[0]), inc=int(tokens[1]))
+    elif "logslocation" in _line:
+        setting.logsLocation = utilsl.strExtractFromBounds(
+            s=_line, lbound='"', rbound='"'
+        )
+    elif "savelogs" in _line:
+        setting.saveLogs = "true" in _line
 
 
 def saveHeuristicsWeights(
@@ -292,22 +402,18 @@ def saveHeuristicsWeights(
     return ret
 
 
-standardTimeFormat = timeFormat(time=300_000, inc=5000)
-blitzTimeFormat = timeFormat(time=300_000, inc=0)
-
-
 class matchO(object):
     def __init__(
         self,
         conf1: heuristicEntry,
         conf2: heuristicEntry,
-        infoFilePath: str,
+        settings: infoFile,
         debugMode: bool = False,
         extra: str = "",
     ):
         self.conf1: heuristicEntry = conf1
         self.conf2: heuristicEntry = conf2
-        self.infoFilePath: str = infoFilePath
+        self.settings: infoFile = settings
         self.uid: int = int(1000 * time.time())
         self.debugMode: bool = debugMode
         self.extra: str = extra
@@ -319,19 +425,19 @@ class matchO(object):
             uid=self.uid,
             extra=self.extra,
         )
-        setting = readInfoFile(self.infoFilePath)
         newInfoPath = os.path.join(tmpfolder, f"newInfo_{self.uid}_{self.extra}.info")
         with open(newInfoPath, "w") as file:
-            for i in range(len(setting.engineNames)):
-                file.write(f"{setting.engineNames[i]}\n")
-                allCmd = "\n".join(setting.engineSettings[i])
+            for i in range(len(self.settings.engineNames)):
+                file.write(f"{self.settings.engineNames[i]}\n")
+                allCmd = "\n".join(self.settings.engineSettings[i])
                 file.write(f"{allCmd}\n")
                 file.write(
                     f'"setoption name heuristicWeightsPath value {heuristics[i]}";\n'
                 )
             file.write(f"[match]\n")
-            allCmd = "\n".join(setting.matchSettings)
-            file.write(f"{allCmd}\n")
+            file.write(f"{self.settings.matchSettings}")
+            # allCmd = "\n".join(setting.matchSettings.raw)
+            # file.write(f"{allCmd}\n")
         return newInfoPath
 
 
@@ -372,7 +478,20 @@ class matchStatus(Enum):
 class tournamentType(Enum):
     CLASSIC = 1
     BASELINE = 2
-    INVALID = 3
+    SPRT = 3
+    LOS = 4
+    INVALID = 5
+
+    def useBaselines(self) -> bool:
+        return (
+            self.value == tournamentType.BASELINE.value
+            or self.value == tournamentType.SPRT.value
+            or self.value == tournamentType.LOS.value
+        )
+
+    def __repr__(self) -> str:
+        self_name = self.__class__.__name__
+        return f"{self_name}.{self.name}"
 
 
 class matchFetchStatus(Enum):
@@ -385,6 +504,10 @@ def valueToTournamentType(val: int) -> tournamentType:
         return tournamentType.CLASSIC
     if val == tournamentType.BASELINE.value:
         return tournamentType.BASELINE
+    if val == tournamentType.SPRT.value:
+        return tournamentType.SPRT
+    if val == tournamentType.LOS.value:
+        return tournamentType.LOS
     return tournamentType.INVALID
 
 
@@ -522,11 +645,15 @@ class tournament(object):
         nThread: int = 1,
         type: tournamentType = tournamentType.CLASSIC,
         useGUIWait: bool = True,
+        baselineLimit: int = -1,
     ):
         self.timeFormat: timeFormat = timeF
         self.type = type
         self.matchInv: matchContainerInfo = matchContainerInfo(1)
-        self.templatePath: str | None = templatePath
+        self.settings: infoFile | None = (
+            readInfoFile(templatePath) if templatePath is not None else None
+        )
+        self.templatePath = templatePath
         self.population: list[chessIndividual] = []
         self.baseline: list[chessIndividual] = []
         self.evalBin: str | None = evalBin
@@ -537,6 +664,7 @@ class tournament(object):
         self.setThread(nThread)
         self.logs: dict = {}
         self.useGUIWait = useGUIWait
+        self.baselineLimit = baselineLimit
 
     def saveArgsToDict(self) -> dict:
         ret = {}
@@ -579,7 +707,7 @@ class tournament(object):
 
     def thread_dispatchMatch(self, threadId: int, info: threadInfo) -> None:
         assert self.population is not None
-        assert self.templatePath is not None
+        assert self.settings is not None
         assert self.evalBin is not None
         info.status = threadStatus.RUNNING
         while not info.interrupt:
@@ -591,7 +719,7 @@ class tournament(object):
 
             pair = res.matchOrder
             opp1 = self.population[pair[0]].position
-            if self.type == tournamentType.BASELINE:
+            if self.type.useBaselines():
                 opp2 = self.baseline[pair[1]].position
             else:
                 opp2 = self.population[pair[1]].position
@@ -604,7 +732,7 @@ class tournament(object):
             currentMatch: matchO = matchO(
                 conf1=opp1,
                 conf2=opp2,
-                infoFilePath=self.templatePath,
+                settings=self.settings,
                 extra=f"T{threadId}",
                 debugMode=self.debugMode,
             )
@@ -625,14 +753,14 @@ class tournament(object):
 
     def retryErrors(self, info: threadInfo) -> None:
         assert self.population is not None
-        assert self.templatePath is not None
+        assert self.settings is not None
         assert self.evalBin is not None
         for i in range(len(self.matchInv.status)):
             if self.matchInv.status[i] != matchStatus.ERROR:
                 continue
             pair = self.matchInv.order[i]
             opp1 = self.population[pair[0]].position
-            if self.type == tournamentType.BASELINE:
+            if self.type.useBaselines():
                 opp2 = self.baseline[pair[1]].position
             else:
                 opp2 = self.population[pair[1]].position
@@ -644,7 +772,7 @@ class tournament(object):
             currentMatch: matchO = matchO(
                 conf1=opp1,
                 conf2=opp2,
-                infoFilePath=self.templatePath,
+                settings=self.settings,
                 extra=f"T0r",
                 debugMode=self.debugMode,
             )
@@ -670,7 +798,11 @@ class tournament(object):
                     f"[DEBUG] \t {self.population[i].scoring}, id: {self.population[i].uid}\n"
                 )
         self.population[pair[0]].scoring.addEq(score[0])
-        if not self.type == tournamentType.BASELINE:
+        if not self.type.useBaselines():
+            if self.debugMode:
+                print(
+                    f"[DEBUG] from updateScore: also updating next pair via type: {self.type} \n"
+                )
             self.population[pair[1]].scoring.addEq(score[1])
 
         if self.debugMode:
@@ -693,8 +825,6 @@ def killAndWait(threads: list[threading.Thread], infos: list[threadInfo]) -> Non
 def GUIWaitLoop(
     tourney: tournament, threads: list[threading.Thread], infos: list[threadInfo]
 ) -> None:
-    assert global_tui.gui.stdscr is not None
-    global_tui.gui.stdscr.nodelay(True)
     while not global_tui.shouldClose():
         time.sleep(1)
         if global_scoreBoard.roundStat.isOver():
@@ -706,7 +836,7 @@ def GUIWaitLoop(
 
 
 global_scoreBoard = scoreBoard()
-global_tui: tuiGUI = tuiGUI(debugMode=True)
+global_tui: tuiGUI = tuiGUI(debugMode=True, useCurses=True)
 global_tui.setScoreBoard(global_scoreBoard)
 global_tui.dispatch()
 
@@ -727,6 +857,7 @@ class chessObjective(obj.objective):
         assert len(self.indexesTemplate) != 0, (
             "Indexes is empty, cannot relate MH position to engine parameter"
         )
+        assert self.tourney.settings is not None
         if self.tourney.debugMode:
             print(
                 f"Evaluating {len(positions)} positions with {len(self.baseline)} baselines..."
@@ -751,6 +882,15 @@ class chessObjective(obj.objective):
         ]
         global_scoreBoard.roundStat.nMatch = len(matchInv.status)
         self.tourney.dispatchMatch(matchInv)
+        if self.tourney.type == tournamentType.LOS:
+            ret = [
+                chessSpec.computeLOS(wins=x.scoring.win, losses=x.scoring.lose)
+                * x.scoring.nMatch()
+                for x in self.tourney.population
+            ]
+            # print([x.scoring.nMatch() for x in self.tourney.population])
+
+            return ret
         return [x.scoring.getScore() for x in self.tourney.population]
 
     def setIndexesTemplate(self, idx: list[int]) -> None:
@@ -763,6 +903,10 @@ class chessObjective(obj.objective):
         self.baseline = [entry]
 
     def appendBaseline(self, entry: heuristicEntry) -> None:
+        if len(self.baseline) == self.tourney.baselineLimit:
+            self.baseline.pop(0)
+            assert self.tourney.settings is not None
+            self.tourney.settings.matchSettings.nMatch += 1
         self.baseline.append(entry)
 
     def _saveToFile(self, log: dict) -> None:
@@ -860,7 +1004,7 @@ UPPER_BOUND_WEIGHT = 100
 LOWER_BOUND_WEIGHT = 0
 # LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
 STEP_WEIGTH = 1
-N_PARAMS = 11 * 2
+N_PARAMS = 12 * 2
 
 
 def clear() -> None:
@@ -879,6 +1023,65 @@ class guiUpdateCallback(template.callback):
         global_tui.pingUpdate()
 
 
+class callbackBaseline(template.callback):
+    """ """
+
+    def __init__(self):
+        super().__init__()
+        self.LOS_FRAC_THRESH = 0.92
+
+    def on_iter_end(self):
+        assert self.mh is not None
+        assert self.mh.objective is not None
+        assert type(self.mh.objective) is chessObjective
+        assert self.mh.objective.tourney.settings is not None
+        if self.mh.objective.tourney.type == tournamentType.BASELINE:
+            best = self.mh.getBestIndiv()
+            nBaseline = len(self.mh.objective.baseline)
+            if best.score == nBaseline * 2:
+                self.mh.objective.appendBaseline(
+                    chessSpec.entryFrom1dArray(
+                        best.position, indexes=self.mh.objective.indexesTemplate
+                    )
+                )
+        elif self.mh.objective.tourney.type == tournamentType.LOS:
+            best = self.mh.getBestIndiv()
+            if (
+                best.score
+                / (
+                    self.mh.objective.tourney.settings.matchSettings.nMatch
+                    * 2
+                    * len(self.mh.objective.tourney.baseline)
+                )
+            ) > self.LOS_FRAC_THRESH:
+                self.mh.objective.appendBaseline(
+                    chessSpec.entryFrom1dArray(
+                        best.position, indexes=self.mh.objective.indexesTemplate
+                    )
+                )
+
+
+@dataclass
+class mhUserInput:
+    maxiter: int
+    popsize: int
+    preEvaluation: bool = True
+    saveLog: bool = True
+    bounds: tuple[int, int] | None = None
+    steps: int | None = None
+    seed: int = 42
+
+
+@dataclass
+class userInput:
+    baseInfoFile: str = ""
+    tmpFolderPath: str = ""
+    evaluationBinaryPath: str = ""
+    mhParams: mhUserInput | None = None
+    debugMode: bool = False
+    timeF: timeFormat = hyperBulletTimeFormat
+
+
 if __name__ == "__main__":
     path = "engines/engine_tourney.info"
     tmpFolder = f"out/heuristics/MH/tmp_{int(time.time())}"
@@ -888,7 +1091,7 @@ if __name__ == "__main__":
     popsize = 16
     maxiter = 32
 
-    cbs = [chessSpec.callbackBaseline(), guiUpdateCallback()]
+    cbs = [callbackBaseline(), guiUpdateCallback()]
     saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix="ben")
     mh = gw.GW(
         popsize=popsize,
@@ -907,7 +1110,8 @@ if __name__ == "__main__":
         debugMode=False,
         logDir=tmpFolder,
         nThread=4,
-        type=tournamentType.BASELINE,
+        type=tournamentType.LOS,
+        baselineLimit=4,
     )
 
     mh.setObjective(
@@ -920,7 +1124,7 @@ if __name__ == "__main__":
     )
     assert type(mh.objective) is chessObjective
     mh.objective.setBaseline(chessSpec.simpleBaselineWeights)
-    mh.objective.setIndexesTemplate(chessSpec.currentIndexes)
+    mh.objective.setIndexesTemplate(chessSpec.newIndexes)
     mh.objective.appendBaseline(chessSpec.newWeight_1)
 
     mh.generatePopulation()
@@ -928,21 +1132,21 @@ if __name__ == "__main__":
     mh.addInvididual(
         indiv=individual(
             position=chessSpec.simpleBaselineWeights.maskOut(
-                indexes=chessSpec.currentIndexes, defaultValue=0
+                indexes=chessSpec.newIndexes, defaultValue=0
             ).get1DArray()
         )
     )
     mh.addInvididual(
         indiv=individual(
             position=chessSpec.newWeight_0.maskOut(
-                chessSpec.currentIndexes, defaultValue=0
+                chessSpec.newIndexes, defaultValue=0
             ).get1DArray()
         )
     )
     mh.addInvididual(
         indiv=individual(
             position=chessSpec.newWeight_1.maskOut(
-                chessSpec.currentIndexes, defaultValue=0
+                chessSpec.newIndexes, defaultValue=0
             ).get1DArray()
         )
     )

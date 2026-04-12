@@ -37,6 +37,7 @@ pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType
     const allblackMoveBB = moveGenl._cst_moveGenBB(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
+    const color_mask = alphaBetal.getScoreMaskFromTurn(p_state.whiteToMove());
 
     var score: scoreType = 0;
     const phase: scoreType = @intCast(p_state.getPhase());
@@ -45,7 +46,7 @@ pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType
     score += evaluate_PSQT(p_state, values, _phase);
 
     score += evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
-    score += evaluate_king(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
+    score += evaluate_king(p_state, color_mask, values, _phase);
 
     score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
     score += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
@@ -78,10 +79,12 @@ pub fn evaluate_debug(p_state: *const chess.Board_state, values: *heuristicValue
 
     const phase: scoreType = @intCast(p_state.getPhase());
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+
+    const color_mask = alphaBetal.getScoreMaskFromTurn(p_state.whiteToMove());
     const ret: heuristicComponents = .{
         .PSQT = evaluate_PSQT(p_state, values, _phase),
         .Mobility = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
-        .King = evaluate_king(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
+        .King = evaluate_king(p_state, color_mask, values, _phase),
 
         .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
         .Structure = evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase),
@@ -205,13 +208,11 @@ pub fn evaluate_mobility(p_state: *const chess.Board_state, p_whiteMoveBB: *cons
     //const moveB = moveGenl.generateMoveCountLegalMoves(p_state, false);
     //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
 }
-pub fn evaluate_king(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
-    _ = p_whiteMoveBB;
-    _ = p_blackMoveBB;
+pub fn evaluate_king(p_state: *const chess.Board_state, color_mask: scoreType, values: *heuristicValues, _phase: scoreType) scoreType {
     const wKing = squarel.squareInfo.init(p_state.wKingSq);
     const bKing = squarel.squareInfo.init(p_state.bKingSq);
     const distance: scoreType = @intCast(wKing.computeBenDistance(bKing));
-    const bonus = squarel.maxBenDistance - distance;
+    const bonus = color_mask * (squarel.maxBenDistance - distance);
     return computeTapered(bonus * values.KingProximityValue[MG], bonus * values.KingProximityValue[EG], _phase);
 }
 pub fn evaluate_safety(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
@@ -419,6 +420,8 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
         dest = &globalHeuristic.SafetyQueenValue;
     } else if (s.containsE("structureProtection", .ignoreCase)) {
         dest = &globalHeuristic.StructureProtectionValue;
+    } else if (s.containsE("kingProximity", .ignoreCase)) {
+        dest = &globalHeuristic.KingProximityValue;
     } else {
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token {s}\n", .{s._slice()});
@@ -513,7 +516,9 @@ pub fn isBoardTexelValid(p_board: *chess.Board_state) bool {
     if (fmoves.len == 0) {
         return false;
     }
-    const stat = evaluate(p_board, &globalHeuristic);
+
+    const color_mask = alphaBetal.getScoreMaskFromTurn(p_board.whiteToMove());
+    const stat = color_mask * evaluate(p_board, &globalHeuristic);
     var info: threadingl.threadInfo = .{ .alive = true, .working = true };
     const feature: searchFeatures = .{ .useStaticSearch = true };
 

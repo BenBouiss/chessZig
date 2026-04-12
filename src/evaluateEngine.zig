@@ -1056,6 +1056,7 @@ const guiSetting = struct {
     nEngines: u8 = 0,
     debugMode: bool = false,
     printToScreen: bool = true,
+    seed: u64 = configl.SEED,
     pub fn init(alloc: std.mem.Allocator) !guiSetting {
         var ret: guiSetting = .{};
         ret.engineOptions[0] = try std.ArrayList(string).initCapacity(alloc, 2);
@@ -1104,6 +1105,7 @@ const guiSetting = struct {
 
         std.debug.print("\t use opening book {}\n", .{p_self.match.useOpeningBook});
         std.debug.print("\t opening book path {s}\n", .{p_self.match.openingBookPath._slice()});
+        std.debug.print("\t seed: {d}\n", .{p_self.seed});
 
         std.debug.print("\t save logs {}\n", .{p_self.match.saveLogs});
         std.debug.print("\t logs path {s}\n", .{p_self.match.logPath._slice()});
@@ -1137,6 +1139,9 @@ const guiSetting = struct {
 
         const timeStr = try std.fmt.bufPrint(&strBuffer, "\t time format: time {d} inc {d}\n", .{ p_self.match.timeF.time, p_self.match.timeF.inc });
         _ = try fd.write(timeStr);
+
+        const seedStr = try std.fmt.bufPrint(&strBuffer, "\t seed {d}\n", .{p_self.seed});
+        _ = try fd.write(seedStr);
 
         const useOpeningStr = try std.fmt.bufPrint(&strBuffer, "\t use opening book {}\n", .{p_self.match.useOpeningBook});
         _ = try fd.write(useOpeningStr);
@@ -1182,15 +1187,22 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         settings.match.nMatch = std.fmt.parseInt(u8, nbrStr, 10) catch {
             return false;
         };
-
+        return true;
+    } else if (buffer.containsE("seed", .ignoreCase)) {
+        const seed = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.seed = std.fmt.parseInt(u64, seed, 10) catch {
+            return false;
+        };
         return true;
     } else if (buffer.startsWith("playerSwitch")) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
-        if (utilsl.equal(u8, boolStr, "true")) {
+        if (utilsl.contains(boolStr, "true", .ignoreCase)) {
             settings.match.playerSwitch = true;
-        } else if (utilsl.equal(u8, boolStr, "false")) {
+        } else if (utilsl.contains(boolStr, "false", .ignoreCase)) {
             settings.match.playerSwitch = false;
         } else {
             return false;
@@ -1201,9 +1213,9 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
-        if (utilsl.equal(u8, boolStr, "true")) {
+        if (utilsl.contains(boolStr, "true", .ignoreCase)) {
             settings.debugMode = true;
-        } else if (utilsl.equal(u8, boolStr, "false")) {
+        } else if (utilsl.contains(boolStr, "false", .ignoreCase)) {
             settings.debugMode = false;
         } else {
             return false;
@@ -1213,9 +1225,9 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
-        if (utilsl.equal(u8, boolStr, "true")) {
+        if (utilsl.contains(boolStr, "true", .ignoreCase)) {
             settings.match.useOpeningBook = true;
-        } else if (utilsl.equal(u8, boolStr, "false")) {
+        } else if (utilsl.contains(boolStr, "false", .ignoreCase)) {
             settings.match.useOpeningBook = false;
         } else {
             return false;
@@ -1233,9 +1245,9 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
-        if (utilsl.equal(u8, boolStr, "true")) {
+        if (utilsl.contains(boolStr, "true", .ignoreCase)) {
             settings.match.saveLogs = true;
-        } else if (utilsl.equal(u8, boolStr, "false")) {
+        } else if (utilsl.contains(boolStr, "false", .ignoreCase)) {
             settings.match.saveLogs = false;
         } else {
             return false;
@@ -1244,9 +1256,9 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
-        if (utilsl.equal(u8, boolStr, "true")) {
+        if (utilsl.contains(boolStr, "true", .ignoreCase)) {
             settings.printToScreen = true;
-        } else if (utilsl.equal(u8, boolStr, "false")) {
+        } else if (utilsl.contains(boolStr, "false", .ignoreCase)) {
             settings.printToScreen = false;
         } else {
             return false;
@@ -1282,9 +1294,9 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
-        if (utilsl.equal(u8, boolStr, "true")) {
+        if (utilsl.contains(boolStr, "true", .ignoreCase)) {
             settings.match.infinite = true;
-        } else if (utilsl.equal(u8, boolStr, "false")) {
+        } else if (utilsl.contains(boolStr, "false", .ignoreCase)) {
             settings.match.infinite = false;
         } else {
             return false;

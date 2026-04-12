@@ -37,8 +37,8 @@ pub const KILLER_0_HEURISTIC_VALUE = 900;
 pub const KILLER_1_HEURISTIC_VALUE = 800;
 pub const MAX_HIST_HEURISTIC_VALUE = 700;
 
-pub const DEFAULT_USEQUIESC = false;
-pub const _DEFAULT_USEQUIESC = "false";
+pub const DEFAULT_USEQUIESC = true;
+pub const _DEFAULT_USEQUIESC = "true";
 
 pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
@@ -147,7 +147,7 @@ pub const TUNE_COMPLEXITY: bool = false; // ? weights
 pub const TUNE_PSQT: bool = true; // > 5 weights
 
 //pub const N_TERMS: usize = 392 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
-pub const N_TERMS: usize = 396 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
+pub const N_TERMS: usize = 397 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
 
 // TEXEL indexes
 pub const TEXEL_PAWN_COUNT_IDX: usize = 0;

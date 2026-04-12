@@ -14,6 +14,8 @@ import numpy.typing as npt
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+INVALID_VALUE: float = 99999
+
 
 def loadTexelWeight(
     path: str, n_pos: int, pos_offset: int = 0, dtype: npt.DTypeLike = np.float16
@@ -167,69 +169,6 @@ def print2dTensor(w, centipawn: bool = False) -> None:
             print("")
 
 
-# texel weight section
-INVALID_VALUE: float = 99999
-total_idx = 0
-
-countPawn_idx = total_idx
-total_idx += 1
-countKnight_idx = total_idx
-total_idx += 1
-countBishop_idx = total_idx
-total_idx += 1
-countRook_idx = total_idx
-total_idx += 1
-countQueen_idx = total_idx
-total_idx += 1
-
-mobility_idx = total_idx
-total_idx += 1
-
-kingMoveCountScore_idx = total_idx
-total_idx += 1
-
-structureProtection_idx = total_idx
-total_idx += 1
-
-isolatedPawnScore_idx = total_idx
-total_idx += 1
-stackedPawnScore_idx = total_idx
-total_idx += 1
-passedPawnScore_idx = total_idx
-total_idx += 1
-
-tempoChecksScore_idx = total_idx
-total_idx += 1
-
-# not used
-safetyPawn_idx = total_idx
-total_idx += 1
-safetyKnight_idx = total_idx
-total_idx += 1
-safetyBishop_idx = total_idx
-total_idx += 1
-safetyRook_idx = total_idx
-total_idx += 1
-safetyQueen_idx = total_idx
-total_idx += 1
-
-kingProximity = total_idx
-total_idx += 1
-
-PSQT_Pawn_idx = total_idx
-total_idx += 64
-PSQT_Bishop_idx = total_idx
-total_idx += 64
-PSQT_Knight_idx = total_idx
-total_idx += 64
-PSQT_Rook_idx = total_idx
-total_idx += 64
-PSQT_Queen_idx = total_idx
-total_idx += 64
-PSQT_King_idx = total_idx
-total_idx += 64
-
-
 def texelWeightsFromFlatLists(
     arr: list[float], indexes: list[int] | None = None
 ) -> texelWeights:
@@ -305,7 +244,7 @@ class texelWeights:
             ret = [fillValue] * self.len()
 
         self.sort()
-        assert self.checkBounds(), "Checkbound failed: overlaping weights were found"
+        self.assertBounds()
         offset = 0
         for e in self.elem:
             assert e.val is not None
@@ -324,8 +263,12 @@ class texelWeights:
                 break
             if not ((e.idx + len(e.val)) <= self.elem[i + 1].idx):
                 return False
-            # , "overlaping weights"
+
+            # "overlaping weights"
         return True
+
+    def assertBounds(self) -> None:
+        assert self.checkBounds(), "Checkbound failed: overlaping weights were found"
 
     def sort(self) -> None:
         self.elem.sort(key=lambda x: x.idx)
@@ -333,7 +276,7 @@ class texelWeights:
     def pushArray(self, val: list[float], startingIdx: int) -> None:
         self.elem.append(weight(idx=startingIdx, val=list(val)))
         self.sort()
-        assert self.checkBounds(), "Checkbound failed: overlaping weights were found"
+        self.assertBounds()
 
     def multiply(self, val: float) -> texelWeights:
         for l in self.elem:
@@ -398,8 +341,22 @@ class tuneConfig:
     tuneMobility: bool = True
     tuneStructure: bool = True
     tunePawnStructure: bool = True
-    tunePSQT: bool = True
+    tuneTempo: bool = True
+    tuneKingStuff: bool = True
     tuneSafety: bool = True
+    tunePSQT: bool = True
+
+    def freezingRequired(self) -> bool:
+        return not (
+            self.tuneCount
+            and self.tuneMobility
+            and self.tuneStructure
+            and self.tunePawnStructure
+            and self.tuneTempo
+            and self.tuneKingStuff
+            and self.tuneSafety
+            and self.tunePSQT
+        )
 
 
 class trainingOptions:
@@ -412,16 +369,23 @@ class trainingOptions:
         initialWeights: texelWeights | None = None,
         lrScheduler: bool = False,
     ):
-        assert os.path.exists(path)
+        assert os.path.exists(path), f"file {path} not found"
+        assert path.endswith(".csv"), (
+            f"extension of {path} not supported expected .csv file"
+        )
         self.path = path
         self.pos_per_epoch = pos_per_epoch
         self.epoch = epoch
         self.tuneCfg = tuneCfg
         self.initWeights = initialWeights
         self.lrScheduler = lrScheduler
+        if self.tuneCfg.freezingRequired:
+            assert self.initWeights is not None, (
+                "Some freezing required(one tune param was set to False) but no initial weights given"
+            )
 
     def setInitialWeight(self, w: texelWeights) -> None:
-        assert w.checkBounds()
+        w.assertBounds()
         self.initWeights = w
 
     def makeFreezeMask(self) -> torch.Tensor:
@@ -431,6 +395,7 @@ class trainingOptions:
 
         if not self.tuneCfg.tuneMobility:
             mask[mobility_idx] = 0
+            mask[kingMoveCountScore_idx] = 0
 
         if not self.tuneCfg.tuneStructure:
             mask[structureProtection_idx] = 0
@@ -447,6 +412,12 @@ class trainingOptions:
 
         if not self.tuneCfg.tuneSafety:
             mask[safetyPawn_idx : safetyQueen_idx + 1] = [0] * 5
+
+        if not self.tuneCfg.tuneTempo:
+            mask[tempoChecksScore_idx] = 0
+
+        if not self.tuneCfg.tuneKingStuff:
+            mask[kingProximityScore_idx] = 0
 
         return torch.tensor(mask)
 
@@ -469,15 +440,10 @@ class trainingOptions:
 
 
 def printTensorWeight(w, normalize: bool = False) -> None:
-    print(
-        f"pawnCount: {w[countPawn_idx]}, bishopCount: {w[countBishop_idx]}, knightCount: {w[countKnight_idx]}, rookCount: {w[countRook_idx]}, queenCount: {w[countQueen_idx]} "
-    )
-    print(
-        f"moveCount: {w[mobility_idx]}, structureProtection: {w[structureProtection_idx]}"
-    )
-    print(
-        f"isolatedScore: {w[isolatedPawnScore_idx]}, stackedScore: {w[stackedPawnScore_idx]}, passedScore: {w[passedPawnScore_idx]}"
-    )
+    norm = 100 if normalize else 0
+    for idx in range(PSQT_Pawn_idx):
+        print(f"{strWeightNames[idx]} = {w[idx] * norm}")
+
     print(f"pawnArr: ")
     print2dTensor(w[PSQT_Pawn_idx:PSQT_Bishop_idx], normalize)
 
@@ -496,11 +462,6 @@ def printTensorWeight(w, normalize: bool = False) -> None:
     print(f"kingArr: ")
     print2dTensor(w[PSQT_King_idx : PSQT_King_idx + 64], normalize)
 
-    print(
-        f"pawnSafety: {w[safetyPawn_idx]}, bishopSafety: {w[safetyBishop_idx]}, \
-    knightSafety: {w[safetyKnight_idx]}, rookSafety: {w[safetyRook_idx]}, queenSafety: {w[safetyQueen_idx]} "
-    )
-
 
 def saveModelWeightToFile(path: str, model: texelNet) -> None:
     saveWeightToFile(
@@ -514,41 +475,8 @@ def texelWeightToFileStr(w: texelWeights, phase: str) -> str:
     ret = ""
     arr = w.getArray(fullLength=True)
     for idx, val in w.iterValid():
-        if idx == countPawn_idx:
-            ret += f"pawnCountScore{phase} = {val};\n"
-        elif idx == countBishop_idx:
-            ret += f"bishopCountScore{phase} = {val};\n"
-        elif idx == countKnight_idx:
-            ret += f"knightCountScore{phase} = {val};\n"
-        elif idx == countRook_idx:
-            ret += f"rookCountScore{phase} = {val};\n"
-        elif idx == countQueen_idx:
-            ret += f"queenCountScore{phase} = {val};\n"
-        elif idx == mobility_idx:
-            ret += f"mobilityScore{phase} = {val};\n"
-        elif idx == kingMoveCountScore_idx:
-            ret += f"mobilityKingScore{phase} = {val};\n"
-        elif idx == structureProtection_idx:
-            ret += f"structureProtectionScore{phase} = {val};\n"
-        elif idx == isolatedPawnScore_idx:
-            ret += f"isolatedPawnScore{phase} = {val};\n"
-        elif idx == stackedPawnScore_idx:
-            ret += f"stackedPawnScore{phase} = {val};\n"
-        elif idx == passedPawnScore_idx:
-            ret += f"passedPawnScore{phase} = {val};\n"
-        elif idx == tempoChecksScore_idx:
-            ret += f"tempoChecksScore{phase} = {val};\n"
-        elif idx == safetyPawn_idx:
-            ret += f"safetyPawn{phase} = {val};\n"
-        elif idx == safetyKnight_idx:
-            ret += f"safetyKnight{phase} = {val};\n"
-        elif idx == safetyBishop_idx:
-            ret += f"safetyBishop{phase} = {val};\n"
-        elif idx == safetyRook_idx:
-            ret += f"safetyRook{phase} = {val};\n"
-        elif idx == safetyQueen_idx:
-            ret += f"safetyQueen{phase} = {val};\n"
-
+        if idx < PSQT_Pawn_idx:
+            ret += f"{strWeightNames[idx]}{phase} = {val};\n"
         elif idx == PSQT_Pawn_idx:
             ret += f"pawnPSQT{phase} = {floatArrToString(arr[PSQT_Pawn_idx:PSQT_Bishop_idx])};\n"
         elif idx == PSQT_Bishop_idx:
@@ -570,25 +498,8 @@ def texelWeightToFileStr(w: texelWeights, phase: str) -> str:
 
 def weightToFileStr(w: npt.NDArray[np.float16], phase: str) -> str:
     ret = ""
-    ret += f"pawnCountScore{phase} = {w[countPawn_idx]};\n"
-    ret += f"bishopCountScore{phase} = {w[countBishop_idx]};\n"
-    ret += f"knightCountScore{phase} = {w[countKnight_idx]};\n"
-    ret += f"rookCountScore{phase} = {w[countRook_idx]};\nqueenCountScore{phase} = {w[countQueen_idx]};\n"
-
-    ret += f"mobilityScore{phase} = {w[mobility_idx]};\n"
-    ret += f"mobilityKingScore{phase} = {w[kingMoveCountScore_idx]};\n"
-    ret += f"structureProtectionScore{phase} = {w[structureProtection_idx]};\n"
-
-    ret += f"isolatedPawnScore{phase} = {w[isolatedPawnScore_idx]};\n"
-    ret += f"stackedPawnScore{phase} = {w[stackedPawnScore_idx]};\n"
-    ret += f"passedPawnScore{phase} = {w[passedPawnScore_idx]};\n"
-    ret += f"tempoChecksScore{phase} = {w[tempoChecksScore_idx]};\n"
-
-    ret += f"safetyPawn{phase} = {w[safetyPawn_idx]};\n"
-    ret += f"safetyKnight{phase} = {w[safetyKnight_idx]};\n"
-    ret += f"safetyBishop{phase} = {w[safetyBishop_idx]};\n"
-    ret += f"safetyRook{phase} = {w[safetyRook_idx]};\n"
-    ret += f"safetyQueen{phase} = {w[safetyQueen_idx]};\n"
+    for idx in range(PSQT_Pawn_idx):
+        ret += f"{strWeightNames[idx]}{phase} = {w[idx]}"
 
     ret += f"pawnPSQT{phase} = {floatArrToString(w[PSQT_Pawn_idx:PSQT_Bishop_idx])};\n"
     ret += (
@@ -601,8 +512,6 @@ def weightToFileStr(w: npt.NDArray[np.float16], phase: str) -> str:
     ret += f"queenPSQT{phase} = {floatArrToString(w[PSQT_Queen_idx:PSQT_King_idx])};\n"
     ret += f"kingPSQT{phase} = {floatArrToString(w[PSQT_King_idx : PSQT_King_idx + 64])};\n"
     return ret
-
-    pass
 
 
 def saveWeightToFile(
@@ -632,17 +541,84 @@ def floatArrToString(arr) -> str:
     return f"[{tmp}]"
 
 
-if __name__ == "__main__":
-    pass
+# texel weight section
+total_idx = 0
 
-    # model = texelNet()
-    # criterion = nn.MSELoss()
-    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    # torch_x = torch.from_numpy(x)
-    # torch_y = torch.from_numpy(y)
-    # for epoch in range(100):
-    #     optimizer.zero_grad()  # Zero the gradients
-    #     outputs = model(torch_x)
-    #     loss = criterion(outputs, torch_y)
-    #     loss.backward()  # Backward pass
-    #     optimizer.step()  # Update the parameters
+countPawn_idx = total_idx
+total_idx += 1
+countKnight_idx = total_idx
+total_idx += 1
+countBishop_idx = total_idx
+total_idx += 1
+countRook_idx = total_idx
+total_idx += 1
+countQueen_idx = total_idx
+total_idx += 1
+
+mobility_idx = total_idx
+total_idx += 1
+
+kingMoveCountScore_idx = total_idx
+total_idx += 1
+
+structureProtection_idx = total_idx
+total_idx += 1
+
+isolatedPawnScore_idx = total_idx
+total_idx += 1
+stackedPawnScore_idx = total_idx
+total_idx += 1
+passedPawnScore_idx = total_idx
+total_idx += 1
+
+tempoChecksScore_idx = total_idx
+total_idx += 1
+
+# not used
+safetyPawn_idx = total_idx
+total_idx += 1
+safetyKnight_idx = total_idx
+total_idx += 1
+safetyBishop_idx = total_idx
+total_idx += 1
+safetyRook_idx = total_idx
+total_idx += 1
+safetyQueen_idx = total_idx
+total_idx += 1
+
+kingProximityScore_idx = total_idx
+total_idx += 1
+
+PSQT_Pawn_idx = total_idx
+total_idx += 64
+PSQT_Bishop_idx = total_idx
+total_idx += 64
+PSQT_Knight_idx = total_idx
+total_idx += 64
+PSQT_Rook_idx = total_idx
+total_idx += 64
+PSQT_Queen_idx = total_idx
+total_idx += 64
+PSQT_King_idx = total_idx
+total_idx += 64
+
+strWeightNames = [
+    "pawnCountScore",
+    "bishopCountScore",
+    "knightCountScore",
+    "rookCountScore",
+    "queenCountScore",
+    "mobilityScore",
+    "mobilityKingScore",
+    "structureProtectionScore",
+    "isolatedPawnScore",
+    "stackedPawnScore",
+    "passedPawnScore",
+    "tempoChecksScore",
+    "safetyPawn",
+    "safetyKnight",
+    "safetyBishop",
+    "safetyRook",
+    "safetyQueen",
+    "kingProximityScore",
+]
