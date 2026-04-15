@@ -77,21 +77,19 @@ class windowCtx:
     def mainWindow(self, mh: template.templateSelectionAlgo):
         assert self.stdscr is not None
         titleStr = f"Running {mh.name} {mh.iter} / {mh.maxiter} iter"
+        windowOffset = (0, 2)
         if self.useCurses:
-            rectangle(self.stdscr, 0, 2, 1 + 1, 1 + len(titleStr))
+            rectangle(
+                self.stdscr,
+                windowOffset[0],
+                windowOffset[1],
+                windowOffset[0] + 2,
+                windowOffset[1] + 1 + len(titleStr),
+            )
             self.stdscr.addstr(1, 3, f"{titleStr}")
             self.stdscr.refresh()
         else:
             print(f"{titleStr}")
-
-    def objectiveSection(self, mh: template.templateSelectionAlgo) -> None:
-        assert self.stdscr is not None
-        windowOffset = (4, 50)
-        self.stdscr.addstr(
-            windowOffset[0] - 1,
-            windowOffset[1],
-            f"Objective info: ",
-        )
 
     def settingsWindow(self, txt: list[str]) -> None:
         assert self.stdscr is not None
@@ -116,15 +114,14 @@ class windowCtx:
     def onTournamentBegin(self, mh: template.templateSelectionAlgo) -> None:
         assert self.stdscr is not None
         indexes = mh.objective.indexesTemplate
-        best_indiv = chessSpec.entryFrom1dArray(
-            mh.population[0].position, indexes=indexes
-        )
+        bestIndiv = mh.getBestIndiv()
+        best_indiv = chessSpec.entryFrom1dArray(bestIndiv.position, indexes=indexes)
 
         windowOffset = (10, 50)
         self.stdscr.addstr(
             windowOffset[0] - 1,
             windowOffset[1],
-            f"Current best (score: {mh.population[0].score}): ",
+            f"Current best (score: {round(bestIndiv.score, 3)}): ",
         )
         rectangle(
             self.stdscr,
@@ -153,11 +150,16 @@ class windowCtx:
 
         txt.append("MetaHeuristics health metrics:")
         txt.append(
-            f"Score max: {mh.population[0].score} min: {mh.population[-1].score} mean: {round(sum(scores) / mh.popsize, 2)}"
+            f"Score max: {round(max(scores), 3)} min: {round(min(scores), 3)} mean: {round(sum(scores) / mh.popsize, 2)}"
         )
 
         maxLength = max([len(e) for e in txt])
-
+        # print(
+        #    windowOffset[0],
+        #    windowOffset[1],
+        #    windowOffset[0] + len(txt) + 2,
+        #    windowOffset[1] + 1 + maxLength,
+        # )
         rectangle(
             self.stdscr,
             windowOffset[0],

@@ -1,5 +1,4 @@
-Uci complient chess engine project to try out the zig programming language.Uci complient chess engine project to try out the zig programming language. 
-
+Uci complient chess engine project to try out the zig programming language.
 
 Multiple files exist in the build/ directory due to a bug with the zig build command on wsl. The current work around is to set the env variable ZIG_LOCAL_CACHE_DIR to somewhere in the linux filesystem part and the the windows part.
 
@@ -13,7 +12,7 @@ comptime build arguments:
 - useStaged: Staged move generation or not
 - useMagic: Use magic method for slider pieces move generation
 - fastBitscan: Use of the "intrinsics" file for bitscan and reverseBitscan
-- useDebug: Performs sanityChecks at various stage of the move making / unmaking
+- useDebug: Performs sanityChecks at various stage of the move making / unmaking and more
 - useHash: (not used) Wether to use the hash table for previous explored move to retrieve the evaluation / nbr of moves
   - This option is now up to the engine using the setoption name useHash value true
 - useAvx2: (experimental) enable to change the way to get checkers / pinners bitboard during the "staged" move generation
@@ -41,7 +40,7 @@ Tasklist:
         - in the move ordering search the "best" moves to deeper depth than the lower owns
         - heuristics for the depth decays dependant of the state of the game
     - [ ] Futility pruning ?
-    - [ ] History ordering debug
+    - [x] History ordering debug
 
 Sources: 
 - https://www.chessprogramming.org/
@@ -75,7 +74,8 @@ Nodes per second (nps):
 | 7     | 3195901860 | 25547703 | 166346967 |
 
 
-Supported UCI commands:
+## Supported UCI commands:
+
 - uci
 - isready
 - position

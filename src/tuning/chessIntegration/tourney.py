@@ -71,6 +71,9 @@ class roundStatus:
     nFinished: int = 0
     nRunning: int = 0
 
+    def __repr__(self) -> str:
+        return f"{self.nFinished}  + {self.nRunning} running / {self.nMatch}"
+
     def isOver(self) -> bool:
         return self.nMatch == self.nFinished
 
@@ -154,8 +157,7 @@ class tuiGUI:
                 self.updateWindow()
             except Exception as e:
                 self.l.release()
-                _ = e
-                continue
+                print(f"Exception raised in update method {e}")
             time.sleep(SLEEP_STDOUT_S)
 
             if self.useCurses:
@@ -243,13 +245,23 @@ class tuiGUI:
         guil.lastUpdateWindow(self.gui.stdscr, self.sw)
 
     def settingsWindow(self) -> None:
-        assert type(mh.objective) is chessObjective
+        if self.mh is None:
+            return
+        assert type(self.mh.objective) is chessObjective
+        tourney = self.mh.objective.tourney
+        assert tourney.settings is not None
         txt: list[str] = []
         txt.append(f"Tournament settings: ")
-        txt.append(f"Number of baseline: {len(mh.objective.tourney.baseline)}")
-        txt.append(
-            f"Time format: {mh.objective.tourney.timeFormat.time} ms + {mh.objective.tourney.timeFormat.inc} "
-        )
+        txt.append(f"Number of matches: {tourney.settings.matchSettings.nMatch}")
+        txt.append(f"Tournament type: {tourney.type}")
+        if tourney.type.useBaselines():
+            txt.append(f"Number of baseline: {len(tourney.baseline)}")
+            if tourney.timeFormat is not None:
+                txt.append(
+                    f"Time format: {tourney.timeFormat.time} ms + {tourney.timeFormat.inc} "
+                )
+            if tourney.type == tournamentType.LOS:
+                pass
         self.gui.settingsWindow(txt)
 
     def updateMHWindow(self) -> None:
@@ -335,6 +347,11 @@ class infoFile:
 
         print("match settings: ")
         print(self.matchSettings)
+
+    def setTimeFormat(self, timeF: timeFormat | None) -> None:
+        if timeF is None:
+            return
+        self.matchSettings.timeF = timeF
 
 
 def readInfoFile(path: str) -> infoFile:
@@ -494,11 +511,6 @@ class tournamentType(Enum):
         return f"{self_name}.{self.name}"
 
 
-class matchFetchStatus(Enum):
-    FOUND = 1
-    EMPTY = 2
-
-
 def valueToTournamentType(val: int) -> tournamentType:
     if val == tournamentType.CLASSIC.value:
         return tournamentType.CLASSIC
@@ -509,6 +521,11 @@ def valueToTournamentType(val: int) -> tournamentType:
     if val == tournamentType.LOS.value:
         return tournamentType.LOS
     return tournamentType.INVALID
+
+
+class matchFetchStatus(Enum):
+    FOUND = 1
+    EMPTY = 2
 
 
 def scheduleMatches(popsize: int) -> list[tuple[int, int]]:
@@ -637,7 +654,7 @@ class threadInfo:
 class tournament(object):
     def __init__(
         self,
-        timeF: timeFormat = standardTimeFormat,
+        timeF: timeFormat | None = standardTimeFormat,
         templatePath: str | None = None,
         logDir: str = "",
         evalBin: str | None = None,
@@ -646,18 +663,27 @@ class tournament(object):
         type: tournamentType = tournamentType.CLASSIC,
         useGUIWait: bool = True,
         baselineLimit: int = -1,
+        pathPrepend: str = "",
     ):
-        self.timeFormat: timeFormat = timeF
+        self.debugMode: bool = debugMode
+        self.timeFormat: timeFormat | None = timeF
         self.type = type
         self.matchInv: matchContainerInfo = matchContainerInfo(1)
-        self.settings: infoFile | None = (
-            readInfoFile(templatePath) if templatePath is not None else None
-        )
-        self.templatePath = templatePath
+        if templatePath is not None:
+            self.templatePath = os.path.join(pathPrepend, templatePath)
+            if debugMode:
+                print(self.templatePath)
+            self.settings: infoFile | None = readInfoFile(self.templatePath)
+            if self.timeFormat is None:
+                self.timeFormat = self.settings.matchSettings.timeF
+            else:
+                self.settings.setTimeFormat(self.timeFormat)
+        else:
+            self.settings: infoFile | None = None
+
         self.population: list[chessIndividual] = []
         self.baseline: list[chessIndividual] = []
         self.evalBin: str | None = evalBin
-        self.debugMode: bool = debugMode
         if debugMode:
             print("Building tournament with debug on")
         self.logDir: str = logDir
@@ -678,7 +704,7 @@ class tournament(object):
         return ret
 
     def setThread(self, nThread: int) -> None:
-        assert nThread > 0
+        assert nThread > 0, f"Invalid(x <= 0) thread amount {nThread}"
         self.nThread = nThread
 
     def dispatchMatch(self, matchInfo: matchContainerInfo) -> None:
@@ -703,7 +729,6 @@ class tournament(object):
                 x.join()
 
         # check for the ERROR match and retry
-        # self.retryErrors(threadInfos[0])
 
     def thread_dispatchMatch(self, threadId: int, info: threadInfo) -> None:
         assert self.population is not None
@@ -750,43 +775,6 @@ class tournament(object):
             global_tui.pingUpdate()
 
         info.status = threadStatus.FINISHED
-
-    def retryErrors(self, info: threadInfo) -> None:
-        assert self.population is not None
-        assert self.settings is not None
-        assert self.evalBin is not None
-        for i in range(len(self.matchInv.status)):
-            if self.matchInv.status[i] != matchStatus.ERROR:
-                continue
-            pair = self.matchInv.order[i]
-            opp1 = self.population[pair[0]].position
-            if self.type.useBaselines():
-                opp2 = self.baseline[pair[1]].position
-            else:
-                opp2 = self.population[pair[1]].position
-
-            self.matchInv.status[i] = matchStatus.IN_PROGRESS
-            global_scoreBoard.updateScoreBoard(self.matchInv)
-            global_tui.pingUpdate()
-
-            currentMatch: matchO = matchO(
-                conf1=opp1,
-                conf2=opp2,
-                settings=self.settings,
-                extra=f"T0r",
-                debugMode=self.debugMode,
-            )
-            scoreList = launchAndWaitResults(
-                currentMatch, self.evalBin, self.logDir, info
-            )
-
-            if len(scoreList) == 0:
-                self.matchInv.status[i] = matchStatus.ERROR
-            else:
-                self.matchInv.status[i] = matchStatus.FINISHED
-                self.updateScore(pair=pair, score=scoreList)
-            global_scoreBoard.updateScoreBoard(self.matchInv)
-            global_tui.pingUpdate()
 
     def updateScore(self, pair: tuple[int, int], score: list[score]) -> None:
         if self.debugMode:
@@ -838,7 +826,6 @@ def GUIWaitLoop(
 global_scoreBoard = scoreBoard()
 global_tui: tuiGUI = tuiGUI(debugMode=True, useCurses=True)
 global_tui.setScoreBoard(global_scoreBoard)
-global_tui.dispatch()
 
 
 class chessObjective(obj.objective):
@@ -880,6 +867,8 @@ class chessObjective(obj.objective):
             chessIndividual(position=pos, uid=x, scoring=score(0, 0, 0))
             for x, pos in enumerate(self.baseline)
         ]
+
+        global_scoreBoard.roundStat.reset()
         global_scoreBoard.roundStat.nMatch = len(matchInv.status)
         self.tourney.dispatchMatch(matchInv)
         if self.tourney.type == tournamentType.LOS:
@@ -923,7 +912,7 @@ class chessObjective(obj.objective):
         if self.indexesTemplate != []:
             log["indexesTemplate"] = self.indexesTemplate
 
-    def _loadFromFile(self, config: dict) -> None:
+    def _loadFromFile(self, config: dict, pathPrepend: str = "") -> None:
         if config.get("baseline") is not None:
             self.baseline = []
             assert type(config["baseline"]) is list
@@ -941,13 +930,15 @@ class chessObjective(obj.objective):
                     )
                 )
         if config.get("tournament") is not None:
-            self.tourney = tournamentFromConfigFile(config["tournament"])
+            self.tourney = tournamentFromConfigFile(
+                config["tournament"], pathPrepend=pathPrepend
+            )
 
         if config.get("indexesTemplate") is not None:
             self.indexesTemplate = config["indexesTemplate"]
 
 
-def tournamentFromConfigFile(config: dict) -> tournament:
+def tournamentFromConfigFile(config: dict, pathPrepend: str = "") -> tournament:
     return tournament(
         timeF=timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
         templatePath=config["templatePath"],
@@ -956,10 +947,11 @@ def tournamentFromConfigFile(config: dict) -> tournament:
         debugMode=config["debugMode"],
         nThread=config["nThread"],
         type=valueToTournamentType(config["type"]),
+        pathPrepend=pathPrepend,
     )
 
 
-def objectiveFromConfigFile(path: str) -> chessObjective:
+def objectiveFromConfigFile(path: str, pathPrepend: str = "") -> chessObjective:
     assert os.path.exists(path)
     with open(path, "r") as file:
         config = yaml.safe_load(file)
@@ -972,7 +964,7 @@ def objectiveFromConfigFile(path: str) -> chessObjective:
             bounds=objConfig["bounds"],
             steps=objConfig["steps"],
         )
-        ret._loadFromFile(objConfig)
+        ret._loadFromFile(objConfig, pathPrepend=pathPrepend)
         return ret
 
 
@@ -1012,6 +1004,9 @@ def clear() -> None:
 
 
 class guiUpdateCallback(template.callback):
+    def __init__(self):
+        super().__init__()
+
     def on_eval(
         self,
         positions: list[npt.NDArray[np.float64]]
@@ -1076,27 +1071,28 @@ class mhUserInput:
 class userInput:
     baseInfoFile: str = ""
     tmpFolderPath: str = ""
-    evaluationBinaryPath: str = ""
+    resFolderPath: str = ""
+    evaluationBinaryPath: str = "zig-out/bin/evaluate"
     mhParams: mhUserInput | None = None
     debugMode: bool = False
     timeF: timeFormat = hyperBulletTimeFormat
 
 
 if __name__ == "__main__":
+    global_tui.dispatch()
     path = "engines/engine_tourney.info"
-    tmpFolder = f"out/heuristics/MH/tmp_{int(time.time())}"
+    tmpFolder = f"out/heuristics/MH/tmp/tmp_{int(time.time())}"
+    yamlFolder = f"out/heuristics/MH/res/tmp_{int(time.time())}"
     evaluationBinPath = "zig-out/bin/evaluate"
-    os.makedirs(tmpFolder, exist_ok=True)
 
     popsize = 16
     maxiter = 32
 
     cbs = [callbackBaseline(), guiUpdateCallback()]
-    saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix="ben")
+    saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix="result", saveLog=True)
     mh = gw.GW(
         popsize=popsize,
         maxiter=maxiter,
-        saveLog=True,
         preEval=True,
         saveOpt=saveOpt,
         cbs=cbs,
@@ -1104,7 +1100,7 @@ if __name__ == "__main__":
     global_tui.setMH(mh)
 
     tourn = tournament(
-        standardTimeFormat,
+        timeF=hyperBulletTimeFormat,
         templatePath=path,
         evalBin=evaluationBinPath,
         debugMode=False,

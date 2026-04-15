@@ -214,6 +214,34 @@ class callbackSave(template.callback):
             yaml.dump(savingDict, file)
 
 
+class callbackHealthCheck(template.callback):
+    """ """
+
+    def __init__(self):
+        super().__init__()
+        self.STD_THRESHOLD = 5
+        self.POP_THRESHOLD = 0.5
+
+    def on_iter_start(self):
+        assert self.mh is not None
+        assert self.mh.objective is not None
+        poses = np.array(self.mh.getCurrentPositions())
+        stds = poses.std(axis=0)
+        mask: npt.NDArray[np.bool] = stds < self.STD_THRESHOLD
+        nDimReq = mask.sum()
+        if nDimReq == 0:
+            return
+        indexes = list(range(self.mh.popsize))
+        pop = sorted(self.mh.population, key=lambda x: x.score)
+        # first elem is the lowest score
+
+        for idx in range(int(self.mh.popsize * self.POP_THRESHOLD)):
+            pop[idx].position[mask] = self.mh.generateRandArray(ndim=nDimReq)
+            pop[idx].score = (
+                float("-inf") if self.mh.objective.maximize else float("inf")
+            )
+
+
 # https://www.chessprogramming.org/Match_Statistics#cite_note-26
 def computeLOS(wins: int, losses: int):
     if (wins + losses) == 0:
