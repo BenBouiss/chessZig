@@ -29,7 +29,7 @@ class GW(template.templateSelectionAlgo):
         scores = self.evaluate(new_pos)
 
         for i in range(self.popsize):
-            if scores[i] >= self.population[i].score or not self.useGreedy:
+            if scores[i] >= self.population[i].score or not self.optimOpt.useGreedy:
                 self.population[i].position = new_pos[i]
                 self.population[i].score = scores[i]
 

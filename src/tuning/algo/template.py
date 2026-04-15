@@ -39,11 +39,38 @@ FRAME_FROZEN_IDX = 3
 class saveOptions:
     logDir: str = "."
     prefix: str = "result"
+    saveLog: bool = True
+
+    def __init__(self, logDir: str = ".", prefix: str = "result", saveLog: bool = True):
+        os.makedirs(logDir, exist_ok=True)
+        self.logDir = logDir
+        self.prefix = prefix
+        self.saveLog = saveLog
+
+    def loadFromDict(self, d: dict | None) -> None:
+        if d is None:
+            return
+        self.logDir = d.get("logDir", self.logDir)
+        self.prefix = d.get("prefix", self.prefix)
+        self.saveLog = d.get("saveLog", self.saveLog)
+
+
+@dataclass
+class optimizerOption:
+    useGreedy: bool = True
+    preEval: bool = True
+    debugMode: bool = False
+
+    def loadFromDict(self, d: dict | None) -> None:
+        if d is None:
+            return
+        self.useGreedy = d.get("useGreedy", self.useGreedy)
+        self.preEval = d.get("preEval", self.preEval)
+        self.debugMode = d.get("debugMode", self.debugMode)
 
 
 DEFAULT_SEED = 42
 DEFAULT_INT = 1
-DEFAULT_PREVAL = False
 
 
 class templateSelectionAlgo(object):
@@ -52,18 +79,14 @@ class templateSelectionAlgo(object):
         popsize: int,
         maxiter: int,
         seed: int = DEFAULT_SEED,
-        preEval: bool = DEFAULT_PREVAL,
         cbs: list[callback] | None = None,
-        saveLog: bool = False,
         saveOpt: saveOptions = saveOptions(),
-        useGreedy: bool = True,
-        debugMode: bool = False,
+        optimOpt: optimizerOption = optimizerOption(),
     ):
         self.objective: objective.objective | None = None
 
         self.running = False
-        self.preEval: bool = preEval
-        self.useGreedy: bool = useGreedy
+        self.optimOpt = optimOpt
 
         self.maxiter: int = maxiter
         self.iter: int = 0
@@ -78,13 +101,15 @@ class templateSelectionAlgo(object):
         self.populationHistory: list[list[individual]] = []
         self.best_indiv_list: list[individual] = []
         self.callbacks: list[callback] = []
-        self.debugMode = debugMode
+
         if cbs is not None:
             for cb in cbs:
                 self.addCallback(cb)
-        self.saveLog: bool = saveLog
         self.saveOpt: saveOptions = saveOpt
         self.name = "Null"
+
+    def isDebugMode(self) -> bool:
+        return self.optimOpt.debugMode
 
     def addCallback(self, cb: callback) -> None:
         cb.setMh(self)
@@ -99,7 +124,7 @@ class templateSelectionAlgo(object):
         delta = self.objective.bounds[:, 1] - self.objective.bounds[:, 0]
 
         # TODO: v???v
-        initScore = float("-inf") if self.objective.maximize else float("-inf")
+        initScore = float("-inf") if self.objective.maximize else float("inf")
 
         for i in range(self.popsize):
             randMask = self.numpyRandomGenerator.random(size=self.objective.nDims)
@@ -111,6 +136,13 @@ class templateSelectionAlgo(object):
                 score=initScore,
             )
             self.population.append(indiv)
+
+    def generateRandArray(self, ndim: int) -> npt.NDArray[np.float64]:
+        assert self.objective is not None
+
+        delta = self.objective.bounds[:, 1] - self.objective.bounds[:, 0]
+        randMask = self.numpyRandomGenerator.random(size=ndim)
+        return self.snapToCorrectGrid(self.objective.bounds[:, 0] + delta * randMask)
 
     def snapToSteps(self, position: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         assert self.objective is not None
@@ -130,7 +162,7 @@ class templateSelectionAlgo(object):
         assert self.objective is not None
         self.running = True
 
-        if self.preEval and (self.iter == 0):
+        if self.optimOpt.preEval and (self.iter == 0):
             # can be used in algo to have a already evaluated
             # random population
             scores = self.evaluate(self.getCurrentPositions())
@@ -140,7 +172,7 @@ class templateSelectionAlgo(object):
         while self.running and self.iter < self.maxiter:
             self.step()
 
-            if self.debugMode:
+            if self.isDebugMode():
                 print(
                     f"[DEBUG] template.optimize: best indiv: {self.best_indiv_list[-1]}"
                 )
@@ -171,8 +203,8 @@ class templateSelectionAlgo(object):
     def on_iter_end(self):
         for cb in self.callbacks:
             cb.on_iter_end()
-        if self.saveLog:
-            self.populationHistory.append(copy.deepcopy(self.population))
+        self.populationHistory.append(copy.deepcopy(self.population))
+        if self.saveOpt.saveLog:
             # TODO for now we overwrite the existing file everytime "nasty"
             path = os.path.join(
                 self.saveOpt.logDir, f"{self.saveOpt.prefix}_{self.uid}.yaml"
@@ -229,14 +261,14 @@ class templateSelectionAlgo(object):
         self.iter = valDict.get("iter", DEFAULT_INT)
         self.maxiter = valDict.get("maxiter", DEFAULT_INT)
         self.popsize = valDict.get("popsize", DEFAULT_INT)
-        self.preEval = valDict.get("preEval", DEFAULT_PREVAL)
         self.seed = valDict.get("seed", DEFAULT_SEED)
+        self.saveOpt.loadFromDict(valDict.get("saveOptions", None))
+        self.optimOpt.loadFromDict(valDict.get("optimizerOption", None))
 
         if self.objective is not None:
             self.objective.loadFromFile(valDict)
 
         lastFrame = valDict.get("populationHistory", [])
-        # self.populationHistory = valDict.get("populationHistory", [])
         self.populationHistory = loadPopulationHistory(
             valDict.get("populationHistory", [])
         )
@@ -268,8 +300,9 @@ class templateSelectionAlgo(object):
         savingDict["iter"] = self.iter
         savingDict["maxiter"] = self.maxiter
         savingDict["popsize"] = self.popsize
-        savingDict["preEval"] = self.preEval
         savingDict["seed"] = self.seed
+        savingDict["saveOptions"] = self.saveOpt.__dict__
+        savingDict["optimizerOption"] = self.optimOpt.__dict__
         if self.objective is not None:
             # check fmt if not good need to convert to list of list
             savingDict["objective"] = self.objective.saveToFile()
