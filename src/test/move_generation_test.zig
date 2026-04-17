@@ -8,6 +8,7 @@ const mainl = @import("../main.zig");
 const perftl = @import("../search/perft.zig");
 const stringl = @import("../string.zig");
 const bookl = @import("../book.zig");
+const timel = @import("../time.zig");
 
 const std = @import("std");
 
@@ -35,16 +36,17 @@ test "perft - startpos" {
     const perft_MAX_DEPTH = 6;
     var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
     //try std.testing.expect(!hashl.isHashTable_init());
+    var sw: timel.stopWatch = .{};
     for (1..perft_MAX_DEPTH + 1) |depth| {
-        const _start: i64 = std.time.microTimestamp();
+        sw.startTimeTick();
         const res = perftl.perftThreadStart(&board, @intCast(depth), perft_THREAD, perft_BATCHED) catch {
             std.debug.print("[PANIC]: Error when launching perft\n", .{});
             @panic("");
         };
         const expect: i64 = @intCast(res.searchStat.n_nodeExplored);
+        const timeTaken = sw.timeSinceStartUs();
         try std.testing.expectEqual(expect, benchmarkl.ExpectedBenchmarkResults[depth]);
-        const _stop = std.time.microTimestamp();
-        std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(_stop - _start, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, 1 + (_stop - _start)) });
+        std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(timeTaken, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, timeTaken + 1) });
     }
 
     std.debug.print("[TEST]: Perft checks passed\n", .{});

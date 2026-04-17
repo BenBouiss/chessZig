@@ -16,7 +16,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from algo import objective as obj
 from algo import gw
 
-from algo.template import individual, saveOptions, templateSelectionAlgo
+from algo.template import (
+    individual,
+    saveOptions,
+    templateSelectionAlgo,
+    optimizerOption,
+)
 from algo import template
 
 sys.path.append(os.path.dirname(__file__))
@@ -26,12 +31,8 @@ import texel
 import gui as guil
 import utils as utilsl
 
-
 import lock as lockl
 
-baseWeightPath = "engines/heuristics/baseOldWeights.info"
-
-SLEEP_LOCK_S = 0.01
 SLEEP_STDOUT_S = 1
 
 
@@ -217,7 +218,7 @@ class tuiGUI:
             totalMatch = (
                 self.mh.objective.tourney.settings.matchSettings.nMatch
                 * 2
-                * len(self.mh.objective.tourney.baseline)
+                * len(self.mh.objective.baseline)
             )
             print(
                 f"Current best score = {self.mh.population[0].score}, total LOS = {self.mh.population[0].score / totalMatch}, total match: {totalMatch}"
@@ -237,7 +238,7 @@ class tuiGUI:
         )
 
         print(
-            f"Tournament info nMatch = {self.mh.objective.tourney.settings.matchSettings.nMatch}, nBaselines = {len(self.mh.objective.tourney.baseline)}"
+            f"Tournament info nMatch = {self.mh.objective.tourney.settings.matchSettings.nMatch}, nBaselines = {len(self.mh.objective.baseline)}"
         )
 
     def lastUpdatedWin(self) -> None:
@@ -251,18 +252,19 @@ class tuiGUI:
         tourney = self.mh.objective.tourney
         assert tourney.settings is not None
         txt: list[str] = []
-        txt.append(f"Tournament settings: ")
         txt.append(f"Number of matches: {tourney.settings.matchSettings.nMatch}")
         txt.append(f"Tournament type: {tourney.type}")
         if tourney.type.useBaselines():
-            txt.append(f"Number of baseline: {len(tourney.baseline)}")
+            txt.append(f"Number of baseline: {len(self.mh.objective.baseline)}")
             if tourney.timeFormat is not None:
                 txt.append(
                     f"Time format: {tourney.timeFormat.time} ms + {tourney.timeFormat.inc} "
                 )
             if tourney.type == tournamentType.LOS:
                 pass
-        self.gui.settingsWindow(txt)
+        self.gui.standardWindow(
+            txt, winOffset=(10, 0), winTitle="Tournament settings: "
+        )
 
     def updateMHWindow(self) -> None:
         assert self.gui.active
@@ -326,10 +328,23 @@ class matchInfoSettings:
         ret += f"playerSwitch={self.playerSwitch};\n"
         ret += f"debugMode={self.debugMode};\n"
         ret += f"useOpeningBook={self.useOpeningBook};\n"
-        ret += f"openingBookPath={self.openingBookPath};\n"
+        ret += f'openingBookPath="{self.openingBookPath}";\n'
         ret += f"timeFormat=({self.timeF.time}, {self.timeF.inc});\n"
         ret += f"saveLogs={self.saveLogs};\n"
-        ret += f"logsLocation={self.logsLocation};\n"
+        ret += f'logsLocation="{self.logsLocation}";\n'
+        return ret
+
+    def toDict(self) -> dict:
+        ret = {}
+
+        ret["nMatch"] = self.nMatch
+        ret["playerSwitch"] = self.playerSwitch
+        ret["debugMode"] = self.debugMode
+        ret["useOpeningBook"] = self.useOpeningBook
+        ret["openingBookPath"] = self.openingBookPath
+        ret["timeF"] = [self.timeF.time, self.timeF.inc]
+        ret["saveLogs"] = self.saveLogs
+        ret["logsLocation"] = self.logsLocation
         return ret
 
 
@@ -352,6 +367,28 @@ class infoFile:
         if timeF is None:
             return
         self.matchSettings.timeF = timeF
+
+    def toDict(self) -> dict:
+        return {
+            "engineSettings": self.engineSettings,
+            "engineNames": self.engineNames,
+            "matchSettings": self.matchSettings.toDict(),
+        }
+
+
+def infoFileFromDict(d: dict) -> infoFile:
+    ret: infoFile = infoFile(
+        engineSettings=d.get("engineSettings", []),
+        engineNames=d.get("engineNames", []),
+        matchSettings=matchInfoSettings(),
+    )
+    if d.get("matchSettings") is not None:
+        ret.matchSettings = matchInfoSettings(**d["matchSettings"])
+        if d["matchSettings"].get("timeF") is not None:
+            ret.matchSettings.timeF = timeFormat(
+                time=d["matchSettings"]["timeF"][0], inc=d["matchSettings"]["timeF"][1]
+            )
+    return ret
 
 
 def readInfoFile(path: str) -> infoFile:
@@ -657,12 +694,11 @@ class tournament(object):
         timeF: timeFormat | None = standardTimeFormat,
         templatePath: str | None = None,
         logDir: str = "",
+        saveLog: bool = True,
         evalBin: str | None = None,
         debugMode: bool = False,
         nThread: int = 1,
         type: tournamentType = tournamentType.CLASSIC,
-        useGUIWait: bool = True,
-        baselineLimit: int = -1,
         pathPrepend: str = "",
     ):
         self.debugMode: bool = debugMode
@@ -681,6 +717,7 @@ class tournament(object):
         else:
             self.settings: infoFile | None = None
 
+        self.saveLog = saveLog
         self.population: list[chessIndividual] = []
         self.baseline: list[chessIndividual] = []
         self.evalBin: str | None = evalBin
@@ -689,18 +726,20 @@ class tournament(object):
         self.logDir: str = logDir
         self.setThread(nThread)
         self.logs: dict = {}
-        self.useGUIWait = useGUIWait
-        self.baselineLimit = baselineLimit
 
     def saveArgsToDict(self) -> dict:
         ret = {}
-        ret["timeFormat"] = [self.timeFormat.time, self.timeFormat.inc]
-        ret["templatePath"] = self.templatePath
+        if self.timeFormat is not None:
+            ret["timeFormat"] = [self.timeFormat.time, self.timeFormat.inc]
         ret["logDir"] = self.logDir
         ret["evalBin"] = self.evalBin
         ret["debugMode"] = self.debugMode
         ret["nThread"] = self.nThread
         ret["type"] = self.type.value
+
+        ret["templatePath"] = self.templatePath
+        if self.settings is not None:
+            ret["settings"] = self.settings.toDict()
         return ret
 
     def setThread(self, nThread: int) -> None:
@@ -722,13 +761,8 @@ class tournament(object):
                 )
             )
             workingThreads[-1].start()
-        if self.useGUIWait:
-            GUIWaitLoop(self, workingThreads, threadInfos)
-        else:
-            for x in workingThreads:
-                x.join()
 
-        # check for the ERROR match and retry
+        GUIWaitLoop(self, workingThreads, threadInfos)
 
     def thread_dispatchMatch(self, threadId: int, info: threadInfo) -> None:
         assert self.population is not None
@@ -829,11 +863,12 @@ global_tui.setScoreBoard(global_scoreBoard)
 
 
 class chessObjective(obj.objective):
-    def __init__(self, tourney: tournament, **parentKwargs):
+    def __init__(self, tourney: tournament, baselineLimit: int = -1, **parentKwargs):
         self.tourney = tourney
         super().__init__(**parentKwargs)
         self.baseline: list[heuristicEntry] = []
         self.indexesTemplate: list[int] = []
+        self.baselineLimit = baselineLimit
 
     def _evaluate(
         self,
@@ -892,7 +927,7 @@ class chessObjective(obj.objective):
         self.baseline = [entry]
 
     def appendBaseline(self, entry: heuristicEntry) -> None:
-        if len(self.baseline) == self.tourney.baselineLimit:
+        if len(self.baseline) == self.baselineLimit:
             self.baseline.pop(0)
             assert self.tourney.settings is not None
             self.tourney.settings.matchSettings.nMatch += 1
@@ -909,6 +944,7 @@ class chessObjective(obj.objective):
             log["baseline"].append(ret)
 
         log["tournament"] = self.tourney.saveArgsToDict()
+        log["baselineLimit"] = self.baselineLimit
         if self.indexesTemplate != []:
             log["indexesTemplate"] = self.indexesTemplate
 
@@ -936,19 +972,35 @@ class chessObjective(obj.objective):
 
         if config.get("indexesTemplate") is not None:
             self.indexesTemplate = config["indexesTemplate"]
+        self.baselineLimit = config.get("baselineLimit", -1)
 
 
 def tournamentFromConfigFile(config: dict, pathPrepend: str = "") -> tournament:
-    return tournament(
-        timeF=timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
-        templatePath=config["templatePath"],
-        logDir=config["logDir"],
-        evalBin=config["evalBin"],
-        debugMode=config["debugMode"],
-        nThread=config["nThread"],
-        type=valueToTournamentType(config["type"]),
-        pathPrepend=pathPrepend,
-    )
+    if config.get("settings") is not None:
+        ret = tournament(
+            timeF=timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
+            templatePath=None,
+            logDir=config["logDir"],
+            evalBin=config["evalBin"],
+            debugMode=config["debugMode"],
+            nThread=config["nThread"],
+            type=valueToTournamentType(config["type"]),
+            pathPrepend=pathPrepend,
+        )
+        ret.settings = infoFileFromDict(config["settings"])
+        ret.templatePath = config["templatePath"]
+    else:
+        ret = tournament(
+            timeF=timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
+            templatePath=config["templatePath"],
+            logDir=config["logDir"],
+            evalBin=config["evalBin"],
+            debugMode=config["debugMode"],
+            nThread=config["nThread"],
+            type=valueToTournamentType(config["type"]),
+            pathPrepend=pathPrepend,
+        )
+    return ret
 
 
 def objectiveFromConfigFile(path: str, pathPrepend: str = "") -> chessObjective:
@@ -1046,7 +1098,7 @@ class callbackBaseline(template.callback):
                 / (
                     self.mh.objective.tourney.settings.matchSettings.nMatch
                     * 2
-                    * len(self.mh.objective.tourney.baseline)
+                    * len(self.mh.objective.baseline)
                 )
             ) > self.LOS_FRAC_THRESH:
                 self.mh.objective.appendBaseline(
@@ -1078,26 +1130,40 @@ class userInput:
     timeF: timeFormat = hyperBulletTimeFormat
 
 
-if __name__ == "__main__":
+def launch_mh(mh: templateSelectionAlgo) -> None:
+    assert type(mh.objective) is chessObjective
     global_tui.dispatch()
+    global_tui.setMH(mh)
+    mh.addCallback(guiUpdateCallback())
+    mh.addCallback(chessSpec.callbackHealthCheck())
+    if mh.objective.tourney.type.useBaselines():
+        mh.addCallback(callbackBaseline())
+
+    mh.optimize()
+
+
+if __name__ == "__main__":
     path = "engines/engine_tourney.info"
     tmpFolder = f"out/heuristics/MH/tmp/tmp_{int(time.time())}"
     yamlFolder = f"out/heuristics/MH/res/tmp_{int(time.time())}"
     evaluationBinPath = "zig-out/bin/evaluate"
 
-    popsize = 16
-    maxiter = 32
-
-    cbs = [callbackBaseline(), guiUpdateCallback()]
-    saveOpt: saveOptions = saveOptions(logDir=tmpFolder, prefix="result", saveLog=True)
-    mh = gw.GW(
-        popsize=popsize,
-        maxiter=maxiter,
-        preEval=True,
-        saveOpt=saveOpt,
-        cbs=cbs,
+    saveOpt: saveOptions = saveOptions(
+        logDir=tmpFolder,
+        prefix="result",
+        saveLog=True,
+        resDir="out/heuristics/MH/res",
     )
-    global_tui.setMH(mh)
+    optimOpt: optimizerOption = optimizerOption(
+        useGreedy=True, preEval=True, debugMode=False
+    )
+    mh = gw.GW(
+        popsize=16,
+        maxiter=32,
+        saveOpt=saveOpt,
+        optimOpt=optimOpt,
+        cbs=[],
+    )
 
     tourn = tournament(
         timeF=hyperBulletTimeFormat,
@@ -1107,7 +1173,6 @@ if __name__ == "__main__":
         logDir=tmpFolder,
         nThread=4,
         type=tournamentType.LOS,
-        baselineLimit=4,
     )
 
     mh.setObjective(
@@ -1116,6 +1181,7 @@ if __name__ == "__main__":
             tourney=tourn,
             bounds=dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim=N_PARAMS),
             steps=dummyStep(STEP_WEIGTH, nDim=N_PARAMS),
+            baselineLimit=4,
         )
     )
     assert type(mh.objective) is chessObjective
@@ -1146,5 +1212,4 @@ if __name__ == "__main__":
             ).get1DArray()
         )
     )
-
-    mh.optimize()
+    launch_mh(mh)

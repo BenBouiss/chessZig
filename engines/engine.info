@@ -1,19 +1,19 @@
 [engine1]
-path="engines/bin/engine_11_04_26";
-name="no quies";
+path="engines/bin/engine_17_04_26_std";
+name="vanilla";
 "setoption name useHash value false";
 "setoption name searchType value zwsi";
-"setoption name useQuiescence value false";
+"setoption name useQuiescence value true";
 
 [engine2]
-path="engines/bin/engine_11_04_26";
-name="quies no delta";
+path="engines/bin/engine_17_04_26_delta";
+name="delta pruning";
 "setoption name useHash value false";
 "setoption name searchType value zwsi";
 "setoption name useQuiescence value true";
 
 [match]
-nMatch=4;
+nMatch=16;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
@@ -21,4 +21,5 @@ openingBookPath="opening/8moves_v3.pgn";
 timeFormat=(10000, 0);
 logsLocation="out/logs/evaluate";
 //saveLogs=true;
+printToScreen=false;
 

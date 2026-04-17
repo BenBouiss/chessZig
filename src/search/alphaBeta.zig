@@ -406,9 +406,9 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
             _delta += weightl.simpleQueenScore - 200;
         }
         // delta pruning
-        //if (static_eval < (_alpha - _delta)) {
-        //    return _alpha;
-        //}
+        if (static_eval < (_alpha - _delta)) {
+            return _alpha;
+        }
 
         // if move nor capture nor checking
         // problem here where a checking sequence ie

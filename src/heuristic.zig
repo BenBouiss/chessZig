@@ -491,7 +491,20 @@ var STRUCTURE_PROTECTION: scoreType = 1;
 const N_PHASES: usize = 2;
 const N_WEIGHTS: usize = 256;
 const NTERMS: usize = 1024;
-pub var globalHeuristic: heuristicValues = .{};
+pub var globalHeuristic: heuristicValues = .{
+    .MobilityValue = .{ 0, 11 },
+    .KingMobilityValue = .{ 0, 60 },
+    .StructureProtectionValue = .{ 31, 65 },
+    .IsolatedPawnValue = .{ 2, 1 },
+    .StackedPawnValue = .{ 0, 7 },
+    .PassedPawnValue = .{ 68, 98 },
+    .tempoChecksScore = .{ 90, 0 },
+    .SafetyKnightValue = .{ 21, 100 },
+    .SafetyBishopValue = .{ 42, 82 },
+    .SafetyRookValue = .{ 0, 7 },
+    .SafetyQueenValue = .{ 23, 29 },
+    .KingProximityValue = .{ 1, 11 },
+};
 
 //const pawnPhase: usize = 0;
 pub const bishopPhase: usize = 1;

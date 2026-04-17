@@ -5,8 +5,9 @@ import os, time, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import curses
 
-import chessSpec, texel
+import numpy as np
 
+import chessSpec, texel
 from algo import template, gw, objective
 
 
@@ -91,23 +92,25 @@ class windowCtx:
         else:
             print(f"{titleStr}")
 
-    def settingsWindow(self, txt: list[str]) -> None:
+    def standardWindow(
+        self, txt: list[str], winOffset: tuple[int, int], winTitle: str = ""
+    ) -> None:
         assert self.stdscr is not None
         if (len(txt)) == 0:
             return
-        windowOffset = (10, 0)
+        self.stdscr.addstr(winOffset[0] - 1, winOffset[1], f"{winTitle}")
         maxLength = max([len(s) for s in txt])
         rectangle(
             self.stdscr,
-            windowOffset[0],
-            windowOffset[1],
-            windowOffset[0] + len(txt) + 2,
-            windowOffset[1] + 1 + maxLength,
+            winOffset[0],
+            winOffset[1],
+            winOffset[0] + len(txt) + 2,
+            winOffset[1] + 1 + maxLength,
         )
         for i, s in enumerate(txt):
             self.stdscr.addstr(
-                windowOffset[0] + i + 1,
-                windowOffset[1] + 1,
+                winOffset[0] + i + 1,
+                winOffset[1] + 1,
                 f"{s}",
             )
 
@@ -147,32 +150,46 @@ class windowCtx:
         txt: list[str] = []
 
         scores = [e.score for e in mh.population]
+        poses = np.array(mh.getCurrentPositions())
+        stds = poses.std(axis=0)
 
-        txt.append("MetaHeuristics health metrics:")
+        self.stdscr.addstr(
+            windowOffset[0] - 1, windowOffset[1], "MetaHeuristics health metrics:"
+        )
         txt.append(
-            f"Score max: {round(max(scores), 3)} min: {round(min(scores), 3)} mean: {round(sum(scores) / mh.popsize, 2)}"
+            f"Score max: {max(scores): .2e} min: {min(scores): .2e} mean: {(sum(scores) / mh.popsize): .2e}"
         )
 
+        txt.append(
+            f"Standard devs max: {max(stds):.2e} min: {min(stds):.2e} mean: {(sum(stds) / mh.popsize): .2e}"
+        )
         maxLength = max([len(e) for e in txt])
-        # print(
-        #    windowOffset[0],
-        #    windowOffset[1],
-        #    windowOffset[0] + len(txt) + 2,
-        #    windowOffset[1] + 1 + maxLength,
-        # )
+        maxStrSize = 40
+
+        overFlow = 0
+        for e in txt:
+            overFlow += len(e) // maxStrSize
+
         rectangle(
             self.stdscr,
             windowOffset[0],
             windowOffset[1],
-            windowOffset[0] + len(txt) + 2,
-            windowOffset[1] + 1 + maxLength,
+            windowOffset[0] + len(txt) + 2 + overFlow,
+            windowOffset[1] + 1 + maxStrSize,
         )
+        new_lines = 0
         for i, s in enumerate(txt):
-            self.stdscr.addstr(
-                windowOffset[0] + i + 1,
-                windowOffset[1] + 1,
-                f"{s}",
-            )
+            n = len(s)
+            count = 0
+            while n > 0:
+                self.stdscr.addstr(
+                    windowOffset[0] + new_lines + count + 1,
+                    windowOffset[1] + 1,
+                    f"{s[count * maxStrSize : (count + 1) * maxStrSize]}",
+                )
+                n -= maxStrSize
+                count += 1
+            new_lines += count
 
     def onMatchEnd(self, nFinished: int, nMatch: int, nRunning: int):
         assert self.stdscr is not None
@@ -192,28 +209,24 @@ class windowCtx:
             ],
         )
         self.stdscr.refresh()
-        if not (nRunning + nFinished >= nMatch):
+        if (nRunning + nFinished) != nMatch:
             drawBar(
                 size_YX=(2, totalSize),
                 offset_YX=(barOffset[0], barOffset[1]),
                 color=curses.color_pair(0),
             )
         if nFinished != 0:
-            if nRunning != 0:
-                drawBar(
-                    size_YX=(2, currSize + 1),
-                    offset_YX=(barOffset[0], barOffset[1]),
-                    color=curses.color_pair(1),
-                )
-            else:
-                drawBar(
-                    size_YX=(2, currSize),
-                    offset_YX=(barOffset[0], barOffset[1]),
-                    color=curses.color_pair(1),
-                )
+            sizeFinish = currSize if (nRunning == 0) else (currSize + 1)
+            drawBar(
+                size_YX=(2, sizeFinish),
+                offset_YX=(barOffset[0], barOffset[1]),
+                color=curses.color_pair(1),
+            )
 
         if nRunning != 0:
             runningSize = int((nRunning / nMatch) * totalSize)
+            if (nRunning + nFinished) == nMatch:
+                runningSize += 1
             drawBar(
                 size_YX=(2, runningSize),
                 offset_YX=(barOffset[0], currSize + barOffset[1]),

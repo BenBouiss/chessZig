@@ -340,7 +340,7 @@ const guiState = struct {
     alloc: std.mem.Allocator = undefined,
     input: std.ArrayList(enginel.inputChannel) = undefined,
     match: matchStatus = .{},
-    start_time_ms: i64 = undefined,
+    startSw: timel.stopWatch = .{},
     engineInventory: engine_Inventory,
 
     pub fn init() !guiState {
@@ -356,7 +356,8 @@ const guiState = struct {
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(ret.alloc, 2);
         ret.logs = try std.ArrayList([]const u8).initCapacity(ret.alloc, INITIAL_LOGSIZE);
-        ret.start_time_ms = std.time.milliTimestamp();
+        ret.startSw = .{};
+        ret.startSw.startTimeTick();
 
         return ret;
     }
@@ -393,7 +394,7 @@ const guiState = struct {
         }
     }
     pub fn appendLog(p_self: *guiState, log: []const u8) !void {
-        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => {s}", .{ std.time.milliTimestamp() - p_self.start_time_ms, log });
+        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => {s}", .{ p_self.startSw.timeSinceStartMs(), log });
         try p_self.logs.append(p_self.alloc, logmsg);
     }
     pub fn freeLog(p_self: *guiState) void {
