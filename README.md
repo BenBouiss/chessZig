@@ -2,6 +2,7 @@ Uci complient chess engine project to try out the zig programming language.
 
 Multiple files exist in the build/ directory due to a bug with the zig build command on wsl. The current work around is to set the env variable ZIG_LOCAL_CACHE_DIR to somewhere in the linux filesystem part and the the windows part.
 
+Running for zig version 0.15.2
 Installation:
 ```
  ./build/build.sh && ./zig-out/bin/engine

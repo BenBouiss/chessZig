@@ -231,12 +231,12 @@ class callbackHealthCheck(template.callback):
         nDimReq = mask.sum()
         if nDimReq == 0:
             return
-        indexes = list(range(self.mh.popsize))
+
         pop = sorted(self.mh.population, key=lambda x: x.score)
         # first elem is the lowest score
 
         for idx in range(int(self.mh.popsize * self.POP_THRESHOLD)):
-            pop[idx].position[mask] = self.mh.generateRandArray(ndim=nDimReq)
+            pop[idx].position[mask] = self.mh.generateRandArray()[mask]
             pop[idx].score = (
                 float("-inf") if self.mh.objective.maximize else float("inf")
             )

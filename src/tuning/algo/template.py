@@ -38,12 +38,20 @@ FRAME_FROZEN_IDX = 3
 @dataclass
 class saveOptions:
     logDir: str = "."
+    resDir: str | None = None
     prefix: str = "result"
     saveLog: bool = True
 
-    def __init__(self, logDir: str = ".", prefix: str = "result", saveLog: bool = True):
+    def __init__(
+        self,
+        logDir: str = ".",
+        prefix: str = "result",
+        saveLog: bool = True,
+        resDir: str | None = None,
+    ):
         os.makedirs(logDir, exist_ok=True)
         self.logDir = logDir
+        self.resDir = resDir
         self.prefix = prefix
         self.saveLog = saveLog
 
@@ -51,6 +59,7 @@ class saveOptions:
         if d is None:
             return
         self.logDir = d.get("logDir", self.logDir)
+        self.resDir = d.get("resDir", self.resDir)
         self.prefix = d.get("prefix", self.prefix)
         self.saveLog = d.get("saveLog", self.saveLog)
 
@@ -137,11 +146,11 @@ class templateSelectionAlgo(object):
             )
             self.population.append(indiv)
 
-    def generateRandArray(self, ndim: int) -> npt.NDArray[np.float64]:
+    def generateRandArray(self) -> npt.NDArray[np.float64]:
         assert self.objective is not None
 
         delta = self.objective.bounds[:, 1] - self.objective.bounds[:, 0]
-        randMask = self.numpyRandomGenerator.random(size=ndim)
+        randMask = self.numpyRandomGenerator.random(size=self.objective.nDims)
         return self.snapToCorrectGrid(self.objective.bounds[:, 0] + delta * randMask)
 
     def snapToSteps(self, position: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -170,6 +179,8 @@ class templateSelectionAlgo(object):
                 self.population[i].score = scores[i]
 
         while self.running and self.iter < self.maxiter:
+            self.on_iter_start()
+
             self.step()
 
             if self.isDebugMode():
@@ -206,9 +217,13 @@ class templateSelectionAlgo(object):
         self.populationHistory.append(copy.deepcopy(self.population))
         if self.saveOpt.saveLog:
             # TODO for now we overwrite the existing file everytime "nasty"
-            path = os.path.join(
-                self.saveOpt.logDir, f"{self.saveOpt.prefix}_{self.uid}.yaml"
+            dirPath = (
+                self.saveOpt.resDir
+                if self.saveOpt.resDir is not None
+                else self.saveOpt.logDir
             )
+            os.makedirs(dirPath, exist_ok=True)
+            path = os.path.join(dirPath, f"{self.saveOpt.prefix}_{self.uid}.yaml")
             self.saveToFile(path)
 
     def on_optim_start(self):

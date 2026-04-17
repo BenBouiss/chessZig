@@ -10,6 +10,7 @@ const utilsl = @import("../utils.zig");
 const hashl = @import("../hashTable.zig");
 const enginel = @import("../engine.zig");
 const configl = @import("../config.zig");
+const timel = @import("../time.zig");
 
 const threadingl = @import("threading.zig");
 const alphaBetal = @import("alphaBeta.zig");
@@ -89,12 +90,12 @@ fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, de
     return true;
 }
 pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !bool {
-    const _start: u64 = @intCast(std.time.milliTimestamp());
+    var sw: timel.stopWatch = .{};
+    sw.startTimeTick();
     while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
         std.Thread.sleep(configl.INFO_TICKRATE_NS);
         const res = threadingl.getCombinedFromPack(p_threadPack);
-        const _end: u64 = @intCast(std.time.milliTimestamp());
-        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, (_end - _start + 1)) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, @as(u64, @intCast(sw.timeSinceStartMs() + 1))) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
             continue;
         };
         defer p_engine.alloc.free(msg);

@@ -9,3 +9,5 @@ engine before 01_02_26: bug in the undoing of irreversible moves leading to impr
 	- symptom: engine making moves thinking the move will not lead to a draw
 
 engine_11_02_26: introduction of texel evaluation mode in a "fast" way where the speed is comparable to the past approach.
+
+engine_17_04_26: in default weight changes due to recent MH results

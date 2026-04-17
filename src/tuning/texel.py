@@ -92,10 +92,12 @@ class texelNet(nn.Module):
 
 
 def setInitWeight(opt: trainingOptions, model: nn.Module) -> None:
+    idx = 0
     for e in model.named_parameters():
         if not "weight" in e[0]:
             continue
-        opt.modifyTensorWithMask(e[1].data[0], copy=False)
+        opt.modifyTensorWithMask(e[1].data[0], idx=idx, copy=False)
+        idx += 1
 
 
 def zeroOutGrad(freezeM: torch.Tensor, model: nn.Module) -> None:
@@ -116,8 +118,9 @@ def training_loop(
     criterion = nn.MSELoss()
     setInitWeight(opt, model)
     freezeM = opt.makeFreezeMask()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.75)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.75)
 
     if fileSize is None:
         size = getFileLineNumbers(opt.path)
@@ -292,8 +295,8 @@ class texelWeights:
                 l.val[x] /= val
         return self
 
-    def makeTensor(self) -> torch.Tensor:
-        return torch.tensor(self.getArray(fullLength=True))
+    def makeTensor(self, fillValue: int = INVALID_VALUE) -> torch.Tensor:
+        return torch.tensor(self.getArray(fullLength=True, fillValue=fillValue))
 
     def __repr__(self) -> str:
         ret = ""
@@ -366,7 +369,7 @@ class trainingOptions:
         pos_per_epoch: int,
         epoch: int,
         tuneCfg: tuneConfig = tuneConfig(),
-        initialWeights: texelWeights | None = None,
+        initialWeights: list[texelWeights] | None = None,
         lrScheduler: bool = False,
     ):
         assert os.path.exists(path), f"file {path} not found"
@@ -378,71 +381,85 @@ class trainingOptions:
         self.epoch = epoch
         self.tuneCfg = tuneCfg
         self.initWeights = initialWeights
+        if type(self.initWeights) is list:
+            assert len(self.initWeights) == 2, (
+                "Weights must contain both MG and EG section"
+            )
         self.lrScheduler = lrScheduler
         if self.tuneCfg.freezingRequired:
             assert self.initWeights is not None, (
                 "Some freezing required(one tune param was set to False) but no initial weights given"
             )
 
-    def setInitialWeight(self, w: texelWeights) -> None:
-        w.assertBounds()
+    def setInitialWeight(self, w: list[texelWeights]) -> None:
+        assert len(w) == 2, "Weights must contain both MG and EG section"
+        w[0].assertBounds()
+        w[1].assertBounds()
         self.initWeights = w
 
     def makeFreezeMask(self) -> torch.Tensor:
         mask = [1.0] * (total_idx)
+        assert len(mask) == total_idx
         if not self.tuneCfg.tuneCount:
             mask[countPawn_idx : countQueen_idx + 1] = [0] * 5
 
+        assert len(mask) == total_idx
         if not self.tuneCfg.tuneMobility:
             mask[mobility_idx] = 0
             mask[kingMoveCountScore_idx] = 0
 
+        assert len(mask) == total_idx
         if not self.tuneCfg.tuneStructure:
             mask[structureProtection_idx] = 0
 
+        assert len(mask) == total_idx
         if not self.tuneCfg.tunePawnStructure:
             mask[isolatedPawnScore_idx] = 0
             mask[stackedPawnScore_idx] = 0
             mask[passedPawnScore_idx] = 0
 
+        assert len(mask) == total_idx
         if not self.tuneCfg.tunePSQT:
-            mask[PSQT_Pawn_idx : PSQT_King_idx + 64] = [0] * (
-                PSQT_King_idx + 64 - PSQT_Pawn_idx
-            )
+            mask[PSQT_Pawn_idx : PSQT_King_idx + 64] = [0] * (64 * 6)
 
+        assert len(mask) == total_idx
         if not self.tuneCfg.tuneSafety:
             mask[safetyPawn_idx : safetyQueen_idx + 1] = [0] * 5
 
+        assert len(mask) == total_idx
         if not self.tuneCfg.tuneTempo:
             mask[tempoChecksScore_idx] = 0
 
+        assert len(mask) == total_idx
         if not self.tuneCfg.tuneKingStuff:
             mask[kingProximityScore_idx] = 0
 
+        assert len(mask) == total_idx
+
         return torch.tensor(mask)
 
-    def modifyTensorWithMask(self, w: torch.Tensor, copy: bool = False) -> torch.Tensor:
+    def modifyTensorWithMask(
+        self, w: torch.Tensor, idx: int, copy: bool = False
+    ) -> torch.Tensor:
         # modifies the w tensor inplace
         assert self.initWeights is not None
         mask = self.makeFreezeMask()
-        initValMask = mask == 0
+        newW = self.initWeights[idx].makeTensor()
+        initValMask = torch.logical_and((mask == 0), (newW != INVALID_VALUE))
+
         if copy:
             w2 = torch.tensor(w)
-            w2[initValMask] = self.initWeights.makeTensor()[initValMask]
+            w2[initValMask] = newW[initValMask]
             return w2
         else:
-            w[initValMask] = self.initWeights.makeTensor()[initValMask]
+            w[initValMask] = self.initWeights[idx].makeTensor()[initValMask]
             return w
-
-    def makeTensorInitW(self) -> torch.Tensor:
-        assert self.initWeights is not None
-        return self.initWeights.makeTensor()
 
 
 def printTensorWeight(w, normalize: bool = False) -> None:
-    norm = 100 if normalize else 0
+    norm = 100 if normalize else 1
     for idx in range(PSQT_Pawn_idx):
-        print(f"{strWeightNames[idx]} = {w[idx] * norm}")
+        print(f"{strWeightNames[idx]} = {w[idx]}")
 
     print(f"pawnArr: ")
     print2dTensor(w[PSQT_Pawn_idx:PSQT_Bishop_idx], normalize)
@@ -463,11 +480,12 @@ def printTensorWeight(w, normalize: bool = False) -> None:
     print2dTensor(w[PSQT_King_idx : PSQT_King_idx + 64], normalize)
 
 
-def saveModelWeightToFile(path: str, model: texelNet) -> None:
+def saveModelWeightToFile(path: str, model: texelNet, convertToCP: bool = True) -> None:
     saveWeightToFile(
         path,
         model.W_mg.weight.detach().numpy()[0],
         model.W_eg.weight.detach().numpy()[0],
+        convertToCP=convertToCP,
     )
 
 
@@ -499,18 +517,18 @@ def texelWeightToFileStr(w: texelWeights, phase: str) -> str:
 def weightToFileStr(w: npt.NDArray[np.float16], phase: str) -> str:
     ret = ""
     for idx in range(PSQT_Pawn_idx):
-        ret += f"{strWeightNames[idx]}{phase} = {w[idx]}"
+        ret += f"{strWeightNames[idx]}{phase}={w[idx]};\n"
 
-    ret += f"pawnPSQT{phase} = {floatArrToString(w[PSQT_Pawn_idx:PSQT_Bishop_idx])};\n"
+    ret += f"pawnPSQT{phase}={floatArrToString(w[PSQT_Pawn_idx:PSQT_Bishop_idx])};\n"
     ret += (
-        f"bishopPSQT{phase} = {floatArrToString(w[PSQT_Bishop_idx:PSQT_Knight_idx])};\n"
+        f"bishopPSQT{phase}={floatArrToString(w[PSQT_Bishop_idx:PSQT_Knight_idx])};\n"
     )
+    ret += f"knightPSQT{phase}={floatArrToString(w[PSQT_Knight_idx:PSQT_Rook_idx])};\n"
+    ret += f"rookPSQT{phase}={floatArrToString(w[PSQT_Rook_idx:PSQT_Queen_idx])};\n"
+    ret += f"queenPSQT{phase}={floatArrToString(w[PSQT_Queen_idx:PSQT_King_idx])};\n"
     ret += (
-        f"knightPSQT{phase} = {floatArrToString(w[PSQT_Knight_idx:PSQT_Rook_idx])};\n"
+        f"kingPSQT{phase}={floatArrToString(w[PSQT_King_idx : PSQT_King_idx + 64])};\n"
     )
-    ret += f"rookPSQT{phase} = {floatArrToString(w[PSQT_Rook_idx:PSQT_Queen_idx])};\n"
-    ret += f"queenPSQT{phase} = {floatArrToString(w[PSQT_Queen_idx:PSQT_King_idx])};\n"
-    ret += f"kingPSQT{phase} = {floatArrToString(w[PSQT_King_idx : PSQT_King_idx + 64])};\n"
     return ret
 
 
@@ -533,6 +551,8 @@ def saveWeightToFile(
 
             if convertToCP:
                 w = (w * 100).astype(int)
+            else:
+                w = w.astype(int)
             f.write(weightToFileStr(w, ph))
 
 
