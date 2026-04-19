@@ -245,14 +245,18 @@ pub fn evaluate_structure(p_state: *const chess.Board_state, p_whiteMoveBB: *con
     return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * computeTapered(values.StructureProtectionValue[MG], values.StructureProtectionValue[EG], _phase);
 }
 pub fn evaluate_tempo(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *heuristicValues, _phase: scoreType) scoreType {
-    _ = p_whiteMoveBB;
-    _ = p_blackMoveBB;
     var coeff: scoreType = 1;
     if (p_state.whiteToMove()) {
         coeff = -1;
     }
     const isChecked: scoreType = coeff * @intFromBool(p_state.isChecked());
-    return computeTapered(values.tempoChecksScore[MG], values.tempoChecksScore[EG], _phase) * isChecked;
+    const wMoves: u64 = p_whiteMoveBB.collapse();
+    const wThreats: u64 = wMoves & p_state.c_occupiedBB[@intFromBool(false)];
+    const bMoves: u64 = p_blackMoveBB.collapse();
+    const bThreats: u64 = bMoves & p_state.c_occupiedBB[@intFromBool(true)];
+    const deltaThreat: scoreType = @as(scoreType, (@intCast(chess.l_popcount(wThreats)))) - @as(scoreType, (@intCast(chess.l_popcount(bThreats))));
+
+    return computeTapered(values.tempoChecksScore[MG], values.tempoChecksScore[EG], _phase) * isChecked + computeTapered(values.pieceThreatScore[MG], values.pieceThreatScore[EG], _phase) * deltaThreat;
 }
 
 pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreType {
@@ -460,6 +464,7 @@ pub const heuristicValues = struct {
     KingMobilityValue: [N_PHASES]scoreType = .{ weightl.simpleKingMobilityScore, weightl.simpleKingMobilityScore },
 
     tempoChecksScore: [N_PHASES]scoreType = .{ weightl.simpleTempoChecksScore, weightl.simpleTempoChecksScore },
+    pieceThreatScore: [N_PHASES]scoreType = .{ weightl.simplePieceThreatScore, weightl.simplePieceThreatScore },
 
     IsolatedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleIsolatedPawnScore, weightl.simpleIsolatedPawnScore },
     StackedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleStackedPawnScore, weightl.simpleStackedPawnScore },

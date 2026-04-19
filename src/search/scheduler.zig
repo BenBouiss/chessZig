@@ -56,17 +56,37 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     return ret;
 }
 
+pub const searchingThreadContainer = struct {
+    len: usize = 0,
+    items: [configl.MAX_THREAD]std.Thread = undefined,
+    pub fn appendThread(p_self: *searchingThreadContainer, thread: std.Thread) void {
+        std.debug.assert(p_self.len < configl.MAX_THREAD);
+        p_self.items[p_self.len] = thread;
+        p_self.len += 1;
+    }
+    pub fn reset(p_self: *searchingThreadContainer) void {
+        p_self.len = 0;
+    }
+    pub fn joinOn(self: searchingThreadContainer) void {
+        for (0..self.len) |i| {
+            self.items[i].join();
+        }
+    }
+};
+
 pub const uciSearcher = struct {
     config: enginel.goArgStruct = .{},
     schedul: scheduler = .{},
     bestMove: moveDecisionExt = .{},
     nThreads: u32 = 1,
+    searchingThread: searchingThreadContainer = .{},
     endCounter: u16 = 0,
     searching: bool = false,
     interrupt: bool = false,
 
     pub fn reset(p_self: *uciSearcher) void {
         p_self.endCounter = 0;
+        p_self.searchingThread.reset();
         p_self.interrupt = false;
         p_self.searching = false;
         p_self.bestMove = .{};
@@ -325,12 +345,9 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8) bool {
         moveArray = moveGenl.generateLegalMoves(&p_engine.state);
     }
 
-    const dispatchThread = std.Thread.spawn(.{}, dispatchUciGoThreads, .{ p_engine, moveArray }) catch {
+    p_engine.searcher.searchingThread.appendThread(std.Thread.spawn(.{}, dispatchUciGoThreads, .{ p_engine, moveArray }) catch {
         return false;
-    };
-    p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
-        return false;
-    };
+    });
 
     return true;
 }

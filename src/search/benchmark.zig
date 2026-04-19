@@ -23,12 +23,10 @@ pub const benchmarkEntries = [_][]const u8{
 
 pub fn dispatchUciBenchmark(p_engine: *engine) bool {
     // executes the benchmark steps
-    const dispatchThread = std.Thread.spawn(.{}, dispatchUciBenchmarkThreads, .{p_engine}) catch {
+    p_engine.searcher.searchingThread.appendThread(std.Thread.spawn(.{}, dispatchUciBenchmarkThreads, .{p_engine}) catch {
         return false;
-    };
-    p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
-        return false;
-    };
+    });
+
     return true;
 }
 pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {

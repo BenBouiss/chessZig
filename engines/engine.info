@@ -1,25 +1,26 @@
 [engine1]
-path="engines/bin/engine_17_04_26_std";
+path="zig-out/bin/engine";
 name="vanilla";
 "setoption name useHash value false";
 "setoption name searchType value zwsi";
 "setoption name useQuiescence value true";
 
 [engine2]
-path="engines/bin/engine_17_04_26_delta";
-name="delta pruning";
+path="zig-out/bin/engine";
+name="LMR";
 "setoption name useHash value false";
 "setoption name searchType value zwsi";
 "setoption name useQuiescence value true";
+"setoption name useLMR value true";
 
 [match]
-nMatch=16;
+nMatch=4;
 playerSwitch=true;
 debugMode=false;
-useOpeningBook=true;
+useOpeningBook=false;
 openingBookPath="opening/8moves_v3.pgn";
 timeFormat=(10000, 0);
 logsLocation="out/logs/evaluate";
-//saveLogs=true;
+saveLogs=false;
 printToScreen=false;
 

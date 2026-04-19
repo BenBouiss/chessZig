@@ -263,6 +263,7 @@ pub const engine = struct {
         ret.metric = .{};
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
+
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
 
         ret.uciMode = false;
@@ -371,6 +372,7 @@ pub const engine = struct {
         for (0..p_self.workingThreads.items.len) |i| {
             p_self.workingThreads.items[i].join();
         }
+        p_self.searcher.searchingThread.joinOn();
     }
     pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
@@ -486,9 +488,7 @@ pub const engine = struct {
         p_self.status.running = false;
         p_self.searcher.interrupt = true;
         p_self.respond("its ovah");
-        for (0..p_self.workingThreads.items.len) |i| {
-            p_self.workingThreads.items[i].join();
-        }
+        p_self.waitOnWorkingThreads();
     }
     pub fn free(p_self: *engine) void {
         p_self.input.free(p_self.alloc);
@@ -1072,7 +1072,6 @@ fn mainThread(debugMode: bool) void {
     eng.status.running = true;
 
     _ = std.Thread.spawn(.{}, entrypointReaderThreading, .{&eng}) catch unreachable;
-    //eng.workingThreads.append(eng.alloc, inputThread) catch unreachable;
     eng.status.debugMode = debugMode;
     inputThreading(&eng);
 }

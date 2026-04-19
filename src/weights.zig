@@ -1,10 +1,7 @@
-const configl = @import("config.zig");
 const heuristicl = @import("heuristic.zig");
 const chessl = @import("chess.zig");
 
 const scoreType = heuristicl.scoreType;
-const weightType = heuristicl.weightType;
-const NVector = heuristicl.NVector;
 const heuristicValues = heuristicl.heuristicValues;
 
 // values from https://www.chessprogramming.org/Evaluation for now
@@ -28,6 +25,7 @@ pub const simpleStructureProtectionScore: scoreType = 1;
 
 // ============ tempo ============
 pub const simpleTempoChecksScore: scoreType = 25;
+pub const simplePieceThreatScore: scoreType = 4;
 
 // source: https://www.chessprogramming.org/King_Safety
 // ============ safety ============
@@ -38,8 +36,6 @@ pub const simpleSafetyQueenScore: scoreType = 80;
 
 // ============ king ============
 pub const simpleKingProximity: scoreType = 5;
-
-pub var weights: heuristicl.coeffTuple = .{ .val = [_]NVector{ .{ .val = undefined }, .{ .val = undefined } } };
 
 pub const pawnScoreArr = [chessl.N_SQUARES]scoreType{ 0, 0, 0, 0, 0, 0, 0, 0, -31, 8, -7, -37, -36, -14, 3, -31, -22, 9, 5, -11, -10, -2, 3, -19, -26, 3, 10, 9, 6, 1, 0, -23, -17, 16, -2, 15, 14, 0, 15, -13, 7, 28, 21, 44, 40, 31, 44, 7, 78, 83, 86, 73, 102, 82, 85, 90, 0, 0, 0, 0, 0, 0, 0, 0 };
 

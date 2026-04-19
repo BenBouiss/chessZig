@@ -43,10 +43,6 @@ pub const N_SQUARES: u8 = ROW_SIZE * COL_SIZE;
 pub const MAX_POSSIBLE_MOVE: u8 = 218;
 pub const N_PIECES = 12;
 pub const N_PIECES_TYPES = 6;
-pub const QUEENSIDECASTLEID = 0;
-pub const KINGCASTLEID = 1;
-pub const KINGSIDECASTLEID = 2;
-pub const INVALID_POSITION: i8 = -1;
 pub const INVALID_ENPASSANT_FILE: u8 = 8;
 
 pub const EMPTY: u64 = 0;
@@ -62,7 +58,6 @@ pub const notGHFile: u64 = 0x3f3f3f3f3f3f3f3f;
 pub const notHFile: u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
 pub const whitePawnPromoRank: u64 = 0xFF00000000000000;
 pub const blackPawnPromoRank: u64 = 0xFF;
-pub const nonPromoRank: u64 = ~(whitePawnPromoRank | blackPawnPromoRank);
 
 pub const whitePawnDoubleRank: u64 = 0xFF00;
 pub const blackPawnDoubleRank: u64 = 0xFF000000000000;
