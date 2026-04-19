@@ -932,7 +932,7 @@ pub const coeffTuple = struct {
         defer alloc.free(eg_str);
 
         const file = try std.fs.cwd().createFile(path, .{ .read = true });
-        defer file.close();
+        defer file.close(mainl.getGlobalIo());
         _ = try file.write(mg_str);
         _ = try file.write(eg_str);
     }
@@ -1036,21 +1036,25 @@ pub fn createEmptyFile(alloc: std.mem.Allocator, path: string) !void {
     // format
     // Coeff_1_w, Coeff_1_b, ...., Coeff_n_w, Coeff_n_b, phase, outcome)
     // <--comma separated values--->
-    const file = try std.fs.cwd().createFile(path._slice(), .{ .read = true });
-    defer file.close();
+    //const file = try std.fs.cwd().createFile(path._slice(), .{ .read = true });
+    const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{ .read = true });
+    defer file.close(mainl.getGlobalIo());
 
     // save header
     const headerTemplate: csvHeader = .{ .n_params = configl.N_TERMS };
 
     const header_str = try std.fmt.allocPrint(alloc, "{f}\n", .{headerTemplate});
     defer alloc.free(header_str);
-    _ = try file.write(header_str);
+    _ = file.writerStreaming(mainl.getGlobalIo(), header_str);
 }
 pub fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []texelEntry, path: string) !void {
     // <--comma separated values--->
-    const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .write_only });
-    defer file.close();
-    try file.seekFromEnd(0);
+    //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .write_only });
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
+    defer file.close(mainl.getGlobalIo());
+
+    //std.Io.File.Writer.seekTo()
+    //try file.seek(0);
 
     const print_freq: usize = 10000;
     for (0..entries.len) |i| {
@@ -1063,7 +1067,7 @@ pub fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []texelEntry, pa
         const body: csvBody = .{ .entry = &entries[i] };
         const body_str = try std.fmt.allocPrint(alloc, "{f}\n", .{body});
         defer alloc.free(body_str);
-        _ = try file.write(body_str);
+        _ = file.writerStreaming(mainl.getGlobalIo(), body_str);
     }
 }
 
@@ -1434,13 +1438,13 @@ pub fn test_scaling() !void {
         std.debug.print("\n", .{});
     }
 }
-pub fn test_SEE() !void {
+pub fn test_SEE(alloc: std.mem.Allocator) !void {
     const fen = "1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - - 0 1";
     var move = movel.build_move(@intFromEnum(squarel.e_square.f1), @intFromEnum(squarel.e_square.e5), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteRook);
     //const fen = "1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - - 0 1";
     //var move = movel.build_move(@intFromEnum(squarel.e_square.d3), @intFromEnum(squarel.e_square.e5), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteKnight);
 
-    var state = try chess.getBoardFromFen(mainl.GLOBAL_ALLOC, fen);
+    var state = try chess.getBoardFromFen(alloc, fen);
 
     //const fen = "k7/8/3r4/8/2r1b3/5B2/4R3/K7 w - - 0 1";
     //var move = movel.build_move(@intFromEnum(squarel.e_square.f3), @intFromEnum(squarel.e_square.e4), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteBishop);
@@ -1450,18 +1454,18 @@ pub fn test_SEE() !void {
 
     std.debug.print("[DEBUG] test_SEE: score for move: {s} SEE = {d}\n", .{ move.getStr(), SEE(&state, move) });
 }
-pub fn main() !void {
+pub fn main(alloc: std.mem.Allocator) !void {
     //try sanityCheck();
     //try test_main();
-    mainl.initAll(false);
-    var path: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "opening/E12.33-1M-D12-Resolved.book");
-    var savePath: string = try string.initFromSlice(mainl.GLOBAL_ALLOC, "logs/test_weights_int_filter_quiesc+endFen_red_prox.csv");
+    mainl.initAll(alloc, false);
+    var path: string = try string.initFromSlice(alloc, "opening/E12.33-1M-D12-Resolved.book");
+    var savePath: string = try string.initFromSlice(alloc, "logs/test_weights_int_filter_quiesc+endFen_red_prox.csv");
 
-    defer path.free(mainl.GLOBAL_ALLOC);
-    defer savePath.free(mainl.GLOBAL_ALLOC);
+    defer path.free(alloc);
+    defer savePath.free(alloc);
 
     //try test_scaling();
-    //try test_SEE();
-    try test_save(mainl.GLOBAL_ALLOC, path, savePath);
-    //try mainTexel(mainl.GLOBAL_ALLOC, path);
+    //try test_SEE(alloc);
+    try test_save(alloc, path, savePath);
+    //try mainTexel(alloc, path);
 }

@@ -28,8 +28,8 @@ pub fn min(comptime T: type, x: T, y: T) T {
 
 pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.ArrayList(T), size: usize) !std.ArrayList(std.ArrayList(T)) {
     const sizeEach: usize = arr.items.len / size;
-    var ret: std.ArrayList(std.ArrayList(T)) = .{};
-    try ret.append(alloc, .{});
+    var ret: std.ArrayList(std.ArrayList(T)) = try .initCapacity(alloc, 4);
+    try ret.append(alloc, try .initCapacity(alloc, 2));
     var cell: usize = 0;
     var count: usize = 0;
     const last_cell = sizeEach * size;
@@ -39,7 +39,7 @@ pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.A
             if (i != last_cell) {
                 count = 0;
                 cell += 1;
-                try ret.append(alloc, .{});
+                try ret.append(alloc, try .initCapacity(alloc, 2));
             } else {
                 remainder_start = i;
                 break;

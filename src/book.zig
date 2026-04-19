@@ -6,7 +6,6 @@ const configl = @import("config.zig");
 const chessl = @import("chess.zig");
 const filel = @import("file.zig");
 
-const _alloc = mainl.GLOBAL_ALLOC;
 const string = stringl.string;
 
 pub const outcomeFlag = enum(u8) { draw, blackWin, whiteWin };
@@ -51,9 +50,9 @@ pub const openingDatabase = struct {
         // ... next ones afterwards
 
         var ret: openingDatabase = .{};
-        ret.drawnEntries = .{};
-        ret.whiteEntries = .{};
-        ret.blackEntries = .{};
+        ret.drawnEntries = try .initCapacity(alloc, 4);
+        ret.whiteEntries = try .initCapacity(alloc, 4);
+        ret.blackEntries = try .initCapacity(alloc, 4);
         ret.initialized = true;
         try readEntries(&ret, alloc, path);
         ret.setSeed(seed);
@@ -110,7 +109,7 @@ pub const openingDatabase = struct {
                 drawing = p_self.blackEntries;
             },
         }
-        var ret: std.ArrayList(string) = .{};
+        var ret: std.ArrayList(string) = try .initCapacity(alloc, 4);
         std.debug.print("[DEBUG] sample: starting loop\n", .{});
         var randInt = p_self.rngIntGenerator.random();
         for (0..size) |i| {
@@ -128,10 +127,11 @@ pub const openingDatabase = struct {
     }
 };
 pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string) !void {
-    const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
-    defer file.close();
+    //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
+    defer file.close(mainl.getGlobalIo());
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-    var f_reader = file.reader(&buffer);
+    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     const buffer_size = 1024;
     var currentEntriesType: outcomeFlag = .draw;
@@ -141,7 +141,7 @@ pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string
     lineStr.clearRetainingCapacity();
     while (true) {
         var _buffer: [buffer_size]u8 = std.mem.zeroes([buffer_size]u8);
-        var w: std.io.Writer = .fixed(&_buffer);
+        var w: std.Io.Writer = .fixed(&_buffer);
         var s = string.initFromBuffer(&_buffer);
 
         const size = reader.streamDelimiter(&w, '\n') catch {
@@ -176,16 +176,17 @@ pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string
 }
 
 pub fn test_read(path: *string) !void {
-    const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
-    defer file.close();
+    //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
+    defer file.close(mainl.getGlobalIo());
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-    var f_reader = file.reader(&buffer);
+    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     const buffer_size = 1024;
     // in this only to depth 8, thus it should not be that big
     while (true) {
         var _buffer: [buffer_size]u8 = std.mem.zeroes([buffer_size]u8);
-        var w: std.io.Writer = .fixed(&_buffer);
+        var w: std.Io.Writer = .fixed(&_buffer);
         var s = string.initFromBuffer(&_buffer);
         const size = reader.streamDelimiter(&w, '\n') catch {
             break;
@@ -196,53 +197,45 @@ pub fn test_read(path: *string) !void {
     }
 }
 
-pub const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
-
-pub fn test_db(path: *string) !void {
-    var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
-    var openings = try db.sample(GLOBAL_ALLOC, 5, .draw);
-    defer openings.deinit(GLOBAL_ALLOC);
+pub fn test_db(path: *string, alloc: std.mem.Allocator) !void {
+    var db = try openingDatabase.init(alloc, path, 42);
+    defer db.free(alloc);
+    var openings = try db.sample(alloc, 5, .draw);
+    defer openings.deinit(alloc);
 
     for (0..openings.items.len) |i| {
         var algeFen = openings.items[i];
-        const moves = try chessl.algebraicLineToIMoveMatch(&algeFen);
-        var tmp = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
+        const moves = try chessl.algebraicLineToIMoveMatch(alloc, &algeFen);
+        var tmp = try chessl.getBoardFromFen(alloc, chessl.DEFAULT_FEN);
         for (0..moves.len) |j| {
             const move = moves.moves[j];
             tmp.makeMove(move);
         }
         //chessl.print_boardstate(&tmp);
     }
-    for (openings.items) |*str| {
-        defer str.free(GLOBAL_ALLOC);
-        //std.debug.print("{s}\n", .{str._slice()});
-    }
+    //for (openings.items) |*str| {
+    //    defer str.free(alloc);
+    //    //std.debug.print("{s}\n", .{str._slice()});
+    //}
 }
-pub fn test_draw(path: *string) !void {
-    var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
-    var openings_1 = try db.sample(GLOBAL_ALLOC, 1, .draw);
-    defer openings_1.deinit(GLOBAL_ALLOC);
+pub fn test_draw(path: *string, alloc: std.mem.Allocator) !void {
+    var db = try openingDatabase.init(alloc, path, 42);
+    var openings_1 = try db.sample(alloc, 1, .draw);
+    defer openings_1.deinit(alloc);
 
-    var openings_2 = try db.sample(GLOBAL_ALLOC, 1, .draw);
-    defer openings_2.deinit(GLOBAL_ALLOC);
+    var openings_2 = try db.sample(alloc, 1, .draw);
+    defer openings_2.deinit(alloc);
     std.debug.print("{s}\n", .{openings_1.items[0]._slice()});
     std.debug.print("{s}\n", .{openings_2.items[0]._slice()});
 }
 
-pub fn main(path: *string) !void {
+pub fn main(path: *string, alloc: std.mem.Allocator) !void {
     //
     if (!filel.fileExists(path._slice())) {
         std.debug.print("File {s} does not exists \n", .{path._slice()});
         return;
     }
+    try test_db(path, alloc);
     //try test_read(path);
-
-    try test_draw(path);
-    //var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
-    //var openings = try db.sample(GLOBAL_ALLOC, 5, .draw);
-    //defer openings.deinit(GLOBAL_ALLOC);
-    //for (openings.items) |*str| {
-    //    defer str.free(GLOBAL_ALLOC);
-    //    std.debug.print("{s}\n", .{str._slice()});
-    //}
+    //try test_draw(path, alloc);
 }

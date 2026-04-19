@@ -14,14 +14,12 @@ const threadingl = @import("search/threading.zig");
 const benchmarkl = @import("search/benchmark.zig");
 const filel = @import("file.zig");
 const timel = @import("time.zig");
+const mainl = @import("main.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
 const IMove = movel.IMove;
 const debug_err = chess.debug_err;
-
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-pub const GLOBAL_ALLOC = GPA.allocator();
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
@@ -47,9 +45,9 @@ pub const goArgStruct = struct {
     mate: u16 = 0,
 };
 
-pub fn getMsgStdin(reader: *std.io.Reader) ![configl.MAX_USER_INPUT]u8 {
+pub fn getMsgStdin(reader: *std.Io.Reader) ![configl.MAX_USER_INPUT]u8 {
     var buffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-    var w: std.io.Writer = .fixed(&buffer);
+    var w: std.Io.Writer = .fixed(&buffer);
     _ = try reader.streamDelimiter(&w, '\n');
     reader.toss(1);
     return buffer;
@@ -66,7 +64,7 @@ pub const inputChannel = struct {
     }
     fn acquireLock(p_self: *inputChannel) void {
         while (p_self.lock) {
-            std.Thread.sleep(configl.ENGINE_LOCK_TICKRATE_NS);
+            std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.ENGINE_LOCK_TICKRATE_NS) }, .real) catch unreachable;
         }
         p_self.lock = true;
     }
@@ -339,7 +337,7 @@ pub const engine = struct {
 
     pub fn readingThread(p_self: *engine) !void {
         var buffer: [configl.MAX_USER_INPUT]u8 = undefined;
-        var f_reader = std.fs.File.stdin().reader(&buffer);
+        var f_reader = std.Io.File.stdin().reader(mainl.getGlobalIo(), &buffer);
         const reader = &f_reader.interface;
         //_ = p_self.input.putCmd(p_self.alloc, "uci");
         while (p_self.status.running) {
@@ -398,7 +396,9 @@ pub const engine = struct {
                 return true;
             },
             .ISREADY => {
-                return p_self.executeIsReady();
+                return p_self.executeIsReady() catch {
+                    return false;
+                };
             },
             .GO => {
                 if (!p_self.status.positionProvided or p_self.searcher.searching) {
@@ -463,7 +463,7 @@ pub const engine = struct {
         defer self.alloc.free(respmsg);
 
         var buffer: [configl.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
-        var writer = std.fs.File.stdout().writer(&buffer);
+        var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
         const interface = &writer.interface;
         interface.writeAll(respmsg) catch |err| {
             if (self.status.debugMode) {
@@ -495,6 +495,7 @@ pub const engine = struct {
         p_self.workingThreads.deinit(p_self.alloc);
         p_self.options.setOptions.deinit(p_self.alloc);
         hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
+        hashTablel.zobristKeys.free(p_self.alloc);
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
@@ -639,7 +640,9 @@ pub const engine = struct {
                 if (!entry.info.spin.validateValue(val)) {
                     return false;
                 }
-                return p_self.updateHash(val);
+                return p_self.updateHash(val) catch {
+                    return false;
+                };
             },
             .UCI_ELO => {
                 const val = getSpinValFromSetOptionCmd(tokens) catch {
@@ -692,7 +695,9 @@ pub const engine = struct {
             },
 
             .CLEAR_HASH => {
-                return p_self.updateHash(p_self.options.hashTableSize);
+                return p_self.updateHash(p_self.options.hashTableSize) catch {
+                    return false;
+                };
             },
             .PRINT_METRIC => {
                 p_self.metric.printMetric();
@@ -796,11 +801,11 @@ pub const engine = struct {
         }
         return true;
     }
-    fn updateHash(p_self: *engine, hashSize: spinVarType) bool {
+    fn updateHash(p_self: *engine, hashSize: spinVarType) !bool {
         if (p_self.searcher.searching) {
             p_self.searcher.interrupt = true;
             while (p_self.searcher.searching) {
-                std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+                try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
             }
         }
 
@@ -820,9 +825,9 @@ pub const engine = struct {
 
         return true;
     }
-    pub fn executeIsReady(p_self: *engine) bool {
+    pub fn executeIsReady(p_self: *engine) !bool {
         while (p_self.searcher.searching) {
-            std.Thread.sleep(configl.WAIT_TICKRATE_NS);
+            try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
         }
         if (!p_self.status.initializedInternals) {
             _ = p_self.initInternals();
@@ -1054,7 +1059,7 @@ fn inputThreading(p_self: *engine) void {
             std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
             cumulTime = 0;
         }
-        std.Thread.sleep(configl.ENGINE_SERVING_TICKRATE_NS);
+        std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.ENGINE_SERVING_TICKRATE_NS) }, .real) catch unreachable;
         cumulTime += configl.ENGINE_SERVING_TICKRATE_NS;
     }
 }
@@ -1063,7 +1068,7 @@ fn entrypointReaderThreading(p_self: *engine) void {
     p_self.readingThread() catch unreachable;
 }
 fn mainThread(debugMode: bool) void {
-    var eng = engine.init(GLOBAL_ALLOC) catch unreachable;
+    var eng = engine.init(mainl.getGlobalGPA()) catch unreachable;
     eng.status.running = true;
 
     _ = std.Thread.spawn(.{}, entrypointReaderThreading, .{&eng}) catch unreachable;
@@ -1107,6 +1112,7 @@ pub fn launch_engine(debugMode: bool) !void {
     return;
 }
 
-pub fn main() anyerror!void {
+pub fn main(init: std.process.Init) anyerror!void {
+    mainl.GLOBAL_CTX.setInit(init);
     try launch_engine(false);
 }

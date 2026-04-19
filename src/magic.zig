@@ -9,7 +9,6 @@ const mainl = @import("main.zig");
 const std = @import("std");
 
 const e_piece = chess.e_piece;
-const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 
 // TODO Implement fancy bitboard https://www.chessprogramming.org/Magic_Bitboards
 // related(?) link: http://pradu.us/old/Nov27_2008/Buzz/
@@ -62,7 +61,7 @@ pub fn _initMagic(p_magic: *magicRecord, verbose: bool) void {
             std.debug.print("Building using magic move gen!\n", .{});
         }
     }
-    const _start = std.time.milliTimestamp();
+    //const _start = std.time.milliTimestamp();
 
     if (verbose) {
         std.debug.print("[PRE] Starting the search for magic keys \n", .{});
@@ -73,7 +72,8 @@ pub fn _initMagic(p_magic: *magicRecord, verbose: bool) void {
     initRookBishopMoves(p_magic);
 
     if (verbose) {
-        std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
+        //std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
+        std.debug.print("[PRE] Finished magic\n", .{});
     }
     return;
 }

@@ -1,8 +1,5 @@
 const std = @import("std");
 
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-pub const GLOBAL_ALLOC = GPA.allocator();
-
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
 const hashl = @import("hashTable.zig");
@@ -17,6 +14,7 @@ const stringl = @import("string.zig");
 const filel = @import("file.zig");
 const perftl = @import("search/perft.zig");
 const heuristicl = @import("heuristic.zig");
+const timel = @import("time.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -24,10 +22,10 @@ const useDebug = build_options.useDebug;
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
 
-pub fn initAll(verbose: bool) void {
+pub fn initAll(alloc: std.mem.Allocator, verbose: bool) void {
     magicl._initMagic(&magicl.magicTable, verbose);
 
-    hashl._initZobrist(GLOBAL_ALLOC, 42);
+    hashl._initZobrist(alloc, 42);
     //hashl._initOrReallocHashTable(GLOBAL_ALLOC, 2000);
 
     moveTablel._initTables(verbose);
@@ -36,8 +34,8 @@ pub fn initAll(verbose: bool) void {
     }
 }
 
-fn initEngine() !enginel.engine {
-    var engine: enginel.engine = try enginel.engine.init(GLOBAL_ALLOC);
+fn initEngine(alloc: std.mem.Allocator) !enginel.engine {
+    var engine: enginel.engine = try enginel.engine.init(alloc);
     engine.executeBuffer("uci");
     //engine.executeBuffer("debug on");
     engine.executeBuffer("isready");
@@ -58,8 +56,8 @@ const fenListMateOne = [_][]const u8{
     "position fen q7/8/8/8/5k1K/8/8/8 b - - 0 0",
 };
 
-pub fn test_decision() !void {
-    var eng = try initEngine();
+pub fn test_decision(alloc: std.mem.Alloator) !void {
+    var eng = try initEngine(alloc);
     defer eng.free();
     for (0..fenListMateOne.len) |i| {
         const fenCmd = fenListMateOne[i];
@@ -71,8 +69,8 @@ pub fn test_decision() !void {
     }
     std.debug.print("[TEST]: Mate in one test passed\n", .{});
 }
-pub fn test_speed() !void {
-    var eng = try initEngine();
+pub fn test_speed(alloc: std.mem.Alloator) !void {
+    var eng = try initEngine(alloc);
     defer eng.free();
     //eng.executeBuffer("setoption name useQuiescence value true");
     //eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
@@ -81,9 +79,9 @@ pub fn test_speed() !void {
     eng.executeBuffer("go depth 7");
     waitOnEngine(&eng);
 }
-pub fn test_bug() !void {
-    initAll(false);
-    var eng = try initEngine();
+pub fn test_bug(alloc: std.mem.Alloator) !void {
+    initAll(alloc, false);
+    var eng = try initEngine(alloc);
     defer eng.free();
     eng.executeBuffer("setoption name UCI_elo value 3000");
     eng.executeBuffer("setoption name fixedDepth value true");
@@ -95,17 +93,17 @@ pub fn test_bug() !void {
     eng.executeBuffer("go wtime 300000 btime 300000 winc 5000 binc 5000");
     waitOnEngine(&eng);
 }
-pub fn test_perft() !void {
-    initAll(false);
-    var eng = try initEngine();
+pub fn test_perft(alloc: std.mem.Alloator) !void {
+    initAll(alloc, false);
+    var eng = try initEngine(alloc);
     defer eng.free();
     eng.executeBuffer("position startpos");
     eng.executeBuffer("go perft depth 6 batched");
     waitOnEngine(&eng);
 }
-pub fn test_bench() !void {
-    initAll(false);
-    var eng = try initEngine();
+pub fn test_bench(alloc: std.mem.Alloator) !void {
+    initAll(alloc, false);
+    var eng = try initEngine(alloc);
     defer eng.executeBuffer("quit");
     //eng.executeBuffer("debug on");
     //eng.executeBuffer("setoption name useQuiescence value true");
@@ -115,16 +113,68 @@ pub fn test_bench() !void {
     waitOnEngine(&eng);
 }
 
-pub fn main() anyerror!void {
+pub const globalCtx = struct {
+    io: std.Io = undefined,
+    gpa: std.mem.Allocator = undefined,
+    isInit: bool = false,
+    pub fn setInit(p_self: *globalCtx, init: std.process.Init) void {
+        p_self.io = init.io;
+        p_self.gpa = init.gpa;
+        p_self.isInit = true;
+    }
+};
+pub var GLOBAL_CTX: globalCtx = .{};
+pub fn getGlobalIo() std.Io {
+    std.debug.assert(GLOBAL_CTX.isInit);
+    return GLOBAL_CTX.io;
+}
+pub fn getGlobalGPA() std.mem.Allocator {
+    std.debug.assert(GLOBAL_CTX.isInit);
+    return GLOBAL_CTX.gpa;
+}
+
+pub fn test_test() !void {
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    initAll(arena, true);
+    const perft_THREAD = 1;
+    const perft_BATCHED = true;
+    const perft_MAX_DEPTH = 6;
+    var board: chessl.Board_state = try chessl.getBoardFromFen(arena, chessl.DEFAULT_FEN);
+    //try std.testing.expect(!hashl.isHashTable_init());
+    var sw: timel.stopWatch = .{};
+    for (1..perft_MAX_DEPTH + 1) |depth| {
+        sw.startTimeTick();
+        const res = perftl.perftThreadStart(&board, arena, @intCast(depth), perft_THREAD, perft_BATCHED) catch {
+            std.debug.print("[PANIC]: Error when launching perft\n", .{});
+            try std.testing.expect(false);
+            return;
+        };
+        const expect: i64 = @intCast(res.searchStat.n_nodeExplored);
+        const timeTaken = sw.timeSinceStartUs();
+        sw.stop();
+        try std.testing.expectEqual(expect, benchl.ExpectedBenchmarkResults[depth]);
+        std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(timeTaken, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, timeTaken + 1) });
+    }
+
+    std.debug.print("[TEST]: Perft checks passed\n", .{});
+}
+
+pub fn main(init: std.process.Init) anyerror!void {
+    GLOBAL_CTX.setInit(init);
+    const GPA = init.gpa;
+    initAll(GPA, false);
+    try test_test();
     //try test_perft();
     //try test_bench();
     //try test_speed();
-    try heuristicl.main();
+    //try heuristicl.main(GPA);
     //try chessl.main();
     //try test_bug();
-    //Jvar path = try stringl.string.initFromSlice(GLOBAL_ALLOC, "opening/8moves_v3.pgn");
-    //Jdefer path.free(GLOBAL_ALLOC);
-    //Jtry bookl.main(&path);
+    //var path = try stringl.string.initFromSlice(getGlobalGPA(), "opening/8moves_v3.pgn");
+    //defer path.free(getGlobalGPA());
+    //try bookl.main(&path, GPA);
 
-    //try benchl.main();
+    //try benchl.main(GLOBAL_ALLOC);
 }

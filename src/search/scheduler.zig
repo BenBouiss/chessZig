@@ -13,6 +13,7 @@ const utilsl = @import("../utils.zig");
 const configl = @import("../config.zig");
 const weightl = @import("../weights.zig");
 const timel = @import("../time.zig");
+const mainl = @import("../main.zig");
 
 const moveContainer = movel.moveContainer;
 const IMove = movel.IMove;
@@ -281,7 +282,9 @@ pub const scheduler = struct {
                 }
                 count = 0;
             }
-            std.Thread.sleep(tickrate);
+            std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(tickrate) }, .real) catch {
+                break;
+            };
             stat = p_self.getSearchStatus();
             if (stat == .INTERRUPTED or stat == .FINISHED) {
                 decision = p_self.extractBest();

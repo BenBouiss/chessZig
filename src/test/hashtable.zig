@@ -13,13 +13,14 @@ const std = @import("std");
 
 const Board_state = chessl.Board_state;
 
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-pub const GLOBAL_ALLOC = GPA.allocator();
-
 test "entry retrievale" {
-    mainl.initAll(false);
-    hashl._initOrReallocHashTable(GLOBAL_ALLOC, 25, false);
-    defer hashl.hashTable.free(GLOBAL_ALLOC, false);
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+
+    mainl.initAll(arena, false);
+    hashl._initOrReallocHashTable(arena, 25, false);
+    defer hashl.hashTable.free(arena, false);
     for (0..100) |i| {
         const entry: hashl.Hash_entry = .{ .exploredDeph = 1, .key = .{ .code = @intCast(i) }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
         try std.testing.expect(hashl.hashTable.storeEntry(&entry));
@@ -38,12 +39,15 @@ test "entry retrievale" {
         try std.testing.expect(bucket.len == 2);
     }
 
-    std.debug.print("[TEST]: entry storing passed\n", .{});
+    std.log.info("[TEST]: entry storing passed\n", .{});
 }
 test "entry overwriting" {
-    mainl.initAll(false);
-    hashl._initOrReallocHashTable(GLOBAL_ALLOC, 25, false);
-    defer hashl.hashTable.free(GLOBAL_ALLOC, false);
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    mainl.initAll(arena, false);
+    hashl._initOrReallocHashTable(arena, 25, false);
+    defer hashl.hashTable.free(arena, false);
 
     const CODE = 42;
     const entry: hashl.Hash_entry = .{ .exploredDeph = 1, .key = .{ .code = CODE }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
@@ -57,5 +61,5 @@ test "entry overwriting" {
         try std.testing.expect(bucket.len == 1);
     }
 
-    std.debug.print("[TEST]: entry overwriting passed\n", .{});
+    std.log.info("[TEST]: entry overwriting passed\n", .{});
 }

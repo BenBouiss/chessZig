@@ -85,10 +85,11 @@ pub const threadPackageArray = std.MultiArrayList(threadPackageFrame);
 pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *const Board_state, moveArray: *const movel.moveContainer, n_threads: u32) !threadPackageArray {
     const _nThread = @min(n_threads, moveArray.len);
     var ret: threadPackageArray = .{};
-    const threadedMoves = moveArray.cutEvenly(alloc, _nThread) catch {
+    var threadedMoves = moveArray.cutEvenly(alloc, _nThread) catch {
         std.debug.print("[ERROR] getThreadPackArray: move container init\n", .{});
         return debug_err.valueErr;
     };
+    defer threadedMoves.deinit(alloc);
     for (0.._nThread) |i| {
         try ret.append(alloc, .{ .chessState = p_state.copy(), .moves = threadedMoves.items[i], .threadHandle = undefined, ._tInfo = .{} });
     }

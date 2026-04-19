@@ -27,9 +27,6 @@ const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
 const benchmarkResult = benchmarkl.benchmarkResult;
 
-var GPA = std.heap.GeneralPurposeAllocator(.{}){};
-const GLOBAL_ALLOC = GPA.allocator();
-
 const useHash = build_options.useHash;
 const useDebug = build_options.useDebug;
 
@@ -93,7 +90,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
     while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
-        std.Thread.sleep(configl.INFO_TICKRATE_NS);
+        try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.INFO_TICKRATE_NS) }, .real);
         const res = threadingl.getCombinedFromPack(p_threadPack);
         const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, @as(u64, @intCast(sw.timeSinceStartMs() + 1))) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
             continue;
@@ -196,17 +193,17 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
 // non uci depth
 //
 
-pub fn perftThreadStart(p_state: *chess.Board_state, depth: u8, nThread: u8, batched: bool) !threadInfo {
+pub fn perftThreadStart(p_state: *chess.Board_state, alloc: std.mem.Allocator, depth: u8, nThread: u8, batched: bool) !threadInfo {
     var moves = moveGenl.generateLegalMoves(p_state);
     var _nThread: usize = @intCast(nThread);
     if (_nThread == 0) {
         _nThread = try std.Thread.getCpuCount();
     }
     _nThread = utilsl.min(usize, moves.len, _nThread);
-    var pack = threadingl.getThreadPackArray(GLOBAL_ALLOC, p_state, &moves, @intCast(_nThread)) catch {
+    var pack = threadingl.getThreadPackArray(alloc, p_state, &moves, @intCast(_nThread)) catch {
         @panic("Cant init thread pack array");
     };
-    defer threadingl.freeThreadPackArray(GLOBAL_ALLOC, &pack);
+    defer threadingl.freeThreadPackArray(alloc, &pack);
 
     for (0..pack.items(._tInfo).len) |thread_id| {
         pack.items(.threadHandle)[thread_id] = try std.Thread.spawn(.{}, perftWorkerJob, .{ &pack.items(.chessState)[thread_id], depth, &pack.items(._tInfo)[thread_id], &pack.items(.moves)[thread_id], batched });

@@ -20,7 +20,6 @@ const useDebug = build_options.useDebug;
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 
-const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
 const MOVE_STR_MAX_LENGTH = 5;
 
 pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
@@ -358,10 +357,10 @@ pub const matchMoveContainer = struct {
 
     pub fn print(p_self: *const matchMoveContainer) void {
         // FOR DEBUG ONLY
-        var line_str = p_self.getLineString(GLOBAL_ALLOC) catch {
+        var line_str = p_self.getLineString(mainl.getGlobalGPA()) catch {
             return;
         };
-        defer line_str.free(GLOBAL_ALLOC);
+        defer line_str.free(mainl.getGlobalGPA());
         std.debug.print("{s}\n", .{line_str._slice()});
         return;
     }

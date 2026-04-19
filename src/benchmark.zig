@@ -8,7 +8,6 @@ const timel = @import("time.zig");
 
 const build_options = @import("build_options");
 
-const GLOBAL_ALLOCATOR = mainl.GLOBAL_ALLOC;
 const IMove = movel.IMove;
 
 const useHash = build_options.useHash;
@@ -119,11 +118,11 @@ pub const ExpectedPerftResKiwipete = [_]i64{
 };
 pub const KIWIPETE_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0";
 
-pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread: u8, batched: bool) void {
+pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, alloc: std.mem.Allocator, n_max: u8, nThread: u8, batched: bool) void {
     var sw: timel.stopWatch = .{};
     for (1..(n_max + 1)) |depth| {
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
-        const res = perftl.perftThreadStart(p_state, @intCast(depth), nThread, batched) catch unreachable;
+        const res = perftl.perftThreadStart(p_state, alloc, @intCast(depth), nThread, batched) catch unreachable;
         sw.startTimeTick();
         const _node: i64 = @intCast(res.searchStat.n_nodeExplored);
         const timeTaken = sw.timeSinceStartMs();
@@ -159,17 +158,16 @@ pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool
     }
 }
 
-pub fn test_benchmark() void {
-    //var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, KIWIPETE_FEN) catch unreachable;
-    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch unreachable;
+pub fn test_benchmark(alloc: std.mem.Allocator) void {
+    var game_state = chess.getBoardFromFen(alloc, chess.DEFAULT_FEN) catch unreachable;
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 7, 1, true);
+    nodeExplorationBenchmark(&game_state, alloc, 7, 1, true);
     //nodeBenchmark_debug(&game_state, 6, false);
 }
 
-pub fn main() !void {
-    mainl.initAll(true);
-    test_benchmark();
+pub fn main(alloc: std.mem.Allocator) !void {
+    mainl.initAll(alloc, true);
+    test_benchmark(alloc);
 }
