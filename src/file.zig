@@ -3,6 +3,7 @@ const utilsl = @import("utils.zig");
 const configl = @import("config.zig");
 
 const std = @import("std");
+const mainl = @import("main.zig");
 
 const string = stringl.string;
 
@@ -12,24 +13,21 @@ pub const file_err = error{
 };
 
 pub fn fileExists(path: []const u8) bool {
-    std.fs.cwd().access(path, .{}) catch {
+    // FIXME: replace this io
+    std.Io.Dir.access(.cwd(), mainl.getGlobalIo(), path, .{}) catch {
         return false;
     };
     return true;
 }
 pub fn dirExists(path: []const u8) bool {
-    var dir = std.fs.cwd();
-
-    dir.access(path, .{}) catch {
+    std.Io.Dir.access(.cwd(), mainl.getGlobalIo(), path, .{}) catch {
         return false;
     };
     return true;
 }
 pub fn makedirR(path: []const u8) !void {
-    var dir = std.fs.cwd();
-    dir.makePath(path) catch {
-        return;
-    };
+    try std.Io.Dir.createDir(.cwd(), mainl.getGlobalIo(), path, @enumFromInt(0));
+    try std.Io.Dir.createDirPath(.cwd(), mainl.getGlobalIo(), path);
     return;
 }
 
@@ -41,12 +39,14 @@ pub fn getTokensFromFileAlloc(alloc: std.mem.Allocator, path: []const u8, sep: u
         return file_err.mem_error;
     };
 
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-    defer file.close();
-    const file_size = try file.getEndPos();
+    //const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
+    const file_size = try file.length(mainl.getGlobalIo());
+    defer file.close(mainl.getGlobalIo());
     var buffer: []u8 = try alloc.alloc(u8, file_size);
     defer alloc.free(buffer);
-    _ = try file.read(buffer[0..buffer.len]);
+    //_ = try file.read(buffer[0..buffer.len]);
+    _ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
     const _sep: []const u8 = &[_]u8{sep};
     var flines = std.mem.tokenizeAny(u8, buffer, _sep);
     var count: u64 = 0;
@@ -80,15 +80,16 @@ pub fn getTokensFromFile(alloc: std.mem.Allocator, path: []const u8, sep: u8) an
         return file_err.mem_error;
     };
 
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-    defer file.close();
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{ .mode = .read_only });
+    defer file.close(mainl.getGlobalIo());
 
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-    var f_reader = file.reader(&buffer);
+    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     while (true) {
         var _buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-        var w: std.io.Writer = .fixed(&_buffer);
+        var w: std.Io.Writer = .fixed(&_buffer);
+
         const size = reader.streamDelimiter(&w, sep) catch {
             break;
         };
@@ -112,12 +113,13 @@ pub fn getFileLineSize(alloc: std.mem.Allocator, path: []const u8) anyerror!u64 
     if (!fileExists(path)) {
         return file_err.fileNotFound_error;
     }
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-    defer file.close();
-    const file_size = try file.getEndPos();
-    var buffer: []u8 = try alloc.alloc(u8, file_size);
+
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
+    const file_size = try file.length(mainl.getGlobalIo());
+    defer file.close(mainl.getGlobalIo());
+    var buffer: []u8 = try alloc.alloc(u8, @intCast(file_size));
     defer alloc.free(buffer);
-    _ = try file.read(buffer[0..buffer.len]);
+    _ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
     const _sep: []const u8 = &[_]u8{'\n'};
     var flines = std.mem.tokenizeAny(u8, buffer, _sep);
     var count: u64 = 0;

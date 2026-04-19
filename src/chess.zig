@@ -36,11 +36,6 @@ const searchFeatures = schedulerl.searchFeatures;
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
 
-const _alloc = mainl.GLOBAL_ALLOC;
-pub inline fn get_global_alloc() std.mem.Allocator {
-    return _alloc;
-}
-
 pub const NUMBER_PLAYER: u8 = 2;
 pub const ROW_SIZE: u8 = 8;
 pub const COL_SIZE: u8 = 8;
@@ -359,6 +354,7 @@ pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
 }
 /// All memory used by the alloc is freed at return
 pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Board_state {
+    //FIXME: Do this on the stack instead, using slices
     var tokens = utils.split(u8, alloc, fen, ' ') catch {
         return debug_err.fenErr;
     };
@@ -2342,11 +2338,11 @@ pub fn test_scenarios() !void {
     return;
 }
 
-pub fn pin_scenario() !void {
+pub fn pin_scenario(alloc: std.mem.Allocator) !void {
     const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     std.debug.print("[DEBUG] pin scenario: {s}\n", .{fen});
 
-    var board = getBoardFromFen(mainl.GLOBAL_ALLOC, fen) catch {
+    var board = getBoardFromFen(alloc, fen) catch {
         return;
     };
     print_boardstate(&board);
@@ -2371,10 +2367,10 @@ pub fn pin_scenario() !void {
     return;
 }
 
-pub fn test_avx() !void {
+pub fn test_avx(alloc: std.mem.Allocator) !void {
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2RKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     //const fen = DEFAULT_FEN;
-    var state = try getBoardFromFen(get_global_alloc(), fen);
+    var state = try getBoardFromFen(alloc, fen);
     const bb = moveGenl.avx2DumbFill(&state, true).collapse();
     const _bb = moveGenl.avx2DumbFill(&state, false).collapse();
     print_board(&state);
@@ -2431,10 +2427,10 @@ pub fn test_stackedPawn() !void {
     print_bitboard(stackedPawns(overKill));
 }
 
-pub fn algebraicLineToIMoveMatch(line: *string) !matchMoveContainer {
-    var tmpBoard = try getBoardFromFen(get_global_alloc(), DEFAULT_FEN);
-    var tokens = try line.split(get_global_alloc(), ' ');
-    defer tokens.deinit(get_global_alloc());
+pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !matchMoveContainer {
+    var tmpBoard = try getBoardFromFen(alloc, DEFAULT_FEN);
+    var tokens = try line.split(alloc, ' ');
+    defer tokens.deinit(alloc);
     var ret: matchMoveContainer = .{};
     for (tokens.items) |str| {
         var offset: usize = 0;
@@ -2446,8 +2442,8 @@ pub fn algebraicLineToIMoveMatch(line: *string) !matchMoveContainer {
             offset = 2;
         }
 
-        var moveStr = try string.initFromSlice(get_global_alloc(), str[offset..str.len]);
-        defer moveStr.free(get_global_alloc());
+        var moveStr = try string.initFromSlice(alloc, str[offset..str.len]);
+        defer moveStr.free(alloc);
         const move = algebraicToIMove(&tmpBoard, &moveStr);
         if (move.isValid()) {
             tmpBoard.makeMove(move);
@@ -2457,7 +2453,7 @@ pub fn algebraicLineToIMoveMatch(line: *string) !matchMoveContainer {
     return ret;
 }
 pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *string) !Board_state {
-    const moves = try algebraicLineToIMoveMatch(line);
+    const moves = try algebraicLineToIMoveMatch(alloc, line);
     var ret = try getBoardFromFen(alloc, DEFAULT_FEN);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
@@ -2468,7 +2464,7 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *string) !Board
 }
 
 pub fn algebraicToFen(alloc: std.mem.Allocator, line: *string) ![MAX_FEN_LENGTH]u8 {
-    const moves = try algebraicLineToIMoveMatch(line);
+    const moves = try algebraicLineToIMoveMatch(alloc, line);
     var tmp: Board_state = try getBoardFromFen(alloc, DEFAULT_FEN);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
@@ -2478,20 +2474,20 @@ pub fn algebraicToFen(alloc: std.mem.Allocator, line: *string) ![MAX_FEN_LENGTH]
     defer tmp.free(alloc);
     return tmp.get_fen();
 }
-pub fn test_single_algebraic() !void {
-    var state = try getBoardFromFen(get_global_alloc(), DEFAULT_FEN);
+pub fn test_single_algebraic(alloc: std.mem.Allocator) !void {
+    var state = try getBoardFromFen(alloc, DEFAULT_FEN);
     // 1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6
     const algFen = "d4";
-    var _algFen: string = try string.initFromSlice(get_global_alloc(), algFen);
-    defer _algFen.free(get_global_alloc());
+    var _algFen: string = try string.initFromSlice(alloc, algFen);
+    defer _algFen.free(alloc);
     const move = algebraicToIMove(&state, &_algFen);
     std.debug.print("[DEBUG] test_single_algebraic: from {d} to {d} flag {d} fpiece {}\n", .{ move.getFrom(), move.getTo(), move.getFlag(), move.getFromPiece() });
 }
-pub fn test_line_algebraic() !void {
+pub fn test_line_algebraic(alloc: std.mem.Allocator) !void {
     const algFen = "1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6";
-    var _algFen: string = try string.initFromSlice(get_global_alloc(), algFen);
-    defer _algFen.free(get_global_alloc());
-    var moves = try algebraicLineToIMoveMatch(&_algFen);
+    var _algFen: string = try string.initFromSlice(alloc, algFen);
+    defer _algFen.free(alloc);
+    var moves = try algebraicLineToIMoveMatch(alloc, &_algFen);
 
     std.debug.print("[DEBUG] test_line_algebraic: original: {s}, reconstructed: \n", .{algFen});
     moves.print();
@@ -2503,9 +2499,9 @@ pub fn test_safety() !void {
     print_bitboard(safetyArea(e_square.a8));
     print_bitboard(safetyArea(e_square.e8));
 }
-pub fn test_move_heur() !void {
+pub fn test_move_heur(alloc: std.mem.Allocator) !void {
     //var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "1nbqkbnr/2pppppp/8/1p6/Rp6/2P5/4PPPP/1NBQKBNR b Hh b6 0 10");
-    var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+    var tmp: Board_state = try getBoardFromFen(alloc, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
     print_boardstate(&tmp);
     const moves = moveGenl.generateLegalMoves(&tmp);
     const pv: movel.line = .{};
@@ -2523,8 +2519,8 @@ pub fn test_move_heur() !void {
     std.debug.print("ben\n", .{});
 }
 
-pub fn main() !void {
-    mainl.initAll(true);
+pub fn main(alloc: std.mem.Allocator) !void {
+    mainl.initAll(alloc, true);
     //try test_avx();
     //try test_isolated();
     //try test_passed();
