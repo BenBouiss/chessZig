@@ -5,14 +5,13 @@ const enginel = @import("engine.zig");
 const mainl = @import("main.zig");
 const utilsl = @import("utils.zig");
 const configl = @import("config.zig");
-const gconfigl = @import("gui/config.zig");
 const movel = @import("move.zig");
-const squarel = @import("square.zig");
 const bookl = @import("book.zig");
 const filel = @import("file.zig");
 const heuristicl = @import("heuristic.zig");
 const mathl = @import("math.zig");
 const timel = @import("time.zig");
+const hashTablel = @import("hashTable.zig");
 
 const stringl = @import("string.zig");
 const std = @import("std");
@@ -20,7 +19,6 @@ const std = @import("std");
 const e_color = chessl.e_color;
 pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition, StaleMateInsuficientMaterial, Flagged, Dnf };
 const Board_state = chessl.Board_state;
-const e_square = squarel.e_square;
 const string = stringl.string;
 const scoreType = heuristicl.scoreType;
 
@@ -109,21 +107,22 @@ const matchResultContainer = struct {
         for (0..2 - @as(usize, @intCast(@intFromBool(oneEngine)))) |i| {
             const currEng = match.playerInv[i].engineUsed;
             p_self.items[currEng].nMatch += 1;
-            var timeTaken: i64 = 0;
-            for (match.playerInv[i].timeTaken.items) |time| {
-                timeTaken += time;
-            }
-            p_self.items[currEng].stdTimePerTurn = mathl.computeStandardDeviation(i64, match.playerInv[i].timeTaken.items);
-            p_self.items[currEng].avgTimePerTurn = @divFloor(timeTaken, @as(i64, @intCast(match.playerInv[i].timeTaken.items.len + 1)));
+            //var timeTaken: i64 = 0;
+            //for (match.playerInv[i].timeTaken.items) |time| {
+            //    timeTaken += time;
+            //}
+            //p_self.items[currEng].stdTimePerTurn = mathl.computeStandardDeviation(i64, match.playerInv[i].timeTaken.items);
+            p_self.items[currEng].stdTimePerTurn = 0;
+            p_self.items[currEng].avgTimePerTurn = @divFloor(match.playerInv[i].timeTakenCum, match.playerInv[i].movesMade + 1);
         }
         const lineString = try match.chessState.move_history.getLineString(alloc);
 
         try p_self.fens.append(alloc, lineString);
     }
     pub fn saveLog(p_self: *matchResultContainer, alloc: std.mem.Allocator, match: *matchStatus, settings: *guiSetting) !void {
-        if (!settings.match.saveLogs) {
-            return;
-        }
+        //if (!settings.match.saveLogs) {
+        //    return;
+        //}
         var fileName: []u8 = undefined;
         if (settings.match.logPathProvided) {
             fileName = try std.fmt.allocPrint(alloc, "{s}/match_logs_{d}.txt", .{ settings.match.logPath._slice(), std.Io.Timestamp.now(mainl.getGlobalIo(), .real) });
@@ -152,11 +151,11 @@ const matchResultContainer = struct {
             const scoreStr = try std.fmt.allocPrint(alloc, "engine: {s}, {d} matches, win: {d}, lose: {d}, draw: {d}, flagged: {d}, speed: {d}(+-{d}) ms/move;\n", .{ settings.engineNames[engIdx]._slice(), res.nMatch, nwins, nloses, ndraws, nflags, res.avgTimePerTurn, res.stdTimePerTurn });
             defer alloc.free(scoreStr);
             //_ = try file.write(scoreStr);
-            _ = file.writerStreaming(mainl.getGlobalIo(), scoreStr);
+            try file.writeStreamingAll(mainl.getGlobalIo(), scoreStr[0..scoreStr.len]);
 
-            const breakStr = try std.fmt.allocPrint(alloc, "engine: {s}, breakdown (w/l/d) w: {d}/{d}/{d}, b: {d}/{d}/{d} \n", .{ settings.engineNames[engIdx]._slice(), res.res[1].win, res.res[1].lose, res.res[1].draw, res.res[0].win, res.res[0].lose, res.res[0].draw });
+            const breakStr = try std.fmt.allocPrint(alloc, "engine: {s}, breakdown (w/l/d) w: {d}/{d}/{d}, b: {d}/{d}/{d};\n", .{ settings.engineNames[engIdx]._slice(), res.res[1].win, res.res[1].lose, res.res[1].draw, res.res[0].win, res.res[0].lose, res.res[0].draw });
             defer alloc.free(breakStr);
-            _ = file.writerStreaming(mainl.getGlobalIo(), breakStr);
+            try file.writeStreamingAll(mainl.getGlobalIo(), breakStr[0..breakStr.len]);
             //_ = try file.write(breakStr);
         }
 
@@ -164,12 +163,12 @@ const matchResultContainer = struct {
         try settings.writeSummary(&file);
 
         //_ = try file.write("final positions: \n");
-        _ = try file.writeStreamingAll(mainl.getGlobalIo(), "final positions: \n");
+        try file.writeStreamingAll(mainl.getGlobalIo(), "final positions: \n");
         for (0..p_self.fens.items.len) |i| {
             const fenStr = try std.fmt.allocPrint(alloc, "\t{s};\n", .{p_self.fens.items[i]._slice()});
             defer alloc.free(fenStr);
             //_ = try file.write(fenStr);
-            _ = file.writerStreaming(mainl.getGlobalIo(), fenStr);
+            try file.writeStreamingAll(mainl.getGlobalIo(), fenStr[0..fenStr.len]);
         }
     }
     pub fn printResults(p_self: *matchResultContainer, alloc: std.mem.Allocator) !void {
@@ -257,9 +256,9 @@ const matchStatus = struct {
     pub fn turnComplete(p_self: *matchStatus, alloc: std.mem.Allocator) !void {
         // turnComplete now before makemove thus whitetomove()
         var p = &p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())];
-        try p.timeTaken.append(alloc, p_self.turnSW.timeSinceStartMs());
-        //std.debug.print("[DEBUG] turnComplete: removing {d} ms from {} player\n", .{ p_self.turnSW.timeSinceStartMs(), p_self.chessState.whiteToMove() });
-        //p_self.turnSW.print();
+        _ = alloc;
+        p.timeTakenCum += p_self.turnSW.timeSinceStartMs();
+        p.movesMade += 1;
         p.time -= p_self.turnSW.timeSinceStartMs();
         p.time += p.time_inc;
     }
@@ -288,6 +287,8 @@ const engine_info = struct {
         for (0..p_self.options.items.len) |i| {
             alloc.free(p_self.options.items[i]);
         }
+        p_self.options.deinit(alloc);
+        alloc.destroy(p_self);
     }
     pub fn addOption(p_self: *engine_info, alloc: std.mem.Allocator, cmdStr: []const u8) !void {
         const e = try alloc.dupe(u8, cmdStr);
@@ -316,6 +317,12 @@ const engine_Inventory = struct {
         };
         return true;
     }
+    pub fn free(p_self: *engine_Inventory, alloc: std.mem.Allocator) void {
+        for (0..p_self.len) |i| {
+            p_self.items.items[i].free(alloc);
+        }
+        p_self.items.deinit(alloc);
+    }
 };
 const player = struct {
     color: e_color = .WHITE,
@@ -323,16 +330,21 @@ const player = struct {
     time: i64 = DEFAULT_TIME_MS,
     time_inc: i64 = DEFAULT_TIME_INC_MS,
     engineUsed: u8 = 0, // index of the engine to be used (0-1)
-    timeTaken: std.ArrayList(i64) = undefined,
+    timeTakenCum: i64 = undefined,
+    movesMade: i64 = 0,
+
     pub fn init(alloc: std.mem.Allocator, timeF: timeFormat, color: e_color, engineIndex: u8) !player {
         var ret: player = .{ ._time = timeF.time, .time = timeF.time, .time_inc = timeF.inc, .color = color, .engineUsed = engineIndex };
-        ret.timeTaken = try std.ArrayList(i64).initCapacity(alloc, 32);
+        ret.timeTakenCum = 0;
+        ret.movesMade = 0;
+        _ = alloc;
         return ret;
     }
     pub fn reset(p_self: *player) void {
         p_self.time = p_self._time;
         // removes all elements without freeing the mem
-        p_self.timeTaken.clearRetainingCapacity();
+        p_self.timeTakenCum = 0;
+        p_self.movesMade = 0;
     }
 };
 
@@ -404,6 +416,9 @@ const guiState = struct {
         }
     }
     pub fn appendLog(p_self: *guiState, log: []const u8) !void {
+        if (!p_self.config.match.saveLogs) {
+            return;
+        }
         const logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => {s}", .{ p_self.startSw.timeSinceStartMs(), log });
         try p_self.logs.append(p_self.alloc, logmsg);
     }
@@ -438,18 +453,21 @@ const guiState = struct {
         const eng: *engine_info = p_self.engineInventory.items.items[engineIndex];
         var reader = &eng.f_reader.interface;
 
-        var line = std.Io.Writer.Allocating.init(p_self.alloc);
-        defer line.deinit();
         if (p_self.status.debugMode) {
             std.debug.print("[DEBUG] readingThread.gui: Started reading on the stdout of the {d}nth engine (self status: {})\n", .{ engineIndex, p_self.status.running });
         }
         while (p_self.status.running) {
-            const n = reader.streamDelimiter(&line.writer, '\n') catch |err| {
+            var buffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+            var w: std.Io.Writer = .fixed(&buffer);
+            const n = reader.streamDelimiter(&w, '\n') catch |err| {
                 std.debug.print("[DEBUG] readingThread.gui (#{d}): caught err {}\n", .{ engineIndex, err });
                 p_self.crash();
             };
+            if (n <= 1) {
+                break;
+            }
             _ = reader.toss(1);
-            const msg = line.written();
+            const msg = buffer[0 .. n - 1];
 
             if (p_self.status.debugMode) {
                 std.debug.print("[DEBUG]  readingThread.gui (#{d}): found {d} bytes, message: {s}\n", .{ engineIndex, n, msg });
@@ -460,7 +478,6 @@ const guiState = struct {
             const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN(#{d}): {s}\n", .{ engineIndex, msg });
             defer p_self.alloc.free(respmsg);
             try p_self.appendLog(respmsg);
-            line.clearRetainingCapacity();
         }
     }
     pub fn servingGuiThread(p_self: *guiState) !void {
@@ -471,6 +488,7 @@ const guiState = struct {
                 while (inp.nonEmpty()) {
                     const cmdBuffer = inp.readBuffer();
                     defer p_self.alloc.free(cmdBuffer);
+                    //defer p_self.alloc.destroy(cmdBuffer);
                     p_self.handleCmd(.init(cmdBuffer, @intCast(i)));
                     cumulTime = 0;
                 }
@@ -486,6 +504,7 @@ const guiState = struct {
     }
     pub fn saveLog(self: *guiState) !void {
         if (!self.config.match.saveLogs) {
+            std.debug.assert(self.logs.items.len == 0);
             return;
         }
         var fileName: []u8 = undefined;
@@ -502,16 +521,30 @@ const guiState = struct {
             _ = try file.writeStreamingAll(mainl.getGlobalIo(), self.logs.items[i]);
         }
     }
-    pub fn close(p_self: *guiState) void {
-        std.debug.print("[CLOSE] saving logs to log file\n", .{});
+    pub fn free(p_self: *guiState) void {
+        p_self.engineInventory.free(p_self.alloc);
+        p_self.freeLog();
+        p_self.config.free(p_self.alloc);
+        for (0..p_self.input.items.len) |i| {
+            p_self.input.items[i].free(p_self.alloc);
+        }
+        p_self.input.deinit(p_self.alloc);
+        p_self.workingThreads.deinit(p_self.alloc);
+
+        hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
+        hashTablel.zobristKeys.free(p_self.alloc);
         if (p_self.config.match.useOpeningBook) {
             p_self.config.match.openingDb.free(p_self.alloc);
         }
+    }
+    pub fn close(p_self: *guiState) void {
+        std.debug.print("[CLOSE] saving logs to log file\n", .{});
+
         p_self.match.status = .Error;
         p_self.saveLog() catch |err| {
             std.debug.print("[CLOSE] error while saving: {}\n", .{err});
         };
-        defer p_self.freeLog();
+        defer p_self.free();
         p_self.respondAll("QUIT") catch {};
         p_self.status.running = false;
         for (0..p_self.workingThreads.items.len) |i| {
@@ -988,7 +1021,6 @@ var stdout_buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER
 
 pub fn launch_gui(infoPath: []const u8, alloc: std.mem.Allocator) !void {
     var settings = try parseInfoFile(alloc, infoPath);
-    defer settings.free(alloc);
 
     var ret: guiState = try guiState.init(alloc);
     ret.config = &settings;
@@ -1055,6 +1087,14 @@ const configMatch = struct {
         p_self.logPathProvided = true;
         p_self.logPath = try string.initFromSlice(alloc, path);
     }
+    pub fn free(p_self: *configMatch, alloc: std.mem.Allocator) void {
+        if (p_self.openingBookPathProvided) {
+            p_self.openingBookPath.free(alloc);
+        }
+        if (p_self.logPathProvided) {
+            p_self.logPath.free(alloc);
+        }
+    }
 };
 const engineSettingS = struct {
     path: string = undefined,
@@ -1098,7 +1138,9 @@ const guiSetting = struct {
             for (p_self.engineOptions[i].items) |*opt| {
                 opt.free(alloc);
             }
+            p_self.engineOptions[i].deinit(alloc);
         }
+        p_self.match.free(alloc);
     }
     pub fn print(p_self: *guiSetting) void {
         for (0..p_self.nEngines) |i| {
@@ -1129,49 +1171,49 @@ const guiSetting = struct {
         for (0..p_self.nEngines) |i| {
             const engineNbr = try std.fmt.bufPrint(&strBuffer, "Engine #{d}\n", .{i});
             //_ = try fd.write(engineNbr);
-            _ = fd.writerStreaming(mainl.getGlobalIo(), engineNbr);
+            try fd.writeStreamingAll(mainl.getGlobalIo(), engineNbr[0..engineNbr.len]);
 
-            const engineName = try std.fmt.bufPrint(&strBuffer, "\t name: {s}\n", .{p_self.engineNames[i]._slice()});
+            const engineName = try std.fmt.bufPrint(&strBuffer, "\t name: {s};\n", .{p_self.engineNames[i]._slice()});
             //_ = try fd.write(engineName);
-            _ = fd.writerStreaming(mainl.getGlobalIo(), engineName);
+            try fd.writeStreamingAll(mainl.getGlobalIo(), engineName[0..engineName.len]);
 
-            const enginePath = try std.fmt.bufPrint(&strBuffer, "\t path: {s}\n", .{p_self.enginePaths[i].path._slice()});
+            const enginePath = try std.fmt.bufPrint(&strBuffer, "\t path: {s};\n", .{p_self.enginePaths[i].path._slice()});
             //_ = try fd.write(enginePath);
-            _ = fd.writerStreaming(mainl.getGlobalIo(), enginePath);
+            try fd.writeStreamingAll(mainl.getGlobalIo(), enginePath[0..enginePath.len]);
 
             for (p_self.engineOptions[i].items) |*opt| {
-                const engineOpt = try std.fmt.bufPrint(&strBuffer, "\t option: {s}\n", .{opt.*._slice()});
+                const engineOpt = try std.fmt.bufPrint(&strBuffer, "\t option: {s};\n", .{opt.*._slice()});
                 //_ = try fd.write(engineOpt);
-                _ = fd.writerStreaming(mainl.getGlobalIo(), engineOpt);
+                try fd.writeStreamingAll(mainl.getGlobalIo(), engineOpt[0..engineOpt.len]);
             }
         }
 
         //_ = try fd.write("Match settings: \n");
-        _ = try fd.writeStreamingAll(mainl.getGlobalIo(), "Match settings: \n");
+        try fd.writeStreamingAll(mainl.getGlobalIo(), "Match settings: \n");
 
-        const nMatch = try std.fmt.bufPrint(&strBuffer, "\t nMatch: {d}\n", .{p_self.match.nMatch});
+        const nMatch = try std.fmt.bufPrint(&strBuffer, "\t nMatch: {d};\n", .{p_self.match.nMatch});
         //_ = try fd.write(nMatch);
-        _ = fd.writerStreaming(mainl.getGlobalIo(), nMatch);
+        try fd.writeStreamingAll(mainl.getGlobalIo(), nMatch[0..nMatch.len]);
 
-        const pSwitch = try std.fmt.bufPrint(&strBuffer, "\t player switch: {}\n", .{p_self.match.playerSwitch});
+        const pSwitch = try std.fmt.bufPrint(&strBuffer, "\t player switch: {};\n", .{p_self.match.playerSwitch});
         //_ = try fd.write(pSwitch);
-        _ = fd.writerStreaming(mainl.getGlobalIo(), pSwitch);
+        try fd.writeStreamingAll(mainl.getGlobalIo(), pSwitch[0..pSwitch.len]);
 
-        const timeStr = try std.fmt.bufPrint(&strBuffer, "\t time format: time {d} inc {d}\n", .{ p_self.match.timeF.time, p_self.match.timeF.inc });
+        const timeStr = try std.fmt.bufPrint(&strBuffer, "\t time format: time {d} inc {d};\n", .{ p_self.match.timeF.time, p_self.match.timeF.inc });
         //_ = try fd.write(timeStr);
-        _ = fd.writerStreaming(mainl.getGlobalIo(), timeStr);
+        try fd.writeStreamingAll(mainl.getGlobalIo(), timeStr[0..timeStr.len]);
 
-        const seedStr = try std.fmt.bufPrint(&strBuffer, "\t seed {d}\n", .{p_self.seed});
+        const seedStr = try std.fmt.bufPrint(&strBuffer, "\t seed {d};\n", .{p_self.seed});
         //_ = try fd.write(seedStr);
-        _ = fd.writerStreaming(mainl.getGlobalIo(), seedStr);
+        try fd.writeStreamingAll(mainl.getGlobalIo(), seedStr[0..seedStr.len]);
 
-        const useOpeningStr = try std.fmt.bufPrint(&strBuffer, "\t use opening book {}\n", .{p_self.match.useOpeningBook});
+        const useOpeningStr = try std.fmt.bufPrint(&strBuffer, "\t use opening book {};\n", .{p_self.match.useOpeningBook});
         //_ = try fd.write(useOpeningStr);
-        _ = fd.writerStreaming(mainl.getGlobalIo(), useOpeningStr);
+        try fd.writeStreamingAll(mainl.getGlobalIo(), useOpeningStr[0..useOpeningStr.len]);
 
-        const openingBookPath = try std.fmt.bufPrint(&strBuffer, "\t opening book path {s}\n", .{p_self.match.openingBookPath._slice()});
+        const openingBookPath = try std.fmt.bufPrint(&strBuffer, "\t opening book path {s};\n", .{p_self.match.openingBookPath._slice()});
         //_ = try fd.write(openingBookPath);
-        _ = fd.writerStreaming(mainl.getGlobalIo(), openingBookPath);
+        try fd.writeStreamingAll(mainl.getGlobalIo(), openingBookPath[0..openingBookPath.len]);
     }
 };
 pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
@@ -1378,6 +1420,7 @@ pub fn main(init: std.process.Init) !void {
     // 1st arg is the zig file, 2nd is the .info file for the evaluation
     mainl.GLOBAL_CTX.setInit(init);
     const args = try init.minimal.args.toSlice(init.gpa);
+    defer init.gpa.free(args);
     std.debug.assert(args.len > 1);
 
     const path = args[1];

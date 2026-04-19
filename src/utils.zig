@@ -136,6 +136,7 @@ pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
     }
     return -1;
 }
+//pub fn
 
 pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !std.ArrayList([]const T) {
     var ret = try std.ArrayList([]const T).initCapacity(alloc, 4);
