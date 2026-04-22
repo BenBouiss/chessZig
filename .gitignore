@@ -17,4 +17,5 @@ engines/heuristics/tmp/*
 engines/tmp/*
 #test/*
 opening
+zig-pkg
 

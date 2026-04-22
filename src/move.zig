@@ -347,6 +347,7 @@ pub const moveContainer = struct {
 
 //source: https://math.stackexchange.com/questions/194008/how-many-turns-can-a-chess-game-take-at-maximum
 pub const MAX_MATCH_LENGTH: usize = 4096;
+pub const MAX_MATCH_LENGTH_STR: usize = MAX_MATCH_LENGTH * (5 + 1);
 pub const matchMoveContainer = struct {
     // replace the std.mem.zeros with undefined for faster init(?)
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
@@ -494,6 +495,41 @@ pub const matchMoveContainer = struct {
             _ = lineStr.put(' ');
         }
         return lineStr;
+    }
+    pub fn getLineFromBuffer(self: matchMoveContainer, buffer: []u8) string {
+        var lineStr: string = string.initFromBuffer(buffer);
+        for (0..self.len) |i| {
+            const move = self.moves[i];
+            const moveStr = move.getStr();
+            if (moveStr[4] == 0) {
+                _ = lineStr.extend(moveStr[0..4]);
+            } else {
+                _ = lineStr.extend(&moveStr);
+            }
+            _ = lineStr.put(' ');
+        }
+        return lineStr;
+    }
+    pub fn getLineStatic(self: matchMoveContainer) [MAX_MATCH_LENGTH_STR]u8 {
+        var ret: [MAX_MATCH_LENGTH_STR]u8 = std.mem.zeroes([MAX_MATCH_LENGTH_STR]u8);
+        var idx: usize = 0;
+
+        for (0..self.len) |i| {
+            const move = self.moves[i];
+            const moveStr = move.getStr();
+            if (moveStr[4] == 0) {
+                @memcpy(ret[idx .. idx + 4], moveStr[0..4]);
+                idx += 4;
+            } else {
+                //_ = lineStr.extend(&moveStr);
+                @memcpy(ret[idx .. idx + 5], moveStr[0..5]);
+                idx += 5;
+            }
+            ret[idx] = ' ';
+            idx += 1;
+            //_ = lineStr.put(' ');
+        }
+        return ret;
     }
 };
 

@@ -3,6 +3,9 @@ const movel = @import("../move.zig");
 const chessl = @import("../chess.zig");
 const heuristicl = @import("../heuristic.zig");
 const schedulerl = @import("scheduler.zig");
+const configl = @import("../config.zig");
+const mainl = @import("../main.zig");
+const timel = @import("../time.zig");
 
 const std = @import("std");
 
@@ -20,8 +23,6 @@ pub const searchStatistic = struct {
 };
 /// Benchmark function to test the node generation speed in
 /// "real world" settings mainly computing heuristics...
-///
-///
 pub const threadInfo = struct {
     currentBest: moveDecisionExt = .{},
     currentMove: moveDecisionExt = .{},
@@ -126,4 +127,151 @@ pub fn joinOnThreadPack(p_array: *threadPackageArray) void {
     for (0..p_array.len) |i| {
         p_array.items(.threadHandle)[i].join();
     }
+}
+
+pub const searchPackage = struct {
+    chessState: chessl.Board_state = undefined,
+    depth: u16 = 0,
+    features: schedulerl.searchFeatures = .{},
+    scheduler: *schedulerl.scheduler = undefined,
+};
+pub const threadStatus = enum { WAITING, WORKING };
+pub const threadP = struct {
+    _handle: std.Thread = undefined,
+    status: threadStatus = .WAITING,
+    searchPing: bool = false,
+    alive: bool = false,
+};
+
+pub const threadPool = struct {
+    threadProps: [configl.MAX_THREAD]threadP = undefined,
+    threadInfos: [configl.MAX_THREAD]threadInfo = undefined,
+    packages: [configl.MAX_THREAD]searchPackage = undefined,
+
+    nThread: usize = 0,
+    running: bool = false,
+    working: bool = false,
+
+    pub fn addThread(p_self: *threadPool, n: usize) !void {
+        //
+        for (0..n) |_| {
+            p_self.threadInfos[p_self.nThread] = .{ .alive = true };
+            p_self.threadProps[p_self.nThread]._handle = try std.Thread.spawn(.{}, waitingRoom, .{ p_self, p_self.nThread });
+            p_self.nThread += 1;
+        }
+        p_self.running = true;
+    }
+
+    pub fn close(p_self: *threadPool) void {
+        p_self.running = false;
+        for (0..p_self.nThread) |i| {
+            p_self.threadInfos[i].alive = false;
+            p_self.threadProps[i].alive = false;
+        }
+        for (0..p_self.nThread) |i| {
+            p_self.threadProps[i]._handle.join();
+        }
+    }
+    pub fn stop(p_self: *threadPool) void {
+        for (0..p_self.nThread) |i| {
+            p_self.threadInfos[i].alive = false;
+        }
+    }
+    pub fn waitOnFinish(p_self: *const threadPool) void {
+        var sw: timel.stopWatch = .{};
+        sw.startTimeTick();
+        const timeout = 5;
+        while (p_self.getNumberOfWorking() != 0 or !p_self.running) {
+            if (sw.timeSinceStartSec() > timeout) {
+                sw.reset();
+                sw.startTimeTick();
+                std.debug.print("[INACTIVITY] threadPool.waitOnFinish : no activity in the last {d} seconds\n", .{timeout});
+            }
+        }
+    }
+    pub fn getNumberOfWorking(p_self: *const threadPool) usize {
+        var ret: usize = 0;
+        for (0..p_self.nThread) |i| {
+            ret += @intFromBool(p_self.threadProps[i].status == .WORKING);
+        }
+        return ret;
+    }
+    pub fn submit(p_self: *threadPool, p_pack: *const searchPackage) threadPoolerr!void {
+        if (p_self.working) {
+            return threadPoolerr.alreadySearching;
+        }
+        for (0..p_self.nThread) |i| {
+            p_self.packages[i] = p_pack.*;
+            p_self.threadInfos[i] = .{ .working = true, .alive = true };
+        }
+        for (0..p_self.nThread) |i| {
+            p_self.threadProps[i].searchPing = true;
+        }
+
+        //var sw: timel.stopWatch = .{};
+        //sw.startTimeTick();
+        //while (!p_self.working) {
+        //    try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real);
+        //    if (sw.timeSinceStartSec > 4) {
+        //        return threadPoolerr.timedOut;
+        //    }
+        //}
+        return;
+    }
+    pub fn getInfos(p_self: *const threadPool) []const threadInfo {
+        return p_self.threadInfos[0..p_self.nThread];
+    }
+    pub fn getSearchStatus(p_self: *const threadPool) schedulerl.searchStatus {
+        var endCounter: usize = 0;
+        for (0..p_self.nThread) |i| {
+            const info: threadInfo = p_self.threadInfos[i];
+            endCounter += @intFromBool(!info.working);
+        }
+        if (endCounter == p_self.nThread) {
+            return .FINISHED;
+        }
+        return .CONTINUE;
+    }
+    pub fn getCombinedInfo(p_self: *const threadPool) threadInfo {
+        var ret: threadInfo = .{};
+        for (0..p_self.nThread) |i| {
+            const info = p_self.threadInfos[i];
+            ret.searchStat.n_nodeExplored += info.searchStat.n_nodeExplored;
+            ret.searchStat.n_hashRetrieve += info.searchStat.n_hashRetrieve;
+            ret.searchStat.n_cutoffs += info.searchStat.n_cutoffs;
+            if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
+                ret.currentBest = info.currentBest;
+            }
+        }
+        return ret;
+    }
+};
+pub const threadPoolerr = error{ timedOut, alreadySearching };
+
+pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
+    p_self.threadProps[idx].status = .WAITING;
+    p_self.threadProps[idx].alive = true;
+    var sw: timel.stopWatch = .{};
+    sw.startTimeTick();
+    const timeout = 30;
+    while (p_self.running and p_self.threadProps[idx].alive) {
+        if (!p_self.working) {
+            std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch unreachable;
+        }
+        if (sw.timeSinceStartSec() > timeout) {
+            sw.reset();
+            sw.startTimeTick();
+            std.debug.print("[INACTIVITY] threadPool.WaitingRoom: Thread {d} no activity in the last {d} seconds\n", .{ idx, timeout });
+        }
+        if (p_self.threadProps[idx].searchPing) {
+            sw.reset();
+            sw.startTimeTick();
+            p_self.threadProps[idx].searchPing = false;
+            p_self.threadProps[idx].status = .WORKING;
+            var pack = p_self.packages[idx];
+            schedulerl._startSearch(pack.scheduler, &pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth);
+            p_self.threadProps[idx].status = .WAITING;
+        }
+    }
+    std.debug.print("[EXIT] threadPool.WaitingRoom: Thread {d} exiting\n", .{idx});
 }

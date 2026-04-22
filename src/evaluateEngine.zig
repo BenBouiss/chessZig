@@ -77,6 +77,7 @@ const matchResultContainer = struct {
 
         switch (match.status) {
             .Continue, .Error => {
+                std.debug.print("[PANIC] bad status found: {}\n", .{match.status});
                 @panic("???");
             },
             .CheckMate => {
@@ -209,7 +210,7 @@ const ultraBulletTimeFormat: timeFormat = .{ .time = 30000, .inc = 0 };
 const signedCmd = struct {
     str: []const u8,
     engine: u8,
-    pub fn init(buffer: []u8, engineIndex: u8) signedCmd {
+    pub fn init(buffer: []const u8, engineIndex: u8) signedCmd {
         return .{ .str = buffer, .engine = engineIndex };
     }
 };
@@ -433,14 +434,18 @@ const guiState = struct {
         const eng: *engine_info = p_self.engineInventory.items.items[engineIndex];
         var writer = &eng.f_writer.interface;
 
-        const respmsg = try std.fmt.allocPrint(p_self.alloc, "OUT: {s} \n", .{msg});
-        defer p_self.alloc.free(respmsg);
-
         try writer.print("{s}\n", .{msg});
-        try p_self.appendLog(respmsg);
         try writer.flush();
+
+        //writer.writeAll(msg)
+
+        if (!p_self.config.match.saveLogs) {
+            const respmsg = try std.fmt.allocPrint(p_self.alloc, "OUT: {s} \n", .{msg});
+            defer p_self.alloc.free(respmsg);
+            try p_self.appendLog(respmsg);
+        }
         if (p_self.status.debugMode) {
-            std.debug.print("[DEBUG] respond.gui(#{d}): sent msg: {s}\n", .{ engineIndex, respmsg });
+            std.debug.print("[DEBUG] respond.gui(#{d}): sent msg: {s}\n", .{ engineIndex, msg });
         }
     }
     pub fn respondAll(p_self: *guiState, msg: []const u8) !void {
@@ -456,8 +461,8 @@ const guiState = struct {
         if (p_self.status.debugMode) {
             std.debug.print("[DEBUG] readingThread.gui: Started reading on the stdout of the {d}nth engine (self status: {})\n", .{ engineIndex, p_self.status.running });
         }
+        var buffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
         while (p_self.status.running) {
-            var buffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
             var w: std.Io.Writer = .fixed(&buffer);
             const n = reader.streamDelimiter(&w, '\n') catch |err| {
                 std.debug.print("[DEBUG] readingThread.gui (#{d}): caught err {}\n", .{ engineIndex, err });
@@ -467,17 +472,22 @@ const guiState = struct {
                 break;
             }
             _ = reader.toss(1);
-            const msg = buffer[0 .. n - 1];
+            const msg = buffer[0..n];
 
             if (p_self.status.debugMode) {
-                std.debug.print("[DEBUG]  readingThread.gui (#{d}): found {d} bytes, message: {s}\n", .{ engineIndex, n, msg });
+                std.debug.print("[DEBUG]  readingThread.gui (#{d}): found {d} bytes, message: '{s}'\n", .{ engineIndex, n, msg });
             }
 
             _ = p_self.input.items[engineIndex].putCmd(p_self.alloc, msg);
 
-            const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN(#{d}): {s}\n", .{ engineIndex, msg });
-            defer p_self.alloc.free(respmsg);
-            try p_self.appendLog(respmsg);
+            if (!p_self.config.match.saveLogs) {
+                continue;
+            }
+            if (p_self.config.match.saveLogs) {
+                const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN(#{d}): {s}\n", .{ engineIndex, msg });
+                defer p_self.alloc.free(respmsg);
+                try p_self.appendLog(respmsg);
+            }
         }
     }
     pub fn servingGuiThread(p_self: *guiState) !void {
@@ -486,10 +496,10 @@ const guiState = struct {
             for (0..p_self.input.items.len) |i| {
                 var inp = &p_self.input.items[i];
                 while (inp.nonEmpty()) {
-                    const cmdBuffer = inp.readBuffer();
-                    defer p_self.alloc.free(cmdBuffer);
+                    const cmd = inp.readBuffer();
+                    //defer p_self.alloc.free(cmdBuffer);
                     //defer p_self.alloc.destroy(cmdBuffer);
-                    p_self.handleCmd(.init(cmdBuffer, @intCast(i)));
+                    p_self.handleCmd(.init(cmd.cmd[0..cmd.len], @intCast(i)));
                     cumulTime = 0;
                 }
             }
@@ -629,7 +639,16 @@ const guiState = struct {
     pub fn startMatch(p_self: *guiState) !void {
         p_self.match.reset();
         p_self.status.phase = .MATCH;
+
+        //for (0..p_self.engineInventory.len) |i| {
+        //    const eng: *engine_info = p_self.engineInventory.items.items[i];
+        //    var reader = &eng.f_reader.interface;
+        //    _ = try reader.discardRemaining();
+        //}
         try p_self.respondAll("ucinewgame");
+
+        //var reader = &eng.f_reader.interface;
+        //reader.discardRemaining();
         var line = try p_self.match.chessState.move_history.getLineString(p_self.alloc);
         defer line.free(p_self.alloc);
         const msg = try std.fmt.allocPrint(p_self.alloc, "position fen {s} {s}", .{ p_self.match.chessState.get_fen(), line._slice() });
@@ -706,11 +725,17 @@ const guiState = struct {
         }
     }
     fn sendPositionUpdate(p_self: *guiState) !void {
-        var lineBuffer = try p_self.match.chessState.move_history.getLineString(p_self.alloc);
-        const msg = try std.fmt.allocPrint(p_self.alloc, "position startpos {s}", .{lineBuffer._slice()});
+        //var lineBuffer = try p_self.match.chessState.move_history.getLineString(p_self.alloc);
+        var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+        const strBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
+        const lineString = p_self.match.chessState.move_history.getLineStatic();
+        //const lineString = p_self.match.chessState.move_history.getLineFromBuffer(&strBuffer);
+        _ = strBuffer;
+        const msg = try std.fmt.bufPrint(&buffer, "position startpos {s}", .{lineString});
+        //const msg = try std.fmt.allocPrint(p_self.alloc, "position startpos {s}", .{lineBuffer._slice()});
 
-        defer lineBuffer.free(p_self.alloc);
-        defer p_self.alloc.free(msg);
+        //defer lineBuffer.free(p_self.alloc);
+        //defer p_self.alloc.free(msg);
 
         try p_self.respond(msg, p_self.getCurrentPlayer().engineUsed);
     }
@@ -766,7 +791,7 @@ const guiState = struct {
         if (moveArr.items.len != 1) {
             return err_gui_bestmove.nei_error;
         }
-        if (!moveArr.items[0].isIn(p_self.match.availableMoves)) {
+        if (!moveArr.items[0].isIn(p_self.match.availableMoves) and !moveArr.items[0].isValid()) {
             return err_gui_bestmove.unknownMove_error;
         }
         p_self.match.nextTurn_move = moveArr.items[0];
@@ -980,7 +1005,7 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
     chessl.print_board(&p_self.match.chessState);
     const times = try p_self.match.getGuiStr(p_self.alloc);
     defer (p_self.alloc.free(times));
-    std.debug.print("{s}\n", .{times});
+    std.debug.print("{s} mem of buffer {d} {d}\n", .{ times, p_self.engineInventory.items.items[0].f_reader.interface.buffer.len, p_self.engineInventory.items.items[1].f_reader.interface.buffer.len });
 
     const eval = heuristicl.evaluate_debug(&p_self.match.chessState, &heuristicl.globalHeuristic);
     std.debug.print("Current evaluation: \n", .{});
@@ -988,6 +1013,9 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
 }
 
 fn onNextTurnTrigger(p_self: *guiState) !bool {
+    if (p_self.status.debugMode) {
+        std.debug.print("onNextTurnTrigger: next turn trigger received \n", .{});
+    }
     try p_self.match.turnComplete(p_self.alloc);
 
     p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
@@ -1307,7 +1335,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         };
         return true;
-    } else if (buffer.startsWith("saveLogs")) {
+    } else if (buffer.containsE("saveLogs", .ignoreCase)) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
