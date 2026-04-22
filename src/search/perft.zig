@@ -32,7 +32,9 @@ const useDebug = build_options.useDebug;
 
 const assert = std.debug.assert;
 
-pub fn dispatchUciPerftCmd(p_engine: *enginel.engine) bool {
+pub fn dispatchUciPerftCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) bool {
+    p_engine.searcher.schedul.setEngine(p_engine);
+    p_engine.searcher.pack.config = config;
     const dispatchThread = std.Thread.spawn(.{}, dispatchUciPerftThreads, .{p_engine}) catch {
         return false;
     };
@@ -45,7 +47,7 @@ pub fn dispatchUciPerftCmd(p_engine: *enginel.engine) bool {
 pub fn dispatchUciPerftThreads(p_engine: *enginel.engine) void {
     var moveArray = moveGenl.generateLegalMoves(&p_engine.state);
     const searcher = p_engine.searcher;
-    const _nThread: u32 = @min(searcher.nThreads, moveArray.len);
+    const _nThread: u32 = @min(p_engine.options.nThreads, moveArray.len);
     if (_nThread == 0) {
         @panic("No thread or no moves available");
     }
@@ -56,14 +58,13 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine) void {
 
     p_engine.searcher.searching = true;
 
-    const feats: perftSearchFeatures = .{ .useBatched = searcher.config.useBatched, .useHash = p_engine.options.useHashTable };
+    const feats: perftSearchFeatures = .{ .useBatched = searcher.pack.config.useBatched, .useHash = p_engine.options.useHashTable };
     if (p_engine.status.debugMode) {
-        searcher.printInfo();
         if (feats.useHash) {
             std.debug.print("[DEBUG] dispatchUciPerftThreads: use hash is enabled! \n", .{});
         }
     }
-    _ = dispatchPerftPackage(p_engine, &pack, searcher.config.depth, feats);
+    _ = dispatchPerftPackage(p_engine, &pack, searcher.pack.config.depth, feats);
     _ = waitThreadFinish(p_engine, &pack) catch {
         std.debug.print("[ERROR] wait thread\n", .{});
         return;
@@ -89,7 +90,8 @@ fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, de
 pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !bool {
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
-    while (!p_engine.searcher.interrupt and p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
+    var endCounter: usize = 0;
+    while (!p_engine.searcher.interrupt and endCounter != p_engine.options.nThreads) {
         try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.INFO_TICKRATE_NS) }, .real);
         const res = threadingl.getCombinedFromPack(p_threadPack);
         const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, @as(u64, @intCast(sw.timeSinceStartMs() + 1))) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
@@ -97,16 +99,16 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
         };
         defer p_engine.alloc.free(msg);
         p_engine.respond(msg);
-        p_engine.searcher.endCounter = 0;
+        endCounter = 0;
         for (0..p_threadPack.len) |i| {
-            p_engine.searcher.endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].working);
+            endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].working);
         }
     }
     if (p_engine.status.debugMode) {
         std.debug.print("[DEBUG] waitThreadFinish: exiting\n", .{});
     }
     p_engine.searcher.searching = false;
-    if (p_engine.searcher.endCounter != p_engine.searcher.nThreads) {
+    if (endCounter != p_engine.options.nThreads) {
         for (0..p_threadPack.len) |i| {
             p_threadPack.items(._tInfo)[i].alive = false;
         }
@@ -114,7 +116,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
     }
 
     const res = threadingl.getCombinedFromPack(p_threadPack);
-    const msg = std.fmt.allocPrint(p_engine.alloc, "info depth: {d} nodes {d} retrieved: {d} stored: {d}", .{ p_engine.searcher.config.depth, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+    const msg = std.fmt.allocPrint(p_engine.alloc, "info depth: {d} nodes {d} retrieved: {d} stored: {d}", .{ p_engine.searcher.pack.config.depth, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
         return true;
     };
     defer p_engine.alloc.free(msg);

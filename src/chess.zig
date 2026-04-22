@@ -347,38 +347,34 @@ pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
     };
     return nbr;
 }
-/// All memory used by the alloc is freed at return
-pub fn getBoardFromFen(alloc: std.mem.Allocator, fen: []const u8) debug_err!Board_state {
-    //FIXME: Do this on the stack instead, using slices
-    var tokens = utils.split(u8, alloc, fen, ' ') catch {
-        return debug_err.fenErr;
-    };
-    defer tokens.deinit(alloc);
-    if (tokens.items.len < 6) {
+pub fn getBoardFromFen(fen: []const u8) debug_err!Board_state {
+    const nTokens = utils.str_countLetter(fen, ' ');
+    if (nTokens < 5) {
         return debug_err.fenErr;
     }
-    var board = try getBoardFromFen_pieces(tokens.items[0]);
-    _ = try getBoardFromFen_turn(&board, tokens.items[1]);
-    _ = getBoardFromFen_castle(&board, tokens.items[2]);
-    _ = getBoardFromFen_enPassant(&board, tokens.items[3]);
-    board.halfMoveClock = @intCast(getBoardFromFen_clockMove(tokens.items[4]));
-    board.turn_count = @intCast(getBoardFromFen_clockMove(tokens.items[5]));
+    var gen = utils.splitGenerator(u8).init(fen, ' ');
+    var board = try getBoardFromFen_pieces(gen.next().?);
+    _ = try getBoardFromFen_turn(&board, gen.next().?);
+    _ = getBoardFromFen_castle(&board, gen.next().?);
+    _ = getBoardFromFen_enPassant(&board, gen.next().?);
+    board.halfMoveClock = @intCast(getBoardFromFen_clockMove(gen.next().?));
+    board.turn_count = @intCast(getBoardFromFen_clockMove(gen.next().?));
     if (comptime useStaged) {
         onMoveStaged(&board, board.whiteToMove());
     }
     return board;
 }
 
-pub fn getBoardFromUciFen(uciStr: []const u8, alloc: std.mem.Allocator, debug: bool) !Board_state {
-    var ret = getBoardFromFen(alloc, uciStr) catch {
+pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !Board_state {
+    var ret = getBoardFromFen(uciStr) catch {
         std.debug.print("[PANIC] getboardFromUciFen: error while parsing {s}\n", .{uciStr});
         @panic("");
     };
-    try applyUciMoves(&ret, uciStr, alloc, debug);
+    try applyUciMoves(&ret, uciStr, debug);
     return ret;
 }
-pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.Allocator, debug: bool) !void {
-    const moves = try getEmptyMoveListFromStr(uciStr, alloc);
+pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, debug: bool) !void {
+    const moves = try getEmptyMoveListFromStr(uciStr);
     if (debug) {
         std.debug.print("[DEBUG] applyUciMoves: Moves found in str: ", .{});
         for (0..moves.len) |i| {
@@ -400,11 +396,12 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, alloc: std.mem.A
     }
 }
 pub fn getEmptyMoveListFromStr(strBuffer: []const u8, alloc: std.mem.Allocator) !movel.matchMoveContainer {
-    var cmd_split = try utils.split(u8, alloc, strBuffer, ' ');
-    defer cmd_split.deinit(alloc);
+    //var cmd_split = try utils.split(u8, alloc, strBuffer, ' ');
+    //defer cmd_split.deinit(alloc);
+    var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
     var ret: movel.matchMoveContainer = .{};
 
-    for (cmd_split.items) |cmd| {
+    while (gen.next()) |cmd| {
         if (cmd.len != 4 and cmd.len != 5) {
             continue;
         }
@@ -435,14 +432,15 @@ pub fn getEmptyMoveListFromStr(strBuffer: []const u8, alloc: std.mem.Allocator) 
 
 pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: std.mem.Allocator) !std.ArrayList(IMove) {
     // /!\ this assumes that the p_state is updated for the corresponding move to "decode", not suitable for a position startpos parsing
-    var cmd_split = try utils.split(u8, alloc, strBuffer, ' ');
-    var ret = try std.ArrayList(IMove).initCapacity(alloc, cmd_split.items.len);
+    //var cmd_split = try utils.split(u8, alloc, strBuffer, ' ');
+    //defer cmd_split.deinit(alloc);
+    var ret = try std.ArrayList(IMove).initCapacity(alloc, 16);
 
-    defer cmd_split.deinit(alloc);
+    var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
 
     var from: e_square = undefined;
     var to: e_square = undefined;
-    for (cmd_split.items) |cmd| {
+    while (gen.next()) |cmd| {
         if (cmd.len != 4 and cmd.len != 5) {
             continue;
         }
@@ -2333,11 +2331,11 @@ pub fn test_scenarios() !void {
     return;
 }
 
-pub fn pin_scenario(alloc: std.mem.Allocator) !void {
+pub fn pin_scenario() !void {
     const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     std.debug.print("[DEBUG] pin scenario: {s}\n", .{fen});
 
-    var board = getBoardFromFen(alloc, fen) catch {
+    var board = getBoardFromFen(fen) catch {
         return;
     };
     print_boardstate(&board);
@@ -2362,10 +2360,10 @@ pub fn pin_scenario(alloc: std.mem.Allocator) !void {
     return;
 }
 
-pub fn test_avx(alloc: std.mem.Allocator) !void {
+pub fn test_avx() !void {
     const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2RKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     //const fen = DEFAULT_FEN;
-    var state = try getBoardFromFen(alloc, fen);
+    var state = try getBoardFromFen(fen);
     const bb = moveGenl.avx2DumbFill(&state, true).collapse();
     const _bb = moveGenl.avx2DumbFill(&state, false).collapse();
     print_board(&state);
@@ -2423,11 +2421,13 @@ pub fn test_stackedPawn() !void {
 }
 
 pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !matchMoveContainer {
-    var tmpBoard = try getBoardFromFen(alloc, DEFAULT_FEN);
-    var tokens = try line.split(alloc, ' ');
-    defer tokens.deinit(alloc);
+    var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
+    //var tokens = try line.split(alloc, ' ');
+    //defer tokens.deinit(alloc);
+    var gen = utils.splitGenerator(u8).init(line._slice(), ' ');
+
     var ret: matchMoveContainer = .{};
-    for (tokens.items) |str| {
+    while (gen.next()) |str| {
         var offset: usize = 0;
         if (utils.contains(str, ".", .ignoreCase)) {
             if (str.len == 2) {
@@ -2449,7 +2449,7 @@ pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !match
 }
 pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *string) !Board_state {
     const moves = try algebraicLineToIMoveMatch(alloc, line);
-    var ret = try getBoardFromFen(alloc, DEFAULT_FEN);
+    var ret = try getBoardFromFen(DEFAULT_FEN);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
         ret.makeMove(move);
@@ -2460,7 +2460,7 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *string) !Board
 
 pub fn algebraicToFen(alloc: std.mem.Allocator, line: *string) ![MAX_FEN_LENGTH]u8 {
     const moves = try algebraicLineToIMoveMatch(alloc, line);
-    var tmp: Board_state = try getBoardFromFen(alloc, DEFAULT_FEN);
+    var tmp: Board_state = try getBoardFromFen(DEFAULT_FEN);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
         tmp.makeMove(move);
@@ -2470,7 +2470,7 @@ pub fn algebraicToFen(alloc: std.mem.Allocator, line: *string) ![MAX_FEN_LENGTH]
     return tmp.get_fen();
 }
 pub fn test_single_algebraic(alloc: std.mem.Allocator) !void {
-    var state = try getBoardFromFen(alloc, DEFAULT_FEN);
+    var state = try getBoardFromFen(DEFAULT_FEN);
     // 1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6
     const algFen = "d4";
     var _algFen: string = try string.initFromSlice(alloc, algFen);
@@ -2496,7 +2496,7 @@ pub fn test_safety() !void {
 }
 pub fn test_move_heur(alloc: std.mem.Allocator) !void {
     //var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "1nbqkbnr/2pppppp/8/1p6/Rp6/2P5/4PPPP/1NBQKBNR b Hh b6 0 10");
-    var tmp: Board_state = try getBoardFromFen(alloc, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+    var tmp: Board_state = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
     print_boardstate(&tmp);
     const moves = moveGenl.generateLegalMoves(&tmp);
     const pv: movel.line = .{};
@@ -2513,9 +2513,47 @@ pub fn test_move_heur(alloc: std.mem.Allocator) !void {
     }
     std.debug.print("ben\n", .{});
 }
+pub fn test_parser(alloc: std.mem.Allocator) !void {
+    var tokens = utils.split(u8, alloc, DEFAULT_FEN, ' ') catch {
+        return debug_err.fenErr;
+    };
+    defer tokens.deinit(alloc);
+    for (0..tokens.items.len) |i| {
+        std.debug.print("'{s}' ", .{tokens.items[i]});
+    }
+    std.debug.print("\n", .{});
+    const nTokens = utils.str_countLetter(DEFAULT_FEN, ' ');
+    std.debug.print("{d} tokens\n", .{nTokens});
+
+    var gen = utils.splitGenerator(u8).init(DEFAULT_FEN, ' ');
+    while (gen.next()) |tok| {
+        std.debug.print("'{s}' ", .{tok});
+    }
+    std.debug.print("\n", .{});
+
+    const testcases = [_][]const u8{
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
+        " rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR  w HAha - 0 0 ",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR   w   HAha - 0  0  ",
+        "   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
+    };
+    for (0..testcases.len) |i| {
+        const vers = testcases[i];
+        std.debug.print("Testion for version '{s}' \n", .{vers});
+        gen = utils.splitGenerator(u8).init(vers, ' ');
+        while (gen.next()) |tok| {
+            std.debug.print("'{s}' ", .{tok});
+        }
+        std.debug.print("\n", .{});
+    }
+
+    return;
+}
 
 pub fn main(alloc: std.mem.Allocator) !void {
     mainl.initAll(alloc, true);
+    try test_parser(alloc);
     //try test_avx();
     //try test_isolated();
     //try test_passed();
@@ -2524,6 +2562,6 @@ pub fn main(alloc: std.mem.Allocator) !void {
     //try test_scenarios();
     //try test_single_algebraic();
     //try test_line_algebraic();
-    try test_move_heur();
+    //try test_move_heur(alloc);
     return;
 }

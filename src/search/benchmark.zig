@@ -46,25 +46,13 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
 
-        const fmoves = moveGenl.generateLegalMoves(&p_engine.state);
-        var pack = threadingl.getThreadPackArray(p_engine.alloc, &p_engine.state, &fmoves, p_engine.searcher.nThreads) catch {
-            std.debug.print("[ERROR] dispatchUciGoThreads: Cant init thread pack array\n", .{});
-            return;
-        };
-        defer threadingl.freeThreadPackArray(p_engine.alloc, &pack);
         p_engine.searcher.searching = true;
         defer p_engine.searcher.searching = false;
         var sched = &p_engine.searcher.schedul;
-        sched.setThreadPack(&pack);
         sched.setEngine(p_engine);
         sched.features.fixedDepth = true;
         sched.reportProgress = true;
-
-        if (sched.turn) {
-            sched.timeM.remainingTimeMs = p_engine.searcher.config.wtime;
-        } else {
-            sched.timeM.remainingTimeMs = p_engine.searcher.config.btime;
-        }
+        sched.timeM.remainingTimeMs = std.math.maxInt(u32);
         if (p_engine.trackMetrics()) {
             p_engine.metric.addTimeToProcessingMs(stopWatch.timeSinceStartMs());
         }

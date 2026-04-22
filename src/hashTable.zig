@@ -46,7 +46,6 @@ pub const Hash_entry = struct {
     age: u8 = 0,
 
     valid: bool = false,
-    lock: bool = false,
     pub inline fn moveA(self: Hash_entry) u64 {
         return self.val.moveAmount;
     }
@@ -70,7 +69,6 @@ pub const Hash_bucket = struct {
     entries: [configl.ITEM_PER_BUCKET]Hash_entry,
     //TODO find a way to put entries outside of this struct as the following 2 bytes are now worth the pointer to entries in mem 8 bytes
     len: u8 = 0,
-    lock: bool = false,
     //hashTableOffset: u64,
     //has_collision: bool = false,
     pub fn printSize(p_self: *Hash_bucket) void {
@@ -103,15 +101,12 @@ pub const Hash_bucket = struct {
     }
 
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
-        //p_self.acquireLock();
         for (0..p_self.len) |i| {
             const entry = p_self.entries[i];
             if (entry.key.code == hash and entry.exploredDeph == depth) {
-                //p_self.releaseLock();
                 return entry;
             }
         }
-        //p_self.releaseLock();
         return .{ .valid = false };
     }
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?*Hash_entry {
@@ -124,13 +119,6 @@ pub const Hash_bucket = struct {
             }
         }
         return null;
-    }
-    fn acquireLock(p_self: *Hash_bucket) void {
-        while (p_self.lock) {}
-        p_self.lock = true;
-    }
-    fn releaseLock(p_self: *Hash_bucket) void {
-        p_self.lock = false;
     }
 };
 
@@ -158,7 +146,6 @@ pub const Hash_table = struct {
         ret.entries = (try alloc.alloc(Hash_bucket, total_size));
 
         for (0..total_size) |i| {
-            ret.entries[i].lock = false;
             ret.entries[i].len = 0;
         }
         ret.initialized = true;
@@ -277,6 +264,10 @@ pub fn _initHash(alloc: std.mem.Allocator, seed: u64, bitsHashTable: u8) void {
     _initZobrist(alloc, seed);
     _ = bitsHashTable;
     return;
+}
+pub fn _freeHash(alloc: std.mem.Allocator, verbose: bool) void {
+    hashTable.free(alloc, verbose);
+    zobristKeys.free(alloc);
 }
 
 pub fn initZobristKeys(rng: std.Random) void {

@@ -135,11 +135,11 @@ pub const globalCtx = struct {
 };
 pub var GLOBAL_CTX: globalCtx = .{};
 pub inline fn getGlobalIo() std.Io {
-    //std.debug.assert(GLOBAL_CTX.isInit);
+    std.debug.assert(GLOBAL_CTX.isInit);
     return GLOBAL_CTX.io;
 }
 pub inline fn getGlobalGPA() std.mem.Allocator {
-    //std.debug.assert(GLOBAL_CTX.isInit);
+    std.debug.assert(GLOBAL_CTX.isInit);
     return GLOBAL_CTX.gpa;
 }
 
@@ -174,15 +174,16 @@ pub fn test_test() !void {
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
-    initAll(GPA, false);
+    //initAll(GPA, false);
+    defer hashl._freeHash(GPA, false);
     //try test_test();
     //try test_perft(GPA);
     //try test_bench();
     //try test_speed();
     //try heuristicl.main(GPA);
-    //try chessl.main();
+    try chessl.main(GPA);
     //try test_bug();
-    try test_bug2(GPA);
+    //try test_bug2(GPA);
     //var path = try stringl.string.initFromSlice(getGlobalGPA(), "opening/8moves_v3.pgn");
     //defer path.free(getGlobalGPA());
     //try bookl.main(&path, GPA);

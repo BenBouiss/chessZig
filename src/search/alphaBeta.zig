@@ -401,6 +401,9 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, .{}, depth);
     var i: usize = 0;
     while (gen.pickNext(&order)) |move| : (i += 1) {
+        //const fmoves = moveGenl.generateLegalMoves_capture(p_state);
+        //for (0..fmoves.len) |i| {
+        //const move = fmoves.moves[i];
         var _delta = BIG_DELTA;
         if (move.isPromotion()) {
             _delta += weightl.simpleQueenScore - 200;

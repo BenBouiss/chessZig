@@ -136,7 +136,44 @@ pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
     }
     return -1;
 }
-//pub fn
+pub fn splitGenerator(comptime T: type) type {
+    return struct {
+        slice: []const T,
+        sep: T,
+        idx: usize = 0,
+        const self = @This();
+
+        pub fn init(a: []const T, sep: T) splitGenerator(T) {
+            return .{ .sep = sep, .slice = a, .idx = 0 };
+        }
+        pub fn next(p_self: *self) ?[]const T {
+            if (p_self.idx >= p_self.slice.len) {
+                return null;
+            }
+            while (p_self.slice[p_self.idx] == p_self.sep) {
+                if (p_self.idx == p_self.slice.len - 1) {
+                    break;
+                }
+                p_self.idx += 1;
+            }
+            if (p_self.slice[p_self.idx] == p_self.sep) {
+                return null;
+            }
+            for (p_self.idx..p_self.slice.len) |i| {
+                const l = p_self.slice[i];
+                if (l == p_self.sep) {
+                    const start = p_self.idx;
+                    p_self.idx = i + 1;
+                    return p_self.slice[start..i];
+                }
+            }
+
+            const start = p_self.idx;
+            p_self.idx = p_self.slice.len;
+            return p_self.slice[start..];
+        }
+    };
+}
 
 pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !std.ArrayList([]const T) {
     var ret = try std.ArrayList([]const T).initCapacity(alloc, 4);
