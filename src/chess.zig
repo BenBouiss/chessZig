@@ -395,9 +395,7 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, debug: bool) !vo
         onMoveStaged(p_board, p_board.whiteToMove());
     }
 }
-pub fn getEmptyMoveListFromStr(strBuffer: []const u8, alloc: std.mem.Allocator) !movel.matchMoveContainer {
-    //var cmd_split = try utils.split(u8, alloc, strBuffer, ' ');
-    //defer cmd_split.deinit(alloc);
+pub fn getEmptyMoveListFromStr(strBuffer: []const u8) !movel.matchMoveContainer {
     var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
     var ret: movel.matchMoveContainer = .{};
 
@@ -429,6 +427,35 @@ pub fn getEmptyMoveListFromStr(strBuffer: []const u8, alloc: std.mem.Allocator) 
     }
     return ret;
 }
+pub fn getFirstMoveFromStr(p_state: *Board_state, strBuffer: []const u8) IMove {
+    // /!\ this assumes that the p_state is updated for the corresponding move to "decode", not suitable for a position startpos parsing
+    var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
+
+    while (gen.next()) |cmd| {
+        if (cmd.len != 4 and cmd.len != 5) {
+            continue;
+        }
+        const from = stringToLERF(cmd[0..2]);
+        const to = stringToLERF(cmd[2..4]);
+        if (from == .invalid or to == .invalid) {
+            continue;
+        }
+        const flag: u8 = inferFlagFromMovement(p_state, from, to, cmd);
+        const piece = p_state.get_piece(@intFromEnum(from));
+        var toPiece = p_state.get_piece(@intFromEnum(to));
+        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, piece);
+        if (move.isEnpassant()) {
+            if (p_state.whiteToMove()) {
+                toPiece = .nBlackPawn;
+            } else {
+                toPiece = .nWhitePawn;
+            }
+        }
+        move.setCapture(toPiece);
+        return move;
+    }
+    return .{};
+}
 
 pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: std.mem.Allocator) !std.ArrayList(IMove) {
     // /!\ this assumes that the p_state is updated for the corresponding move to "decode", not suitable for a position startpos parsing
@@ -438,14 +465,12 @@ pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: s
 
     var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
 
-    var from: e_square = undefined;
-    var to: e_square = undefined;
     while (gen.next()) |cmd| {
         if (cmd.len != 4 and cmd.len != 5) {
             continue;
         }
-        from = stringToLERF(cmd[0..2]);
-        to = stringToLERF(cmd[2..4]);
+        const from = stringToLERF(cmd[0..2]);
+        const to = stringToLERF(cmd[2..4]);
         if (from == .invalid or to == .invalid) {
             continue;
         }
@@ -2494,7 +2519,7 @@ pub fn test_safety() !void {
     print_bitboard(safetyArea(e_square.a8));
     print_bitboard(safetyArea(e_square.e8));
 }
-pub fn test_move_heur(alloc: std.mem.Allocator) !void {
+pub fn test_move_heur() !void {
     //var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "1nbqkbnr/2pppppp/8/1p6/Rp6/2P5/4PPPP/1NBQKBNR b Hh b6 0 10");
     var tmp: Board_state = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
     print_boardstate(&tmp);
@@ -2562,6 +2587,6 @@ pub fn main(alloc: std.mem.Allocator) !void {
     //try test_scenarios();
     //try test_single_algebraic();
     //try test_line_algebraic();
-    //try test_move_heur(alloc);
+    //try test_move_heur();
     return;
 }

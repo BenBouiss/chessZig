@@ -25,5 +25,5 @@ openingBookPath="opening/8moves_v3.pgn";
 timeFormat=(5000, 0);
 logsLocation="out/logs/evaluate";
 saveLogs=false;
-printToScreen=true;
+printToScreen=false;
 
