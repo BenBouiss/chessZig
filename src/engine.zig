@@ -254,13 +254,13 @@ pub const engineOptions = struct {
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
 
     engineElo: spinVarType = configl.DEFAULT_ELO,
-    setOptions: std.ArrayList(setOptionEntry) = undefined,
     nOptions: u16 = 0,
     depthLevel: u16 = configl.DEFAULT_DEPTH,
     trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
-
     searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
+
+    setOptions: std.ArrayList(setOptionEntry) = .empty,
 };
 
 pub const engine = struct {
@@ -319,7 +319,7 @@ pub const engine = struct {
     pub fn initOptions(p_self: *engine) !void {
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
 
-        try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
+        try p_self.addOption(.{ .name = "hashS", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEHASHTABLE } } });
 
         try p_self.addOption(.{ .name = "useQuiescence", .optionType = .USEQUIESCENCE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEQUIESC } } });
@@ -552,7 +552,6 @@ pub const engine = struct {
             hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
             hashTablel.zobristKeys.free(p_self.alloc);
         }
-        //hashTablel._freeHash(p_self.alloc, p_self.status.debugMode);
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
@@ -604,160 +603,96 @@ pub const engine = struct {
         if (tokens.items.len < 2) {
             return false;
         }
-        const name: e_engineOptions = parseSetOptionTypeCmd(cmdBuffer);
+        const name: e_engineOptions = parseSetOptionTypeCmd(&p_self.options.setOptions, cmdBuffer);
         const entry = p_self.getOptionEntry(name);
 
         switch (name) {
             .THREADS => {
-                const val = getSpinValFromSetOptionCmd(tokens) catch {
+                p_self.options.nThreads = getSpinValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.spin.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.nThreads = val;
                 return true;
             },
             .USEHASHTABLE => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useHashTable = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useHashTable = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
 
             .USEQUIESCENCE => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useQuiescence = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useQuiescence = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
             .USENULLPRUNE => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useNullPrune = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useNullPrune = utilsl.contains(val, "true", .ignoreCase);
-                return true;
             },
             .USELATEMOVEREDUC => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useLMR = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useLMR = utilsl.contains(val, "true", .ignoreCase);
-                return true;
             },
             .USESEE => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useSEE = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useSEE = utilsl.contains(val, "true", .ignoreCase);
-                return true;
             },
             .USEFUTILITY => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useFutility = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useFutility = utilsl.contains(val, "true", .ignoreCase);
-                return true;
             },
             .USERAZORING => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useRazoring = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useRazoring = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
 
             .HASHTABLESIZE => {
-                const val = getSpinValFromSetOptionCmd(tokens) catch {
+                p_self.options.hashTableSize = getSpinValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.spin.validateValue(val)) {
-                    return false;
-                }
-                return p_self.updateHash(val) catch {
-                    return false;
-                };
+                return true;
             },
             .UCI_ELO => {
-                const val = getSpinValFromSetOptionCmd(tokens) catch {
+                const val = getSpinValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.spin.validateValue(val)) {
-                    return false;
-                }
                 return p_self.updateElo(val);
             },
             .UCI_LIMITSTRENGHT => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.limitElo = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.limitElo = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
             .FIXED_DEPTH => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.fixedDepth = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.fixedDepth = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
             .USESTATICSEARCH => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.useStaticSearch = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.useStaticSearch = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
             .TRACKMETRICS => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.trackMetrics = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.trackMetrics = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
             .REPORTPROG => {
-                const val = getCheckValFromSetOptionCmd(tokens) catch {
+                p_self.options.reportProgress = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                p_self.options.reportProgress = utilsl.contains(val, "true", .ignoreCase);
                 return true;
             },
 
@@ -803,14 +738,12 @@ pub const engine = struct {
         p_self.id.code = code;
     }
     fn executePositionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
-        var sw: timel.stopWatch = .{};
-        sw.startTimeTick();
         const cmdOffset = 8;
         //* position [fen <fenstring> | startpos ]  moves <move1> .... <movei>
         // ex: position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah -
 
         if (utilsl.contains(cmdBuffer, "startpos", .ignoreCase)) {
-            p_self.state = chess.getBoardFromFen(p_self.alloc, chess.DEFAULT_FEN) catch {
+            p_self.state = chess.getBoardFromFen(chess.DEFAULT_FEN) catch {
                 return false;
             };
             chess.applyUciMoves(&p_self.state, cmdBuffer[cmdOffset..], p_self.status.debugMode) catch {
@@ -828,13 +761,10 @@ pub const engine = struct {
             return false;
         }
         p_self.status.positionProvided = true;
-        if (p_self.trackMetrics()) {
-            p_self.metric.addTimeToProcessingUs(sw.timeSinceStartUs());
-        }
         return true;
     }
     pub fn setFen(p_self: *engine, fen: []const u8) void {
-        p_self.state = chess.getBoardFromFen(p_self.alloc, fen) catch unreachable;
+        p_self.state = chess.getBoardFromFen(fen) catch unreachable;
     }
 
     fn initInternals(p_self: *engine) bool {
@@ -941,27 +871,8 @@ pub const engine = struct {
         }
         p_self.searcher.reset();
         return benchmarkl.dispatchUciBenchmark(p_self);
-        //@panic("speedtest missing");
     }
 };
-pub fn getLastMoveFromUci(p_board: *Board_state, cmdBuffer: []const u8, alloc: std.mem.Allocator) !IMove {
-    var moveArray = try chess.getMoveListFromStr(p_board, cmdBuffer, alloc);
-    defer moveArray.deinit(alloc);
-    const n = moveArray.items.len;
-    if (n == 0) {
-        return debug_err.fenErr;
-    }
-    var retMove = moveArray.items[n - 1];
-    chess.fillMoveFromState(p_board, &retMove);
-    if (retMove.isEnpassant()) {
-        if (p_board.whiteToMove()) {
-            retMove.setCapture(.nBlackPawn);
-        } else {
-            retMove.setCapture(.nWhitePawn);
-        }
-    }
-    return retMove;
-}
 
 fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
     var goArgs: goArgStruct = .{};
@@ -1041,50 +952,16 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
     return goArgs;
 }
 
-pub fn parseSetOptionTypeCmd(cmdBuffer: []const u8) e_engineOptions {
-    if (utilsl.contains(cmdBuffer, " threads", .ignoreCase)) {
-        return .THREADS;
-    } else if (utilsl.contains(cmdBuffer, " hash", .ignoreCase)) {
-        return .HASHTABLESIZE;
-    } else if (utilsl.contains(cmdBuffer, " usehash", .ignoreCase)) {
-        return .USEHASHTABLE;
-    } else if (utilsl.contains(cmdBuffer, " uci_limitstrength", .ignoreCase)) {
-        return .UCI_LIMITSTRENGHT;
-    } else if (utilsl.contains(cmdBuffer, " uci_elo", .ignoreCase)) {
-        return .UCI_ELO;
-    } else if (utilsl.contains(cmdBuffer, " fixeddepth", .ignoreCase)) {
-        return .FIXED_DEPTH;
-    } else if (utilsl.contains(cmdBuffer, " usestaticsearch", .ignoreCase)) {
-        return .USESTATICSEARCH;
-    } else if (utilsl.contains(cmdBuffer, " trackmetrics", .ignoreCase)) {
-        return .TRACKMETRICS;
-    } else if (utilsl.contains(cmdBuffer, " reportProgress", .ignoreCase)) {
-        return .REPORTPROG;
-    } else if (utilsl.contains(cmdBuffer, " clearhash", .ignoreCase)) {
-        return .CLEAR_HASH;
-    } else if (utilsl.contains(cmdBuffer, " printmetric", .ignoreCase)) {
-        return .PRINT_METRIC;
-    } else if (utilsl.contains(cmdBuffer, " heuristicWeightsPath", .ignoreCase)) {
-        return .HEUR_WEIGHTS_PATH;
-    } else if (utilsl.contains(cmdBuffer, " useQuiescence", .ignoreCase)) {
-        return .USEQUIESCENCE;
-    } else if (utilsl.contains(cmdBuffer, " useNullPruning", .ignoreCase)) {
-        return .USENULLPRUNE;
-    } else if (utilsl.contains(cmdBuffer, " useLMR", .ignoreCase)) {
-        return .USELATEMOVEREDUC;
-    } else if (utilsl.contains(cmdBuffer, " useSEE", .ignoreCase)) {
-        return .USESEE;
-    } else if (utilsl.contains(cmdBuffer, " useFutility", .ignoreCase)) {
-        return .USEFUTILITY;
-    } else if (utilsl.contains(cmdBuffer, " useRazoring", .ignoreCase)) {
-        return .USERAZORING;
-    } else if (utilsl.contains(cmdBuffer, " searchType", .ignoreCase)) {
-        return .SEARCHTYPE;
+pub fn parseSetOptionTypeCmd(options: *std.ArrayList(setOptionEntry), cmdBuffer: []const u8) e_engineOptions {
+    for (0..options.items.len) |i| {
+        const entry = options.items[i];
+        if (utilsl.contains(cmdBuffer, entry.name, .ignoreCase)) {
+            return entry.optionType;
+        }
     }
-
     return .INVALID;
 }
-pub fn getSpinValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) !spinVarType {
+pub fn getSpinValFromSetOptionCmd(tokens: std.ArrayList([]const u8), entry: setOptionEntry) !spinVarType {
     for (0..tokens.items.len) |i| {
         const token = tokens.items[i];
         if (utilsl.contains(token, "value", .ignoreCase)) {
@@ -1092,19 +969,27 @@ pub fn getSpinValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) !spinVarTyp
                 const ret = std.fmt.parseInt(spinVarType, tokens.items[i + 1], 10) catch {
                     return debug_err.valueErr;
                 };
+
+                if (!entry.info.spin.validateValue(ret)) {
+                    return debug_err.valueErr;
+                }
                 return ret;
             }
         }
     }
     return debug_err.valueErr;
 }
-pub fn getCheckValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) ![]const u8 {
+pub fn getCheckValFromSetOptionCmd(tokens: std.ArrayList([]const u8), entry: setOptionEntry) !bool {
     for (0..tokens.items.len) |i| {
         const token = tokens.items[i];
 
         if (utilsl.contains(token, "value", .ignoreCase)) {
             if (i != tokens.items.len - 1) {
-                return tokens.items[i + 1];
+                const val = tokens.items[i + 1];
+                if (!entry.info.str.validateValue(val)) {
+                    return debug_err.valueErr;
+                }
+                return utilsl.contains(val, "true", .ignoreCase);
             }
         }
     }

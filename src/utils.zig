@@ -146,6 +146,16 @@ pub fn splitGenerator(comptime T: type) type {
         pub fn init(a: []const T, sep: T) splitGenerator(T) {
             return .{ .sep = sep, .slice = a, .idx = 0 };
         }
+        pub fn len(p_self: *self) usize {
+            var ret: usize = 0;
+            const prevIdx = p_self.idx;
+            p_self.idx = 0;
+            while (p_self.next()) |_| {
+                ret += 1;
+            }
+            p_self.idx = prevIdx;
+            return ret;
+        }
         pub fn next(p_self: *self) ?[]const T {
             if (p_self.idx >= p_self.slice.len) {
                 return null;

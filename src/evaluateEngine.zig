@@ -777,24 +777,18 @@ const guiState = struct {
         return self.engineInventory.items.items[self.match.playerInv[0].engineUsed].alive and self.engineInventory.items.items[self.match.playerInv[1].engineUsed].alive;
     }
     pub fn executeBestMove(p_self: *guiState, cmdBuffer: []const u8) err_gui_bestmove!bool {
-        var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer, ' ') catch {
-            return err_gui_bestmove.mem_error;
-        };
-        defer tokens.deinit(p_self.alloc);
-        if (tokens.items.len < 2) {
+        var gen = utilsl.splitGenerator(u8).init(cmdBuffer, ' ');
+        if (gen.len() < 2) {
             return err_gui_bestmove.nei_error;
         }
-        var moveArr = chessl.getMoveListFromStr(&p_self.match.chessState, cmdBuffer, p_self.alloc) catch {
-            return err_gui_bestmove.mem_error;
-        };
-        defer moveArr.deinit(p_self.alloc);
-        if (moveArr.items.len != 1) {
-            return err_gui_bestmove.nei_error;
-        }
-        if (!moveArr.items[0].isIn(p_self.match.availableMoves) and !moveArr.items[0].isValid()) {
+        const move = chessl.getFirstMoveFromStr(&p_self.match.chessState, cmdBuffer);
+        if (!move.isValid()) {
             return err_gui_bestmove.unknownMove_error;
         }
-        p_self.match.nextTurn_move = moveArr.items[0];
+        if (!move.isIn(p_self.match.availableMoves)) {
+            return err_gui_bestmove.unknownMove_error;
+        }
+        p_self.match.nextTurn_move = move;
 
         return true;
     }
@@ -954,7 +948,7 @@ fn pickBoardState(p_self: *guiState) !Board_state {
         defer openings.deinit(p_self.alloc);
         return try chessl.algebraicLineToBoardstate(p_self.alloc, &openings.items[0]);
     } else {
-        return try chessl.getBoardFromFen(p_self.alloc, chessl.DEFAULT_FEN);
+        return try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     }
 }
 fn matchRoutine(p_self: *guiState) !void {

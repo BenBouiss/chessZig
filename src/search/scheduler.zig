@@ -3,7 +3,6 @@ const std = @import("std");
 const enginel = @import("../engine.zig");
 const movel = @import("../move.zig");
 const chessl = @import("../chess.zig");
-const moveGenl = @import("../move_generation.zig");
 const perftl = @import("perft.zig");
 const alphaBetal = @import("alphaBeta.zig");
 const threadingl = @import("threading.zig");
