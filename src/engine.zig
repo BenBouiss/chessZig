@@ -59,11 +59,8 @@ pub const cmdResult = struct {
     len: usize = 0,
 };
 pub const inputChannel = struct {
-    //cmdBuffer: std.ArrayList([]u8),
-    //cmdBuffer: std.Deque([][configl.MAX_USER_INPUT]u8),
     cmdBuffer: [][configl.MAX_USER_INPUT]u8 = undefined,
     cmdSize: []usize = undefined,
-    //cmdSizes: *[INPUTCHANNEL_LEN]usize = undefined,
     currentIdx: usize = 0,
     nextIdx: usize = 0,
     len: usize = INPUTCHANNEL_LEN,
@@ -76,65 +73,36 @@ pub const inputChannel = struct {
         ret.nextIdx = 0;
         ret.currentIdx = 0;
 
-        //ret.cmdSizes = &(try alloc.alloc(usize, INPUTCHANNEL_LEN));
-        //const buffer = try alloc.alloc([][configl.MAX_USER_INPUT]u8, 64);
-        //ret.cmdBuffer = std.Deque([][configl.MAX_USER_INPUT]u8).initBuffer(buffer);
         ret.l = .{};
-        //ret.cmdBuffer = try std.ArrayList([]u8).initCapacity(alloc, 32);
-        //try ret.cmdBuffer.ensureTotalCapacity(alloc, 64);
         return ret;
     }
 
     pub fn nonEmpty(p_self: *inputChannel) bool {
         p_self.l.acquireLock();
-        //const ret = p_self.cmdBuffer.items.len != 0;
-        //const ret = p_self.cmdBuffer.len != 0;
         const ret = p_self.currentIdx != p_self.nextIdx;
         p_self.l.releaseLock();
         return ret;
     }
     pub fn readBuffer(p_self: *inputChannel) cmdResult {
-        // caller is responsible for the freeing of the []u8
         p_self.l.acquireLock();
-        //const ret = p_self.cmdBuffer.popFront().?;
-        //const ret = p_self.cmdBuffer.orderedRemove(0);
         p_self.currentIdx = (p_self.currentIdx + 1) % INPUTCHANNEL_LEN;
-        const ret = p_self.cmdBuffer[p_self.currentIdx];
         const ret_len = p_self.cmdSize[p_self.currentIdx];
+        var ret: cmdResult = .{ .len = ret_len };
+        @memcpy((ret.cmd[0..ret_len]), p_self.cmdBuffer[p_self.currentIdx][0..ret_len]);
         p_self.l.releaseLock();
-        return .{ .cmd = ret, .len = ret_len };
+        return ret;
     }
-    pub fn putCmd(p_self: *inputChannel, alloc: std.mem.Allocator, cmd: []const u8) bool {
+    pub fn putCmd(p_self: *inputChannel, cmd: []const u8) bool {
         p_self.l.acquireLock();
-        _ = alloc;
-        //const _cmd = alloc.dupe(u8, cmd) catch {
-        //    p_self.l.releaseLock();
-        //    return false;
-        //};
-        //p_self.cmdBuffer.pushBackBounded(_cmd) catch {
-        //    p_self.l.releaseLock();
-        //    return false;
-        //};
-        //p_self.cmdBuffer.append(alloc, _cmd) catch {
-        //    p_self.l.releaseLock();
-        //    return false;
-        //};
         p_self.nextIdx = (p_self.nextIdx + 1) % INPUTCHANNEL_LEN;
         @memcpy((p_self.cmdBuffer[p_self.nextIdx][0..cmd.len]), cmd[0..cmd.len]);
         p_self.cmdSize[p_self.nextIdx] = cmd.len;
-
-        //p_self.cmdBuffer[p_self.nextIdx][cmd.len + 1 ..] = 0;
-
         p_self.l.releaseLock();
         return true;
     }
     pub fn free(p_self: *inputChannel, alloc: std.mem.Allocator) void {
         alloc.free(p_self.cmdBuffer);
         alloc.free(p_self.cmdSize);
-        //while (p_self.nonEmpty()) {
-        //    alloc.free(p_self.readBuffer());
-        //}
-        //p_self.cmdBuffer.deinit(alloc);
     }
 };
 
@@ -371,7 +339,6 @@ pub const engine = struct {
         var buffer: [configl.MAX_USER_INPUT]u8 = undefined;
         var f_reader = std.Io.File.stdin().reader(mainl.getGlobalIo(), &buffer);
         const reader = &f_reader.interface;
-        //_ = p_self.input.putCmd(p_self.alloc, "uci");
         while (p_self.status.running) {
             const inputBuffer = try getMsgStdin(reader);
             const msg = utilsl.trimStr(&inputBuffer);
@@ -380,7 +347,7 @@ pub const engine = struct {
                 std.debug.print("\n", .{});
             }
 
-            _ = p_self.input.putCmd(p_self.alloc, msg);
+            _ = p_self.input.putCmd(msg);
         }
     }
     pub fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) void {
@@ -391,9 +358,12 @@ pub const engine = struct {
             const status = p_self.uci_executeCmd(cmdtype, trimmedBuffer);
             if (p_self.status.debugMode) {
                 if (cmdtype != .NOOP) {
-                    std.debug.print("[DEBUG] executeBuffer: found command type {} status: {}\n", .{ cmdtype, status });
+                    std.debug.print("[DEBUG] executeBuffer.engine: found command type {} status: {}\n", .{ cmdtype, status });
                 }
             }
+            const statMsg = std.fmt.allocPrint(p_self.alloc, "engineOp {} {} '{s}'", .{ cmdtype, status, cmdBuffer }) catch unreachable;
+            defer p_self.alloc.free(statMsg);
+            p_self.respond(statMsg);
         } else if (cmdtype == .UCI) {
             p_self.uciMode = true;
             p_self.printEngineInfo();
@@ -532,10 +502,6 @@ pub const engine = struct {
             }
             return;
         };
-    }
-    pub fn addCommand(p_self: *engine, alloc: std.mem.Allocator, cmd: []const u8) bool {
-        _ = p_self.input.putCmd(alloc, cmd);
-        return true;
     }
     pub fn sendKill(p_self: *engine) void {
         p_self.status.running = false;
@@ -822,24 +788,24 @@ pub const engine = struct {
         const delta: f32 = (_elo - configl.MIN_ELO) / (configl.MAX_ELO - configl.MIN_ELO);
         const proj = configl.MIN_DEPTH + (configl.MAX_DEPTH - configl.MIN_DEPTH) * delta;
         p_self.options.depthLevel = @intFromFloat(proj);
-        if (p_self.status.debugMode) {
-            std.debug.print("[DEBUG] updateElo: New updates depth {d} from elo {d}\n", .{ p_self.options.depthLevel, elo });
-        }
+        //if (p_self.status.debugMode) {
+        //    std.debug.print("[DEBUG] updateElo: New updates depth {d} from elo {d}\n", .{ p_self.options.depthLevel, elo });
+        //}
 
         return true;
     }
     pub fn executeIsReady(p_self: *engine) !bool {
         var sw: timel.stopWatch = .{};
         sw.startTimeTick();
-        const timeout = 5;
-        while (p_self.searcher.searching) {
-            if (sw.timeSinceStartSec() > timeout) {
-                sw.reset();
-                sw.startTimeTick();
-                std.debug.print("[INACTIVITY] engine.executeIsReady: stuck for the last {d} seconds\n", .{timeout});
-            }
-            try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
-        }
+        //const timeout = 5;
+        //while (p_self.searcher.searching) {
+        //    if (sw.timeSinceStartSec() > timeout) {
+        //        sw.reset();
+        //        sw.startTimeTick();
+        //        std.debug.print("[INACTIVITY] engine.executeIsReady: stuck for the last {d} seconds\n", .{timeout});
+        //    }
+        //    try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
+        //}
         if (!p_self.status.initializedInternals) {
             _ = p_self.initInternals();
         }
@@ -1016,11 +982,7 @@ fn inputThreading(p_self: *engine) void {
             p_self.stopWatch.startTimeTick();
             const cmd = p_self.input.readBuffer();
             if (p_self.status.debugMode) {
-                std.debug.print("[DEBUG] inputThreading: found command type '{s}' len {d} raw '{any}'", .{ cmd.cmd[0..cmd.len], cmd.len, cmd.cmd[0..cmd.len] });
-                if (cmd.len == 0) {
-                    std.debug.print("[DEBUG] inputThreading: whole buffer {s}\n", .{cmd.cmd});
-                    std.debug.print("[DEBUG] inputThreading: 0 cmd found printing next: {s} {d}\n", .{ p_self.input.cmdBuffer[p_self.input.nextIdx], p_self.input.cmdSize[p_self.input.nextIdx] });
-                }
+                std.debug.print("[DEBUG] inputThreading.engine: found command type '{s}'\n", .{cmd.cmd[0..cmd.len]});
             }
 
             p_self.executeBuffer(cmd.cmd[0..cmd.len]);

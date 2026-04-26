@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import sys, os
 
 sys.path.append(os.path.dirname(__file__))
@@ -72,27 +71,16 @@ class GW(template.templateSelectionAlgo):
     def updateCoefficient(self):
         self.a = 2 * (1 - self.iter / self.maxiter)
 
-    def applyFrozenToNewPos(
-        self, positions: npt.NDArray[np.float64]
-    ) -> npt.NDArray[np.float64]:
-        assert self.popsize == len(positions)
-        for i in range(self.popsize):
-            if self.population[i].frozen:
-                positions[i] = np.array(self.population[i].position)
-        return positions
-
 
 if __name__ == "__main__":
-    target = [1.5, 1.5]
-    steps = [0.1, 0.1]
-    bounds = [[0, 10]] * len(target)
-    test = objective.dummyObjective(
-        target=target, steps=steps, bounds=bounds, maximize=True
+    test = objective.makeDummyObjective(
+        nDim=10, minV=-10, maxV=10, step=0.1, maximize=False
     )
+    print(f"The target is {test.target}")
 
     logDir = "logs"
     saveOpt: template.saveOptions = template.saveOptions(logDir=logDir, prefix="ben")
-    mh = GW(popsize=32, maxiter=16, saveLog=True, saveOpt=saveOpt)
+    mh = GW(popsize=32, maxiter=64, saveOpt=saveOpt)
     mh.setObjective(test)
     # mh.addCallback(callbackSave(logDir, prefix="ben"))
     mh.generatePopulation()
@@ -100,10 +88,10 @@ if __name__ == "__main__":
     mh.optimize()
 
     mh.printPopulation()
-    print("Now loading from yaml")
+    # print("Now loading from yaml")
 
-    tmp = GW(popsize=32, maxiter=16)
-    tmpFile = os.path.join(mh.saveOpt.logDir, f"{mh.saveOpt.prefix}_{mh.uid}.yaml")
-    tmp.loadYaml(tmpFile)
-    print(f"Size of pop found: {tmp.popsize}")
-    tmp.printPopulation()
+    # tmp = GW(popsize=32, maxiter=16)
+    # tmpFile = os.path.join(mh.saveOpt.logDir, f"{mh.saveOpt.prefix}_{mh.uid}.yaml")
+    # tmp.loadYaml(tmpFile)
+    # print(f"Size of pop found: {tmp.popsize}")
+    # tmp.printPopulation()

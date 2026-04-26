@@ -1131,7 +1131,7 @@ pub var historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]score
 
 pub fn _initMoveOrdering() void {
     historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
-    killerMoves = undefined;
+    killerMoves = std.mem.zeroes([64][2]IMove);
 }
 pub fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];

@@ -3,11 +3,13 @@ from dataclasses import dataclass
 import os, time, sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 import curses
 
 import numpy as np
 
 import chessSpec, texel
+import constants as cst
 from algo import template, gw, objective
 
 
@@ -138,7 +140,7 @@ class windowCtx:
         for x, idx in enumerate(indexes):
             assert best_indiv.weights[0].elem[x].val is not None
             assert best_indiv.weights[1].elem[x].val is not None
-            param = f"{texel.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
+            param = f"{cst.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
 
             self.stdscr.addstr(windowOffset[0] + x + 1, windowOffset[1] + 1, f"{param}")
 
