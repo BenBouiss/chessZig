@@ -7,9 +7,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from chessIntegration import chessSpec
 
 import unittest
-import texel
+import constants as cst
 
-texel.PSQT_Bishop_idx
+cst.PSQT_Bishop_idx
 
 
 class TestArray(unittest.TestCase):

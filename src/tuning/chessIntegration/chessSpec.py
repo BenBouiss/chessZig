@@ -9,7 +9,14 @@ from enum import Enum
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-import texel
+import utils as utilsl
+
+import texelW
+
+from texelW import texelWeights
+
+import constants as cst
+
 from algo import template
 import lock as lockl
 
@@ -50,24 +57,24 @@ EG = 1
 
 
 class heuristicEntry:
-    weights: list[texel.texelWeights]
+    weights: list[texelWeights]
 
-    def __init__(self, weights: list[texel.texelWeights]):
+    def __init__(self, weights: list[texelWeights]):
         assert len(weights) == 2
         self.weights = [weights[0].copy(), weights[1].copy()]
 
     def maskOut(
-        self, indexes: list[int], defaultValue: float = texel.INVALID_VALUE
+        self, indexes: list[int], defaultValue: float = cst.INVALID_VALUE
     ) -> heuristicEntry:
-        # return the weights masked with the new indexes where non present indexes are marked with texel.INVALID_VALUE or current value
+        # return the weights masked with the new indexes where non present indexes are marked with cst.INVALID_VALUE or current value
         ret = []
         for i in range(len(self.weights)):
             arr = np.array(self.weights[i].getArray(fullLength=True))
-            mask = arr == texel.INVALID_VALUE
+            mask = arr == cst.INVALID_VALUE
             arr[mask] = defaultValue
 
             ret.append(
-                texel.texelWeightsFromFlatLists(
+                texelW.texelWeightsFromFlatLists(
                     arr[np.array(indexes)].tolist(), indexes=indexes
                 )
             )
@@ -79,7 +86,7 @@ class heuristicEntry:
         phases = ["_MG", "_EG"]
         with open(path, "w") as file:
             for i in range(len(phases)):
-                file.write(texel.texelWeightToFileStr(self.weights[i], phases[i]))
+                file.write(texelW.texelWeightToFileStr(self.weights[i], phases[i]))
 
     def print(self, fileFormat: bool = False) -> None:
         phases = ["_MG", "_EG"]
@@ -87,19 +94,44 @@ class heuristicEntry:
         for i in range(len(phases)):
             weights[i] = self.weights[i].getArray(fullLength=True)
         for w in range(len(weights[0])):
-            if weights[MG][w] != texel.INVALID_VALUE:
-                if fileFormat:
-                    print(f"{texel.strWeightNames[w]}{phases[MG]} = {weights[MG][w]};")
-                    print(f"{texel.strWeightNames[w]}{phases[EG]} = {weights[EG][w]};")
+            if weights[MG][w] != cst.INVALID_VALUE:
+                if w < cst.PSQT_Pawn_idx:
+                    # print(w)
+                    if fileFormat:
+                        print(
+                            f"{cst.strWeightNames[w]}{phases[MG]} = {weights[MG][w]};"
+                        )
+                        print(
+                            f"{cst.strWeightNames[w]}{phases[EG]} = {weights[EG][w]};"
+                        )
+                    else:
+                        print(
+                            f"{cst.strWeightNames[w]} = {weights[MG][w]} {weights[EG][w]}"
+                        )
                 else:
-                    print(
-                        f"{texel.strWeightNames[w]}: {weights[MG][w]} {weights[EG][w]}"
-                    )
+                    if (w - cst.PSQT_Pawn_idx) % 64 == 0:
+                        # only first indexes good
+                        idx = (w - cst.PSQT_Pawn_idx) % 64
+                        print(
+                            f"{cst.strPQSTNames[idx]}{phases[MG]} = {weights[MG][w : w + 64]};"
+                        )
+                        print(
+                            f"{cst.strPQSTNames[idx]}{phases[EG]} = {weights[EG][w : w + 64]};"
+                        )
 
     def get1DArray(self) -> npt.NDArray[np.float64]:
         return np.concatenate(
             [self.weights[MG].getArray(), self.weights[EG].getArray()]
         )
+
+    def pushArray(self, val: list[float], idx: int, phase: phaseE) -> None:
+        if phase == phaseE.MG:
+            self.weights[MG].pushArray(val=val, startingIdx=idx)
+        elif phase == phaseE.EG:
+            self.weights[EG].pushArray(val=val, startingIdx=idx)
+        else:
+            self.weights[MG].pushArray(val=val, startingIdx=idx)
+            self.weights[EG].pushArray(val=val, startingIdx=idx)
 
 
 def entryFrom1dArray(
@@ -110,8 +142,8 @@ def entryFrom1dArray(
         indexes = list(range(len(w[0])))
     ret = heuristicEntry(
         weights=[
-            texel.texelWeightsFromLists(w[0], indexes),
-            texel.texelWeightsFromLists(w[1], indexes),
+            texelW.texelWeightsFromLists(w[0], indexes),
+            texelW.texelWeightsFromLists(w[1], indexes),
         ]
     )
     return ret
@@ -136,15 +168,68 @@ def entryFrom2dList(
     assert len(arr) == 2
     ret = heuristicEntry(
         weights=[
-            texel.texelWeightsFromFlatLists(arr[0], indexes),
-            texel.texelWeightsFromFlatLists(arr[1], indexes),
+            texelW.texelWeightsFromFlatLists(arr[0], indexes),
+            texelW.texelWeightsFromFlatLists(arr[1], indexes),
         ]
     )
     return ret
 
 
-def entryFromTexelWeights(w: texel.texelWeights) -> heuristicEntry:
+def entryFromTexelWeights(w: texelWeights) -> heuristicEntry:
     ret: heuristicEntry = heuristicEntry(weights=[w.copy(), w.copy()])
+    return ret
+
+
+class phaseE(Enum):
+    MG = 0
+    EG = 1
+    ALL = 2
+
+
+def entryFromWinfoFile(path: str) -> heuristicEntry:
+    assert os.path.exists(path)
+    ret = heuristicEntry(weights=[texelWeights(), texelWeights()])
+    with open(path, "r") as file:
+        for line in file.readlines():
+            _line = line.rstrip().lower()
+            if "mg" in _line:
+                token = phaseE.MG
+            elif "eg" in _line:
+                token = phaseE.EG
+            else:
+                token = phaseE.ALL
+
+            found: bool = False
+            for i in range(len(cst.strWeightNames)):
+                s = cst.strWeightNames[i]
+                if _line.startswith(s.lower()):
+                    found = True
+                    val = utilsl.strExtractFromBounds(s=_line, lbound="=", rbound=";")
+                    if not len(val):
+                        continue
+
+                    ret.pushArray(val=[float(val)], idx=cst.allIndexes[i], phase=token)
+                    break
+            if found:
+                continue
+
+            for i in range(len(cst.strPQSTNames)):
+                s = cst.strPQSTNames[i]
+                if _line.startswith(s.lower()):
+                    if "[" in _line:
+                        _str = utilsl.strExtractFromBounds(
+                            s=_line, lbound="[", rbound="]"
+                        )
+                        if not len(_str):
+                            continue
+                        val = [float(x) for x in _str.split(",")]
+
+                        ret.pushArray(
+                            val=val,
+                            idx=cst.allIndexes[i + cst.PSQT_Pawn_idx],
+                            phase=token,
+                        )
+
     return ret
 
 
@@ -318,25 +403,25 @@ simplePieceCount: list[float] = [100, 300, 300, 500, 900]
 # simpleBaselineWeights: list[float] = [-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0]
 
 prevIndexes = [
-    texel.mobility_idx,
-    texel.structureProtection_idx,
-    texel.isolatedPawnScore_idx,
-    texel.stackedPawnScore_idx,
-    texel.passedPawnScore_idx,
-    texel.safetyKnight_idx,
-    texel.safetyBishop_idx,
-    texel.safetyRook_idx,
-    texel.safetyQueen_idx,
+    cst.mobility_idx,
+    cst.structureProtection_idx,
+    cst.isolatedPawnScore_idx,
+    cst.stackedPawnScore_idx,
+    cst.passedPawnScore_idx,
+    cst.safetyKnight_idx,
+    cst.safetyBishop_idx,
+    cst.safetyRook_idx,
+    cst.safetyQueen_idx,
 ]
-currentIndexes = list(range(texel.mobility_idx, texel.safetyQueen_idx + 1))
-currentIndexes.remove(texel.safetyPawn_idx)
+currentIndexes = list(range(cst.mobility_idx, cst.safetyQueen_idx + 1))
+currentIndexes.remove(cst.safetyPawn_idx)
 defaultWeights: heuristicEntry = entryFromListDup(
     arr=[5, 10, 1, 1, 1, 2, 25, 20, 20, 40, 80], indexes=currentIndexes
 )
 
-newIndexes = list(range(texel.mobility_idx, texel.kingProximityScore_idx + 1))
-newIndexes.remove(texel.safetyPawn_idx)
-# texel.INVALID_VALUE, #pawn safety is not used
+newIndexes = list(range(cst.mobility_idx, cst.kingProximityScore_idx + 1))
+newIndexes.remove(cst.safetyPawn_idx)
+# cst.INVALID_VALUE, #pawn safety is not used
 
 simpleBaselineWeights: heuristicEntry = entryFromListDup(
     arr=[-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0],

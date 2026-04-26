@@ -37,6 +37,7 @@ FRAME_FROZEN_IDX = 3
 
 @dataclass
 class saveOptions:
+    # TODO: actually use this dir, currently only used if resDir not provided
     logDir: str = "."
     resDir: str | None = None
     prefix: str = "result"
@@ -165,6 +166,15 @@ class templateSelectionAlgo(object):
         ret = np.min([ret, self.objective.bounds[:, 1]], axis=0)
         ret = np.max([ret, self.objective.bounds[:, 0]], axis=0)
         return ret
+
+    def applyFrozenToNewPos(
+        self, positions: npt.NDArray[np.float64]
+    ) -> npt.NDArray[np.float64]:
+        assert self.popsize == len(positions)
+        for i in range(self.popsize):
+            if self.population[i].frozen:
+                positions[i] = np.array(self.population[i].position)
+        return positions
 
     def optimize(self) -> None:
         assert len(self.population) != 0

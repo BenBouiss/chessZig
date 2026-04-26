@@ -14,7 +14,7 @@ import numpy.typing as npt
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from algo import objective as obj
-from algo import gw
+from algo import gw, DE
 
 from algo.template import (
     individual,
@@ -27,7 +27,9 @@ from algo import template
 sys.path.append(os.path.dirname(__file__))
 from chessSpec import heuristicEntry, score, chessIndividual
 import chessSpec
-import texel
+
+import texelW
+
 import gui as guil
 import utils as utilsl
 
@@ -229,7 +231,7 @@ class tuiGUI:
         for x, idx in enumerate(indexes):
             assert best_indiv.weights[0].elem[x].val is not None
             assert best_indiv.weights[1].elem[x].val is not None
-            param = f"{texel.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
+            param = f"{cst.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
 
             print(f"{param}")
 
@@ -448,6 +450,7 @@ def readMatchSettingLine(setting: matchInfoSettings, line: str) -> None:
 def saveHeuristicsWeights(
     entries: list[heuristicEntry], directory: str, uid: int, extra: str
 ) -> list[str]:
+    os.makedirs(directory, exist_ok=True)
     ret: list[str] = []
     for i in range(len(entries)):
         path = os.path.join(directory, f"{uid}_{i}_{extra}.winfo")
@@ -472,7 +475,7 @@ class matchO(object):
         self.debugMode: bool = debugMode
         self.extra: str = extra
 
-    def generateFiles(self, tmpfolder: str) -> str:
+    def generateFiles(self, tmpfolder: str) -> list[str]:
         heuristics = saveHeuristicsWeights(
             [self.conf1, self.conf2],
             directory=tmpfolder,
@@ -492,14 +495,15 @@ class matchO(object):
             file.write(f"{self.settings.matchSettings}")
             # allCmd = "\n".join(setting.matchSettings.raw)
             # file.write(f"{allCmd}\n")
-        return newInfoPath
+        return [newInfoPath, heuristics[0], heuristics[1]]
 
 
 def launchAndWaitResults(
-    m: matchO, evalPath: str, tmpFolder: str, info: threadInfo
+    m: matchO, evalPath: str, tmpFolder: str, info: threadInfo, deleteTmp: bool
 ) -> list[score]:
     ret: list[score] = []
-    newInfo = m.generateFiles(tmpFolder)
+    paths = m.generateFiles(tmpFolder)
+    newInfo = paths[0]
     info.runningProc = subprocess.Popen(
         [evalPath, newInfo],
         stdin=subprocess.DEVNULL,
@@ -518,6 +522,12 @@ def launchAndWaitResults(
         if len(tokens) != 3:
             continue
         ret.append(score(win=int(tokens[0]), lose=int(tokens[1]), draw=int(tokens[2])))
+    if deleteTmp:
+        for p in paths:
+            try:
+                os.remove(p)
+            except Exception as e:
+                _ = e
     return ret
 
 
@@ -556,6 +566,18 @@ def valueToTournamentType(val: int) -> tournamentType:
     if val == tournamentType.SPRT.value:
         return tournamentType.SPRT
     if val == tournamentType.LOS.value:
+        return tournamentType.LOS
+    return tournamentType.INVALID
+
+
+def strToTournamentType(val: str) -> tournamentType:
+    if val == tournamentType.CLASSIC.name:
+        return tournamentType.CLASSIC
+    if val == tournamentType.BASELINE.name:
+        return tournamentType.BASELINE
+    if val == tournamentType.SPRT.name:
+        return tournamentType.SPRT
+    if val == tournamentType.LOS.name:
         return tournamentType.LOS
     return tournamentType.INVALID
 
@@ -633,15 +655,15 @@ class matchContainerInfo(object):
             self.status.append(matchStatus.PENDING)
         self.lock = False
 
-    def splitNThreads(self, nThread: int) -> list[list[int]]:
+    def splitNThreads(self, nThreads: int) -> list[list[int]]:
         # used to statically dispatch the matches amongst n threads
-        assert nThread != 0
+        assert nThreads != 0
         ret: list[list[int]] = []
         n = len(self.order)
-        sizeEach: int = int(n / nThread)
-        remainder = n - (sizeEach * nThread)
+        sizeEach: int = int(n / nThreads)
+        remainder = n - (sizeEach * nThreads)
         offset: int = 0
-        for x in range(nThread):
+        for x in range(nThreads):
             ret.append([])
             for y in range(offset, sizeEach + offset):
                 ret[x].append(y)
@@ -654,8 +676,10 @@ class matchContainerInfo(object):
     def getMatch(self) -> matchFetchResult:
         self.l.acquire()
         for i in range(len(self.order)):
-            if self.status[i] == matchStatus.PENDING:
-                # or error here also to retry
+            if (
+                self.status[i] == matchStatus.PENDING
+                or self.status[i] == matchStatus.ERROR
+            ):
                 self.status[i] == matchStatus.DISPATCHED
                 self.l.release()
                 return matchFetchResult(
@@ -691,13 +715,14 @@ class threadInfo:
 class tournament(object):
     def __init__(
         self,
-        timeF: timeFormat | None = standardTimeFormat,
+        timeF: timeFormat | None = None,
         templatePath: str | None = None,
-        logDir: str = "",
+        logDir: str | None = None,
         saveLog: bool = True,
+        deleteTmp: bool = True,
         evalBin: str | None = None,
         debugMode: bool = False,
-        nThread: int = 1,
+        nThreads: int = 1,
         type: tournamentType = tournamentType.CLASSIC,
         pathPrepend: str = "",
     ):
@@ -718,13 +743,19 @@ class tournament(object):
             self.settings: infoFile | None = None
 
         self.saveLog = saveLog
+        self.deleteTmp = deleteTmp
         self.population: list[chessIndividual] = []
         self.baseline: list[chessIndividual] = []
         self.evalBin: str | None = evalBin
         if debugMode:
             print("Building tournament with debug on")
-        self.logDir: str = logDir
-        self.setThread(nThread)
+        if logDir is None:
+            self.logDir = os.getcwd()
+            pass
+        else:
+            self.logDir: str = logDir
+            os.makedirs(self.logDir, exist_ok=True)
+        self.setThread(nThreads)
         self.logs: dict = {}
 
     def saveArgsToDict(self) -> dict:
@@ -734,7 +765,7 @@ class tournament(object):
         ret["logDir"] = self.logDir
         ret["evalBin"] = self.evalBin
         ret["debugMode"] = self.debugMode
-        ret["nThread"] = self.nThread
+        ret["nThreads"] = self.nThreads
         ret["type"] = self.type.value
 
         ret["templatePath"] = self.templatePath
@@ -742,9 +773,9 @@ class tournament(object):
             ret["settings"] = self.settings.toDict()
         return ret
 
-    def setThread(self, nThread: int) -> None:
-        assert nThread > 0, f"Invalid(x <= 0) thread amount {nThread}"
-        self.nThread = nThread
+    def setThread(self, nThreads: int) -> None:
+        assert nThreads > 0, f"Invalid(x <= 0) thread amount {nThreads}"
+        self.nThreads = nThreads
 
     def dispatchMatch(self, matchInfo: matchContainerInfo) -> None:
         self.matchInv = matchInfo
@@ -753,7 +784,7 @@ class tournament(object):
         # for threadId, idx in enumerate(indexes):
         global_scoreBoard.updateScoreBoard(self.matchInv)
         global_tui.pingUpdate()
-        for threadId in range(self.nThread):
+        for threadId in range(self.nThreads):
             threadInfos.append(threadInfo())
             workingThreads.append(
                 threading.Thread(
@@ -797,11 +828,12 @@ class tournament(object):
             )
 
             scoreList = launchAndWaitResults(
-                currentMatch, self.evalBin, self.logDir, info
+                currentMatch, self.evalBin, self.logDir, info, self.deleteTmp
             )
 
             if len(scoreList) == 0:
                 self.matchInv.status[res.idx] = matchStatus.ERROR
+                # assert False, "Error encountered"
             else:
                 self.matchInv.status[res.idx] = matchStatus.FINISHED
                 self.updateScore(pair=pair, score=scoreList)
@@ -960,8 +992,8 @@ class chessObjective(obj.objective):
                 self.baseline.append(
                     chessSpec.heuristicEntry(
                         weights=[
-                            texel.texelWeightsFromFlatWeights(e[0]),
-                            texel.texelWeightsFromFlatWeights(e[1]),
+                            texelW.texelWeightsFromFlatWeights(e[0]),
+                            texelW.texelWeightsFromFlatWeights(e[1]),
                         ]
                     )
                 )
@@ -983,7 +1015,7 @@ def tournamentFromConfigFile(config: dict, pathPrepend: str = "") -> tournament:
             logDir=config["logDir"],
             evalBin=config["evalBin"],
             debugMode=config["debugMode"],
-            nThread=config["nThread"],
+            nThreads=config["nThreads"],
             type=valueToTournamentType(config["type"]),
             pathPrepend=pathPrepend,
         )
@@ -996,7 +1028,7 @@ def tournamentFromConfigFile(config: dict, pathPrepend: str = "") -> tournament:
             logDir=config["logDir"],
             evalBin=config["evalBin"],
             debugMode=config["debugMode"],
-            nThread=config["nThread"],
+            nThreads=config["nThreads"],
             type=valueToTournamentType(config["type"]),
             pathPrepend=pathPrepend,
         )
@@ -1020,35 +1052,11 @@ def objectiveFromConfigFile(path: str, pathPrepend: str = "") -> chessObjective:
         return ret
 
 
-# since all the current positions are "similar" enough might
-# be a good idea to do a dummy func with only nDim in input
-def dummyBounds(lbound: float, rbound: float, nDim: int) -> npt.NDArray[np.float64]:
-    """
-    ex: for [-10.0; 10] with ndim = 4
-    res = np.array(
-                   [-10.0, 10],
-                   [-10.0, 10],
-                   [-10.0, 10],
-                   [-10.0, 10]
-                   )
-
-    """
-    return np.tile(np.array([lbound, rbound]), [nDim, 1])
-
-
-def dummyStep(step: float, nDim: int) -> npt.NDArray[np.float64]:
-    """
-    ex: for 0.01 with ndim = 4
-    res = np.array(0.01, 0.01, 0.01, 0.01)
-    """
-    return np.repeat(np.array([step]), nDim)
-
-
 UPPER_BOUND_WEIGHT = 100
 LOWER_BOUND_WEIGHT = 0
 # LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
 STEP_WEIGTH = 1
-N_PARAMS = 12 * 2
+N_PARAMS = 2 * len(chessSpec.newIndexes)
 
 
 def clear() -> None:
@@ -1110,24 +1118,253 @@ class callbackBaseline(template.callback):
 
 @dataclass
 class mhUserInput:
-    maxiter: int
-    popsize: int
+    maxiter: int = 0
+    popsize: int = 0
+    lowerBound: int = LOWER_BOUND_WEIGHT
+    upperBound: int = UPPER_BOUND_WEIGHT
+
     preEvaluation: bool = True
-    saveLog: bool = True
-    bounds: tuple[int, int] | None = None
-    steps: int | None = None
     seed: int = 42
+    variant: str = "gw"
+    variantParameters: dict | None = None
+    optimOpt: optimizerOption = optimizerOption()
+
+    def __repr__(self) -> str:
+        ret = "{"
+        for i, (k, v) in enumerate(self.__dict__.items()):
+            ret += f"{k}: {v}"
+            if i != len(self.__dict__) - 1:
+                ret += ",\n"
+        ret += "}"
+        return f"{ret}"
+
+    def fromDict(self, d: dict) -> None:
+        for _str in self.__dataclass_fields__.keys():
+            new_val = d.get(f"{_str}", self.__dict__[_str])
+            if new_val is not None and self.__dict__[_str] is not None:
+                assert type(new_val) is type(self.__dict__[_str])
+            self.__dict__[_str] = new_val
+
+        if d.get("optimizerOpt"):
+            self.optimOpt.useGreedy = d["optimizerOpt"].get(
+                "useGreedy", self.optimOpt.useGreedy
+            )
+            self.optimOpt.debugMode = d["optimizerOpt"].get(
+                "debugMode", self.optimOpt.debugMode
+            )
+            self.optimOpt.preEval = d["optimizerOpt"].get(
+                "preEval", self.optimOpt.preEval
+            )
+
+
+@dataclass
+class pathsUserInput:
+    infoTemplate: str | None = None
+    tmpFolder: str | None = None
+    resultFolder: str | None = None
+    evaluatorBinaryPath: str | None = None
+
+    tournamentBaselinePaths: list[str] | None = None
+    metaHeuristicExtraIndividuals: list[str] | None = None
+
+    def __repr__(self) -> str:
+        ret = "{"
+        for i, (k, v) in enumerate(self.__dict__.items()):
+            ret += f"{k}: {v}"
+            if i != len(self.__dict__) - 1:
+                ret += ",\n"
+        ret += "}"
+        return f"{ret}"
+
+    def fromDict(self, d: dict) -> None:
+        for _str in self.__dataclass_fields__.keys():
+            new_val = d.get(f"{_str}", self.__dict__[_str])
+            if new_val is not None and self.__dict__[_str] is not None:
+                assert type(new_val) is type(self.__dict__[_str])
+            self.__dict__[_str] = new_val
+
+
+@dataclass
+class tournamentUserInput:
+    nThreads: int = 1
+    timeF: timeFormat | None = None  # defaults to the template timeFormat
+    tourneyT: tournamentType = tournamentType.LOS
+    baselineLimit: int = 4
+    deleteTmp: bool = True
+
+    def __repr__(self) -> str:
+        ret = "{"
+        for i, (k, v) in enumerate(self.__dict__.items()):
+            ret += f"{k}: {v}"
+            if i != len(self.__dict__) - 1:
+                ret += ",\n"
+        ret += "}"
+        return f"{ret}"
+
+    def fromDict(self, d: dict) -> None:
+        for _str in self.__dataclass_fields__.keys():
+            if _str == "timeF":
+                token = d.get(f"timeFormat", self.__dict__[_str])
+                if not token:
+                    self.timeF = None
+                else:
+                    assert type(token) is str
+                    vals = token.split(",")
+                    assert len(vals) == 2
+                    self.timeF = timeFormat(time=int(vals[0]), inc=int(vals[1]))
+            elif _str == "tournamentType":
+                token = d.get(f"tournamentType", self.tourneyT.name)
+                self.tourneyT = strToTournamentType(token)
+            else:
+                new_val = d.get(f"{_str}", self.__dict__[_str])
+                if new_val is not None and self.__dict__[_str] is not None:
+                    assert type(new_val) is type(self.__dict__[_str])
+                self.__dict__[_str] = new_val
 
 
 @dataclass
 class userInput:
-    baseInfoFile: str = ""
-    tmpFolderPath: str = ""
-    resFolderPath: str = ""
-    evaluationBinaryPath: str = "zig-out/bin/evaluate"
-    mhParams: mhUserInput | None = None
-    debugMode: bool = False
-    timeF: timeFormat = hyperBulletTimeFormat
+    paths: pathsUserInput = pathsUserInput()
+    mhParams: mhUserInput = mhUserInput()
+    tournamentParams: tournamentUserInput = tournamentUserInput()
+
+    def __repr__(self) -> str:
+        return f"paths: {str(self.paths)}\n\nmhParams: {str(self.mhParams)}\n\nournamentParams: {str(self.tournamentParams)}"
+
+
+def readUserYamlInput(path: str, pathToRoot: str = "") -> userInput:
+    assert os.path.exists(path)
+    ret: userInput = userInput()
+    with open(path, "r") as f:
+        vals = yaml.safe_load(f)
+    panic = False
+    if vals.get("mh"):
+        ret.mhParams.fromDict(vals["mh"])
+    else:
+        print("[PANIC] missing 'mh' section")
+        panic = True
+
+    if vals.get("tournament"):
+        ret.tournamentParams.fromDict(vals["tournament"])
+    else:
+        print("[PANIC] missing 'tournament' section")
+        panic = True
+
+    if vals.get("paths"):
+        ret.paths.fromDict(vals["paths"])
+        for k, v in ret.paths.__dict__.items():
+            if v is not None:
+                if type(v) is str:
+                    ret.paths.__dict__[k] = os.path.join(pathToRoot, v)
+                elif type(v) is list:
+                    ret.paths.__dict__[k] = [
+                        os.path.join(pathToRoot, x) for x in v if x is not None
+                    ]
+                else:
+                    print(f"[PANIC] unknown type {type(v)} found  in path joining")
+                    panic = True
+
+    else:
+        print("[PANIC] missing 'paths' section")
+        panic = True
+    if panic:
+        assert False, (
+            f"Missing sections encountered during userInput gathering of path: {path}"
+        )
+    return ret
+
+
+def makeMHFromUserInput(userInp: userInput) -> templateSelectionAlgo:
+
+    assert userInp.paths.tmpFolder is not None
+    saveOpt: saveOptions = saveOptions(
+        logDir=userInp.paths.tmpFolder,
+        prefix="result",
+        saveLog=True,
+        resDir=userInp.paths.resultFolder,
+    )
+    optimOpt: optimizerOption = optimizerOption(
+        useGreedy=userInp.mhParams.optimOpt.useGreedy,
+        preEval=userInp.mhParams.optimOpt.preEval,
+        debugMode=userInp.mhParams.optimOpt.debugMode,
+    )
+    mhName = userInp.mhParams.variant.lower()
+    if mhName == "gw" or mhName == "gwo":
+        mhConstructor = gw.GW
+    elif mhName == "de":
+        mhConstructor = DE.DE
+    else:
+        assert False, f"unknown mh name token {mhName}"
+    varKwargs = (
+        {}
+        if userInp.mhParams.variantParameters is None
+        else userInp.mhParams.variantParameters
+    )
+    ret = mhConstructor(
+        popsize=userInp.mhParams.popsize,
+        maxiter=userInp.mhParams.maxiter,
+        saveOpt=saveOpt,
+        optimOpt=optimOpt,
+        cbs=[],
+        **varKwargs,
+    )
+
+    tourn = tournament(
+        timeF=userInp.tournamentParams.timeF,
+        templatePath=userInp.paths.infoTemplate,
+        evalBin=userInp.paths.evaluatorBinaryPath,
+        debugMode=False,
+        deleteTmp=userInp.tournamentParams.deleteTmp,
+        logDir=os.path.join(userInp.paths.tmpFolder, f"tmp_{int(time.time())}"),
+        nThreads=userInp.tournamentParams.nThreads,
+        type=userInp.tournamentParams.tourneyT,
+    )
+
+    ret.setObjective(
+        chessObjective(
+            maximize=True,
+            tourney=tourn,
+            bounds=obj.dummyBounds(
+                lbound=userInp.mhParams.lowerBound,
+                rbound=userInp.mhParams.upperBound,
+                nDim=N_PARAMS,
+            ),
+            steps=obj.dummyStep(STEP_WEIGTH, nDim=N_PARAMS),
+            baselineLimit=userInp.tournamentParams.baselineLimit,
+        )
+    )
+    assert type(ret.objective) is chessObjective
+    ret.objective.setIndexesTemplate(chessSpec.newIndexes)
+    if type(userInp.paths.tournamentBaselinePaths) is list:
+        for path in userInp.paths.tournamentBaselinePaths:
+            if type(path) is not str:
+                continue
+            ret.objective.appendBaseline(chessSpec.entryFromWinfoFile(path))
+
+    else:
+        if userInp.tournamentParams.tourneyT.useBaselines:
+            if (
+                userInp.paths.tournamentBaselinePaths is None
+                or (userInp.paths.tournamentBaselinePaths) == 0
+            ):
+                assert False, (
+                    "Tournament declared uses baselines but no baseline was given"
+                )
+
+    ret.generatePopulation()
+
+    if userInp.paths.metaHeuristicExtraIndividuals is not None:
+        for path in userInp.paths.metaHeuristicExtraIndividuals:
+            if type(path) is not str:
+                continue
+            ret.addInvididual(
+                indiv=individual(
+                    chessSpec.entryFromWinfoFile(path)
+                    .maskOut(indexes=chessSpec.newIndexes, defaultValue=0)
+                    .get1DArray()
+                )
+            )
+    return ret
 
 
 def launch_mh(mh: templateSelectionAlgo) -> None:
@@ -1145,7 +1382,6 @@ def launch_mh(mh: templateSelectionAlgo) -> None:
 if __name__ == "__main__":
     path = "engines/engine_tourney.info"
     tmpFolder = f"out/heuristics/MH/tmp/tmp_{int(time.time())}"
-    yamlFolder = f"out/heuristics/MH/res/tmp_{int(time.time())}"
     evaluationBinPath = "zig-out/bin/evaluate"
 
     saveOpt: saveOptions = saveOptions(
@@ -1166,12 +1402,12 @@ if __name__ == "__main__":
     )
 
     tourn = tournament(
-        timeF=hyperBulletTimeFormat,
+        # timeF=timeFormat(time=5000, inc=0),
         templatePath=path,
         evalBin=evaluationBinPath,
         debugMode=False,
-        logDir=tmpFolder,
-        nThread=4,
+        logDir=os.path.join(tmpFolder, f"tmp_{int(time.time())}"),
+        nThreads=4,
         type=tournamentType.LOS,
     )
 
@@ -1179,8 +1415,10 @@ if __name__ == "__main__":
         chessObjective(
             maximize=True,
             tourney=tourn,
-            bounds=dummyBounds(LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim=N_PARAMS),
-            steps=dummyStep(STEP_WEIGTH, nDim=N_PARAMS),
+            bounds=obj.dummyBounds(
+                LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim=N_PARAMS
+            ),
+            steps=obj.dummyStep(STEP_WEIGTH, nDim=N_PARAMS),
             baselineLimit=4,
         )
     )

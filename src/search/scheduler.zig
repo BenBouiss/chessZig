@@ -95,6 +95,7 @@ pub const uciSearcher = struct {
     }
     pub fn dispatch(self: *uciSearcher) !void {
         self.threadProp.alive = true;
+        self.threadProp.status = .WAITING;
         self.threadProp._handle = try std.Thread.spawn(.{}, waitingRoom, .{self});
     }
 
@@ -126,8 +127,12 @@ pub fn waitingRoom(self: *uciSearcher) !void {
     self.threadProp.status = .WAITING;
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
-    const timeout = 10;
+    const timeout = 2;
     while (self.threadProp.alive) {
+        std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch {
+            self.schedul.p_engine.respond("engineOp uciSearcher.waitingroom .FATAL");
+            self.close() catch unreachable;
+        };
         if (self.threadProp.searchPing) {
             sw.reset();
             sw.startTimeTick();
@@ -140,6 +145,7 @@ pub fn waitingRoom(self: *uciSearcher) !void {
             sw.reset();
             sw.startTimeTick();
             std.debug.print("[INACTIVITY] searcher.WaitingRoom: no activity in the last {d} seconds\n", .{timeout});
+            self.schedul.p_engine.respond("engineOp uciSearcher.waitingroom .WAITING");
         }
     }
 }
@@ -212,14 +218,14 @@ pub const scheduler = struct {
         return p_self._threadPool.getSearchStatus();
     }
     pub fn handleInterrupt(p_self: *scheduler) void {
-        if (p_self.isDebugMode()) {
-            std.debug.print("[DEBUG] handleInterrupt: interrupting\n", .{});
-        }
+        //if (p_self.isDebugMode()) {
+        //    std.debug.print("[DEBUG] handleInterrupt: interrupting\n", .{});
+        //}
         p_self._threadPool.stop();
         p_self._threadPool.waitOnFinish();
-        if (p_self.isDebugMode()) {
-            std.debug.print("[DEBUG] handleInterrupt: finished\n", .{});
-        }
+        //if (p_self.isDebugMode()) {
+        //    std.debug.print("[DEBUG] handleInterrupt: finished\n", .{});
+        //}
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) searchReport {
         const ret = p_self.incrementalLoop(depth);
@@ -240,6 +246,8 @@ pub const scheduler = struct {
 
         if (!p_self._threadPool.running) {
             p_self._threadPool.addThread(1) catch unreachable;
+
+            p_self.p_engine.respond("engineOp incrementalLoop .ADDTHREAD");
         }
         const pack: threadingl.searchPackage = .{ .depth = maxDepth, .features = p_self.features, .scheduler = p_self, .chessState = p_self.p_engine.state };
 
@@ -257,12 +265,13 @@ pub const scheduler = struct {
 
         var sw: timel.stopWatch = .{};
         sw.startTimeTick();
-        const timeout = 5;
+        const timeout = 2;
         while (stat == .CONTINUE) {
             if (sw.timeSinceStartSec() > timeout) {
                 sw.reset();
                 sw.startTimeTick();
                 std.debug.print("[INACTIVITY] scheduler.incrementalLoop: no activity in the last {d} seconds\n", .{timeout});
+                p_self.p_engine.respond("engineOp uciSearcher.waitingroom .WAITING");
             }
             count += 1;
             if (count % countTimePrint == 0) {

@@ -253,7 +253,7 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     p_self.threadProps[idx].alive = true;
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
-    const timeout = 30;
+    const timeout = 2;
     while (p_self.running and p_self.threadProps[idx].alive) {
         if (!p_self.working) {
             std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch unreachable;
@@ -273,5 +273,8 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
             p_self.threadProps[idx].status = .WAITING;
         }
     }
+    p_self.running = false;
+    const pack = p_self.packages[idx];
     std.debug.print("[EXIT] threadPool.WaitingRoom: Thread {d} exiting\n", .{idx});
+    pack.scheduler.p_engine.respond("engineOp threadPool.waitingroom .EXITING");
 }
