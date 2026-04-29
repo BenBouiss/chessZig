@@ -16,6 +16,7 @@ const filel = @import("file.zig");
 const timel = @import("time.zig");
 const mainl = @import("main.zig");
 const lockl = @import("lock.zig");
+const stringl = @import("string.zig");
 
 const Board_state = chess.Board_state;
 const e_moveFlags = movel.e_moveFlags;
@@ -24,8 +25,10 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, USERAZORING, TRACKMETRICS, SEARCHTYPE, REPORTPROG };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USESEE, USEFUTILITY, USERAZORING, TRACKMETRICS, SEARCHTYPE, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
+
+pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
 
 pub const goArgStruct = struct {
     searchMoves: bool = false,
@@ -227,8 +230,10 @@ pub const engineOptions = struct {
     trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
     searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
-
     setOptions: std.ArrayList(setOptionEntry) = .empty,
+
+    saveLogs: bool = false,
+    logsPath: stringl.string = undefined,
 };
 
 pub const engine = struct {
@@ -242,8 +247,9 @@ pub const engine = struct {
     uciMode: bool = false,
     id: engineIdentification = .{},
     options: engineOptions = .{},
-    stopWatch: timel.stopWatch = .{},
+    startSw: timel.stopWatch = .{},
     metric: engineMetrics = .{},
+    logs: std.ArrayList([]const u8) = undefined,
 
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
@@ -252,10 +258,14 @@ pub const engine = struct {
         ret.status = .{};
         ret.id = .{};
         ret.options = .{};
-        ret.stopWatch = .{};
+        ret.options.logsPath = try .initFromSlice(alloc, "out/engine.log");
+        ret.startSw = .{};
+        ret.startSw.startTimeTick();
+
         ret.metric = .{};
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
+        ret.logs = try std.ArrayList([]const u8).initCapacity(ret.alloc, 16);
 
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
         ret.searcher = try alloc.create(schedulerl.uciSearcher);
@@ -286,6 +296,9 @@ pub const engine = struct {
     }
     pub fn initOptions(p_self: *engine) !void {
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
+
+        try p_self.addOption(.{ .name = "savelogs", .optionType = .SAVELOGS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "false" } } });
+        try p_self.addOption(.{ .name = "logsPath", .optionType = .LOGSPATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "engine.log" } } });
 
         try p_self.addOption(.{ .name = "hashS", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEHASHTABLE } } });
@@ -348,12 +361,20 @@ pub const engine = struct {
             }
 
             _ = p_self.input.putCmd(msg);
+            if (p_self.options.saveLogs) {
+                const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN: '{s}' len {d}\n", .{ msg, msg.len });
+                defer p_self.alloc.free(respmsg);
+                try p_self.appendLog(respmsg);
+            }
         }
     }
-    pub fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) void {
+    pub fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) bool {
         const cmdtype = getEngineCmdType(cmdBuffer);
 
         if (p_self.uciMode) {
+            const msg = std.fmt.allocPrint(p_self.alloc, "engineOp received '{s}' {d}", .{ cmdBuffer, cmdBuffer.len }) catch unreachable;
+            defer p_self.alloc.free(msg);
+            p_self.respond(msg);
             const trimmedBuffer = utilsl.trimStr(cmdBuffer);
             const status = p_self.uci_executeCmd(cmdtype, trimmedBuffer);
             if (p_self.status.debugMode) {
@@ -361,13 +382,17 @@ pub const engine = struct {
                     std.debug.print("[DEBUG] executeBuffer.engine: found command type {} status: {}\n", .{ cmdtype, status });
                 }
             }
-            const statMsg = std.fmt.allocPrint(p_self.alloc, "engineOp {} {} '{s}'", .{ cmdtype, status, cmdBuffer }) catch unreachable;
+            const statMsg = std.fmt.allocPrint(p_self.alloc, "engineOp {} {} '{s}' {d}", .{ cmdtype, status, cmdBuffer, cmdBuffer.len }) catch {
+                return status;
+            };
             defer p_self.alloc.free(statMsg);
             p_self.respond(statMsg);
+            return status;
         } else if (cmdtype == .UCI) {
             p_self.uciMode = true;
             p_self.printEngineInfo();
         }
+        return true;
     }
     fn waitOnWorkingThreads(p_self: *engine) void {
         for (0..p_self.workingThreads.items.len) |i| {
@@ -377,13 +402,18 @@ pub const engine = struct {
     }
     pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
-        p_self.searcher.interrupt = true;
-        p_self.searcher.close() catch {};
+        if (p_self.searcher.threadProp.alive) {
+            p_self.searcher.interrupt = true;
+            p_self.searcher.close() catch {};
+        }
         if (p_self.trackMetrics()) {
             p_self.metric.printMetric();
         }
         p_self.waitOnWorkingThreads();
         p_self.respond("its ovah");
+        if (p_self.options.saveLogs) {
+            p_self.saveLog() catch {};
+        }
         p_self.free();
         return true;
     }
@@ -459,7 +489,7 @@ pub const engine = struct {
         }
         return true;
     }
-    pub fn respond(self: engine, msg: []const u8) void {
+    pub fn respond(self: *engine, msg: []const u8) void {
         if (self.status.debugMode) {
             std.debug.print("[DEBUG] respond.engine: sending msg: '{s}'\n", .{msg});
         }
@@ -481,8 +511,17 @@ pub const engine = struct {
             }
             return;
         };
+        if (self.options.saveLogs) {
+            const _respmsg = std.fmt.allocPrint(self.alloc, "OUT: len {d} '{s}'\n", .{ respmsg.len, respmsg[0..@min(respmsg.len, respmsg.len - 1)] }) catch {
+                return;
+            };
+            defer self.alloc.free(_respmsg);
+            self.appendLog(_respmsg) catch {
+                return;
+            };
+        }
     }
-    pub fn respondNonFmt(self: engine, msg: []const u8) void {
+    pub fn respondNonFmt(self: *engine, msg: []const u8) void {
         if (self.status.debugMode) {
             std.debug.print("[DEBUG] respondNonFmt.engine: sending msg: '{s}'\n", .{msg});
         }
@@ -502,6 +541,15 @@ pub const engine = struct {
             }
             return;
         };
+        if (self.options.saveLogs) {
+            const _respmsg = std.fmt.allocPrint(self.alloc, "OUT: len {d} '{s}'\n", .{ msg.len, msg[0..@min(msg.len, msg.len - 1)] }) catch {
+                return;
+            };
+            defer self.alloc.free(_respmsg);
+            self.appendLog(_respmsg) catch {
+                return;
+            };
+        }
     }
     pub fn sendKill(p_self: *engine) void {
         p_self.status.running = false;
@@ -518,6 +566,46 @@ pub const engine = struct {
             hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
             hashTablel.zobristKeys.free(p_self.alloc);
         }
+        p_self.freeLog();
+        p_self.options.logsPath.free(p_self.alloc);
+    }
+    pub fn freeLog(p_self: *engine) void {
+        for (0..p_self.logs.items.len) |i| {
+            p_self.alloc.free(p_self.logs.items[i]);
+        }
+        p_self.logs.deinit(p_self.alloc);
+    }
+    pub fn saveLog(self: *engine) !void {
+        if (!self.options.saveLogs) {
+            return;
+        }
+        const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), self.options.logsPath._slice(), .{ .read = true });
+        defer file.close(mainl.getGlobalIo());
+        for (0..self.logs.items.len) |i| {
+            _ = try file.writeStreamingAll(mainl.getGlobalIo(), self.logs.items[i]);
+        }
+    }
+    pub fn appendLogTyped(p_self: *engine, log: []const u8, typed: e_logMsgType) !void {
+        var logmsg: []u8 = "";
+        switch (typed) {
+            .IN, .OUT => {
+                @panic("???");
+            },
+            .CHANNELREAD => {
+                logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => channel read {s}\n", .{ p_self.startSw.timeSinceStartMs(), log });
+            },
+            //.SERVING => {
+            //    logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => channel read {s}\n", .{ p_self.startSw.timeSinceStartMs(), log });
+            //    //SERVING: {s} status {}
+
+            //},
+        }
+        try p_self.logs.append(p_self.alloc, logmsg);
+    }
+
+    pub fn appendLog(p_self: *engine, log: []const u8) !void {
+        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => {s}", .{ p_self.startSw.timeSinceStartMs(), log });
+        try p_self.logs.append(p_self.alloc, logmsg);
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
@@ -583,6 +671,35 @@ pub const engine = struct {
                 p_self.options.useHashTable = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
+                return true;
+            },
+            .SAVELOGS => {
+                p_self.options.saveLogs = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                    return false;
+                };
+                return true;
+            },
+            .LOGSPATH => {
+                const path = getStringValFromSetOptionCmd(tokens) catch {
+                    return false;
+                };
+
+                if (utilsl.contains(path, ".log", .ignoreCase)) {
+                    const newP = stringl.string.initFromSlice(p_self.alloc, path) catch {
+                        return false;
+                    };
+                    p_self.options.logsPath.free(p_self.alloc);
+                    p_self.options.logsPath = newP;
+                } else {
+                    const newP = filel.joinPath(p_self.alloc, path, "engine.log") catch {
+                        return false;
+                    };
+                    p_self.options.logsPath.free(p_self.alloc);
+                    p_self.options.logsPath = newP;
+                }
+                if (p_self.status.debugMode) {
+                    std.debug.print("[DEBUG] executeSetoptionCmd: new logs path '{s}' \n", .{p_self.options.logsPath._slice()});
+                }
                 return true;
             },
 
@@ -977,20 +1094,32 @@ pub fn getStringValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) ![]const 
 fn inputThreading(p_self: *engine) void {
     var cumulTime: u64 = 0;
     while (p_self.status.running) {
-        //while (p_self.input.cmdBuffer.items.len != 0 and p_self.status.running) {
         while (p_self.input.nonEmpty() and p_self.status.running) {
-            p_self.stopWatch.startTimeTick();
+            var sw: timel.stopWatch = .{};
+            sw.startTimeTick();
             const cmd = p_self.input.readBuffer();
+
+            if (p_self.options.saveLogs and p_self.status.running) {
+                p_self.appendLogTyped(cmd.cmd[0..cmd.len], .CHANNELREAD) catch {};
+            }
             if (p_self.status.debugMode) {
                 std.debug.print("[DEBUG] inputThreading.engine: found command type '{s}'\n", .{cmd.cmd[0..cmd.len]});
             }
 
-            p_self.executeBuffer(cmd.cmd[0..cmd.len]);
+            const status = p_self.executeBuffer(cmd.cmd[0..cmd.len]);
             cumulTime = 0;
             if (p_self.trackMetrics()) {
-                p_self.metric.addTimeToProcessingUs(p_self.stopWatch.timeSinceStartUs());
+                p_self.metric.addTimeToProcessingUs(sw.timeSinceStartUs());
             }
-            p_self.stopWatch.stop();
+            if (p_self.options.saveLogs and p_self.status.running) {
+                const respmsg = std.fmt.allocPrint(p_self.alloc, "SERVING: {s} status {}\n", .{ cmd.cmd[0..cmd.len], status }) catch {
+                    continue;
+                };
+                defer p_self.alloc.free(respmsg);
+                p_self.appendLog(respmsg) catch {
+                    continue;
+                };
+            }
         }
         if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
             std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});

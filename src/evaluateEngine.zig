@@ -440,8 +440,14 @@ const guiState = struct {
         if (!p_self.config.match.saveLogs) {
             return;
         }
-        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => {}", .{ p_self.startSw.timeSinceStartMs(), err });
+        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => {}\n", .{ p_self.startSw.timeSinceStartMs(), err });
         try p_self.logs.append(p_self.alloc, logmsg);
+
+        const buffer1 = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => buffer 1 {s} {any}\n", .{ p_self.startSw.timeSinceStartMs(), p_self.engineInventory.items.items[0]._writerBuffer, p_self.engineInventory.items.items[0]._writerBuffer });
+        try p_self.logs.append(p_self.alloc, buffer1);
+
+        const buffer2 = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => buffer 2 {s} {any}\n", .{ p_self.startSw.timeSinceStartMs(), p_self.engineInventory.items.items[1]._writerBuffer, p_self.engineInventory.items.items[1]._writerBuffer });
+        try p_self.logs.append(p_self.alloc, buffer2);
     }
     pub fn freeLog(p_self: *guiState) void {
         for (0..p_self.logs.items.len) |i| {
@@ -598,8 +604,7 @@ const guiState = struct {
                 return false;
             },
             .READYOK => {
-                //const p_engine = p_self.engineInventory.items.items[cmdBuffer.engine];
-                const p_engine = p_self.getCurrentEngine();
+                const p_engine = p_self.engineInventory.items.items[cmdBuffer.engine];
                 p_engine.setReady(true);
                 return true;
             },
@@ -699,23 +704,17 @@ const guiState = struct {
     fn waitEngine(p_self: *guiState) !void {
         const p_player = p_self.getCurrentPlayer();
         const p_engine = p_self.getCurrentEngine();
-        var sent: bool = false;
-        p_engine.setReady(false);
+        p_engine.ready = false;
         const timeout = p_self.config.match.timeF.time;
         var sw: timel.stopWatch = .{};
         sw.startTimeTick();
+        try p_self.respond("ISREADY", p_player.engineUsed);
         while (!p_engine.isReady()) {
-            if (!sent) {
-                sent = true;
-                try p_self.respond("ISREADY", p_player.engineUsed);
-            }
             try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
-
             if (sw.timeSinceStartMs() > timeout) {
                 return err_eval.timeout_error;
             }
         }
-        p_engine.ready = true;
     }
     fn waitAllPlayers(p_self: *guiState) !void {
         while (!p_self.allPlayersConnected()) {

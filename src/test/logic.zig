@@ -4,6 +4,8 @@ const moveTablel = @import("../moveTables.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
+const stringl = @import("../string.zig");
+const filel = @import("../file.zig");
 
 const std = @import("std");
 
@@ -81,5 +83,21 @@ test "generator" {
         while (gen.next()) |tok| : (j += 1) {
             try std.testing.expect(utilsl.equal(u8, tokens.items[j], tok));
         }
+    }
+}
+const join_testcases = [_][3][]const u8{
+    [_][]const u8{ "out", "engine.log", "out/engine.log" },
+    [_][]const u8{ "out/", "engine.log", "out/engine.log" },
+    [_][]const u8{ "out/", "/engine.log", "out/engine.log" },
+};
+
+test "join" {
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    for (0..join_testcases.len) |i| {
+        var joined = try filel.joinPath(arena, join_testcases[i][0], join_testcases[i][1]);
+        defer joined.free(arena);
+        try std.testing.expect(utilsl.equal(u8, joined._slice(), join_testcases[i][2]));
     }
 }
