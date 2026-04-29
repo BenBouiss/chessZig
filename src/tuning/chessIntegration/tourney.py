@@ -323,6 +323,7 @@ class matchInfoSettings:
     timeF: timeFormat = hyperBulletTimeFormat
     saveLogs: bool = True
     logsLocation: str = "out/logs"
+    printToScreen: bool = True
 
     def __repr__(self) -> str:
         ret = ""
@@ -334,6 +335,7 @@ class matchInfoSettings:
         ret += f"timeFormat=({self.timeF.time}, {self.timeF.inc});\n"
         ret += f"saveLogs={self.saveLogs};\n"
         ret += f'logsLocation="{self.logsLocation}";\n'
+        ret += f"printToScreen={self.printToScreen};\n"
         return ret
 
     def toDict(self) -> dict:
@@ -347,6 +349,7 @@ class matchInfoSettings:
         ret["timeF"] = [self.timeF.time, self.timeF.inc]
         ret["saveLogs"] = self.saveLogs
         ret["logsLocation"] = self.logsLocation
+        ret["printToScreen"] = self.printToScreen
         return ret
 
 
@@ -445,6 +448,8 @@ def readMatchSettingLine(setting: matchInfoSettings, line: str) -> None:
         )
     elif "savelogs" in _line:
         setting.saveLogs = "true" in _line
+    elif "printToScreen" in _line:
+        setting.saveLogs = "true" in _line
 
 
 def saveHeuristicsWeights(
@@ -491,6 +496,10 @@ class matchO(object):
                 file.write(
                     f'"setoption name heuristicWeightsPath value {heuristics[i]}";\n'
                 )
+                if self.settings.matchSettings.saveLogs:
+                    file.write(
+                        f'"setoption name logspath value {os.path.join(self.settings.matchSettings.logsLocation, f"engine_{self.uid}_{self.extra}_{i}.log")}";\n'
+                    )
             file.write(f"[match]\n")
             file.write(f"{self.settings.matchSettings}")
             # allCmd = "\n".join(setting.matchSettings.raw)

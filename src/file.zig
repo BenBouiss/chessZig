@@ -128,6 +128,28 @@ pub fn getFileLineSize(alloc: std.mem.Allocator, path: []const u8) anyerror!u64 
     }
     return count;
 }
+pub fn joinPath(alloc: std.mem.Allocator, p1: []const u8, p2: []const u8) !stringl.string {
+    // does not support very weird path
+    const _p1 = utilsl.stripStr(p1);
+    var _p2 = utilsl.stripStr(p2);
+
+    var newLen = _p1.len + _p2.len;
+    var slashInsert: bool = false;
+    if (_p1[_p1.len - 1] != '/' and _p2[0] != '/') {
+        newLen += 1;
+        slashInsert = true;
+    } else if (_p1[_p1.len - 1] == '/' and _p2[0] == '/') {
+        newLen -= 1;
+        _p2 = _p2[1..];
+    }
+    var ret: stringl.string = try .initZero(alloc, newLen);
+    try ret.copyFromSlice(_p1);
+    if (slashInsert) {
+        _ = ret.put('/');
+    }
+    _ = ret.extend(_p2);
+    return ret;
+}
 pub fn main(alloc: std.mem.Allocator, path: []const u8) !void {
     var tokens = try getTokensFromFile(alloc, path, '\n');
     defer stringl.freeArrayList_string(alloc, &tokens);

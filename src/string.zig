@@ -42,6 +42,7 @@ pub const string = struct {
         for (0..slice.len) |i| {
             p_self.data[i] = slice[i];
         }
+        p_self.len = slice.len;
     }
     pub fn put(p_self: *string, letter: u8) bool {
         if ((p_self.len + 1) > p_self.capacity) {

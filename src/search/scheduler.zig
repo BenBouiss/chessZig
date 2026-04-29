@@ -103,10 +103,8 @@ pub const uciSearcher = struct {
         //
         self.threadProp.alive = false;
         self.interrupt = true;
+        self.threadProp._handle.join();
         self.schedul._threadPool.close();
-        if (self.threadProp.alive) {
-            self.threadProp._handle.join();
-        }
         self.searchingThread.joinOn();
     }
     pub fn submit(self: *uciSearcher, p_engine: *enginel.engine, pack: searcherPackage) threadingl.threadPoolerr!void {
@@ -218,14 +216,8 @@ pub const scheduler = struct {
         return p_self._threadPool.getSearchStatus();
     }
     pub fn handleInterrupt(p_self: *scheduler) void {
-        //if (p_self.isDebugMode()) {
-        //    std.debug.print("[DEBUG] handleInterrupt: interrupting\n", .{});
-        //}
         p_self._threadPool.stop();
         p_self._threadPool.waitOnFinish();
-        //if (p_self.isDebugMode()) {
-        //    std.debug.print("[DEBUG] handleInterrupt: finished\n", .{});
-        //}
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) searchReport {
         const ret = p_self.incrementalLoop(depth);
