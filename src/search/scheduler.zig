@@ -237,15 +237,22 @@ pub const scheduler = struct {
         defer p_self.timeM.stopWatch.stop();
 
         if (!p_self._threadPool.running) {
-            p_self._threadPool.addThread(1) catch unreachable;
-
+            p_self._threadPool.addThread(1) catch {
+                p_self.p_engine.respond("engineOp threadPoolAddThread failed crashing");
+                _ = p_self.p_engine.executeQuitProcedure();
+                @panic(":)");
+            };
             p_self.p_engine.respond("engineOp incrementalLoop .ADDTHREAD");
         }
         const pack: threadingl.searchPackage = .{ .depth = maxDepth, .features = p_self.features, .scheduler = p_self, .chessState = p_self.p_engine.state };
 
-        std.debug.assert(p_self._threadPool.nThread == 1);
         std.debug.assert(p_self._threadPool.running);
-        p_self._threadPool.submit(&pack) catch unreachable;
+
+        p_self._threadPool.submit(&pack) catch {
+            p_self.p_engine.respond("engineOp threadPoolSubmit failed crashing");
+            _ = p_self.p_engine.executeQuitProcedure();
+            @panic(":)");
+        };
 
         const tickrate = configl.WR_TICKRATE_NS;
         var decision: moveDecisionExt = .{};

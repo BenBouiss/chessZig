@@ -448,8 +448,8 @@ def readMatchSettingLine(setting: matchInfoSettings, line: str) -> None:
         )
     elif "savelogs" in _line:
         setting.saveLogs = "true" in _line
-    elif "printToScreen" in _line:
-        setting.saveLogs = "true" in _line
+    elif "printtoscreen" in _line:
+        setting.printToScreen = "true" in _line
 
 
 def saveHeuristicsWeights(
@@ -502,8 +502,6 @@ class matchO(object):
                     )
             file.write(f"[match]\n")
             file.write(f"{self.settings.matchSettings}")
-            # allCmd = "\n".join(setting.matchSettings.raw)
-            # file.write(f"{allCmd}\n")
         return [newInfoPath, heuristics[0], heuristics[1]]
 
 
@@ -513,14 +511,21 @@ def launchAndWaitResults(
     ret: list[score] = []
     paths = m.generateFiles(tmpFolder)
     newInfo = paths[0]
-    info.runningProc = subprocess.Popen(
-        [evalPath, newInfo],
-        stdin=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        text=True,
+    crashPath = os.path.join(
+        tmpFolder, f"crashreport_{m.uid}_{m.extra}_{int(time.time())}.log"
     )
+
+    with open(crashPath, "w") as crashFile:
+        info.runningProc = subprocess.Popen(
+            [evalPath, newInfo],
+            stdin=subprocess.DEVNULL,
+            stderr=crashFile,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        status = info.runningProc.wait()
     assert info.runningProc.stdout is not None
+
     for line in iter(info.runningProc.stdout.readline, ""):
         _line = line.rstrip()
         tokens = _line.split(" ")
@@ -531,12 +536,19 @@ def launchAndWaitResults(
         if len(tokens) != 3:
             continue
         ret.append(score(win=int(tokens[0]), lose=int(tokens[1]), draw=int(tokens[2])))
+
     if deleteTmp:
         for p in paths:
             try:
                 os.remove(p)
             except Exception as e:
                 _ = e
+
+    if len(ret) == 0:
+        pass
+    else:
+        os.remove(crashPath)
+    info.runningProc.terminate()
     return ret
 
 
