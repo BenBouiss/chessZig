@@ -154,12 +154,12 @@ pub const threadPool = struct {
 
     pub fn addThread(p_self: *threadPool, n: usize) !void {
         //
+        p_self.running = true;
         for (0..n) |_| {
             p_self.threadInfos[p_self.nThread] = .{ .alive = true };
             p_self.threadProps[p_self.nThread]._handle = try std.Thread.spawn(.{}, waitingRoom, .{ p_self, p_self.nThread });
             p_self.nThread += 1;
         }
-        p_self.running = true;
     }
 
     pub fn close(p_self: *threadPool) void {

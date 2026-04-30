@@ -33,6 +33,7 @@ const e_guiPhase = enum(u8) { INVALID, WAITING, MATCH };
 const guiStatus = struct {
     running: bool = false,
     phase: e_guiPhase = .INVALID,
+    closing: bool = false,
     debugMode: bool = false,
 };
 
@@ -271,6 +272,7 @@ const engine_info = struct {
     alive: bool = false,
     ready: bool = false,
     options: std.ArrayList([]u8) = undefined,
+    proc: std.process.Child = undefined,
     f_writer: std.Io.File.Writer,
     f_reader: std.Io.File.Reader,
     _writerBuffer: [configl.MAX_USER_INPUT]u8 = undefined,
@@ -339,6 +341,11 @@ const engine_Inventory = struct {
         }
         p_self.items.deinit(alloc);
     }
+    pub fn sendKill(p_self: *engine_Inventory) void {
+        for (0..p_self.len) |i| {
+            p_self.items.items[i].proc.kill(mainl.getGlobalIo());
+        }
+    }
 };
 const player = struct {
     color: e_color = .WHITE,
@@ -369,7 +376,8 @@ const guiState = struct {
 
     // will contains each send and receiv
     config: *guiSetting = undefined,
-    logs: std.ArrayList([]const u8) = undefined,
+    logs: enginel.logging = .{},
+    //logs: std.ArrayList([]u8) = undefined,
     status: guiStatus = .{},
     alloc: std.mem.Allocator = undefined,
     input: std.ArrayList(enginel.inputChannel) = undefined,
@@ -380,6 +388,7 @@ const guiState = struct {
     pub fn init(alloc: std.mem.Allocator) !guiState {
         var ret: guiState = undefined;
 
+        ret.status = .{};
         ret.match.status = .Continue;
 
         ret.alloc = alloc;
@@ -389,7 +398,8 @@ const guiState = struct {
         ret.input = try std.ArrayList(enginel.inputChannel).initCapacity(ret.alloc, 2);
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(ret.alloc, 2);
-        ret.logs = try std.ArrayList([]const u8).initCapacity(ret.alloc, INITIAL_LOGSIZE);
+        //ret.logs = try std.ArrayList([]u8).initCapacity(ret.alloc, INITIAL_LOGSIZE);
+        ret.logs = try enginel.logging.init(alloc, INITIAL_LOGSIZE);
         ret.startSw = .{};
         ret.startSw.startTimeTick();
 
@@ -404,12 +414,11 @@ const guiState = struct {
             .stderr = .inherit,
         };
 
-        var child = try std.process.spawn(mainl.getGlobalIo(), opt);
-
         var eng: *engine_info = try engine_info.init(p_self.alloc);
+        eng.proc = try std.process.spawn(mainl.getGlobalIo(), opt);
 
-        eng.f_writer = (child.stdin.?.writer(mainl.getGlobalIo(), &eng._writerBuffer));
-        eng.f_reader = (child.stdout.?.reader(mainl.getGlobalIo(), &eng._readerBuffer));
+        eng.f_writer = (eng.proc.stdin.?.writer(mainl.getGlobalIo(), &eng._writerBuffer));
+        eng.f_reader = (eng.proc.stdout.?.reader(mainl.getGlobalIo(), &eng._readerBuffer));
         try p_self.input.append(p_self.alloc, try .init(p_self.alloc));
 
         return p_self.engineInventory.addEngine(p_self.alloc, eng);
@@ -443,17 +452,11 @@ const guiState = struct {
         const logmsg = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => {}\n", .{ p_self.startSw.timeSinceStartMs(), err });
         try p_self.logs.append(p_self.alloc, logmsg);
 
-        const buffer1 = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => buffer 1 {s} {any}\n", .{ p_self.startSw.timeSinceStartMs(), p_self.engineInventory.items.items[0]._writerBuffer, p_self.engineInventory.items.items[0]._writerBuffer });
-        try p_self.logs.append(p_self.alloc, buffer1);
+        //const buffer1 = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => buffer 1 {s} {any}\n", .{ p_self.startSw.timeSinceStartMs(), p_self.engineInventory.items.items[0]._writerBuffer, p_self.engineInventory.items.items[0]._writerBuffer });
+        //try p_self.logs.append(p_self.alloc, buffer1);
 
-        const buffer2 = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => buffer 2 {s} {any}\n", .{ p_self.startSw.timeSinceStartMs(), p_self.engineInventory.items.items[1]._writerBuffer, p_self.engineInventory.items.items[1]._writerBuffer });
-        try p_self.logs.append(p_self.alloc, buffer2);
-    }
-    pub fn freeLog(p_self: *guiState) void {
-        for (0..p_self.logs.items.len) |i| {
-            p_self.alloc.free(p_self.logs.items[i]);
-        }
-        p_self.logs.deinit(p_self.alloc);
+        //const buffer2 = try std.fmt.allocPrint(p_self.alloc, "[PANIC]{d} ms => buffer 2 {s} {any}\n", .{ p_self.startSw.timeSinceStartMs(), p_self.engineInventory.items.items[1]._writerBuffer, p_self.engineInventory.items.items[1]._writerBuffer });
+        //try p_self.logs.append(p_self.alloc, buffer2);
     }
 
     pub fn respond(p_self: *guiState, msg: []const u8, engineIndex: u8) !void {
@@ -533,7 +536,7 @@ const guiState = struct {
     }
     pub fn saveLog(self: *guiState) !void {
         if (!self.config.match.saveLogs) {
-            std.debug.assert(self.logs.items.len == 0);
+            std.debug.assert(self.logs._logs.items.len == 0);
             return;
         }
         var fileName: []u8 = undefined;
@@ -546,13 +549,14 @@ const guiState = struct {
         //const file = try std.fs.cwd().createFile(fileName, .{ .read = true });
         const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), fileName, .{ .read = true });
         defer file.close(mainl.getGlobalIo());
-        for (0..self.logs.items.len) |i| {
-            _ = try file.writeStreamingAll(mainl.getGlobalIo(), self.logs.items[i]);
+
+        for (0..self.logs._logs.items.len) |i| {
+            _ = try file.writeStreamingAll(mainl.getGlobalIo(), self.logs._logs.items[i]);
         }
     }
     pub fn free(p_self: *guiState) void {
         p_self.engineInventory.free(p_self.alloc);
-        p_self.freeLog();
+        p_self.logs.free(p_self.alloc);
         p_self.config.free(p_self.alloc);
         for (0..p_self.input.items.len) |i| {
             p_self.input.items[i].free(p_self.alloc);
@@ -567,18 +571,25 @@ const guiState = struct {
         }
     }
     pub fn close(p_self: *guiState) void {
+        if (p_self.status.closing) {
+            return;
+        }
+        p_self.status.closing = true;
         std.debug.print("[CLOSE] saving logs to log file\n", .{});
 
         p_self.match.status = .Error;
         p_self.saveLog() catch |err| {
             std.debug.print("[CLOSE] error while saving: {}\n", .{err});
         };
-        defer p_self.free();
         p_self.respondAll("QUIT") catch {};
         p_self.status.running = false;
         for (0..p_self.workingThreads.items.len) |i| {
             p_self.workingThreads.items[i].join();
         }
+        std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(std.time.ns_per_s) }, .real) catch {};
+        p_self.engineInventory.sendKill();
+
+        p_self.free();
     }
     pub fn crash(p_self: *guiState) noreturn {
         std.debug.print("[CRASH] crashing this gui, with no survivors\n", .{});
@@ -920,8 +931,10 @@ fn mainGuiThread(p_self: *guiState) void {
     record.saveLog(p_self.alloc, &p_self.match, p_self.config) catch |err| {
         std.debug.print("[CLOSE] error {} while saving the match stats\n", .{err});
     };
-    p_self.close();
     record.free(p_self.alloc);
+    if (p_self.status.running) {
+        p_self.close();
+    }
 }
 fn pickBoardState(p_self: *guiState) !Board_state {
     if (p_self.config.match.useOpeningBook and p_self.config.match.openingBookPathProvided) {

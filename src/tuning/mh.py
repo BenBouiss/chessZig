@@ -22,6 +22,7 @@ if __name__ == "__main__":
     path = "src/tuning/config.yml"
     info = tourney.readUserYamlInput(path)
     metaH = tourney.makeMHFromUserInput(info)
+    # tourney.global_tui.useCurses = False
     tourney.launch_mh(metaH)
 
     # print("ben")

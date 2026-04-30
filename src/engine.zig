@@ -89,6 +89,7 @@ pub const inputChannel = struct {
     pub fn readBuffer(p_self: *inputChannel) cmdResult {
         p_self.l.acquireLock();
         p_self.currentIdx = (p_self.currentIdx + 1) % INPUTCHANNEL_LEN;
+        std.debug.assert(p_self.currentIdx != p_self.nextIdx + 1);
         const ret_len = p_self.cmdSize[p_self.currentIdx];
         var ret: cmdResult = .{ .len = ret_len };
         @memcpy((ret.cmd[0..ret_len]), p_self.cmdBuffer[p_self.currentIdx][0..ret_len]);
@@ -235,6 +236,33 @@ pub const engineOptions = struct {
     saveLogs: bool = false,
     logsPath: stringl.string = undefined,
 };
+pub const logging = struct {
+    _logs: std.ArrayList([]u8) = undefined,
+    lock: lockl.lock = .{},
+    freed: bool = false,
+    pub fn init(alloc: std.mem.Allocator, initialCap: usize) !logging {
+        var ret: logging = .{ .freed = false, .lock = .{} };
+        ret._logs = try std.ArrayList([]u8).initCapacity(alloc, initialCap);
+        return ret;
+    }
+    pub fn free(self: *logging, alloc: std.mem.Allocator) void {
+        self.lock.acquireLock();
+        defer self.lock.releaseLock();
+        for (0..self._logs.items.len) |i| {
+            alloc.free(self._logs.items[i]);
+        }
+        self._logs.deinit(alloc);
+        self.freed = true;
+    }
+    pub fn append(self: *logging, alloc: std.mem.Allocator, msg: []u8) !void {
+        self.lock.acquireLock();
+        defer self.lock.releaseLock();
+        if (self.freed) {
+            return;
+        }
+        try self._logs.append(alloc, msg);
+    }
+};
 
 pub const engine = struct {
     state: Board_state,
@@ -249,7 +277,8 @@ pub const engine = struct {
     options: engineOptions = .{},
     startSw: timel.stopWatch = .{},
     metric: engineMetrics = .{},
-    logs: std.ArrayList([]const u8) = undefined,
+    //logs: std.ArrayList([]u8) = undefined,
+    logs: logging = .{},
 
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
@@ -265,7 +294,8 @@ pub const engine = struct {
         ret.metric = .{};
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
-        ret.logs = try std.ArrayList([]const u8).initCapacity(ret.alloc, 16);
+        //ret.logs = try std.ArrayList([]u8).initCapacity(ret.alloc, 16);
+        ret.logs = try logging.init(alloc, 16);
 
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
         ret.searcher = try alloc.create(schedulerl.uciSearcher);
@@ -360,9 +390,13 @@ pub const engine = struct {
                 std.debug.print("\n", .{});
             }
 
+            const prevCur = p_self.input.currentIdx;
+            const prevNext = p_self.input.nextIdx;
             _ = p_self.input.putCmd(msg);
+            const nextCur = p_self.input.currentIdx;
+            const nextNext = p_self.input.nextIdx;
             if (p_self.options.saveLogs) {
-                const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN: '{s}' len {d}\n", .{ msg, msg.len });
+                const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN: '{s}' len {d} before(cur:{d} next:{d}) after(curr{d} next:{d})\n", .{ msg, msg.len, prevCur, prevNext, nextCur, nextNext });
                 defer p_self.alloc.free(respmsg);
                 try p_self.appendLog(respmsg);
             }
@@ -566,23 +600,18 @@ pub const engine = struct {
             hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
             hashTablel.zobristKeys.free(p_self.alloc);
         }
-        p_self.freeLog();
+        p_self.logs.free(p_self.alloc);
         p_self.options.logsPath.free(p_self.alloc);
     }
-    pub fn freeLog(p_self: *engine) void {
-        for (0..p_self.logs.items.len) |i| {
-            p_self.alloc.free(p_self.logs.items[i]);
-        }
-        p_self.logs.deinit(p_self.alloc);
-    }
+
     pub fn saveLog(self: *engine) !void {
         if (!self.options.saveLogs) {
             return;
         }
         const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), self.options.logsPath._slice(), .{ .read = true });
         defer file.close(mainl.getGlobalIo());
-        for (0..self.logs.items.len) |i| {
-            _ = try file.writeStreamingAll(mainl.getGlobalIo(), self.logs.items[i]);
+        for (0..self.logs._logs.items.len) |i| {
+            _ = try file.writeStreamingAll(mainl.getGlobalIo(), self.logs._logs.items[i]);
         }
     }
     pub fn appendLogTyped(p_self: *engine, log: []const u8, typed: e_logMsgType) !void {
