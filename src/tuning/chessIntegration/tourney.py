@@ -114,6 +114,15 @@ class scoreBoard:
         self.l.release()
 
 
+class windowIndex(Enum):
+    TITLE = 0
+    LAST_UPDATE = 1
+    TOURNEY = 2
+    MH_BEST_INDIV = 3
+    MH_HEALTH_METRICS = 4
+    PROGRESSBAR = 5
+
+
 class tuiGUI:
     gui = guil.windowCtx()
     useCurses: bool = True
@@ -122,16 +131,36 @@ class tuiGUI:
     mh: templateSelectionAlgo | None = None
 
     running: bool = False
-    needUpdate: bool = False
+    tickUpdate: bool = False
+    roundUpdate: bool = False
+
     debugMode: bool = False
     sw: stopwatch = stopwatch()
     mainThread: threading.Thread | None = None
     interruptReceived: bool = False
+    windows: list[guil.windowComponent] = []
     tick: int = 0
 
     def __init__(self, debugMode: bool = False, useCurses: bool = True) -> None:
         self.debugMode = debugMode
         self.useCurses = useCurses
+        # title
+        self.windows.append(guil.windowComponent(offset=[0, 2], size=[2, 0]))
+
+        # last update
+        self.windows.append(guil.windowComponent(offset=[0, 104], size=[0, 0]))
+
+        # tourney
+        self.windows.append(guil.windowComponent(offset=[10, 0], size=[0, 0]))
+
+        # MH best indiv
+        self.windows.append(guil.windowComponent(offset=[10, 50], size=[0, 0]))
+
+        # MH health markers
+        self.windows.append(guil.windowComponent(offset=[10, 104], size=[0, 0]))
+
+        # progress bar
+        self.windows.append(guil.windowComponent(offset=[36, 0], size=[2, 64]))
 
     def shouldClose(self) -> bool:
         return self.interruptReceived
@@ -153,7 +182,7 @@ class tuiGUI:
     def start(self) -> None:
         self.running = True
         self.sw.start()
-        self.pingUpdate()
+        self.pingTickUpdate()
         while self.running:
             try:
                 # mainly used to handle the case where the terminal is resized
@@ -171,9 +200,14 @@ class tuiGUI:
                     global_tui.close()
             self.tick += 1
 
-    def pingUpdate(self) -> None:
+    def pingTickUpdate(self) -> None:
         self.l.acquire()
-        self.needUpdate = True
+        self.tickUpdate = True
+        self.l.release()
+
+    def pingRoundUpdate(self) -> None:
+        self.l.acquire()
+        self.roundUpdate = True
         self.l.release()
 
     def close(self) -> None:
@@ -184,25 +218,30 @@ class tuiGUI:
     def updateWindow(self) -> None:
         self.l.acquire()
         if not self.useCurses:
-            if not self.needUpdate or not self.running:
+            if not self.tickUpdate or not self.running:
                 self.l.release()
                 return
-            self.needUpdate = False
+            self.tickUpdate = False
             self.liteUpdateWindow()
             self.l.release()
             return
 
         guil.loadingSymbolWindow(self.gui.stdscr, self.tick)
-        if not self.needUpdate or not self.running:
+        if (not self.tickUpdate and not self.roundUpdate) or not self.running:
             if self.debugMode:
                 pass
             self.l.release()
             return
-        self.needUpdate = False
-        self.updateMHWindow()
-        self.updateProgress()
+        if self.tickUpdate:
+            self.updateProgress()
+
+        if self.roundUpdate:
+            self.updateMHWindow()
+            self.settingsWindow()
+
+        self.tickUpdate = False
+        self.roundUpdate = False
         self.lastUpdatedWin()
-        self.settingsWindow()
         self.l.release()
 
     def liteUpdateWindow(self) -> None:
@@ -245,7 +284,9 @@ class tuiGUI:
 
     def lastUpdatedWin(self) -> None:
         assert self.gui.active
-        guil.lastUpdateWindow(self.gui.stdscr, self.sw)
+        guil.lastUpdateWindow(
+            self.gui.stdscr, self.sw, self.windows[windowIndex.LAST_UPDATE.value]
+        )
 
     def settingsWindow(self) -> None:
         if self.mh is None:
@@ -265,23 +306,31 @@ class tuiGUI:
             if tourney.type == tournamentType.LOS:
                 pass
         self.gui.standardWindow(
-            txt, winOffset=(10, 0), winTitle="Tournament settings: "
+            txt,
+            win=self.windows[windowIndex.TOURNEY.value],
+            winTitle="Tournament settings: ",
         )
 
     def updateMHWindow(self) -> None:
         assert self.gui.active
         if self.mh is None:
             return
-        self.gui.mainWindow(self.mh)
-        self.gui.onTournamentBegin(self.mh)
-        self.gui.mhHealthMarkers(self.mh)
+        # 3 windows
+        # title bar, best indiv, mh health markers
+        self.gui.mainWindow(self.mh, self.windows[windowIndex.TITLE.value])
+
+        self.gui.mhBestIndiv(self.mh, self.windows[windowIndex.MH_BEST_INDIV.value])
+        self.gui.mhHealthMarkers(
+            self.mh, self.windows[windowIndex.MH_HEALTH_METRICS.value]
+        )
 
     def updateProgress(self) -> None:
         if self.scoreB.roundStat.nMatch != 0:
-            self.gui.onMatchEnd(
+            self.gui.progressBar(
                 nFinished=self.scoreB.roundStat.nFinished,
                 nMatch=self.scoreB.roundStat.nMatch,
                 nRunning=self.scoreB.roundStat.nRunning,
+                win=self.windows[windowIndex.PROGRESSBAR.value],
             )
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -804,7 +853,7 @@ class tournament(object):
         threadInfos: list[threadInfo] = []
         # for threadId, idx in enumerate(indexes):
         global_scoreBoard.updateScoreBoard(self.matchInv)
-        global_tui.pingUpdate()
+        global_tui.pingTickUpdate()
         for threadId in range(self.nThreads):
             threadInfos.append(threadInfo())
             workingThreads.append(
@@ -838,7 +887,7 @@ class tournament(object):
             self.matchInv.status[res.idx] = matchStatus.IN_PROGRESS
 
             global_scoreBoard.updateScoreBoard(self.matchInv)
-            global_tui.pingUpdate()
+            global_tui.pingTickUpdate()
 
             currentMatch: matchO = matchO(
                 conf1=opp1,
@@ -859,7 +908,7 @@ class tournament(object):
                 self.matchInv.status[res.idx] = matchStatus.FINISHED
                 self.updateScore(pair=pair, score=scoreList)
             global_scoreBoard.updateScoreBoard(self.matchInv)
-            global_tui.pingUpdate()
+            global_tui.pingTickUpdate()
 
         info.status = threadStatus.FINISHED
 
@@ -937,6 +986,7 @@ class chessObjective(obj.objective):
             print(
                 f"Evaluating {len(positions)} positions with {len(self.baseline)} baselines..."
             )
+        global_tui.pingRoundUpdate()
         matchInv: matchContainerInfo = matchContainerInfo(
             len(positions), popBase=len(self.baseline), type=self.tourney.type
         )
@@ -1096,7 +1146,7 @@ class guiUpdateCallback(template.callback):
     ):
         assert self.mh is not None
         _ = positions
-        global_tui.pingUpdate()
+        global_tui.pingTickUpdate()
 
 
 class callbackBaseline(template.callback):
