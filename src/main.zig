@@ -181,7 +181,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try test_bench();
     //try test_speed();
     //try heuristicl.main(GPA);
-    try chessl.main(GPA);
+    //try chessl.main(GPA);
     //try test_bug();
     //try test_bug2(GPA);
     //var path = try stringl.string.initFromSlice(getGlobalGPA(), "opening/8moves_v3.pgn");

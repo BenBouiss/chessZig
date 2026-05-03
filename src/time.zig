@@ -40,6 +40,11 @@ pub const stopWatch = struct {
         p_self.savedTimeUs = 0;
     }
 };
+// implement to implement a sort of ping every x seconds, ms...
+// call .tick returns bool
+pub const timer = struct {
+    sw: stopWatch = .{},
+};
 
 pub fn main() !void {
     //

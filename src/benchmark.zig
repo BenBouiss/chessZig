@@ -133,7 +133,7 @@ pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, alloc: std.mem.Allo
         }
         if (comptime useHash) {
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{res.n_hashRetrieve});
-            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
+            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.stat.insertion});
         }
     }
 }
@@ -152,7 +152,7 @@ pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool
         sw.stop();
         if (comptime useHash) {
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{bench_res.n_hashRetrieve});
-            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
+            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.stat.insertion});
         }
         //        std.debug.assert(bench_res.n_nodes == ExpectedBenchmarkResults[depth]);
     }

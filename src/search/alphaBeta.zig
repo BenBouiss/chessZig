@@ -42,7 +42,6 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 
     var score: scoreType = 0;
 
-    //std.debug.print("[DEBUG] searchEntrypoint: {}\n", .{p_features.searchType});
     switch (p_features.searchType) {
         .STD => {
             score = searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
@@ -94,13 +93,11 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     }
 
     var hashMove: IMove = .{};
+    var hashFlag: hashl.nodeType = .UPPER;
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
-            //if (entry.val.search.t == .CUT and ply != 0) {
-            //    return entry.eval();
-            //}
             hashMove = _entry.val.search.bestMove;
         }
     }
@@ -183,15 +180,12 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         // under no possible scenario can this become >=, the resulting engines only produce drawn games amongst themselves
         if (finalScore > _alpha) {
             _alpha = finalScore;
+            hashFlag = .ALL;
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
             if (!isCapture) {
                 heuristicl.updateHistoryHeurist(p_state.whiteToMove(), move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(depth));
-            }
-            if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .PV, bestMove);
-                _ = hashl.hashTable.storeEntry(&s_entry);
             }
         }
         if (_alpha >= beta) {
@@ -209,7 +203,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .CUT, move);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .LOWER, move);
                 _ = hashl.hashTable.storeEntry(&s_entry);
             }
             p_info.searchStat.n_cutoffs += 1;
@@ -221,6 +215,11 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             finalScore = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(depth)));
         } else {
             finalScore = weightl.simpleStalemateScore;
+        }
+    } else {
+        if (p_features.useHash) {
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, hashFlag, bestMove);
+            _ = hashl.hashTable.storeEntry(&s_entry);
         }
     }
 

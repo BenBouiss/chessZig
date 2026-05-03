@@ -364,6 +364,12 @@ pub const engine = struct {
     pub inline fn trackMetrics(p_self: *engine) bool {
         return p_self.options.trackMetrics;
     }
+    pub fn printMetrics(p_self: *engine) void {
+        p_self.metric.printMetric();
+        if (p_self.options.useHashTable) {
+            hashTablel.printTTStats();
+        }
+    }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
         p_self.options.nOptions += 1;
@@ -406,9 +412,6 @@ pub const engine = struct {
         const cmdtype = getEngineCmdType(cmdBuffer);
 
         if (p_self.uciMode) {
-            const msg = std.fmt.allocPrint(p_self.alloc, "engineOp received '{s}' {d}", .{ cmdBuffer, cmdBuffer.len }) catch unreachable;
-            defer p_self.alloc.free(msg);
-            p_self.respond(msg);
             const trimmedBuffer = utilsl.trimStr(cmdBuffer);
             const status = p_self.uci_executeCmd(cmdtype, trimmedBuffer);
             if (p_self.status.debugMode) {
@@ -436,12 +439,10 @@ pub const engine = struct {
     }
     pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
-        if (p_self.searcher.threadProp.alive) {
-            p_self.searcher.interrupt = true;
-            p_self.searcher.close() catch {};
-        }
+        p_self.searcher.interrupt = true;
+        p_self.searcher.close() catch {};
         if (p_self.trackMetrics()) {
-            p_self.metric.printMetric();
+            p_self.printMetrics();
         }
         p_self.waitOnWorkingThreads();
         p_self.respond("its ovah");
@@ -585,12 +586,7 @@ pub const engine = struct {
             };
         }
     }
-    pub fn sendKill(p_self: *engine) void {
-        p_self.status.running = false;
-        p_self.searcher.interrupt = true;
-        p_self.respond("its ovah");
-        p_self.waitOnWorkingThreads();
-    }
+
     pub fn free(p_self: *engine) void {
         p_self.input.free(p_self.alloc);
         p_self.workingThreads.deinit(p_self.alloc);
@@ -814,7 +810,7 @@ pub const engine = struct {
                 };
             },
             .PRINT_METRIC => {
-                p_self.metric.printMetric();
+                p_self.printMetrics();
                 return true;
             },
             .HEUR_WEIGHTS_PATH => {
@@ -893,6 +889,7 @@ pub const engine = struct {
     fn refreshInternals(p_self: *engine) void {
         _ = p_self.updateElo(p_self.options.engineElo);
         heuristicl._initMoveOrdering();
+        _ = p_self.updateHash(p_self.options.hashTableSize) catch {};
     }
     fn updateHeuristicWeights(p_self: *engine, path: []const u8) bool {
         heuristicl.modifyHeuristicWeight(p_self.alloc, path, p_self.status.debugMode) catch {
@@ -934,24 +931,10 @@ pub const engine = struct {
         const delta: f32 = (_elo - configl.MIN_ELO) / (configl.MAX_ELO - configl.MIN_ELO);
         const proj = configl.MIN_DEPTH + (configl.MAX_DEPTH - configl.MIN_DEPTH) * delta;
         p_self.options.depthLevel = @intFromFloat(proj);
-        //if (p_self.status.debugMode) {
-        //    std.debug.print("[DEBUG] updateElo: New updates depth {d} from elo {d}\n", .{ p_self.options.depthLevel, elo });
-        //}
 
         return true;
     }
     pub fn executeIsReady(p_self: *engine) !bool {
-        var sw: timel.stopWatch = .{};
-        sw.startTimeTick();
-        //const timeout = 5;
-        //while (p_self.searcher.searching) {
-        //    if (sw.timeSinceStartSec() > timeout) {
-        //        sw.reset();
-        //        sw.startTimeTick();
-        //        std.debug.print("[INACTIVITY] engine.executeIsReady: stuck for the last {d} seconds\n", .{timeout});
-        //    }
-        //    try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
-        //}
         if (!p_self.status.initializedInternals) {
             _ = p_self.initInternals();
         }
@@ -1121,9 +1104,12 @@ pub fn getStringValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) ![]const 
 }
 
 fn inputThreading(p_self: *engine) void {
-    var cumulTime: u64 = 0;
+    var cumulSw: timel.stopWatch = .{};
+    cumulSw.startTimeTick();
     while (p_self.status.running) {
         while (p_self.input.nonEmpty() and p_self.status.running) {
+            cumulSw.reset();
+            cumulSw.startTimeTick();
             var sw: timel.stopWatch = .{};
             sw.startTimeTick();
             const cmd = p_self.input.readBuffer();
@@ -1131,12 +1117,9 @@ fn inputThreading(p_self: *engine) void {
             if (p_self.options.saveLogs and p_self.status.running) {
                 p_self.appendLogTyped(cmd.cmd[0..cmd.len], .CHANNELREAD) catch {};
             }
-            if (p_self.status.debugMode) {
-                std.debug.print("[DEBUG] inputThreading.engine: found command type '{s}'\n", .{cmd.cmd[0..cmd.len]});
-            }
 
             const status = p_self.executeBuffer(cmd.cmd[0..cmd.len]);
-            cumulTime = 0;
+
             if (p_self.trackMetrics()) {
                 p_self.metric.addTimeToProcessingUs(sw.timeSinceStartUs());
             }
@@ -1150,12 +1133,12 @@ fn inputThreading(p_self: *engine) void {
                 };
             }
         }
-        if (cumulTime > configl.DEBUG_INACTIVITY_READING_NS) {
+        if (cumulSw.timeSinceStartUs() > configl.DEBUG_INACTIVITY_READING_US) {
             std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
-            cumulTime = 0;
+            cumulSw.reset();
+            cumulSw.startTimeTick();
         }
         std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.ENGINE_SERVING_TICKRATE_NS) }, .real) catch unreachable;
-        cumulTime += configl.ENGINE_SERVING_TICKRATE_NS;
     }
 }
 

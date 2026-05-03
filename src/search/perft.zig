@@ -94,7 +94,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
     while (!p_engine.searcher.interrupt and endCounter != p_engine.options.nThreads) {
         try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.INFO_TICKRATE_NS) }, .real);
         const res = threadingl.getCombinedFromPack(p_threadPack);
-        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, @as(u64, @intCast(sw.timeSinceStartMs() + 1))) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+        const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, @as(u64, @intCast(sw.timeSinceStartMs() + 1))) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion }) catch {
             continue;
         };
         defer p_engine.alloc.free(msg);
@@ -116,7 +116,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
     }
 
     const res = threadingl.getCombinedFromPack(p_threadPack);
-    const msg = std.fmt.allocPrint(p_engine.alloc, "info depth: {d} nodes {d} retrieved: {d} stored: {d}", .{ p_engine.searcher.pack.config.depth, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion }) catch {
+    const msg = std.fmt.allocPrint(p_engine.alloc, "info depth: {d} nodes {d} retrieved: {d} stored: {d}", .{ p_engine.searcher.pack.config.depth, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion }) catch {
         return true;
     };
     defer p_engine.alloc.free(msg);

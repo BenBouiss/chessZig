@@ -19,6 +19,7 @@ const IMove = movel.IMove;
 const scoreType = heuristicl.scoreType;
 
 pub const searchStatus = enum { CONTINUE, INTERRUPTED, FINISHED };
+
 pub const searchReport = struct {
     timeTakenMs: i64 = 0,
     searchStat: threadingl.searchStatistic = .{},
@@ -68,7 +69,6 @@ pub const searchingThreadContainer = struct {
         p_self.len = 0;
     }
     pub fn joinOn(self: *searchingThreadContainer) void {
-        //std.debug.print("[DEBUG] searchingThreadContainer.joinOn: joining on the {d} thread(s) stored\n", .{self.len});
         for (0..self.len) |i| {
             self.items[i].join();
         }
@@ -86,7 +86,7 @@ pub const uciSearcher = struct {
     schedul: scheduler = .{},
     searching: bool = false,
     interrupt: bool = false,
-    threadProp: threadingl.threadP = undefined,
+    threadProps: threadingl.threadP = undefined,
     searchingThread: searchingThreadContainer = .{},
 
     pub fn reset(p_self: *uciSearcher) void {
@@ -94,16 +94,14 @@ pub const uciSearcher = struct {
         p_self.searching = false;
     }
     pub fn dispatch(self: *uciSearcher) !void {
-        self.threadProp.alive = true;
-        self.threadProp.status = .WAITING;
-        self.threadProp._handle = try std.Thread.spawn(.{}, waitingRoom, .{self});
+        self.threadProps.alive = true;
+        self.threadProps.status = .WAITING;
+        self.threadProps._handle = try std.Thread.spawn(.{}, waitingRoom, .{self});
     }
 
     pub fn close(self: *uciSearcher) !void {
-        //
-        self.threadProp.alive = false;
+        self.threadProps.alive = false;
         self.interrupt = true;
-        self.threadProp._handle.join();
         self.schedul._threadPool.close();
         self.searchingThread.joinOn();
     }
@@ -116,26 +114,26 @@ pub const uciSearcher = struct {
         } else {
             self.schedul.timeM.setRemainingTimeMs(self.pack.config.btime);
         }
-        self.threadProp.searchPing = true;
+        self.threadProps.searchPing = true;
     }
 };
 pub fn waitingRoom(self: *uciSearcher) !void {
     //
-    self.threadProp.alive = true;
-    self.threadProp.status = .WAITING;
+    self.threadProps.alive = true;
+    self.threadProps.status = .WAITING;
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
     const timeout = 2;
-    while (self.threadProp.alive) {
+    while (self.threadProps.alive) {
         std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch {
             self.schedul.p_engine.respond("engineOp uciSearcher.waitingroom .FATAL");
             self.close() catch unreachable;
         };
-        if (self.threadProp.searchPing) {
+        if (self.threadProps.searchPing) {
             sw.reset();
             sw.startTimeTick();
-            self.threadProp.status = .WORKING;
-            self.threadProp.searchPing = false;
+            self.threadProps.status = .WORKING;
+            self.threadProps.searchPing = false;
             dispatchUciGoThreads(self);
         }
 
@@ -220,7 +218,13 @@ pub const scheduler = struct {
         p_self._threadPool.waitOnFinish();
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) searchReport {
-        const ret = p_self.incrementalLoop(depth);
+        if (!p_self._threadPool.running) {
+            return .{};
+        }
+
+        const pack: threadingl.searchPackage = .{ .depth = depth, .features = p_self.features, .scheduler = p_self, .chessState = p_self.p_engine.state };
+
+        const ret = p_self.incrementalLoop(&pack);
 
         if (p_self.p_engine.trackMetrics()) {
             p_self.p_engine.metric.addTimeToSearchingMs(ret.timeTakenMs);
@@ -232,23 +236,13 @@ pub const scheduler = struct {
         return res.currentBest.copy();
     }
 
-    pub fn incrementalLoop(p_self: *scheduler, maxDepth: u16) searchReport {
+    pub fn incrementalLoop(p_self: *scheduler, pack: *const threadingl.searchPackage) searchReport {
+        std.debug.assert(p_self._threadPool.running);
+
         p_self.timeM.startSearchTick();
         defer p_self.timeM.stopWatch.stop();
 
-        if (!p_self._threadPool.running) {
-            p_self._threadPool.addThread(1) catch {
-                p_self.p_engine.respond("engineOp threadPoolAddThread failed crashing");
-                _ = p_self.p_engine.executeQuitProcedure();
-                @panic(":)");
-            };
-            p_self.p_engine.respond("engineOp incrementalLoop .ADDTHREAD");
-        }
-        const pack: threadingl.searchPackage = .{ .depth = maxDepth, .features = p_self.features, .scheduler = p_self, .chessState = p_self.p_engine.state };
-
-        std.debug.assert(p_self._threadPool.running);
-
-        p_self._threadPool.submit(&pack) catch {
+        p_self._threadPool.submit(pack) catch {
             p_self.p_engine.respond("engineOp threadPoolSubmit failed crashing");
             _ = p_self.p_engine.executeQuitProcedure();
             @panic(":)");
@@ -262,16 +256,7 @@ pub const scheduler = struct {
 
         var stat = p_self.getSearchStatus();
 
-        var sw: timel.stopWatch = .{};
-        sw.startTimeTick();
-        const timeout = 2;
         while (stat == .CONTINUE) {
-            if (sw.timeSinceStartSec() > timeout) {
-                sw.reset();
-                sw.startTimeTick();
-                std.debug.print("[INACTIVITY] scheduler.incrementalLoop: no activity in the last {d} seconds\n", .{timeout});
-                p_self.p_engine.respond("engineOp uciSearcher.waitingroom .WAITING");
-            }
             count += 1;
             if (count % countTimePrint == 0) {
                 if (p_self.features.reportProgress) {
@@ -294,7 +279,6 @@ pub const scheduler = struct {
 
         sendFinal(p_self, &decision);
         p_self.handleInterrupt();
-        // TODO: FIX ME: UCI style thingy here
         const res = p_self._threadPool.getCombinedInfo();
         return .{ .move = decision.move, .timeTakenMs = p_self.timeM.timeSinceStartMs(), .searchStat = res.searchStat, .score = decision.scoring };
     }
@@ -309,11 +293,20 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config
         return perftl.dispatchUciPerftCmd(p_engine, config);
     }
     _ = cmdBuffer;
-    if (!p_engine.searcher.threadProp.alive) {
+    if (!p_engine.searcher.schedul._threadPool.running) {
+        p_engine.searcher.schedul._threadPool.addThread(1) catch {
+            p_engine.respond("engineOp threadPoolAddThread failed crashing");
+            _ = p_engine.executeQuitProcedure();
+            @panic(":)");
+        };
+        p_engine.respond("engineOp incrementalLoop .ADDTHREAD");
+    }
+    if (!p_engine.searcher.threadProps.alive) {
         p_engine.searcher.dispatch() catch {
             return false;
         };
     }
+
     p_engine.searcher.submit(p_engine, .{ .config = config, .state = p_engine.state.copy() }) catch {
         return false;
     };
@@ -403,7 +396,7 @@ pub fn sendUpdate(p_self: *scheduler) void {
     const n_nodes: i64 = @intCast(res.searchStat.n_nodeExplored);
     const timeDelta = p_self.timeM.timeSinceStartMs();
 
-    const msg = std.fmt.allocPrint(p_self.p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d} cutoff: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.searchStat.n_hashRetrieve, hashl.hashTable.n_insertion, res.searchStat.n_cutoffs }) catch {
+    const msg = std.fmt.allocPrint(p_self.p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d} cutoff: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion, res.searchStat.n_cutoffs }) catch {
         return;
     };
     defer p_self.p_engine.alloc.free(msg);

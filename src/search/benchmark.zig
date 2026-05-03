@@ -23,9 +23,11 @@ pub const benchmarkEntries = [_][]const u8{
 
 pub fn dispatchUciBenchmark(p_engine: *engine) bool {
     // executes the benchmark steps
-    p_engine.searcher.searchingThread.appendThread(std.Thread.spawn(.{}, dispatchUciBenchmarkThreads, .{p_engine}) catch {
+
+    const dispatchThread = std.Thread.spawn(.{}, dispatchUciBenchmarkThreads, .{p_engine}) catch {
         return false;
-    });
+    };
+    p_engine.searcher.searchingThread.appendThread(dispatchThread);
 
     return true;
 }
@@ -38,27 +40,26 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
     };
     defer results.deinit(p_engine.alloc);
     const benchmarkDepth: u16 = 8;
+
+    var sched = &p_engine.searcher.schedul;
+    sched.setEngine(p_engine);
+    if (!sched._threadPool.running) {
+        sched._threadPool.addThread(1) catch {
+            std.debug.print("[ERROR] dispatchUciBenchmarkThreads: Cant init threadpool and none found\n", .{});
+        };
+    }
+    sched.features.fixedDepth = true;
+    sched.reportProgress = true;
+    sched.timeM.remainingTimeMs = std.math.maxInt(u32);
+    p_engine.searcher.searching = true;
     std.debug.print("============ Benchmark evaluation ============\n", .{});
     for (0..benchmarkEntries.len) |i| {
-        var stopWatch: timel.stopWatch = .{};
-        stopWatch.startTimeTick();
-        defer stopWatch.stop();
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
-
-        p_engine.searcher.searching = true;
-        defer p_engine.searcher.searching = false;
-        var sched = &p_engine.searcher.schedul;
-        sched.setEngine(p_engine);
-        sched.features.fixedDepth = true;
-        sched.reportProgress = true;
-        sched.timeM.remainingTimeMs = std.math.maxInt(u32);
-        if (p_engine.trackMetrics()) {
-            p_engine.metric.addTimeToProcessingMs(stopWatch.timeSinceStartMs());
-        }
         const res = sched.entryPointSearch(benchmarkDepth);
         results.append(p_engine.alloc, res) catch unreachable;
     }
+    p_engine.searcher.searching = false;
     printResults(&benchmarkEntries, &results);
     std.debug.print("============ Benchmark perft ============\nComing soon\n", .{});
 }

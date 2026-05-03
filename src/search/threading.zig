@@ -6,6 +6,7 @@ const schedulerl = @import("scheduler.zig");
 const configl = @import("../config.zig");
 const mainl = @import("../main.zig");
 const timel = @import("../time.zig");
+const lockl = @import("../lock.zig");
 
 const std = @import("std");
 
@@ -151,10 +152,18 @@ pub const threadPool = struct {
     nThread: usize = 0,
     running: bool = false,
     working: bool = false,
+    lock: lockl.lock = .{},
+
+    pub fn isRunning(p_self: *threadPool) bool {
+        p_self.lock.acquireLock();
+        defer p_self.lock.releaseLock();
+        return p_self.running;
+    }
 
     pub fn addThread(p_self: *threadPool, n: usize) !void {
-        //
         p_self.running = true;
+
+        std.debug.print("[DEBUG] addThread: Adding {d} thread(s) current nbr {d}\n", .{ n, p_self.nThread });
         for (0..n) |_| {
             p_self.threadInfos[p_self.nThread] = .{ .alive = true };
             p_self.threadProps[p_self.nThread]._handle = try std.Thread.spawn(.{}, waitingRoom, .{ p_self, p_self.nThread });
@@ -163,25 +172,28 @@ pub const threadPool = struct {
     }
 
     pub fn close(p_self: *threadPool) void {
+        std.debug.print("[EXIT] Closing threadPool with {d} threads\n", .{p_self.nThread});
         p_self.running = false;
         for (0..p_self.nThread) |i| {
             p_self.threadInfos[i].alive = false;
             p_self.threadProps[i].alive = false;
         }
+        std.debug.print("[EXIT] Joining on threadPool\n", .{});
         for (0..p_self.nThread) |i| {
             p_self.threadProps[i]._handle.join();
         }
+        p_self.nThread = 0;
     }
     pub fn stop(p_self: *threadPool) void {
         for (0..p_self.nThread) |i| {
             p_self.threadInfos[i].alive = false;
         }
     }
-    pub fn waitOnFinish(p_self: *const threadPool) void {
+    pub fn waitOnFinish(p_self: *threadPool) void {
         var sw: timel.stopWatch = .{};
         sw.startTimeTick();
         const timeout = 5;
-        while (p_self.getNumberOfWorking() != 0 or !p_self.running) {
+        while (p_self.getNumberOfWorking() != 0 and p_self.isRunning()) {
             if (sw.timeSinceStartSec() > timeout) {
                 sw.reset();
                 sw.startTimeTick();
@@ -254,14 +266,17 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
     const timeout = 2;
-    while (p_self.running and p_self.threadProps[idx].alive) {
+    const alive = &p_self.threadProps[idx].alive;
+
+    std.debug.print("[DEBUG] threadPool.WaitingRoom: Thread {d} entering loop\n", .{idx});
+    while (p_self.isRunning() and alive.*) {
         if (!p_self.working) {
             std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch unreachable;
         }
         if (sw.timeSinceStartSec() > timeout) {
             sw.reset();
             sw.startTimeTick();
-            std.debug.print("[INACTIVITY] threadPool.WaitingRoom: Thread {d} no activity in the last {d} seconds\n", .{ idx, timeout });
+            std.debug.print("[INACTIVITY] threadPool.WaitingRoom: Thread {d} no activity in the last {d} seconds. Running {} alive {}\n", .{ idx, timeout, p_self.running, alive.* });
         }
         if (p_self.threadProps[idx].searchPing) {
             sw.reset();

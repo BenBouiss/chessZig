@@ -22,7 +22,6 @@ const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const board_statusl = @import("board_status.zig");
 const stringl = @import("string.zig");
-const schedulerl = @import("search/scheduler.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
@@ -31,6 +30,8 @@ const matchMoveContainer = movel.matchMoveContainer;
 const cachedTables = tablel.cachedTables;
 const status = board_statusl.status;
 const string = stringl.string;
+
+const schedulerl = @import("search/scheduler.zig");
 const searchFeatures = schedulerl.searchFeatures;
 
 const e_square = squarel.e_square;
@@ -640,6 +641,7 @@ pub const Board_state = struct {
 
         ret.lastMove = .{};
 
+        // to reduce memory footprint on the stack, consider placing these somewhere else?
         ret.move_history = .{};
         ret.stack = .{};
         ret.s_stack = .{};
@@ -653,7 +655,6 @@ pub const Board_state = struct {
 
         ret.rngIntGenerator = std.Random.DefaultPrng.init(ret.seed);
         ret.randInt = ret.rngIntGenerator.random();
-        //
         return ret;
     }
     pub fn free(p_self: *Board_state, alloc: std.mem.Allocator) void {
@@ -697,14 +698,6 @@ pub const Board_state = struct {
             }
         }
         return .{ .array = ret, .len = ret.len };
-    }
-
-    pub fn printHistory(self: Board_state) void {
-        for (0..self.move_history.len) |i| {
-            const move = self.move_history.moves[i];
-            std.debug.print("{s} ", .{move.getStr()});
-        }
-        std.debug.print("\n", .{});
     }
 
     pub fn get_fen(self: *const Board_state) [MAX_FEN_LENGTH]u8 {
@@ -1020,6 +1013,7 @@ pub const Board_state = struct {
         p_self.pushState();
         p_self.s_stack.push(p_self.stat);
 
+        p_self.lastMove = .{};
         p_self.victim = .nEmptySquare;
         hashl.updateKey(&p_self.key, &hashl.zobristKeys.playKey);
         hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
@@ -1286,7 +1280,6 @@ pub const Board_state = struct {
         ret -= @intCast(heuristicl.rookPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteRook)] + self.pieceCount[@intFromEnum(e_piece.nBlackRook)]));
         ret -= @intCast(heuristicl.queenPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteQueen)] + self.pieceCount[@intFromEnum(e_piece.nBlackQueen)]));
         ret = @max(0, ret);
-
         return @intCast(ret);
     }
     pub fn isEndGame(self: *const Board_state) bool {
