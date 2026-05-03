@@ -15,6 +15,7 @@ const e_square = squarel.e_square;
 const useHash = build_options.useHash;
 const scoreType = heuristicl.scoreType;
 const IMove = movel.IMove;
+const TT_strat = configl.TT_strat;
 
 pub const Key = struct {
     code: u64 = 0,
@@ -85,35 +86,45 @@ pub const Hash_bucket = struct {
         std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryComponents)});
         _ = p_self;
     }
-    //pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
-    //    var idxS: usize = 0;
-    //    var sDepth: u8 = 255;
-    //    // if a better entry exists for this hash key we exit
-    //    for (0..configl.ITEM_PER_BUCKET) |i| {
-    //        const entry = p_self.entries[i];
-    //        if (!entry.valid) {
-    //            p_self.entries[i] = p_entry.*;
-    //            p_self.len = @min(p_self.len + 1, p_self.entries.len);
-    //            return;
-    //        }
-    //        if (entry.key.code == p_entry.key.code) {
-    //            if (entry.exploredDepth > p_entry.exploredDepth) {
-    //                return;
-    //            }
-    //            p_self.entries[i] = p_entry.*;
-    //            return;
-    //        }
+    pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry, strategy: TT_strat) void {
+        switch (strategy) {
+            .ALWAYS_REPLACE => {
+                p_self.addEntry_AR(p_entry);
+            },
+            .KEEP_DEEPER => {
+                p_self.addEntry_deep(p_entry);
+            },
+        }
+    }
+    pub fn addEntry_deep(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
+        var idxS: usize = 0;
+        var sDepth: u8 = 255;
+        // if a better entry exists for this hash key we exit
+        for (0..configl.ITEM_PER_BUCKET) |i| {
+            const entry = p_self.entries[i];
+            if (!entry.valid) {
+                p_self.entries[i] = p_entry.*;
+                p_self.len = @min(p_self.len + 1, p_self.entries.len);
+                return;
+            }
+            if (entry.key.code == p_entry.key.code) {
+                if (entry.exploredDepth > p_entry.exploredDepth) {
+                    return;
+                }
+                p_self.entries[i] = p_entry.*;
+                return;
+            }
 
-    //        if (entry.exploredDepth < sDepth) {
-    //            idxS = i;
-    //            sDepth = entry.exploredDepth;
-    //        }
-    //    }
+            if (entry.exploredDepth < sDepth) {
+                idxS = i;
+                sDepth = entry.exploredDepth;
+            }
+        }
 
-    //    p_self.entries[idxS] = p_entry.*;
-    //    //p_self.len = @min(p_self.len + 1, p_self.entries.len);
-    //}
-    pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
+        p_self.entries[idxS] = p_entry.*;
+        //p_self.len = @min(p_self.len + 1, p_self.entries.len);
+    }
+    pub fn addEntry_AR(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
         p_self.entries[p_self.len] = p_entry.*;
         p_self.len = (p_self.len + 1) % configl.ITEM_PER_BUCKET;
     }
@@ -155,6 +166,7 @@ pub const Hash_table = struct {
     size: u64 = 0,
     initialized: bool = false,
     stat: hashTableStat = .{},
+    mask: u64 = 0,
 
     pub fn init(alloc: std.mem.Allocator, MBsize: u32, verbose: bool) !Hash_table {
         var ret: Hash_table = undefined;
@@ -164,7 +176,8 @@ pub const Hash_table = struct {
         total_size = @divFloor(total_size, @sizeOf(Hash_bucket));
 
         ret.closestBit = chess.l_getMsbIdx(total_size);
-        ret.size = chess.xToBitboard(ret.closestBit) - 1;
+        ret.size = chess.xToBitboard(ret.closestBit);
+        ret.mask = ret.size - 1;
 
         ret.stat.insertion = 0;
 
@@ -195,7 +208,8 @@ pub const Hash_table = struct {
     }
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
         //return hash % self.entries.len;
-        return hash >> @intCast(64 - self.closestBit);
+        //return hash >> @intCast(64 - self.closestBit);
+        return hash & self.mask;
     }
     pub fn getBucketFromFullHashIndex(self: Hash_table, hash: u64) *Hash_bucket {
         const index = self.getHashIndex(hash);
@@ -215,7 +229,7 @@ pub const Hash_table = struct {
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry) bool {
         p_self.stat.insertion += 1;
         var p_bucket = p_self.getBucketFromFullHashIndex(p_entry.key.code);
-        p_bucket.addEntry(p_entry);
+        p_bucket.addEntry(p_entry, configl.DEFAULT_TT_STRAT);
         return true;
     }
     pub fn countNonEmpty(p_self: *Hash_table) u64 {

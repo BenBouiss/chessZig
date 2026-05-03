@@ -12,6 +12,8 @@ const heuristicl = @import("heuristic.zig");
 const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
 const benchmarkl = @import("search/benchmark.zig");
+const perftl = @import("search/perft.zig");
+
 const filel = @import("file.zig");
 const timel = @import("time.zig");
 const mainl = @import("main.zig");
@@ -156,9 +158,7 @@ pub const setOptionEntry = struct {
 
 pub const engineStatus = struct {
     running: bool = false,
-    // FIXME: useless for now
-    // searching vvv
-    searching: bool = false,
+    benchmarking: bool = false,
     debugMode: bool = false,
     positionProvided: bool = false,
     initializedInternals: bool = false,
@@ -435,11 +435,9 @@ pub const engine = struct {
         for (0..p_self.workingThreads.items.len) |i| {
             p_self.workingThreads.items[i].join();
         }
-        p_self.searcher.searchingThread.joinOn();
     }
     pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
-        p_self.searcher.interrupt = true;
         p_self.searcher.close() catch {};
         if (p_self.trackMetrics()) {
             p_self.printMetrics();
@@ -886,7 +884,7 @@ pub const engine = struct {
         _ = p_self.updateElo(p_self.options.engineElo);
         return true;
     }
-    fn refreshInternals(p_self: *engine) void {
+    pub fn refreshInternals(p_self: *engine) void {
         _ = p_self.updateElo(p_self.options.engineElo);
         heuristicl._initMoveOrdering();
         _ = p_self.updateHash(p_self.options.hashTableSize) catch {};
@@ -957,6 +955,18 @@ pub const engine = struct {
             }
             goArg.depth = p_self.options.depthLevel;
         }
+        if (goArg.type == .PERFT) {
+            return perftl.dispatchUciPerftCmd(p_self, goArg);
+        }
+        if (!p_self.searcher.schedul._threadPool.running) {
+            p_self.searcher.schedul._threadPool.addThread(1) catch {
+                p_self.respond("engineOp threadPoolAddThread failed crashing");
+                _ = p_self.executeQuitProcedure();
+                @panic(":)");
+            };
+            p_self.respond("engineOp incrementalLoop .ADDTHREAD");
+        }
+
         return schedulerl.dispatchUciGoCmd(p_self, cmdBuffer, goArg);
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -965,6 +975,7 @@ pub const engine = struct {
             return false;
         }
         p_self.searcher.reset();
+        p_self.status.benchmarking = true;
         return benchmarkl.dispatchUciBenchmark(p_self);
     }
 };
@@ -1138,8 +1149,16 @@ fn inputThreading(p_self: *engine) void {
             cumulSw.reset();
             cumulSw.startTimeTick();
         }
+        if (p_self.status.running) {
+            if (p_self.searcher.searching and !p_self.status.benchmarking) {
+                // check things here that scheduler was doing
+                schedulerl.waitingRoomOneShot(p_self) catch {};
+            }
+        }
         std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.ENGINE_SERVING_TICKRATE_NS) }, .real) catch unreachable;
     }
+
+    std.debug.print("[DEBUG] inputThreading.engine: exiting \n", .{});
 }
 
 fn entrypointReaderThreading(p_self: *engine) void {
