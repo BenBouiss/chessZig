@@ -33,9 +33,7 @@ const useDebug = build_options.useDebug;
 const assert = std.debug.assert;
 
 pub fn dispatchUciPerftCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) bool {
-    p_engine.searcher.schedul.setEngine(p_engine);
-    p_engine.searcher.pack.config = config;
-    const dispatchThread = std.Thread.spawn(.{}, dispatchUciPerftThreads, .{p_engine}) catch {
+    const dispatchThread = std.Thread.spawn(.{}, dispatchUciPerftThreads, .{ p_engine, config }) catch {
         return false;
     };
     p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
@@ -44,9 +42,8 @@ pub fn dispatchUciPerftCmd(p_engine: *enginel.engine, config: enginel.goArgStruc
     return true;
 }
 
-pub fn dispatchUciPerftThreads(p_engine: *enginel.engine) void {
+pub fn dispatchUciPerftThreads(p_engine: *enginel.engine, config: enginel.goArgStruct) void {
     var moveArray = moveGenl.generateLegalMoves(&p_engine.state);
-    const searcher = p_engine.searcher;
     const _nThread: u32 = @min(p_engine.options.nThreads, moveArray.len);
     if (_nThread == 0) {
         @panic("No thread or no moves available");
@@ -56,16 +53,18 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine) void {
     };
     defer threadingl.freeThreadPackArray(p_engine.alloc, &pack);
 
+    p_engine.status.benchmarking = true;
+    defer p_engine.status.benchmarking = false;
     p_engine.searcher.searching = true;
 
-    const feats: perftSearchFeatures = .{ .useBatched = searcher.pack.config.useBatched, .useHash = p_engine.options.useHashTable };
+    const feats: perftSearchFeatures = .{ .useBatched = config.useBatched, .useHash = p_engine.options.useHashTable };
     if (p_engine.status.debugMode) {
         if (feats.useHash) {
             std.debug.print("[DEBUG] dispatchUciPerftThreads: use hash is enabled! \n", .{});
         }
     }
-    _ = dispatchPerftPackage(p_engine, &pack, searcher.pack.config.depth, feats);
-    _ = waitThreadFinish(p_engine, &pack) catch {
+    _ = dispatchPerftPackage(p_engine, &pack, config.depth, feats);
+    _ = waitThreadFinish(p_engine, &pack, config) catch {
         std.debug.print("[ERROR] wait thread\n", .{});
         return;
     };
@@ -87,7 +86,7 @@ fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, de
     }
     return true;
 }
-pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !bool {
+pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, config: enginel.goArgStruct) !bool {
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
     var endCounter: usize = 0;
@@ -116,7 +115,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray) !b
     }
 
     const res = threadingl.getCombinedFromPack(p_threadPack);
-    const msg = std.fmt.allocPrint(p_engine.alloc, "info depth: {d} nodes {d} retrieved: {d} stored: {d}", .{ p_engine.searcher.pack.config.depth, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion }) catch {
+    const msg = std.fmt.allocPrint(p_engine.alloc, "info depth: {d} nodes {d} retrieved: {d} stored: {d}", .{ config.depth, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion }) catch {
         return true;
     };
     defer p_engine.alloc.free(msg);

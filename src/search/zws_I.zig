@@ -130,13 +130,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
             }
             i_reset = true;
-            if (hashMoveIsQuiet) {
-                //i += 1;
-                //const m = gen.pickNext(&order);
-                //const m2 = gen.pickNext(&order);
-                //std.debug.assert(hashMove.equal(m.?));
-                //std.debug.print("{s} {s} len gen {d} next {s}\n", .{ hashMove.getStr(), m.?.getStr(), gen.moves.len, m2.?.getStr() });
-            }
         } else if (i_reset) {
             i = 0;
             i_reset = false;
@@ -144,9 +137,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 continue;
             }
         }
-        //if (gen.extra == .QUIETMOVE and hashMoveIsQuiet and i == 0) {
-        //    continue;
-        //}
 
         _ = p_state.makeMove(move);
 

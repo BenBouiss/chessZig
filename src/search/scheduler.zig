@@ -57,92 +57,39 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     return ret;
 }
 
-pub const searchingThreadContainer = struct {
-    len: usize = 0,
-    items: [configl.MAX_THREAD]std.Thread = undefined,
-    pub fn appendThread(p_self: *searchingThreadContainer, thread: std.Thread) void {
-        std.debug.assert(p_self.len < configl.MAX_THREAD);
-        p_self.items[p_self.len] = thread;
-        p_self.len += 1;
-    }
-    pub fn reset(p_self: *searchingThreadContainer) void {
-        p_self.len = 0;
-    }
-    pub fn joinOn(self: *searchingThreadContainer) void {
-        for (0..self.len) |i| {
-            self.items[i].join();
-        }
-        self.reset();
-    }
-};
-
-pub const searcherPackage = struct {
-    config: enginel.goArgStruct = undefined,
-    state: chessl.Board_state = undefined,
-};
-
 pub const uciSearcher = struct {
-    pack: searcherPackage = .{},
     schedul: scheduler = .{},
     searching: bool = false,
     interrupt: bool = false,
-    threadProps: threadingl.threadP = undefined,
-    searchingThread: searchingThreadContainer = .{},
+    swSinceSearch: timel.stopWatch = .{},
 
     pub fn reset(p_self: *uciSearcher) void {
         p_self.interrupt = false;
         p_self.searching = false;
     }
-    pub fn dispatch(self: *uciSearcher) !void {
-        self.threadProps.alive = true;
-        self.threadProps.status = .WAITING;
-        self.threadProps._handle = try std.Thread.spawn(.{}, waitingRoom, .{self});
-    }
-
     pub fn close(self: *uciSearcher) !void {
-        self.threadProps.alive = false;
         self.interrupt = true;
+        self.searching = false;
         self.schedul._threadPool.close();
-        self.searchingThread.joinOn();
-    }
-    pub fn submit(self: *uciSearcher, p_engine: *enginel.engine, pack: searcherPackage) threadingl.threadPoolerr!void {
-        //
-        self.schedul.setEngine(p_engine);
-        self.pack = pack;
-        if (self.pack.state.whiteToMove()) {
-            self.schedul.timeM.setRemainingTimeMs(self.pack.config.wtime);
-        } else {
-            self.schedul.timeM.setRemainingTimeMs(self.pack.config.btime);
-        }
-        self.threadProps.searchPing = true;
     }
 };
-pub fn waitingRoom(self: *uciSearcher) !void {
-    //
-    self.threadProps.alive = true;
-    self.threadProps.status = .WAITING;
-    var sw: timel.stopWatch = .{};
-    sw.startTimeTick();
-    const timeout = 2;
-    while (self.threadProps.alive) {
-        std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch {
-            self.schedul.p_engine.respond("engineOp uciSearcher.waitingroom .FATAL");
-            self.close() catch unreachable;
-        };
-        if (self.threadProps.searchPing) {
-            sw.reset();
-            sw.startTimeTick();
-            self.threadProps.status = .WORKING;
-            self.threadProps.searchPing = false;
-            dispatchUciGoThreads(self);
-        }
 
-        if (sw.timeSinceStartSec() > timeout) {
-            sw.reset();
-            sw.startTimeTick();
-            std.debug.print("[INACTIVITY] searcher.WaitingRoom: no activity in the last {d} seconds\n", .{timeout});
-            self.schedul.p_engine.respond("engineOp uciSearcher.waitingroom .WAITING");
-        }
+pub fn waitingRoomOneShot(self: *enginel.engine) !void {
+    //if (count % countTimePrint == 0) {
+    //    if (p_self.features.reportProgress) {
+    //        sendUpdate(p_self);
+    //    }
+    //    count = 0;
+    //}
+
+    const stat = self.searcher.schedul.getSearchStatus();
+    if (stat == .INTERRUPTED or stat == .FINISHED) {
+        const decision = self.searcher.schedul.extractBest();
+        _sendFinal(self, &decision);
+        self.searcher.schedul.handleInterrupt();
+        self.searcher.searching = false;
+        self.searcher.swSinceSearch.reset();
+        self.searcher.schedul.timeM.reset();
     }
 }
 pub const moveDecisionExt = struct {
@@ -289,35 +236,26 @@ pub const scheduler = struct {
 };
 
 pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config: enginel.goArgStruct) bool {
-    if (config.type == .PERFT) {
-        return perftl.dispatchUciPerftCmd(p_engine, config);
-    }
     _ = cmdBuffer;
-    if (!p_engine.searcher.schedul._threadPool.running) {
-        p_engine.searcher.schedul._threadPool.addThread(1) catch {
-            p_engine.respond("engineOp threadPoolAddThread failed crashing");
-            _ = p_engine.executeQuitProcedure();
-            @panic(":)");
-        };
-        p_engine.respond("engineOp incrementalLoop .ADDTHREAD");
-    }
-    if (!p_engine.searcher.threadProps.alive) {
-        p_engine.searcher.dispatch() catch {
-            return false;
-        };
+    const pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = getSearchFeatures(p_engine), .scheduler = &(p_engine.searcher.schedul) };
+    p_engine.searcher.schedul.timeM.startSearchTick();
+    p_engine.searcher.schedul._threadPool.submit(&pack) catch {
+        p_engine.respond("engineOp threadPoolSubmit failed crashing");
+        _ = p_engine.executeQuitProcedure();
+        @panic(":)");
+    };
+    p_engine.searcher.searching = true;
+    p_engine.searcher.swSinceSearch.startTimeTick();
+    p_engine.searcher.schedul.setEngine(p_engine);
+    if (p_engine.state.whiteToMove()) {
+        p_engine.searcher.schedul.timeM.setRemainingTimeMs(config.wtime);
+    } else {
+        p_engine.searcher.schedul.timeM.setRemainingTimeMs(config.btime);
     }
 
-    p_engine.searcher.submit(p_engine, .{ .config = config, .state = p_engine.state.copy() }) catch {
-        return false;
-    };
     return true;
 }
-pub fn dispatchUciGoThreads(p_searcher: *uciSearcher) void {
-    p_searcher.searching = true;
-    defer p_searcher.searching = false;
 
-    _ = p_searcher.schedul.entryPointSearch(p_searcher.pack.config.depth);
-}
 pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
     // everything gets "returned" via the p_info
     // launched as single threaded
@@ -330,7 +268,7 @@ pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_inf
     }
     var line: movel.line = .{};
     if (sched.isDebugMode()) {
-        std.debug.print("[DEBUG] _startSearch: starting from depth {d} max depth {d}\n", .{ depth, maxDepth });
+        std.debug.print("[DEBUG] _startSearch: starting from depth {d} max depth {d} remaining time {d} ms\n", .{ depth, maxDepth, sched.timeM.remainingTimeMs });
     }
 
     _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line);
@@ -351,6 +289,9 @@ pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_inf
         if (features.reportProgress) {
             sendPartial(sched, depth, decision, p_info);
         }
+    }
+    if (sched.isDebugMode()) {
+        std.debug.print("debug exit status alive: {} overtime thinking: {}\n", .{ p_info.alive, canExtendSearch(&sched.timeM, depth, maxDepth, decision, &features) });
     }
     if (sched.p_engine.options.trackMetrics) {
         sched.p_engine.metric.addPlies(depth);
@@ -389,6 +330,11 @@ pub fn sendFinal(p_self: *scheduler, decision: *moveDecisionExt) void {
         std.debug.print("[DEBUG] sendFinal: best move: '{s}' \n", .{decision.move.getStr()});
     }
     p_self.p_engine.respondNonFmt(msg);
+}
+pub fn _sendFinal(p_self: *enginel.engine, decision: *const moveDecisionExt) void {
+    var buffer = std.mem.zeroes([32]u8);
+    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{decision.move.getStr()}) catch unreachable;
+    p_self.respondNonFmt(msg);
 }
 
 pub fn sendUpdate(p_self: *scheduler) void {

@@ -68,6 +68,9 @@ pub const _DEFAULT_SEARCH_TYPE = "ZWSI";
 
 pub const searchType = enum { STD, PVS, ZWS, ZWSI, ASPIRATION };
 
+pub const TT_strat = enum { ALWAYS_REPLACE, KEEP_DEEPER };
+pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
+
 pub const DEFAULT_USE_SEE = true;
 pub const _DEFAULT_USE_SEE = "true";
 
