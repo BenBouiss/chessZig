@@ -32,26 +32,37 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
     }
-    if (_depth <= 0 or !p_info.alive) {
-        return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine, t);
-    }
 
     var finalScore: scoreType = 0;
     var bestMove: IMove = .{};
     var hashMove: IMove = .{};
-    if (p_features.useHash) {
+    var hashFlag: hashl.nodeType = .UPPER;
+    if (p_features.useHash and depth > 2) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(_depth));
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
+            //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
             if (comptime t == .NonPV) {
-                if (_entry.val.search.t == .CUT and ply != 0) {
-                    //if (ply != 0) {
+                if (_entry.val.search.t == .ALL) {
                     return _entry.eval();
+                } else if (_entry.val.search.t == .LOWER) {
+                    if (_entry.eval() >= beta) {
+                        return _entry.eval();
+                    }
+                } else if (_entry.val.search.t == .UPPER) {
+                    if (_entry.eval() >= _alpha) {
+                        return _entry.eval();
+                    }
                 }
             }
             hashMove = _entry.val.search.bestMove;
         }
     }
+
+    if (_depth <= 0 or !p_info.alive) {
+        return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine, t);
+    }
+
     // null move prunning here
     // R = 3
     const ischeck = p_state.isChecked();
@@ -74,6 +85,13 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     gen.fetchNext(p_state);
     // captures are now in
     var useLMR = false;
+    var hashMoveIsQuiet: bool = false;
+    if (hashMove.isValid()) {
+        if (hashMove.isQuietMove() and hashMove.getFromPiece() == p_state.pieceArray[hashMove.getFrom()]) {
+            gen.moves.append(hashMove);
+            hashMoveIsQuiet = true;
+        }
+    }
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
 
     if (p_features.useLMR and _depth > 3 and !ischeck) {
@@ -91,6 +109,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     var i: usize = 0;
     var tot: usize = 0;
     var captureOnly: bool = true;
+
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
         order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
@@ -99,6 +118,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
         }
     }
+    var i_reset: bool = false;
     while (gen.pickNext(&order)) |move| : (i += 1) {
         //std.debug.assert(move.isValid());
         if (i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
@@ -109,31 +129,42 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             if (useLMR) {
                 heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
             }
+            i_reset = true;
+            if (hashMoveIsQuiet) {
+                //i += 1;
+                //const m = gen.pickNext(&order);
+                //const m2 = gen.pickNext(&order);
+                //std.debug.assert(hashMove.equal(m.?));
+                //std.debug.print("{s} {s} len gen {d} next {s}\n", .{ hashMove.getStr(), m.?.getStr(), gen.moves.len, m2.?.getStr() });
+            }
+        } else if (i_reset) {
             i = 0;
+            i_reset = false;
+            if (hashMoveIsQuiet) {
+                continue;
+            }
         }
+        //if (gen.extra == .QUIETMOVE and hashMoveIsQuiet and i == 0) {
+        //    continue;
+        //}
 
         _ = p_state.makeMove(move);
 
         var score: scoreType = 0;
         if (i == 0) {
-            //std.debug.print("First i {s} {d} ply {d} a {d} b {d}\n", .{ move.getStr(), _depth - 1, ply + 1, -beta, -_alpha });
             score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
         } else {
             if (useLMR and (order.depths[i] < (_depth - 1))) {
-                //std.debug.assert(order.depths[i] <= _depth);
                 score = -searchLoop(p_state, p_info, order.depths[i], -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
             } else {
                 score = _alpha + 1;
             }
             if (score > _alpha) {
-                //std.debug.print("other i {s} nonPv({d}) {d} ply {d} a {d} b {d}\n", .{ move.getStr(), i, _depth - 1, ply + 1, -beta, -_alpha });
                 score = -searchLoop(p_state, p_info, _depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
             }
 
             //https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html
             if (score > _alpha and score < beta) {
-                //std.debug.print("other i {d}\n", .{_depth - 1});
-                //if (score > _alpha and ((beta - _alpha) > 1)) {
                 score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, .PV);
             }
         }
@@ -149,6 +180,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
         if (finalScore > _alpha) {
             _alpha = finalScore;
+            hashFlag = .ALL;
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
@@ -172,8 +204,10 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), beta, .CUT, move);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .LOWER, move);
+                //if (p_state.lastMove.isValid()) {
                 _ = hashl.hashTable.storeEntry(&s_entry);
+                //}
             }
 
             p_info.searchStat.n_cutoffs += 1;
@@ -183,10 +217,16 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
     if (tot == 0) {
         if (p_state.isChecked()) {
-            //if (!p_state.isLegal(p_state.whiteToMove())) {
             _alpha = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(_depth)));
         } else {
             _alpha = weightl.simpleStalemateScore;
+        }
+    } else {
+        if (p_features.useHash) {
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove);
+            //if (p_state.lastMove.isValid()) {
+            _ = hashl.hashTable.storeEntry(&s_entry);
+            // }
         }
     }
 

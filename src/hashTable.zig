@@ -5,6 +5,7 @@ const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const configl = @import("config.zig");
 const heuristicl = @import("heuristic.zig");
+const mainl = @import("main.zig");
 
 const build_options = @import("build_options");
 const useDebug = build_options.useDebug;
@@ -25,10 +26,10 @@ const entryComponents = union { moveAmount: u64, search: searchEntry };
 
 // Types of nodes:
 //  ALL: Upper bound: less than alpha
-//  PV: or Exact Complete evaluation of a position done a depth 0
-//  CUT: Lower bound: greater or equal than beta. Induced a beta cutoff
+//  UPPER: or Exact Complete evaluation of a position done a depth 0 to be compared with alpha
+//  LOWER: Lower bound: greater or equal than beta. Induced a beta cutoff to be compared with beta
 //
-pub const nodeType = enum { PV, ALL, CUT };
+pub const nodeType = enum { UPPER, ALL, LOWER };
 
 pub const searchEntry = struct {
     evaluation: scoreType = 0,
@@ -42,68 +43,84 @@ pub const searchEntry = struct {
 pub const Hash_entry = struct {
     key: Key = .{},
     val: entryComponents = undefined,
-    exploredDeph: u8 = 0,
+    exploredDepth: u8 = undefined,
     age: u8 = 0,
 
     valid: bool = false,
-    pub inline fn moveA(self: Hash_entry) u64 {
+    pub inline fn moveA(self: *const Hash_entry) u64 {
         return self.val.moveAmount;
     }
 
-    pub inline fn eval(self: Hash_entry) scoreType {
+    pub inline fn eval(self: *const Hash_entry) scoreType {
         return self.val.search.evaluation;
+    }
+    pub inline fn copy(self: *const Hash_entry) Hash_entry {
+        return .{ .age = self.age, .val = self.val, .exploredDepth = self.exploredDepth, .key = self.key };
     }
 };
 
 pub fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    return .{ .key = key, .exploredDeph = depth, .val = .{ .moveAmount = moveAmount }, .valid = true };
+    return .{ .key = key, .exploredDepth = depth, .val = .{ .moveAmount = moveAmount }, .valid = true };
 }
 pub fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
-    return .{ .key = key, .exploredDeph = depth, .val = .{ .search = .{ .evaluation = eval } }, .valid = true };
+    return .{ .key = key, .exploredDepth = depth, .val = .{ .search = .{ .evaluation = eval } }, .valid = true };
 }
 
 pub fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: IMove) Hash_entry {
-    return .{ .key = key, .exploredDeph = depth, .val = .{ .search = .{ .evaluation = eval, .t = nodeT, .bestMove = bestMove } }, .valid = true };
+    return .{ .key = key, .exploredDepth = depth, .val = .{ .search = .{ .evaluation = eval, .t = nodeT, .bestMove = bestMove } }, .valid = true };
 }
 pub const Hash_bucket = struct {
-    entries: [configl.ITEM_PER_BUCKET]Hash_entry,
-    //TODO find a way to put entries outside of this struct as the following 2 bytes are now worth the pointer to entries in mem 8 bytes
+    entries: [configl.ITEM_PER_BUCKET]Hash_entry = undefined,
     len: u8 = 0,
-    //hashTableOffset: u64,
-    //has_collision: bool = false,
+    pub fn print(p_self: *const Hash_bucket) void {
+        std.debug.print("Bucket properties len = {d}, total len = {d}\n", .{ p_self.len, p_self.entries.len });
+        for (0..p_self.len) |i| {
+            const _e = p_self.entries[i];
+            std.debug.print("item {d} code:{d}, valid:{}, depth:{d}, eval:{any}\n", .{ i, _e.key.code, _e.valid, _e.exploredDepth, _e.val });
+        }
+    }
     pub fn printSize(p_self: *Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
         std.debug.print("[DEBUG] printSize: entries size is {d} bytes\n", .{@sizeOf(Hash_entry)});
         std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryComponents)});
         _ = p_self;
     }
+    //pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
+    //    var idxS: usize = 0;
+    //    var sDepth: u8 = 255;
+    //    // if a better entry exists for this hash key we exit
+    //    for (0..configl.ITEM_PER_BUCKET) |i| {
+    //        const entry = p_self.entries[i];
+    //        if (!entry.valid) {
+    //            p_self.entries[i] = p_entry.*;
+    //            p_self.len = @min(p_self.len + 1, p_self.entries.len);
+    //            return;
+    //        }
+    //        if (entry.key.code == p_entry.key.code) {
+    //            if (entry.exploredDepth > p_entry.exploredDepth) {
+    //                return;
+    //            }
+    //            p_self.entries[i] = p_entry.*;
+    //            return;
+    //        }
+
+    //        if (entry.exploredDepth < sDepth) {
+    //            idxS = i;
+    //            sDepth = entry.exploredDepth;
+    //        }
+    //    }
+
+    //    p_self.entries[idxS] = p_entry.*;
+    //    //p_self.len = @min(p_self.len + 1, p_self.entries.len);
+    //}
     pub fn addEntry(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
-        var idxS: usize = p_self.len;
-        var sDepth: u8 = 0;
-        // if a better entry exists for this hash key we exit
-        for (0..p_self.len) |i| {
-            const entry = p_self.entries[i];
-            if (entry.key.code == p_entry.key.code) {
-                if (entry.exploredDeph > p_entry.exploredDeph) {
-                    return;
-                }
-                p_self.entries[i] = p_entry.*;
-                return;
-            }
-
-            if (entry.exploredDeph < sDepth) {
-                idxS = i;
-                sDepth = entry.exploredDeph;
-            }
-        }
-        p_self.entries[idxS] = p_entry.*;
-        p_self.len = @min(p_self.len + 1, p_self.entries.len);
+        p_self.entries[p_self.len] = p_entry.*;
+        p_self.len = (p_self.len + 1) % configl.ITEM_PER_BUCKET;
     }
-
     pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) Hash_entry {
         for (0..p_self.len) |i| {
             const entry = p_self.entries[i];
-            if (entry.key.code == hash and entry.exploredDeph == depth) {
+            if (entry.key.code == hash and entry.exploredDepth == depth) {
                 return entry;
             }
         }
@@ -112,12 +129,16 @@ pub const Hash_bucket = struct {
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?*Hash_entry {
         for (0..p_self.len) |i| {
             const entry = &p_self.entries[i];
-            // >= to select an entry that was explored to current depth or deeper
-            // now that only one instance of the key gets stored, the highest depth is the first one to get hit
-            if (entry.key.code == hash and entry.exploredDeph >= depth) {
-                return entry;
+            // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
+            if (entry.key.code == hash) {
+                if (entry.exploredDepth >= depth) {
+                    hashTable.stat.hit += 1;
+                    return entry;
+                }
+                break;
             }
         }
+        hashTable.stat.miss += 1;
         return null;
     }
 };
@@ -125,33 +146,40 @@ pub const Hash_bucket = struct {
 pub const hashTableStat = struct {
     hit: u64 = 0,
     miss: u64 = 0,
-    collision: u64 = 0,
+    insertion: u64 = 0,
 };
 pub const Hash_table = struct {
     entries: []Hash_bucket,
     MBsize: u32 = 0,
+    closestBit: u8 = 0,
     size: u64 = 0,
-    n_insertion: u64 = 0,
     initialized: bool = false,
     stat: hashTableStat = .{},
 
     pub fn init(alloc: std.mem.Allocator, MBsize: u32, verbose: bool) !Hash_table {
-        var total_size: u64 = @intCast(MBsize * 1000000);
-        total_size = @divFloor(total_size, @sizeOf(Hash_bucket));
         var ret: Hash_table = undefined;
         ret.MBsize = MBsize;
-        ret.size = total_size;
-        ret.n_insertion = 0;
 
-        ret.entries = (try alloc.alloc(Hash_bucket, total_size));
+        var total_size: u64 = @intCast(MBsize * 1000000);
+        total_size = @divFloor(total_size, @sizeOf(Hash_bucket));
 
-        for (0..total_size) |i| {
+        ret.closestBit = chess.l_getMsbIdx(total_size);
+        ret.size = chess.xToBitboard(ret.closestBit) - 1;
+
+        ret.stat.insertion = 0;
+
+        ret.entries = (try alloc.alloc(Hash_bucket, ret.size));
+
+        for (0..ret.size) |i| {
             ret.entries[i].len = 0;
+            for (0..configl.ITEM_PER_BUCKET) |j| {
+                ret.entries[i].entries[j] = .{};
+            }
         }
         ret.initialized = true;
 
         if (verbose) {
-            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets !\n", .{total_size});
+            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d}!\n", .{ ret.size, ret.closestBit });
             ret.entries[0].printSize();
         }
         return ret;
@@ -166,14 +194,12 @@ pub const Hash_table = struct {
         }
     }
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
-        return hash % self.entries.len;
+        //return hash % self.entries.len;
+        return hash >> @intCast(64 - self.closestBit);
     }
     pub fn getBucketFromFullHashIndex(self: Hash_table, hash: u64) *Hash_bucket {
         const index = self.getHashIndex(hash);
         return &self.entries[index];
-    }
-    pub fn getBucketFromHashIndex(self: Hash_table, offset: u64) *Hash_bucket {
-        return &self.entries[offset];
     }
 
     pub fn overwriteEvaluationEntries(p_self: *Hash_table, p_entry: *const Hash_entry, score: scoreType) void {
@@ -187,22 +213,38 @@ pub const Hash_table = struct {
         }
     }
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry) bool {
-        p_self.n_insertion += 1;
+        p_self.stat.insertion += 1;
         var p_bucket = p_self.getBucketFromFullHashIndex(p_entry.key.code);
-        //if (p_bucket.len == configl.ITEM_PER_BUCKET) {
-        //    _ = strategyEntryRemoval(p_bucket, p_entry);
-        //}
-        //p_bucket.hashTableOffset = p_self.getHashIndex(p_entry.key.code);
         p_bucket.addEntry(p_entry);
         return true;
     }
-};
+    pub fn countNonEmpty(p_self: *Hash_table) u64 {
+        var ret: u64 = 0;
+        for (p_self.entries) |e| {
+            ret += @intFromBool(e.len != 0);
+        }
+        return ret;
+    }
+    pub fn countValids(p_self: *Hash_table) u64 {
+        var ret: u64 = 0;
+        for (p_self.entries) |e| {
+            ret += @intCast(e.len);
+        }
+        return ret;
+    }
 
-pub fn strategyEntryRemoval(p_bucket: *Hash_bucket, p_entry: *const Hash_entry) bool {
-    _ = p_bucket;
-    _ = p_entry;
-    @panic("bucket is full! :)");
-}
+    pub fn getMostUtilized(p_self: *Hash_table) u8 {
+        var ret: u8 = 0;
+        for (0..p_self.entries.len) |i| {
+            const e = p_self.entries[i];
+            ret = @max(ret, e.len);
+            if (ret == configl.ITEM_PER_BUCKET) {
+                break;
+            }
+        }
+        return ret;
+    }
+};
 
 pub fn getEntryFromPerft(key: Key, depth: u8) Hash_entry {
     const p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
@@ -317,4 +359,18 @@ pub fn convertEPIdxBoardToZobrist(enPassantIdx: u8) u8 {
         return chess.INVALID_ENPASSANT_FILE;
     }
     return chess.getSqIdxFile(enPassantIdx);
+}
+pub fn printTTStats() void {
+    const n = hashTable.countNonEmpty();
+    const frac: f64 = @as(f64, @floatFromInt(n)) / @as(f64, @floatFromInt(hashTable.entries.len)) * 100;
+    std.log.info("TT: {d:.2}% of buckets used, non empty {d} total {} buckets", .{ frac, n, hashTable.entries.len });
+
+    const nvalid = hashTable.countValids();
+    const frac2: f64 = @as(f64, @floatFromInt(nvalid)) / @as(f64, @floatFromInt(hashTable.entries.len * configl.ITEM_PER_BUCKET)) * 100;
+    std.log.info("TT: total utilization {d:.2}%", .{frac2});
+
+    const util = hashTable.getMostUtilized();
+    std.log.info("TT: most entries in a bucket {d}", .{util});
+
+    std.log.info("TT: insertions {d} hit {d} miss {d}", .{ hashTable.stat.insertion, hashTable.stat.hit, hashTable.stat.miss });
 }

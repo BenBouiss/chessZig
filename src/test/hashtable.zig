@@ -8,6 +8,7 @@ const mainl = @import("../main.zig");
 const perftl = @import("../search/perft.zig");
 const stringl = @import("../string.zig");
 const bookl = @import("../book.zig");
+const configl = @import("../config.zig");
 
 const std = @import("std");
 
@@ -20,12 +21,11 @@ test "entry retrievale" {
 
     mainl.initAll(arena, false);
     hashl._initOrReallocHashTable(arena, 25, false);
-    defer hashl.hashTable.free(arena, false);
     for (0..100) |i| {
-        const entry: hashl.Hash_entry = .{ .exploredDeph = 1, .key = .{ .code = @intCast(i) }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
+        const entry: hashl.Hash_entry = .{ .exploredDepth = 1, .key = .{ .code = @intCast(i) }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
         try std.testing.expect(hashl.hashTable.storeEntry(&entry));
 
-        const entry2: hashl.Hash_entry = .{ .exploredDeph = 1, .key = .{ .code = @as(u64, @intCast(i)) + hashl.hashTable.entries.len }, .val = .{ .search = .{ .evaluation = @intCast(i * i * i) } }, .valid = true };
+        const entry2: hashl.Hash_entry = .{ .exploredDepth = 2, .key = .{ .code = @as(u64, @intCast(i)) + hashl.hashTable.entries.len }, .val = .{ .search = .{ .evaluation = @intCast(i * i * i) } }, .valid = true };
         try std.testing.expect(hashl.hashTable.storeEntry(&entry2));
     }
     for (0..100) |i| {
@@ -36,12 +36,53 @@ test "entry retrievale" {
         try std.testing.expect(entry2.?.valid);
 
         const bucket = hashl.hashTable.getBucketFromFullHashIndex(@intCast(i));
-        try std.testing.expect(bucket.len == 2);
+        try std.testing.expectEqual(bucket.len, 2);
     }
 
     std.log.info("[TEST]: entry storing passed\n", .{});
+    hashl.hashTable.free(arena, false);
 }
-test "entry overwriting" {
+//test "entry overwriting" {
+//    std.debug.print("[DEBUG] overwritting\n", .{});
+//    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//    defer arena_allocator.deinit();
+//    const arena = arena_allocator.allocator();
+//    mainl.initAll(arena, false);
+//    hashl._initOrReallocHashTable(arena, 25, false);
+//
+//    const CODE: u64 = 42;
+//    const depth: u8 = 1;
+//
+//    const entry: hashl.Hash_entry = .{ .exploredDepth = depth, .key = .{ .code = CODE }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
+//    try std.testing.expect(hashl.hashTable.storeEntry(&entry));
+//    try std.testing.expectEqual(depth, entry.exploredDepth);
+//    const _bucket = hashl.hashTable.getBucketFromFullHashIndex(CODE);
+//    try std.testing.expectEqual(1, _bucket.len);
+//    //std.debug.print("entry {any}\n", .{entry});
+//    //std.debug.print("{any}\n", .{_bucket.entries});
+//
+//    for (0..100) |i| {
+//        const _entry: hashl.Hash_entry = .{ .exploredDepth = @intCast(i), .key = .{ .code = CODE }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
+//        try std.testing.expect(hashl.hashTable.storeEntry(&_entry));
+//
+//        const bucket = hashl.hashTable.getBucketFromFullHashIndex(CODE);
+//        try std.testing.expectEqual(1, bucket.len);
+//    }
+//    //const _bucket = hashl.hashTable.getBucketFromFullHashIndex(CODE);
+//    //std.debug.print("{any}\n", .{_bucket.entries});
+//
+//    const entry2: hashl.Hash_entry = .{ .exploredDepth = 255, .key = .{ .code = CODE + hashl.hashTable.entries.len }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
+//
+//    try std.testing.expect(hashl.hashTable.storeEntry(&entry2));
+//
+//    const bucket = hashl.hashTable.getBucketFromFullHashIndex(CODE + hashl.hashTable.entries.len);
+//    _ = bucket;
+//    //try std.testing.expectEqual(bucket.len, 2);
+//
+//    std.log.info("[TEST]: entry overwriting passed\n", .{});
+//    hashl.hashTable.free(arena, false);
+//}
+test "entry overwrite" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
@@ -49,17 +90,41 @@ test "entry overwriting" {
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
 
-    const CODE = 42;
-    const entry: hashl.Hash_entry = .{ .exploredDeph = 1, .key = .{ .code = CODE }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
+    const m: u64 = @intCast(hashl.hashTable.entries.len);
+    const code: u64 = 4;
+    //const depths = [_]u8{ 1, 4 };
 
-    try std.testing.expect(hashl.hashTable.storeEntry(&entry));
     for (0..100) |i| {
-        const _entry: hashl.Hash_entry = .{ .exploredDeph = @intCast(i), .key = .{ .code = CODE }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
-        try std.testing.expect(hashl.hashTable.storeEntry(&_entry));
-
-        const bucket = hashl.hashTable.getBucketFromFullHashIndex(CODE);
-        try std.testing.expect(bucket.len == 1);
+        const entry: hashl.Hash_entry = .{ .exploredDepth = @intCast(i), .key = .{ .code = code }, .val = .{ .search = .{ .evaluation = @intCast(i) } }, .valid = true };
+        try std.testing.expect(hashl.hashTable.storeEntry(&entry));
     }
+    const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
-    std.log.info("[TEST]: entry overwriting passed\n", .{});
+    try std.testing.expectEqual(1, bucket.len);
+
+    const entry: hashl.Hash_entry = .{ .exploredDepth = 200, .key = .{ .code = code + m }, .val = .{ .search = .{ .evaluation = 0 } }, .valid = true };
+    try std.testing.expect(hashl.hashTable.storeEntry(&entry));
+
+    try std.testing.expectEqual(2, bucket.len);
+
+    std.log.info("[TEST]: entry overwrite passed\n", .{});
+}
+
+test "entry replacement" {
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    mainl.initAll(arena, false);
+    hashl._initOrReallocHashTable(arena, 25, false);
+    defer hashl.hashTable.free(arena, false);
+    const d = [_]u8{ 16, 4 };
+    const code: u64 = 42;
+    for (0..d.len) |i| {
+        const entry: hashl.Hash_entry = .{ .exploredDepth = d[i], .key = .{ .code = code }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
+        std.debug.assert(hashl.hashTable.storeEntry(&entry));
+    }
+    const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
+    try std.testing.expectEqual(1, _bucket.len);
+
+    std.log.info("[TEST]: entry replacement passed\n", .{});
 }

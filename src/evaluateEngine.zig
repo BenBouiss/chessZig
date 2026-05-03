@@ -758,7 +758,6 @@ const guiState = struct {
         try p_self.respond("stop", engineIndex);
         // this is needed as we do not want to send critical commands as the engines is cleaning up its internals.
         // bug fixed with this:
-        // when an engine is flagged, sendInterrupt is invoked and right after a clearHash is sent for the next match to begin. Thus clearing the hashTable while the engine is still potentially searching.
         try p_self.waitEngine();
     }
     pub fn setPlayerEngine(p_self: *guiState, white: bool, engineIndex: u8) void {

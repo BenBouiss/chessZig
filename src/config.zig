@@ -30,7 +30,7 @@ pub const _DEFAULT_USEHASHTABLE = "false";
 pub const DEFAULT_USE_NULLPRUNE = true;
 pub const _DEFAULT_USE_NULLPRUNE = "true";
 
-pub const ORDERING_LINE_VALUE = 9999;
+pub const ORDERING_LINE_VALUE = 99999;
 
 //https://www.chessprogramming.org/Move_Ordering
 pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
@@ -102,6 +102,7 @@ pub const DEBUG_INACTIVITY_SERVING_NS = DEBUG_INACTIVITY_SERVING_S * std.math.po
 //
 pub const DEBUG_INACTIVITY_READING_S = 30; // 30 seconds in ns
 pub const DEBUG_INACTIVITY_READING_NS = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
+pub const DEBUG_INACTIVITY_READING_US = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 6); // 30 seconds in us
 //
 
 pub const START_TICKRATE_NS = 2 * std.math.pow(u64, 10, 9); // 2 seconds in ns

@@ -37,12 +37,13 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
 
     var hashMove: IMove = .{};
+    var hashFlag: hashl.nodeType = .UPPER;
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, @intCast(_depth));
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             if (comptime t == .NonPV) {
-                if (_entry.val.search.t == .CUT and ply != 0) {
+                if (_entry.val.search.t == .LOWER and ply != 0) {
                     return _entry.eval();
                 }
             }
@@ -161,6 +162,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         // under no possible scenario can this become >=, the resulting engines only produce drawn games amongst themselves
         if (finalScore > _alpha) {
             _alpha = finalScore;
+            hashFlag = .ALL;
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
@@ -181,7 +183,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), beta, .CUT, move);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), beta, .LOWER, move);
                 _ = hashl.hashTable.storeEntry(&s_entry);
             }
 
@@ -198,7 +200,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
 
     if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .PV, bestMove);
+        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove);
         _ = hashl.hashTable.storeEntry(&s_entry);
     }
 
