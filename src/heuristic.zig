@@ -1207,7 +1207,8 @@ pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const
     }
     return ret;
 }
-pub const moveReductionAmount = 4;
+//pub const moveReductionAmount = 4;
+pub const moveReductionAmount = 6;
 pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer) void {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
@@ -1230,7 +1231,7 @@ pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrd
             continue;
         }
 
-        p_order.depths[i] = depth - 2;
+        p_order.depths[i] = depth - 1 - @as(u16, @ceil(@as(f16, @floatFromInt(depth)) / 3.0));
     }
 
     //std.debug.print("[DEBUG] computeLateMoveReduc: LMR new depths: {any}", .{p_order.depths[0..p_order.len]});

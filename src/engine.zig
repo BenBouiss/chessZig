@@ -84,26 +84,26 @@ pub const inputChannel = struct {
 
     pub fn nonEmpty(p_self: *inputChannel) bool {
         p_self.l.acquireLock();
+        defer p_self.l.releaseLock();
         const ret = p_self.currentIdx != p_self.nextIdx;
-        p_self.l.releaseLock();
         return ret;
     }
     pub fn readBuffer(p_self: *inputChannel) cmdResult {
         p_self.l.acquireLock();
+        defer p_self.l.releaseLock();
         p_self.currentIdx = (p_self.currentIdx + 1) % INPUTCHANNEL_LEN;
         std.debug.assert(p_self.currentIdx != p_self.nextIdx + 1);
         const ret_len = p_self.cmdSize[p_self.currentIdx];
         var ret: cmdResult = .{ .len = ret_len };
         @memcpy((ret.cmd[0..ret_len]), p_self.cmdBuffer[p_self.currentIdx][0..ret_len]);
-        p_self.l.releaseLock();
         return ret;
     }
     pub fn putCmd(p_self: *inputChannel, cmd: []const u8) bool {
         p_self.l.acquireLock();
+        defer p_self.l.releaseLock();
         p_self.nextIdx = (p_self.nextIdx + 1) % INPUTCHANNEL_LEN;
         @memcpy((p_self.cmdBuffer[p_self.nextIdx][0..cmd.len]), cmd[0..cmd.len]);
         p_self.cmdSize[p_self.nextIdx] = cmd.len;
-        p_self.l.releaseLock();
         return true;
     }
     pub fn free(p_self: *inputChannel, alloc: std.mem.Allocator) void {
