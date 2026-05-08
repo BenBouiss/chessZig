@@ -1,28 +1,16 @@
 const std = @import("std");
 const timel = @import("time.zig");
+const mainl = @import("main.zig");
 
 pub const lock = struct {
-    _lock: bool = false,
+    //_lock: bool = false,
     //_lock: std.atomic.Mutex = .unlocked,
-    pub fn releaseLock(p_self: *lock) void {
-        //p_self._lock.unlock();
-        p_self._lock = false;
+    _lock: std.Io.Mutex = .{ .state = .init(.unlocked) },
+    pub inline fn releaseLock(p_self: *lock) void {
+        p_self._lock.unlock(mainl.getGlobalIo());
     }
-    pub fn acquireLock(p_self: *lock) void {
-        //std.debug.assert(p_self._lock.tryLock());
-        //std.debug.print("[DEBUG] lock.aquireLock: {}\n", .{ret});
-        var sw: timel.stopWatch = .{};
-        sw.startTimeTick();
-        const timeout = 5;
-
-        while (p_self._lock) {
-            if (sw.timeSinceStartSec() > timeout) {
-                sw.reset();
-                sw.startTimeTick();
-                std.debug.print("[INACTIVITY] lock.acquireLock : stuck for the last {d} seconds\n", .{timeout});
-            }
-        }
-        p_self._lock = true;
+    pub inline fn acquireLock(p_self: *lock) void {
+        p_self._lock.lockUncancelable(mainl.getGlobalIo());
     }
 };
 

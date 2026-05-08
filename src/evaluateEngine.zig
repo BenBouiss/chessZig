@@ -639,7 +639,7 @@ const guiState = struct {
         std.debug.assert(p.engineUsed == cmdBuffer.engine);
         std.debug.assert(!p_self.match.nextTurnTrigger);
         const status = p_self.executeBestMove(cmdBuffer.str) catch |err| {
-            std.debug.print("[DEBUG] matchOnBestMove: found err: {}\n", .{err});
+            std.debug.print("[DEBUG] matchOnBestMove: found err: {} with command: '{s}' len {d}\n", .{ err, cmdBuffer.str, cmdBuffer.str.len });
             if (err == err_eval.unknownMove_error) {
                 std.debug.print("[DEBUG] expected one of the following moves: \n", .{});
                 p_self.match.availableMoves.print();

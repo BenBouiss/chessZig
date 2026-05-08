@@ -219,6 +219,7 @@ class windowCtx:
 
         totalSize = 64
         # win.grow(size=(0, totalSize))
+        assert nMatch != 0
         currSize = int((nFinished / nMatch) * totalSize)
         _addstr(
             self.stdscr,

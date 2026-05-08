@@ -27,8 +27,11 @@ from algo import template
 sys.path.append(os.path.dirname(__file__))
 from chessSpec import heuristicEntry, score, chessIndividual
 import chessSpec
+import tournament as tournamentl
+from tournament import timeFormat, tournamentType, tournament
 
 import texelW
+import constants as cstsl
 
 import gui as guil
 import utils as utilsl
@@ -36,82 +39,6 @@ import utils as utilsl
 import lock as lockl
 
 SLEEP_STDOUT_S = 1
-
-
-@dataclass
-class stopwatch:
-    # carbon copy of the implementation found in time.zig
-    started: bool = False
-    startTime: float = 0.0
-    savedTime: float = 0.0
-    # in seconds
-
-    def start(self) -> None:
-        assert not self.started, "Stopwatch is already running"
-        self.started = True
-        self.startTime = time.time()
-
-    def reset(self) -> None:
-        self.started = False
-        self.startTime = 0.0
-        self.savedTime = 0.0
-
-    def stop(self) -> None:
-        self.started = False
-        self.savedTime = time.time()
-
-    def timeSinceStart(self) -> float:
-        assert self.startTime != 0, "Stopwatch was never started"
-        if self.started:
-            return time.time() - self.startTime
-        else:
-            return self.savedTime
-
-
-@dataclass
-class roundStatus:
-    nMatch: int = 0
-    nFinished: int = 0
-    nRunning: int = 0
-
-    def __repr__(self) -> str:
-        return f"{self.nFinished}  + {self.nRunning} running / {self.nMatch}"
-
-    def isOver(self) -> bool:
-        return self.nMatch == self.nFinished
-
-    def reset(self) -> None:
-        self.nMatch = 0
-        self.nFinished = 0
-        self.nRunning = 0
-
-
-@dataclass
-class scoreBoard:
-    l: lockl.lock = lockl.lock()
-    sw: stopwatch = stopwatch()
-    roundStat: roundStatus = roundStatus()
-
-    def updateScoreBoard(self, matchInv: matchContainerInfo) -> None:
-        self.l.acquire()
-        nRunning = 0
-        nFinished = 0
-        for j in range(len(matchInv.status)):
-            match matchInv.status[j]:
-                case matchStatus.DISPATCHED:
-                    nRunning += 1
-                case matchStatus.IN_PROGRESS:
-                    nRunning += 1
-                case matchStatus.FINISHED:
-                    nFinished += 1
-                case matchStatus.ERROR:
-                    nFinished += 1
-                case _:
-                    pass
-        self.roundStat.nFinished = nFinished
-        self.roundStat.nRunning = nRunning
-
-        self.l.release()
 
 
 class windowIndex(Enum):
@@ -127,7 +54,7 @@ class tuiGUI:
     gui = guil.windowCtx()
     useCurses: bool = True
     l: lockl.lock = lockl.lock()
-    scoreB: scoreBoard = scoreBoard()
+    scoreB: tournamentl.scoreBoard = tournamentl.scoreBoard()
     mh: templateSelectionAlgo | None = None
 
     running: bool = False
@@ -135,7 +62,7 @@ class tuiGUI:
     roundUpdate: bool = False
 
     debugMode: bool = False
-    sw: stopwatch = stopwatch()
+    sw: tournamentl.stopwatch = tournamentl.stopwatch()
     mainThread: threading.Thread | None = None
     interruptReceived: bool = False
     windows: list[guil.windowComponent] = []
@@ -157,15 +84,15 @@ class tuiGUI:
         self.windows.append(guil.windowComponent(offset=[10, 50], size=[0, 0]))
 
         # MH health markers
-        self.windows.append(guil.windowComponent(offset=[10, 104], size=[0, 0]))
+        self.windows.append(guil.windowComponent(offset=[10, 96], size=[0, 0]))
 
         # progress bar
-        self.windows.append(guil.windowComponent(offset=[36, 0], size=[2, 64]))
+        self.windows.append(guil.windowComponent(offset=[30, 0], size=[2, 64]))
 
     def shouldClose(self) -> bool:
         return self.interruptReceived
 
-    def setScoreBoard(self, sb: scoreBoard) -> None:
+    def setScoreBoard(self, sb: tournamentl.scoreBoard) -> None:
         self.scoreB = sb
 
     def setMH(self, mh: templateSelectionAlgo) -> None:
@@ -191,6 +118,7 @@ class tuiGUI:
                 self.l.release()
                 print(f"Exception raised in update method {e}")
             time.sleep(SLEEP_STDOUT_S)
+            self.pingTickUpdate()
 
             if self.useCurses:
                 c = self.gui.stdscr.getch()
@@ -198,6 +126,7 @@ class tuiGUI:
                     print("INTERRUPT RECEIVED")
                     self.interruptReceived = True
                     global_tui.close()
+                    self.mh.objective.tourney.running = False
             self.tick += 1
 
     def pingTickUpdate(self) -> None:
@@ -270,12 +199,12 @@ class tuiGUI:
         for x, idx in enumerate(indexes):
             assert best_indiv.weights[0].elem[x].val is not None
             assert best_indiv.weights[1].elem[x].val is not None
-            param = f"{cst.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
+            param = f"{cstsl.strWeightNames[idx]}: {best_indiv.weights[0].elem[x].val[0]}, {best_indiv.weights[1].elem[x].val[0]}"
 
             print(f"{param}")
 
         print(
-            f"Progress {self.scoreB.roundStat.nFinished} / {self.scoreB.roundStat.nMatch} with {self.scoreB.roundStat.nRunning} running"
+            f"Progress {self.scoreB.nFinished} / {self.scoreB.nMatch} with {self.scoreB.nRunning} running"
         )
 
         print(
@@ -325,11 +254,11 @@ class tuiGUI:
         )
 
     def updateProgress(self) -> None:
-        if self.scoreB.roundStat.nMatch != 0:
+        if self.scoreB.nMatch != 0:
             self.gui.progressBar(
-                nFinished=self.scoreB.roundStat.nFinished,
-                nMatch=self.scoreB.roundStat.nMatch,
-                nRunning=self.scoreB.roundStat.nRunning,
+                nFinished=self.scoreB.nFinished,
+                nMatch=self.scoreB.nMatch,
+                nRunning=self.scoreB.nRunning,
                 win=self.windows[windowIndex.PROGRESSBAR.value],
             )
 
@@ -340,165 +269,6 @@ class tuiGUI:
             self.running = False
             self.close()
         guil.restoreWindow(self.gui)
-
-    # def __del__(self):
-    #    if self.debugMode:
-    #        print("__del__ invoked")
-    #    if self.running:
-    #        self.running = False
-    #        self.close()
-    #    guil.restoreWindow(self.gui)
-
-
-@dataclass
-class timeFormat:
-    # times in ms
-    time: int
-    inc: int
-
-
-standardTimeFormat = timeFormat(time=300_000, inc=5000)
-blitzTimeFormat = timeFormat(time=300_000, inc=0)
-hyperBulletTimeFormat = timeFormat(time=10_000, inc=0)
-
-
-@dataclass
-class matchInfoSettings:
-    nMatch: int = 1
-    playerSwitch: bool = False
-    debugMode: bool = False
-    useOpeningBook: bool = False
-    openingBookPath: str = ""
-    timeF: timeFormat = hyperBulletTimeFormat
-    saveLogs: bool = True
-    logsLocation: str = "out/logs"
-    printToScreen: bool = True
-
-    def __repr__(self) -> str:
-        ret = ""
-        ret += f"nMatch={self.nMatch};\n"
-        ret += f"playerSwitch={self.playerSwitch};\n"
-        ret += f"debugMode={self.debugMode};\n"
-        ret += f"useOpeningBook={self.useOpeningBook};\n"
-        ret += f'openingBookPath="{self.openingBookPath}";\n'
-        ret += f"timeFormat=({self.timeF.time}, {self.timeF.inc});\n"
-        ret += f"saveLogs={self.saveLogs};\n"
-        ret += f'logsLocation="{self.logsLocation}";\n'
-        ret += f"printToScreen={self.printToScreen};\n"
-        return ret
-
-    def toDict(self) -> dict:
-        ret = {}
-
-        ret["nMatch"] = self.nMatch
-        ret["playerSwitch"] = self.playerSwitch
-        ret["debugMode"] = self.debugMode
-        ret["useOpeningBook"] = self.useOpeningBook
-        ret["openingBookPath"] = self.openingBookPath
-        ret["timeF"] = [self.timeF.time, self.timeF.inc]
-        ret["saveLogs"] = self.saveLogs
-        ret["logsLocation"] = self.logsLocation
-        ret["printToScreen"] = self.printToScreen
-        return ret
-
-
-@dataclass
-class infoFile:
-    engineSettings: list[list[str]]
-    engineNames: list[str]
-    matchSettings: matchInfoSettings
-
-    def print(self) -> None:
-        print("engine settings: ")
-        for i in range(len(self.engineSettings)):
-            print(self.engineNames[i])
-            print(self.engineSettings[i])
-
-        print("match settings: ")
-        print(self.matchSettings)
-
-    def setTimeFormat(self, timeF: timeFormat | None) -> None:
-        if timeF is None:
-            return
-        self.matchSettings.timeF = timeF
-
-    def toDict(self) -> dict:
-        return {
-            "engineSettings": self.engineSettings,
-            "engineNames": self.engineNames,
-            "matchSettings": self.matchSettings.toDict(),
-        }
-
-
-def infoFileFromDict(d: dict) -> infoFile:
-    ret: infoFile = infoFile(
-        engineSettings=d.get("engineSettings", []),
-        engineNames=d.get("engineNames", []),
-        matchSettings=matchInfoSettings(),
-    )
-    if d.get("matchSettings") is not None:
-        ret.matchSettings = matchInfoSettings(**d["matchSettings"])
-        if d["matchSettings"].get("timeF") is not None:
-            ret.matchSettings.timeF = timeFormat(
-                time=d["matchSettings"]["timeF"][0], inc=d["matchSettings"]["timeF"][1]
-            )
-    return ret
-
-
-def readInfoFile(path: str) -> infoFile:
-    ret = infoFile([[]], [], matchInfoSettings())
-    matchSection: bool = False
-    engineIndex = 0
-    with open(path, "r") as file:
-        for line in file.readlines():
-            _line = line.rstrip()
-            if not len(_line) or _line.startswith("//"):
-                continue
-            if _line.startswith("[match]"):
-                matchSection = True
-                continue
-            if _line.startswith("["):
-                ret.engineNames.append(_line)
-                if len(ret.engineSettings[engineIndex]):
-                    engineIndex += 1
-                    ret.engineSettings.append([])
-                continue
-            if matchSection:
-                readMatchSettingLine(ret.matchSettings, _line)
-            else:
-                ret.engineSettings[engineIndex].append(_line.rstrip())
-    return ret
-
-
-def readMatchSettingLine(setting: matchInfoSettings, line: str) -> None:
-    _line = line.lower()
-    if "nmatch" in _line:
-        setting.nMatch = int(
-            utilsl.strExtractFromBounds(s=_line, lbound="=", rbound=";")
-        )
-    elif "playerswitch" in _line:
-        setting.playerSwitch = "true" in _line
-    elif "debugmode" in _line:
-        setting.debugMode = "true" in _line
-    elif "useopeningbook" in _line:
-        setting.useOpeningBook = "true" in _line
-    elif "openingbookpath" in _line:
-        setting.openingBookPath = utilsl.strExtractFromBounds(
-            s=_line, lbound='"', rbound='"'
-        )
-    elif "timeformat" in _line:
-        vals: str = utilsl.strExtractFromBounds(s=_line, lbound="(", rbound=")")
-        tokens = vals.split(",")
-        if (len(tokens)) == 2:
-            setting.timeF = timeFormat(time=int(tokens[0]), inc=int(tokens[1]))
-    elif "logslocation" in _line:
-        setting.logsLocation = utilsl.strExtractFromBounds(
-            s=_line, lbound='"', rbound='"'
-        )
-    elif "savelogs" in _line:
-        setting.saveLogs = "true" in _line
-    elif "printtoscreen" in _line:
-        setting.printToScreen = "true" in _line
 
 
 def saveHeuristicsWeights(
@@ -513,453 +283,7 @@ def saveHeuristicsWeights(
     return ret
 
 
-class matchO(object):
-    def __init__(
-        self,
-        conf1: heuristicEntry,
-        conf2: heuristicEntry,
-        settings: infoFile,
-        debugMode: bool = False,
-        extra: str = "",
-    ):
-        self.conf1: heuristicEntry = conf1
-        self.conf2: heuristicEntry = conf2
-        self.settings: infoFile = settings
-        self.uid: int = int(1000 * time.time())
-        self.debugMode: bool = debugMode
-        self.extra: str = extra
-
-    def generateFiles(self, tmpfolder: str) -> list[str]:
-        heuristics = saveHeuristicsWeights(
-            [self.conf1, self.conf2],
-            directory=tmpfolder,
-            uid=self.uid,
-            extra=self.extra,
-        )
-        newInfoPath = os.path.join(tmpfolder, f"newInfo_{self.uid}_{self.extra}.info")
-        with open(newInfoPath, "w") as file:
-            for i in range(len(self.settings.engineNames)):
-                file.write(f"{self.settings.engineNames[i]}\n")
-                allCmd = "\n".join(self.settings.engineSettings[i])
-                file.write(f"{allCmd}\n")
-                file.write(
-                    f'"setoption name heuristicWeightsPath value {heuristics[i]}";\n'
-                )
-                if self.settings.matchSettings.saveLogs:
-                    file.write(
-                        f'"setoption name logspath value {os.path.join(self.settings.matchSettings.logsLocation, f"engine_{self.uid}_{self.extra}_{i}.log")}";\n'
-                    )
-            file.write(f"[match]\n")
-            file.write(f"{self.settings.matchSettings}")
-        return [newInfoPath, heuristics[0], heuristics[1]]
-
-
-def launchAndWaitResults(
-    m: matchO, evalPath: str, tmpFolder: str, info: threadInfo, deleteTmp: bool
-) -> list[score]:
-    ret: list[score] = []
-    paths = m.generateFiles(tmpFolder)
-    newInfo = paths[0]
-    crashPath = os.path.join(
-        tmpFolder, f"crashreport_{m.uid}_{m.extra}_{int(time.time())}.log"
-    )
-
-    with open(crashPath, "w") as crashFile:
-        info.runningProc = subprocess.Popen(
-            [evalPath, newInfo],
-            stdin=subprocess.DEVNULL,
-            stderr=crashFile,
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        status = info.runningProc.wait()
-    assert info.runningProc.stdout is not None
-
-    for line in iter(info.runningProc.stdout.readline, ""):
-        _line = line.rstrip()
-        tokens = _line.split(" ")
-        if m.debugMode:
-            print(
-                f"[DEBUG] from launchAndWaitResults: line found: '{line}' tokens: '{tokens}'\n"
-            )
-        if len(tokens) != 3:
-            continue
-        ret.append(score(win=int(tokens[0]), lose=int(tokens[1]), draw=int(tokens[2])))
-
-    if deleteTmp:
-        for p in paths:
-            try:
-                os.remove(p)
-            except Exception as e:
-                _ = e
-
-    if len(ret) == 0:
-        pass
-    else:
-        os.remove(crashPath)
-    info.runningProc.terminate()
-    return ret
-
-
-class matchStatus(Enum):
-    PENDING = 1
-    IN_PROGRESS = 2
-    FINISHED = 3
-    ERROR = 4
-    DISPATCHED = 5
-
-
-class tournamentType(Enum):
-    CLASSIC = 1
-    BASELINE = 2
-    SPRT = 3
-    LOS = 4
-    INVALID = 5
-
-    def useBaselines(self) -> bool:
-        return (
-            self.value == tournamentType.BASELINE.value
-            or self.value == tournamentType.SPRT.value
-            or self.value == tournamentType.LOS.value
-        )
-
-    def __repr__(self) -> str:
-        self_name = self.__class__.__name__
-        return f"{self_name}.{self.name}"
-
-
-def valueToTournamentType(val: int) -> tournamentType:
-    if val == tournamentType.CLASSIC.value:
-        return tournamentType.CLASSIC
-    if val == tournamentType.BASELINE.value:
-        return tournamentType.BASELINE
-    if val == tournamentType.SPRT.value:
-        return tournamentType.SPRT
-    if val == tournamentType.LOS.value:
-        return tournamentType.LOS
-    return tournamentType.INVALID
-
-
-def strToTournamentType(val: str) -> tournamentType:
-    if val == tournamentType.CLASSIC.name:
-        return tournamentType.CLASSIC
-    if val == tournamentType.BASELINE.name:
-        return tournamentType.BASELINE
-    if val == tournamentType.SPRT.name:
-        return tournamentType.SPRT
-    if val == tournamentType.LOS.name:
-        return tournamentType.LOS
-    return tournamentType.INVALID
-
-
-class matchFetchStatus(Enum):
-    FOUND = 1
-    EMPTY = 2
-
-
-def scheduleMatches(popsize: int) -> list[tuple[int, int]]:
-    """
-    ex for 4 configs
-    [0, 1, 2, 3]
-    schedule:
-        0 vs 1
-        0 vs 2
-        0 vs 3
-        1 vs 2
-        1 vs 3
-        2 vs 3
-    """
-    ret: list[tuple[int, int]] = []
-    indexes = list(range(popsize))
-    for x in range(len(indexes)):
-        for y in range(x + 1, len(indexes)):
-            ret.append((x, y))
-    return ret
-
-
-def scheduleMatchesBaseline(popsize: int, popBase: int) -> list[tuple[int, int]]:
-    """
-    ex for 4 configs and 2 baseline
-    [0, 1, 2, 3]
-    schedule:
-        0 vs base_0
-        0 vs base_1
-
-        1 vs base_0
-        1 vs base_1
-
-        2 vs base_0
-        2 vs base_1
-
-        3 vs base_0
-        3 vs base_1
-    """
-    ret: list[tuple[int, int]] = []
-    indexes = list(range(popsize))
-    for x in range(len(indexes)):
-        for y in range(popBase):
-            ret.append((x, y))
-    return ret
-
-
-class matchContainerInfo(object):
-    order: list[tuple[int, int]]
-    status: list[matchStatus]
-    l: lockl.lock = lockl.lock()
-
-    def __init__(
-        self,
-        popsize: int,
-        popBase: int = 0,
-        type: tournamentType = tournamentType.CLASSIC,
-    ):
-        self.order = []
-        self.status: list[matchStatus] = []
-        self.popsize: int = popsize
-        if type == tournamentType.CLASSIC:
-            self.order.extend(scheduleMatches(popsize))
-        else:
-            self.order.extend(scheduleMatchesBaseline(popsize, popBase))
-
-        for _ in range(len(self.order)):
-            self.status.append(matchStatus.PENDING)
-        self.lock = False
-
-    def splitNThreads(self, nThreads: int) -> list[list[int]]:
-        # used to statically dispatch the matches amongst n threads
-        assert nThreads != 0
-        ret: list[list[int]] = []
-        n = len(self.order)
-        sizeEach: int = int(n / nThreads)
-        remainder = n - (sizeEach * nThreads)
-        offset: int = 0
-        for x in range(nThreads):
-            ret.append([])
-            for y in range(offset, sizeEach + offset):
-                ret[x].append(y)
-            offset += sizeEach
-        for x in range(remainder):
-            index = offset + x
-            ret[x].append(index)
-        return ret
-
-    def getMatch(self) -> matchFetchResult:
-        self.l.acquire()
-        for i in range(len(self.order)):
-            if (
-                self.status[i] == matchStatus.PENDING
-                or self.status[i] == matchStatus.ERROR
-            ):
-                self.status[i] == matchStatus.DISPATCHED
-                self.l.release()
-                return matchFetchResult(
-                    matchOrder=self.order[i], status=matchFetchStatus.FOUND, idx=i
-                )
-
-        self.l.release()
-        return matchFetchResult(status=matchFetchStatus.EMPTY)
-
-
-@dataclass
-class matchFetchResult:
-    matchOrder: tuple[int, int] = (0, 0)
-    status: matchFetchStatus = matchFetchStatus.EMPTY
-    idx: int = -1
-
-
-class threadStatus(Enum):
-    PENDING = 0
-    RUNNING = 1
-    CRASHED = 2
-    FINISHED = 3
-
-
-@dataclass
-class threadInfo:
-    status: threadStatus = threadStatus.PENDING
-    interrupt: bool = False
-    currentMatch: matchFetchResult = matchFetchResult()
-    runningProc: subprocess.Popen | None = None
-
-
-class tournament(object):
-    def __init__(
-        self,
-        timeF: timeFormat | None = None,
-        templatePath: str | None = None,
-        logDir: str | None = None,
-        saveLog: bool = True,
-        deleteTmp: bool = True,
-        evalBin: str | None = None,
-        debugMode: bool = False,
-        nThreads: int = 1,
-        type: tournamentType = tournamentType.CLASSIC,
-        pathPrepend: str = "",
-    ):
-        self.debugMode: bool = debugMode
-        self.timeFormat: timeFormat | None = timeF
-        self.type = type
-        self.matchInv: matchContainerInfo = matchContainerInfo(1)
-        if templatePath is not None:
-            self.templatePath = os.path.join(pathPrepend, templatePath)
-            if debugMode:
-                print(self.templatePath)
-            self.settings: infoFile | None = readInfoFile(self.templatePath)
-            if self.timeFormat is None:
-                self.timeFormat = self.settings.matchSettings.timeF
-            else:
-                self.settings.setTimeFormat(self.timeFormat)
-        else:
-            self.settings: infoFile | None = None
-
-        self.saveLog = saveLog
-        self.deleteTmp = deleteTmp
-        self.population: list[chessIndividual] = []
-        self.baseline: list[chessIndividual] = []
-        self.evalBin: str | None = evalBin
-        if debugMode:
-            print("Building tournament with debug on")
-        if logDir is None:
-            self.logDir = os.getcwd()
-            pass
-        else:
-            self.logDir: str = logDir
-            os.makedirs(self.logDir, exist_ok=True)
-        self.setThread(nThreads)
-        self.logs: dict = {}
-
-    def saveArgsToDict(self) -> dict:
-        ret = {}
-        if self.timeFormat is not None:
-            ret["timeFormat"] = [self.timeFormat.time, self.timeFormat.inc]
-        ret["logDir"] = self.logDir
-        ret["evalBin"] = self.evalBin
-        ret["debugMode"] = self.debugMode
-        ret["nThreads"] = self.nThreads
-        ret["type"] = self.type.value
-
-        ret["templatePath"] = self.templatePath
-        if self.settings is not None:
-            ret["settings"] = self.settings.toDict()
-        return ret
-
-    def setThread(self, nThreads: int) -> None:
-        assert nThreads > 0, f"Invalid(x <= 0) thread amount {nThreads}"
-        self.nThreads = nThreads
-
-    def dispatchMatch(self, matchInfo: matchContainerInfo) -> None:
-        self.matchInv = matchInfo
-        workingThreads: list[threading.Thread] = []
-        threadInfos: list[threadInfo] = []
-        # for threadId, idx in enumerate(indexes):
-        global_scoreBoard.updateScoreBoard(self.matchInv)
-        global_tui.pingTickUpdate()
-        for threadId in range(self.nThreads):
-            threadInfos.append(threadInfo())
-            workingThreads.append(
-                threading.Thread(
-                    target=self.thread_dispatchMatch, args=([threadId, threadInfos[-1]])
-                )
-            )
-            workingThreads[-1].start()
-
-        GUIWaitLoop(self, workingThreads, threadInfos)
-
-    def thread_dispatchMatch(self, threadId: int, info: threadInfo) -> None:
-        assert self.population is not None
-        assert self.settings is not None
-        assert self.evalBin is not None
-        info.status = threadStatus.RUNNING
-        while not info.interrupt:
-            res = self.matchInv.getMatch()
-            info.currentMatch = res
-
-            if res.status == matchFetchStatus.EMPTY:
-                break
-
-            pair = res.matchOrder
-            opp1 = self.population[pair[0]].position
-            if self.type.useBaselines():
-                opp2 = self.baseline[pair[1]].position
-            else:
-                opp2 = self.population[pair[1]].position
-
-            self.matchInv.status[res.idx] = matchStatus.IN_PROGRESS
-
-            global_scoreBoard.updateScoreBoard(self.matchInv)
-            global_tui.pingTickUpdate()
-
-            currentMatch: matchO = matchO(
-                conf1=opp1,
-                conf2=opp2,
-                settings=self.settings,
-                extra=f"T{threadId}",
-                debugMode=self.debugMode,
-            )
-
-            scoreList = launchAndWaitResults(
-                currentMatch, self.evalBin, self.logDir, info, self.deleteTmp
-            )
-
-            if len(scoreList) == 0:
-                self.matchInv.status[res.idx] = matchStatus.ERROR
-                # assert False, "Error encountered"
-            else:
-                self.matchInv.status[res.idx] = matchStatus.FINISHED
-                self.updateScore(pair=pair, score=scoreList)
-            global_scoreBoard.updateScoreBoard(self.matchInv)
-            global_tui.pingTickUpdate()
-
-        info.status = threadStatus.FINISHED
-
-    def updateScore(self, pair: tuple[int, int], score: list[score]) -> None:
-        if self.debugMode:
-            print(
-                f"[DEBUG] from updateScore: pair: {pair}, score: {score} before adding pop: \n"
-            )
-            for i in range(len(self.population)):
-                print(
-                    f"[DEBUG] \t {self.population[i].scoring}, id: {self.population[i].uid}\n"
-                )
-        self.population[pair[0]].scoring.addEq(score[0])
-        if not self.type.useBaselines():
-            if self.debugMode:
-                print(
-                    f"[DEBUG] from updateScore: also updating next pair via type: {self.type} \n"
-                )
-            self.population[pair[1]].scoring.addEq(score[1])
-
-        if self.debugMode:
-            for i in range(len(self.population)):
-                print(
-                    f"[DEBUG] \t {self.population[i].scoring}, id: {self.population[i].uid}\n"
-                )
-
-
-def killAndWait(threads: list[threading.Thread], infos: list[threadInfo]) -> None:
-    for e in infos:
-        e.interrupt = True
-        assert e.runningProc is not None
-        e.runningProc.kill()
-
-    for t in threads:
-        t.join()
-
-
-def GUIWaitLoop(
-    tourney: tournament, threads: list[threading.Thread], infos: list[threadInfo]
-) -> None:
-    while not global_tui.shouldClose():
-        time.sleep(1)
-        if global_scoreBoard.roundStat.isOver():
-            break
-    if global_tui.shouldClose():
-        assert global_tui.mh is not None
-        global_tui.mh.running = False
-        killAndWait(threads, infos)
-
-
-global_scoreBoard = scoreBoard()
+global_scoreBoard = tournamentl.scoreBoard()
 global_tui: tuiGUI = tuiGUI(debugMode=True, useCurses=True)
 global_tui.setScoreBoard(global_scoreBoard)
 
@@ -978,6 +302,7 @@ class chessObjective(obj.objective):
         | npt.NDArray[np.float64]
         | list[list[float]],
     ) -> list[float]:
+
         assert len(self.indexesTemplate) != 0, (
             "Indexes is empty, cannot relate MH position to engine parameter"
         )
@@ -986,39 +311,57 @@ class chessObjective(obj.objective):
             print(
                 f"Evaluating {len(positions)} positions with {len(self.baseline)} baselines..."
             )
+
         global_tui.pingRoundUpdate()
-        matchInv: matchContainerInfo = matchContainerInfo(
+        matchInv: tournamentl.matchContainerInfo = tournamentl.matchContainerInfo(
             len(positions), popBase=len(self.baseline), type=self.tourney.type
         )
-        self.tourney.population = []
+        entries: list[heuristicEntry] = []
         for i in range(len(positions)):
-            self.tourney.population.append(
-                chessIndividual(
-                    position=chessSpec.entryFrom1dArray(
-                        np.array(positions[i]), indexes=self.indexesTemplate
-                    ),
-                    uid=i,
-                    scoring=score(0, 0, 0),
+            entries.append(
+                chessSpec.entryFrom1dArray(
+                    np.array(positions[i]), indexes=self.indexesTemplate
                 )
             )
-        self.tourney.baseline = [
-            chessIndividual(position=pos, uid=x, scoring=score(0, 0, 0))
-            for x, pos in enumerate(self.baseline)
-        ]
 
-        global_scoreBoard.roundStat.reset()
-        global_scoreBoard.roundStat.nMatch = len(matchInv.status)
-        self.tourney.dispatchMatch(matchInv)
+        pop = saveHeuristicsWeights(
+            entries=entries,
+            directory=self.tourney.logDir,
+            uid=int(time.time()),
+            extra="pop",
+        )
+        baselines = saveHeuristicsWeights(
+            entries=self.baseline,
+            directory=self.tourney.logDir,
+            uid=int(time.time()),
+            extra="baseline",
+        )
+
+        setting = tournamentl.readInfoFile(self.tourney.templatePath)
+        assert len(setting.engineSettings) != 0
+        eng = setting.engineSettings[0]
+        self.tourney.setPopulation(eng.copyAppendHeuristicWeightOption(pop))
+        self.tourney.setBaseline(eng.copyAppendHeuristicWeightOption(baselines))
+
+        global_tui.setScoreBoard(self.tourney.scoreBoard)
+        self.tourney.startTournament(matchInv)
+
+        allFiles = pop + baselines
+        for f in allFiles:
+            try:
+                os.remove(f)
+            except Exception as e:
+                print(f"Caught exception {e} while trying to remove file {f}")
+                continue
+
         if self.tourney.type == tournamentType.LOS:
             ret = [
-                chessSpec.computeLOS(wins=x.scoring.win, losses=x.scoring.lose)
-                * x.scoring.nMatch()
-                for x in self.tourney.population
+                chessSpec.computeLOS(wins=x.win, losses=x.lose) * x.nMatch()
+                for x in self.tourney.scoreBoard.scores
             ]
-            # print([x.scoring.nMatch() for x in self.tourney.population])
 
             return ret
-        return [x.scoring.getScore() for x in self.tourney.population]
+        return [x.getScore() for x in self.tourney.scoreBoard.scores]
 
     def setIndexesTemplate(self, idx: list[int]) -> None:
         assert len(idx) == int((self.nDims) / 2), (
@@ -1069,41 +412,13 @@ class chessObjective(obj.objective):
                     )
                 )
         if config.get("tournament") is not None:
-            self.tourney = tournamentFromConfigFile(
+            self.tourney = tournamentl.tournamentFromConfigFile(
                 config["tournament"], pathPrepend=pathPrepend
             )
 
         if config.get("indexesTemplate") is not None:
             self.indexesTemplate = config["indexesTemplate"]
         self.baselineLimit = config.get("baselineLimit", -1)
-
-
-def tournamentFromConfigFile(config: dict, pathPrepend: str = "") -> tournament:
-    if config.get("settings") is not None:
-        ret = tournament(
-            timeF=timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
-            templatePath=None,
-            logDir=config["logDir"],
-            evalBin=config["evalBin"],
-            debugMode=config["debugMode"],
-            nThreads=config["nThreads"],
-            type=valueToTournamentType(config["type"]),
-            pathPrepend=pathPrepend,
-        )
-        ret.settings = infoFileFromDict(config["settings"])
-        ret.templatePath = config["templatePath"]
-    else:
-        ret = tournament(
-            timeF=timeFormat(config["timeFormat"][0], config["timeFormat"][1]),
-            templatePath=config["templatePath"],
-            logDir=config["logDir"],
-            evalBin=config["evalBin"],
-            debugMode=config["debugMode"],
-            nThreads=config["nThreads"],
-            type=valueToTournamentType(config["type"]),
-            pathPrepend=pathPrepend,
-        )
-    return ret
 
 
 def objectiveFromConfigFile(path: str, pathPrepend: str = "") -> chessObjective:
@@ -1125,7 +440,6 @@ def objectiveFromConfigFile(path: str, pathPrepend: str = "") -> chessObjective:
 
 UPPER_BOUND_WEIGHT = 100
 LOWER_BOUND_WEIGHT = 0
-# LOWER_BOUND_WEIGHT = -UPPER_BOUND_WEIGHT
 STEP_WEIGTH = 1
 N_PARAMS = 2 * len(chessSpec.newIndexes)
 
@@ -1150,8 +464,6 @@ class guiUpdateCallback(template.callback):
 
 
 class callbackBaseline(template.callback):
-    """ """
-
     def __init__(self):
         super().__init__()
         self.LOS_FRAC_THRESH = 0.92
@@ -1234,7 +546,6 @@ class pathsUserInput:
     tmpFolder: str | None = None
     resultFolder: str | None = None
     evaluatorBinaryPath: str | None = None
-
     tournamentBaselinePaths: list[str] | None = None
     metaHeuristicExtraIndividuals: list[str] | None = None
 
@@ -1257,8 +568,8 @@ class pathsUserInput:
 
 @dataclass
 class tournamentUserInput:
-    nThreads: int = 1
     timeF: timeFormat | None = None  # defaults to the template timeFormat
+    nThreads: int = 1
     tourneyT: tournamentType = tournamentType.LOS
     baselineLimit: int = 4
     deleteTmp: bool = True
@@ -1285,7 +596,7 @@ class tournamentUserInput:
                     self.timeF = timeFormat(time=int(vals[0]), inc=int(vals[1]))
             elif _str == "tournamentType":
                 token = d.get(f"tournamentType", self.tourneyT.name)
-                self.tourneyT = strToTournamentType(token)
+                self.tourneyT = tournamentl.strToTournamentType(token)
             else:
                 new_val = d.get(f"{_str}", self.__dict__[_str])
                 if new_val is not None and self.__dict__[_str] is not None:
@@ -1451,74 +762,4 @@ def launch_mh(mh: templateSelectionAlgo) -> None:
 
 
 if __name__ == "__main__":
-    path = "engines/engine_tourney.info"
-    tmpFolder = f"out/heuristics/MH/tmp/tmp_{int(time.time())}"
-    evaluationBinPath = "zig-out/bin/evaluate"
-
-    saveOpt: saveOptions = saveOptions(
-        logDir=tmpFolder,
-        prefix="result",
-        saveLog=True,
-        resDir="out/heuristics/MH/res",
-    )
-    optimOpt: optimizerOption = optimizerOption(
-        useGreedy=True, preEval=True, debugMode=False
-    )
-    mh = gw.GW(
-        popsize=16,
-        maxiter=32,
-        saveOpt=saveOpt,
-        optimOpt=optimOpt,
-        cbs=[],
-    )
-
-    tourn = tournament(
-        # timeF=timeFormat(time=5000, inc=0),
-        templatePath=path,
-        evalBin=evaluationBinPath,
-        debugMode=False,
-        logDir=os.path.join(tmpFolder, f"tmp_{int(time.time())}"),
-        nThreads=4,
-        type=tournamentType.LOS,
-    )
-
-    mh.setObjective(
-        chessObjective(
-            maximize=True,
-            tourney=tourn,
-            bounds=obj.dummyBounds(
-                LOWER_BOUND_WEIGHT, UPPER_BOUND_WEIGHT, nDim=N_PARAMS
-            ),
-            steps=obj.dummyStep(STEP_WEIGTH, nDim=N_PARAMS),
-            baselineLimit=4,
-        )
-    )
-    assert type(mh.objective) is chessObjective
-    mh.objective.setBaseline(chessSpec.simpleBaselineWeights)
-    mh.objective.setIndexesTemplate(chessSpec.newIndexes)
-    mh.objective.appendBaseline(chessSpec.newWeight_1)
-
-    mh.generatePopulation()
-
-    mh.addInvididual(
-        indiv=individual(
-            position=chessSpec.simpleBaselineWeights.maskOut(
-                indexes=chessSpec.newIndexes, defaultValue=0
-            ).get1DArray()
-        )
-    )
-    mh.addInvididual(
-        indiv=individual(
-            position=chessSpec.newWeight_0.maskOut(
-                chessSpec.newIndexes, defaultValue=0
-            ).get1DArray()
-        )
-    )
-    mh.addInvididual(
-        indiv=individual(
-            position=chessSpec.newWeight_1.maskOut(
-                chessSpec.newIndexes, defaultValue=0
-            ).get1DArray()
-        )
-    )
-    launch_mh(mh)
+    pass
