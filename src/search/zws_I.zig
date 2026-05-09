@@ -194,7 +194,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .LOWER, move);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .LOWER, move, p_state.turn_count);
                 //if (p_state.lastMove.isValid()) {
                 _ = hashl.hashTable.storeEntry(&s_entry);
                 //}
@@ -213,7 +213,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
     } else {
         if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove, p_state.turn_count);
             //if (p_state.lastMove.isValid()) {
             _ = hashl.hashTable.storeEntry(&s_entry);
             // }

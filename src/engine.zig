@@ -77,7 +77,6 @@ pub const inputChannel = struct {
         ret.cmdSize = (try alloc.alloc(usize, INPUTCHANNEL_LEN));
         ret.nextIdx = 0;
         ret.currentIdx = 0;
-
         ret.l = .{};
         return ret;
     }

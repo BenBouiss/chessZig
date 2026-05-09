@@ -611,7 +611,7 @@ pub const Board_state = struct {
     move_history: matchMoveContainer = .{},
     stack: boardStack = .{},
     victim: e_piece = .nEmptySquare,
-    turn_count: u64 = 0,
+    turn_count: usize = 0,
     stat: status = .{},
 
     lastMove: IMove = .{},
@@ -1234,7 +1234,11 @@ pub const Board_state = struct {
                 p_self.pieceCount[@intFromEnum(promPiece)] += 1;
             } else if (move.isDoublePush()) {
                 // middle between from and to
-                p_self.enPassantIdx = (fromSq + toSq) >> 1;
+                if (white) {
+                    p_self.enPassantIdx = fromSq + 8;
+                } else {
+                    p_self.enPassantIdx = fromSq - 8;
+                }
             }
 
             p_self.invert_turn();
@@ -2206,7 +2210,7 @@ pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 
         ret |= knightAttacks(destBB) & p_board.pieceBB[@intFromEnum(e_piece.nBlackKnight)];
         ret |= _AllAttackBishopMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
         ret |= _AllAttackRookMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)] | p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
-        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare) {
+        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare or p_board.enPassantIdx == @intFromEnum(X)) {
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackPawn)]));
         }
         ret |= getKingAttacks(X) & (p_board.pieceBB[@intFromEnum(e_piece.nBlackKing)]);
@@ -2219,10 +2223,9 @@ pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 
         ret |= _AllAttackBishopMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
         ret |= _AllAttackRookMask(destBB, p_board.occupiedBB) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] | p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]);
 
-        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare) {
+        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare or p_board.enPassantIdx == @intFromEnum(X)) {
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]));
         }
-        //ret |= _AllAttackPawnMask(destBB, white) & (p_board.pieceBB[@intFromEnum(e_piece.nWhitePawn)]);
         ret |= getKingAttacks(X) & (p_board.pieceBB[@intFromEnum(e_piece.nWhiteKing)]);
 
         const piece_idx: u8 = @intFromEnum(e_piece.nWhitePawn);
@@ -2243,11 +2246,12 @@ pub fn algebraicIsLetterFile(letter: u8) bool {
 pub fn algebraicIsLetterRank(letter: u8) bool {
     return letter >= '1' and letter <= '8';
 }
-pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
+pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) !IMove {
     // exemple of match "1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6"
     // O-O: castling kingside
     // O-O-O: castling queenside
     // promotions: =
+    // capture: x
     // induces a check: + at the end (useless)
     const white = p_state.whiteToMove();
     if (moveStr.containsE("O-O-O", .ignoreCase)) {
@@ -2263,7 +2267,7 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
             return movel.build_move(@intFromEnum(e_square.e8), @intFromEnum(e_square.g8), @intFromEnum(e_moveFlags.KINGCASTLE), .nBlackKing);
         }
     } else if (moveStr.containsE("-", .ignoreCase)) {
-        return .{};
+        return debug_err.valueErr;
     }
     std.debug.assert(moveStr.len > 1);
     var startXPos = moveStr.len - 2;
@@ -2275,9 +2279,9 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
         startXPos -= 1;
     }
     const posSq = moveStr._slice()[startXPos .. startXPos + 2];
-    const xSq = stringToLERF(posSq[0..2]);
-    if (xSq == .invalid) {
-        return .{};
+    const toSq = stringToLERF(posSq[0..2]);
+    if (toSq == .invalid) {
+        return debug_err.valueErr;
     }
 
     var potentialFromBB = p_state.occupiedBB;
@@ -2299,10 +2303,30 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
             potentialFromBB &= rankMaskFromRankN(rankNbr);
         }
     }
-    potentialFromBB &= getAllMoveMaskFromX(p_state, white, xSq);
+    potentialFromBB &= getAllMoveMaskFromX(p_state, white, toSq);
+
+    // here filter out the pinned direction only
+    if (l_popcount(potentialFromBB) > 1) {
+        //const kingBB = p_state.getKingBB(p_state.whiteToMove());
+        const kingSq = p_state.getKingSq(p_state.whiteToMove());
+        var _bb = potentialFromBB;
+        while (_bb != 0) {
+            const _sq = bitscan(_bb);
+            _bb &= _bb - 1;
+            const _fromBB = xToBitboard(_sq);
+            if ((_fromBB & p_state.pinnedBB) != 0) {
+                if ((inBetween(kingSq, toSq) & _fromBB) == 0) {
+                    potentialFromBB ^= _fromBB;
+                }
+            }
+        }
+    }
+
     if (l_popcount(potentialFromBB) != 1) {
         // possibly only a pawn move
-        potentialFromBB &= (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]);
+        if (potentialFromBB & (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]) != 0) {
+            potentialFromBB &= (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]);
+        }
 
         if (l_popcount(potentialFromBB) != 1) {
             std.debug.print("[PANIC] algebraicToIMove: potentialFromBB contains 0 or multiple possible source square for token: '{s}'\n", .{moveStr._slice()});
@@ -2310,14 +2334,14 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) IMove {
             p_state.move_history.print();
 
             print_bitboard(potentialFromBB);
-            @panic("???");
+            return debug_err.valueErr;
         }
     }
     const fromSq = bitscan(potentialFromBB);
-    var ret: IMove = movel.build_move(fromSq, @intFromEnum(xSq), 0, .nEmptySquare);
+    var ret: IMove = movel.build_move(fromSq, @intFromEnum(toSq), 0, .nEmptySquare);
 
     const fPiece = p_state.get_piece(fromSq);
-    const cPiece = p_state.get_piece(@intFromEnum(xSq));
+    const cPiece = p_state.get_piece(@intFromEnum(toSq));
     ret.setFromPiece(fPiece);
     ret.setCapture(cPiece);
     fillMoveFromState(p_state, &ret);
@@ -2447,6 +2471,9 @@ pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !match
     var ret: matchMoveContainer = .{};
     while (gen.next()) |str| {
         var offset: usize = 0;
+        if (utils.contains(str, "1/2-1/2", .ignoreCase) or utils.contains(str, "1-0", .ignoreCase) or utils.contains(str, "0-1", .ignoreCase)) {
+            break;
+        }
         if (utils.contains(str, ".", .ignoreCase)) {
             if (str.len == 2) {
                 continue;
@@ -2457,7 +2484,10 @@ pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !match
 
         var moveStr = try string.initFromSlice(alloc, str[offset..str.len]);
         defer moveStr.free(alloc);
-        const move = algebraicToIMove(&tmpBoard, &moveStr);
+        const move = algebraicToIMove(&tmpBoard, &moveStr) catch {
+            std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line._slice(), moveStr._slice() });
+            @panic("???");
+        };
         if (move.isValid()) {
             tmpBoard.makeMove(move);
             _ = ret.append(move, .{});

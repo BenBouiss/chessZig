@@ -73,40 +73,23 @@ test "perft - startpos" {
     std.log.info("[TEST]: Perft checks passed\n", .{});
 }
 
-//test "perft - Kiwipete" {
-//    mainl.initAll(false);
-//    const perft_THREAD = 1;
-//    const perft_BATCHED = true;
-//    const perft_MAX_DEPTH = 6;
-//    var board: Board_state = try chessl.getBoardFromFen(GLOBAL_ALLOC, benchmarkl.KIWIPETE_FEN);
-//    //try std.testing.expect(!hashl.isHashTable_init());
-//    for (1..perft_MAX_DEPTH + 1) |depth| {
-//        const _start: i64 = std.time.microTimestamp();
-//        const res = perftl.perftThreadStart(&board, @intCast(depth), perft_THREAD, perft_BATCHED) catch {
-//            std.log.info("[PANIC]: Error when launching perft\n", .{});
-//            @panic("");
-//        };
-//        const expect: i64 = @intCast(res.n_nodeExplored);
-//        //try std.testing.expectEqual(expect, benchmarkl.ExpectedPerftResKiwipete[depth]);
-//        const _stop = std.time.microTimestamp();
-//        std.log.info("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(_stop - _start, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, 1 + (_stop - _start)) });
-//    }
-//
-//    std.log.info("[TEST]: Perft kiwipete checks passed\n", .{});
-//}
+test "book algebraic" {
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
 
-//test "book algebraic" {
-//    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-//    defer arena_allocator.deinit();
-//    const arena = arena_allocator.allocator();
-//    mainl.initAll(arena, false);
-//    const path = "opening/8moves_v3.pgn";
-//    var s = try stringl.string.initFromSlice(arena, path);
-//    defer s.free(arena);
-//    try bookl.test_db(&s, arena);
-//    hashl.zobristKeys.free(arena);
-//    std.log.info("[TEST]: Reading random algebraic position passed\n", .{});
-//}
+    mainl.initAll(arena, false);
+    var io = std.Io.Threaded.init(arena, .{});
+    mainl.GLOBAL_CTX.setIO(io.io());
+    const path = "opening/8moves_v3.pgn";
+    var s = try stringl.string.initFromSlice(arena, path);
+    defer s.free(arena);
+    try bookl.test_db(&s, arena, true);
+
+    hashl.zobristKeys.free(arena);
+    defer hashl._freeHash(arena, false);
+    std.log.info("[TEST]: Reading random algebraic position passed\n", .{});
+}
 
 test "draw detection" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);

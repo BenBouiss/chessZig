@@ -349,15 +349,13 @@ def LLR(elo_0: int, elo_1, wins: int, draws: int, losses: int) -> float:
     LLR ~= 0.5 * (( s1 - s0 ) * (2 * score - s0 - s1)) / (Var(score))
     where Var(score) = (-score**2 + (draws * 0.5**2 + wins * 1**2)) / N
     where N = wins + draws + losses
-
     """
+    if wins == 0 or draws == 0:
+        return 0.0
     N = wins + draws + losses
-    if N == 0:
-        return 0.0
-    score = wins + 0.5 * draws
-    varScore = ((draws * 0.25 + wins) - (score**2)) / N
-    if varScore == 0:
-        return 0.0
+    n_wins, n_draws = wins / N, draws / N
+    score = n_wins + 0.5 * n_draws
+    varScore = ((n_wins + n_draws * 0.25) - (score**2)) / N
     s0 = LL(elo_0)
     s1 = LL(elo_1)
     return 0.5 * ((s1 - s0) * (2 * score - s0 - s1)) / (varScore)

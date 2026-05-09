@@ -38,14 +38,15 @@ pub const searchEntry = struct {
     // bestMove also known as hash move (I think) is to be explored first
     bestMove: IMove = .{},
     // this is for the replacing strat, might be optionnal with alway replace
-    //age: usize,
+    // the age should be used in the keep deeper where, if an entry is older than MAX_DEPTH? = 24 currently we invalidate it. No sense in keeping unreachable deep searches
+    age: usize = 0,
 };
 
 pub const Hash_entry = struct {
     key: Key = .{},
     val: entryComponents = undefined,
     exploredDepth: u8 = undefined,
-    age: u8 = 0,
+    age: usize = 0,
 
     valid: bool = false,
     pub inline fn moveA(self: *const Hash_entry) u64 {
@@ -67,8 +68,8 @@ pub fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entr
     return .{ .key = key, .exploredDepth = depth, .val = .{ .search = .{ .evaluation = eval } }, .valid = true };
 }
 
-pub fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: IMove) Hash_entry {
-    return .{ .key = key, .exploredDepth = depth, .val = .{ .search = .{ .evaluation = eval, .t = nodeT, .bestMove = bestMove } }, .valid = true };
+pub fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: IMove, age: usize) Hash_entry {
+    return .{ .key = key, .exploredDepth = depth, .val = .{ .search = .{ .evaluation = eval, .t = nodeT, .bestMove = bestMove, .age = age } }, .valid = true };
 }
 pub const Hash_bucket = struct {
     entries: [configl.ITEM_PER_BUCKET]Hash_entry = undefined,
@@ -102,7 +103,7 @@ pub const Hash_bucket = struct {
         // if a better entry exists for this hash key we exit
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
-            if (!entry.valid) {
+            if (!entry.valid or (entry.age + configl.SCHEDULER_MAX_ENDGAME_DEPTH) < p_entry.age) {
                 p_self.entries[i] = p_entry.*;
                 p_self.len = @min(p_self.len + 1, p_self.entries.len);
                 return;
