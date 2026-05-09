@@ -878,7 +878,7 @@ fn mainGuiThread(p_self: *guiState) !void {
         _nMatch = _nMatch * 2;
     }
     var currState: Board_state = undefined;
-    while (matchCount < _nMatch or (p_self.config.match.sprt.enabled and record.sprtTag(0, p_self.config.match.sprt) == .NULL)) {
+    while (matchCount < _nMatch or (p_self.config.match.sprt.enabled and record.sprtTag(0, p_self.config.match.sprt) == .NULL and matchCount < p_self.config.match.sprt.maxMatch)) {
         if (matchCount != 0 and p_self.config.match.playerSwitch) {
             const tmp = p_self.match.playerInv[0].engineUsed;
             p_self.match.playerInv[0].engineUsed = p_self.match.playerInv[1].engineUsed;
@@ -1045,6 +1045,7 @@ const configSPRT = struct {
     beta: f32 = 0.05,
     elo_0: f32 = 0.0,
     elo_1: f32 = 10.0,
+    maxMatch: usize = configl.MAX_SPRT_MATCH,
     // bounds exemples https:www.chessprogramming.org/Sequential_Probability_Ratio_Test
     // gainer [0, 10], non regression [-10, 0]
 };
@@ -1160,6 +1161,11 @@ const guiSetting = struct {
         std.debug.print("\t save logs {}\n", .{p_self.match.saveLogs});
         std.debug.print("\t logs path {s}\n", .{p_self.match.logPath._slice()});
         std.debug.print("\t print to screen {}\n", .{p_self.printToScreen});
+        std.debug.print("\t sprt mode {}\n", .{p_self.match.sprt.enabled});
+        if (p_self.match.sprt.enabled) {
+            std.debug.print("\t max sprt matches {d}\n", .{p_self.match.sprt.maxMatch});
+            std.debug.print("\t alpha {d} beta {d} elo_0 {d} elo_1 {d}\n", .{ p_self.match.sprt.alpha, p_self.match.sprt.beta, p_self.match.sprt.elo_0, p_self.match.sprt.elo_1 });
+        }
     }
     pub fn writeSummary(p_self: *guiSetting, fd: *const std.Io.File) !void {
         var strBuffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
@@ -1398,6 +1404,14 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         };
         settings.match.sprt.elo_1 = std.fmt.parseFloat(f32, val) catch {
+            return false;
+        };
+        return true;
+    } else if (buffer.containsE("maxsprtmatch", .ignoreCase)) {
+        const val = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.match.sprt.maxMatch = std.fmt.parseInt(usize, val, 10) catch {
             return false;
         };
         return true;
