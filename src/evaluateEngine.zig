@@ -19,6 +19,9 @@ const std = @import("std");
 
 const e_color = chessl.e_color;
 pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition, StaleMateInsuficientMaterial, Flagged, Dnf };
+
+pub const SPRT_RES = enum(u8) { NULL, H0, H1 };
+
 const Board_state = chessl.Board_state;
 const string = stringl.string;
 const scoreType = heuristicl.scoreType;
@@ -45,10 +48,10 @@ pub const err_eval = error{
 };
 
 const matchResult = struct {
-    win: u8 = 0,
-    lose: u8 = 0,
-    draw: u8 = 0,
-    flagged: u8 = 0,
+    win: usize = 0,
+    lose: usize = 0,
+    draw: usize = 0,
+    flagged: usize = 0,
 };
 
 const matchResultsBench = struct {
@@ -58,12 +61,15 @@ const matchResultsBench = struct {
     res: [2]matchResult = .{ .{}, .{} },
     avgTimePerTurn: i64 = 0,
     stdTimePerTurn: i64 = 0,
-    nMatch: u8 = 0,
+    nMatch: usize = 0,
     finalFen: string = undefined,
-    pub fn getScore(self: *matchResultsBench) scoreType {
+    pub fn getScore(self: matchResultsBench) scoreType {
         var ret: scoreType = @intCast(self.res.win[0] + self.res.win[1]);
         ret += @as(scoreType, @floatFromInt(self.res.draw[0] + self.res.draw[1])) / 2;
         return ret;
+    }
+    pub fn combine(self: matchResultsBench) matchResult {
+        return .{ .win = self.res[0].win + self.res[1].win, .draw = self.res[0].draw + self.res[1].draw, .lose = self.res[0].lose + self.res[1].lose, .flagged = self.res[0].flagged + self.res[1].flagged };
     }
 };
 const matchResultContainer = struct {
@@ -71,6 +77,11 @@ const matchResultContainer = struct {
     fens: std.ArrayList(string) = undefined,
     pub fn init(alloc: std.mem.Allocator) !matchResultContainer {
         return .{ .fens = try std.ArrayList(string).initCapacity(alloc, 4) };
+    }
+    pub fn sprtTag(self: *matchResultContainer, engineIdx: usize, settings: configSPRT) SPRT_RES {
+        const res = self.items[engineIdx];
+        const s = res.combine();
+        return computeSPRT(settings.elo_0, settings.elo_1, settings.alpha, settings.beta, s.win, s.draw, s.lose);
     }
     pub fn addOutCome(p_self: *matchResultContainer, alloc: std.mem.Allocator, match: *matchStatus) !void {
         const p = match.chessState.whiteToMove();
@@ -111,11 +122,6 @@ const matchResultContainer = struct {
         for (0..2 - @as(usize, @intCast(@intFromBool(oneEngine)))) |i| {
             const currEng = match.playerInv[i].engineUsed;
             p_self.items[currEng].nMatch += 1;
-            //var timeTaken: i64 = 0;
-            //for (match.playerInv[i].timeTaken.items) |time| {
-            //    timeTaken += time;
-            //}
-            //p_self.items[currEng].stdTimePerTurn = mathl.computeStandardDeviation(i64, match.playerInv[i].timeTaken.items);
             p_self.items[currEng].stdTimePerTurn = 0;
             p_self.items[currEng].avgTimePerTurn = @divFloor(match.playerInv[i].timeTakenCum, match.playerInv[i].movesMade + 1);
         }
@@ -124,16 +130,12 @@ const matchResultContainer = struct {
         try p_self.fens.append(alloc, lineString);
     }
     pub fn saveLog(p_self: *matchResultContainer, alloc: std.mem.Allocator, match: *matchStatus, settings: *guiSetting) !void {
-        //if (!settings.match.saveLogs) {
-        //    return;
-        //}
         var fileName: []u8 = undefined;
         if (settings.match.logPathProvided) {
             fileName = try std.fmt.allocPrint(alloc, "{s}/match_logs_{d}.txt", .{ settings.match.logPath._slice(), std.Io.Timestamp.now(mainl.getGlobalIo(), .real) });
         } else {
             fileName = try std.fmt.allocPrint(alloc, "out/logs/match_logs_{d}.txt", .{std.Io.Timestamp.now(mainl.getGlobalIo(), .real)});
         }
-        //const file = try std.fs.cwd().createFile(fileName, .{ .read = true });
         const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), fileName, .{ .read = true });
         defer alloc.free(fileName);
         defer file.close(mainl.getGlobalIo());
@@ -141,26 +143,25 @@ const matchResultContainer = struct {
         for (0..settings.nEngines) |i| {
             const engIdx = match.playerInv[i].engineUsed;
             const res = p_self.items[engIdx];
-            var nwins = res.res[0].win + res.res[1].win;
-            var nloses = res.res[0].lose + res.res[1].lose;
-            var ndraws = res.res[0].draw + res.res[1].draw;
-            var nflags = res.res[0].flagged + res.res[1].flagged;
-            if (settings.nEngines == 1) {
-                nwins = res.res[0].win;
-                nloses = res.res[0].lose;
-                ndraws = res.res[0].draw;
-                nflags = res.res[0].flagged;
-            }
+            const s = res.combine();
+            const nwins = s.win;
+            const nloses = s.lose;
+            const ndraws = s.draw;
+            const nflags = s.flagged;
 
             const scoreStr = try std.fmt.allocPrint(alloc, "engine: {s}, {d} matches, win: {d}, lose: {d}, draw: {d}, flagged: {d}, speed: {d}(+-{d}) ms/move;\n", .{ settings.engineNames[engIdx]._slice(), res.nMatch, nwins, nloses, ndraws, nflags, res.avgTimePerTurn, res.stdTimePerTurn });
             defer alloc.free(scoreStr);
-            //_ = try file.write(scoreStr);
             try file.writeStreamingAll(mainl.getGlobalIo(), scoreStr[0..scoreStr.len]);
 
-            const breakStr = try std.fmt.allocPrint(alloc, "engine: {s}, breakdown (w/l/d) w: {d}/{d}/{d}, b: {d}/{d}/{d};\n", .{ settings.engineNames[engIdx]._slice(), res.res[1].win, res.res[1].lose, res.res[1].draw, res.res[0].win, res.res[0].lose, res.res[0].draw });
-            defer alloc.free(breakStr);
-            try file.writeStreamingAll(mainl.getGlobalIo(), breakStr[0..breakStr.len]);
-            //_ = try file.write(breakStr);
+            if (settings.match.sprt.enabled) {
+                const breakStr = try std.fmt.allocPrint(alloc, "engine: {s}, breakdown (w/l/d) w: {d}/{d}/{d}, b: {d}/{d}/{d} sprt {};\n", .{ settings.engineNames[engIdx]._slice(), res.res[1].win, res.res[1].lose, res.res[1].draw, res.res[0].win, res.res[0].lose, res.res[0].draw, p_self.sprtTag(@intCast(engIdx), settings.match.sprt) });
+                defer alloc.free(breakStr);
+                try file.writeStreamingAll(mainl.getGlobalIo(), breakStr[0..breakStr.len]);
+            } else {
+                const breakStr = try std.fmt.allocPrint(alloc, "engine: {s}, breakdown (w/l/d) w: {d}/{d}/{d}, b: {d}/{d}/{d};\n", .{ settings.engineNames[engIdx]._slice(), res.res[1].win, res.res[1].lose, res.res[1].draw, res.res[0].win, res.res[0].lose, res.res[0].draw });
+                defer alloc.free(breakStr);
+                try file.writeStreamingAll(mainl.getGlobalIo(), breakStr[0..breakStr.len]);
+            }
         }
 
         // save the setting part
@@ -377,7 +378,6 @@ const guiState = struct {
     // will contains each send and receiv
     config: *guiSetting = undefined,
     logs: enginel.logging = .{},
-    //logs: std.ArrayList([]u8) = undefined,
     status: guiStatus = .{},
     alloc: std.mem.Allocator = undefined,
     input: std.ArrayList(enginel.inputChannel) = undefined,
@@ -398,7 +398,6 @@ const guiState = struct {
         ret.input = try std.ArrayList(enginel.inputChannel).initCapacity(ret.alloc, 2);
 
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(ret.alloc, 2);
-        //ret.logs = try std.ArrayList([]u8).initCapacity(ret.alloc, INITIAL_LOGSIZE);
         ret.logs = try enginel.logging.init(alloc, INITIAL_LOGSIZE);
         ret.startSw = .{};
         ret.startSw.startTimeTick();
@@ -857,75 +856,48 @@ fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u
     }
 }
 
-fn mainGuiThread(p_self: *guiState) void {
+fn mainGuiThread(p_self: *guiState) !void {
     mainl.initAll(p_self.alloc, p_self.status.debugMode);
     if (p_self.config.match.useOpeningBook) {
         // init the db or smth
-        p_self.config.match.openingDb = bookl.openingDatabase.init(p_self.alloc, &p_self.config.match.openingBookPath, configl.SEED) catch {
-            p_self.close();
-            return;
-        };
+        p_self.config.match.openingDb = try bookl.openingDatabase.init(p_self.alloc, &p_self.config.match.openingBookPath, configl.SEED);
     }
 
-    p_self.respondAll("UCI") catch {};
+    try p_self.respondAll("UCI");
+    try p_self.waitAllPlayers();
+    try p_self.respondAll("ISREADY");
 
-    p_self.waitAllPlayers() catch {
-        p_self.close();
-        return;
-    };
-
-    p_self.respondAll("ISREADY") catch unreachable;
     for (0..p_self.config.nEngines) |i| {
-        sendOptions(p_self, p_self.config.engineOptions[i], @intCast(i)) catch {
-            p_self.close();
-            return;
-        };
+        try sendOptions(p_self, p_self.config.engineOptions[i], @intCast(i));
     }
+    var record: matchResultContainer = try matchResultContainer.init(p_self.alloc);
 
-    var record: matchResultContainer = matchResultContainer.init(p_self.alloc) catch {
-        p_self.close();
-        return;
-    };
-    var matchCount: u8 = 0;
+    var matchCount: usize = 0;
     var _nMatch = p_self.config.match.nMatch;
     if (p_self.config.match.playerSwitch) {
         _nMatch = _nMatch * 2;
     }
     var currState: Board_state = undefined;
-    while (matchCount < _nMatch) {
+    while (matchCount < _nMatch or (p_self.config.match.sprt.enabled and record.sprtTag(0, p_self.config.match.sprt) == .NULL)) {
         if (matchCount != 0 and p_self.config.match.playerSwitch) {
             const tmp = p_self.match.playerInv[0].engineUsed;
             p_self.match.playerInv[0].engineUsed = p_self.match.playerInv[1].engineUsed;
             p_self.match.playerInv[1].engineUsed = tmp;
-            if (p_self.status.debugMode) {
-                std.debug.print("[DEBUG] mainGuiThread: swaping player white engine: {d}, black engine: {d}\n", .{ p_self.match.playerInv[1].engineUsed, p_self.match.playerInv[0].engineUsed });
-            }
             if (matchCount % 2 == 0) {
-                currState = pickBoardState(p_self) catch {
-                    p_self.close();
-                    return;
-                };
+                currState = try pickBoardState(p_self);
             }
             p_self.match.chessState = currState.copy();
         } else {
-            currState = pickBoardState(p_self) catch {
-                p_self.close();
-                return;
-            };
+            currState = try pickBoardState(p_self);
 
             p_self.match.chessState = currState.copy();
         }
-        matchRoutine(p_self) catch {
-            p_self.close();
-            return;
-        };
+        try matchRoutine(p_self);
         chessl.print_boardstate(&p_self.match.chessState);
         matchCount += 1;
-        record.addOutCome(p_self.alloc, &p_self.match) catch {
-            p_self.close();
-            return;
-        };
+        try record.addOutCome(p_self.alloc, &p_self.match);
     }
+
     record.printResults(p_self.alloc) catch {};
     record.saveLog(p_self.alloc, &p_self.match, p_self.config) catch |err| {
         std.debug.print("[CLOSE] error {} while saving the match stats\n", .{err});
@@ -937,15 +909,7 @@ fn mainGuiThread(p_self: *guiState) void {
 }
 fn pickBoardState(p_self: *guiState) !Board_state {
     if (p_self.config.match.useOpeningBook and p_self.config.match.openingBookPathProvided) {
-        if (p_self.config.debugMode) {
-            std.debug.print("[DEBUG] pickBoardState: Picking an opening from len {d}\n", .{p_self.config.match.openingDb.drawnEntries.items.len});
-        }
-        var openings = p_self.config.match.openingDb.sample(p_self.alloc, 1, .draw) catch {
-            @panic("");
-        };
-        if (p_self.config.debugMode) {
-            std.debug.print("[DEBUG] pickBoardState: opening picked: {s}\n", .{openings.items[0]._slice()});
-        }
+        var openings = try p_self.config.match.openingDb.sample(p_self.alloc, 1, .draw);
         defer openings.deinit(p_self.alloc);
         return try chessl.algebraicLineToBoardstate(p_self.alloc, &openings.items[0]);
     } else {
@@ -958,7 +922,7 @@ fn matchRoutine(p_self: *guiState) !void {
         @panic("Failed to start the match");
     };
 
-    var lastUpated: i64 = 0;
+    var timer: timel.timer = .init(configl.EVALUTATION_GUI_WAIT_MS * 1000);
     while (p_self.status.running and p_self.match.status == .Continue) {
         if (p_self.match.nextTurnTrigger) {
             p_self.match.nextTurnTrigger = false;
@@ -979,9 +943,8 @@ fn matchRoutine(p_self: *guiState) !void {
             p_self.match.status = .Flagged;
             break;
         }
-        if (((std.Io.Timestamp.now(mainl.getGlobalIo(), .real).toMilliseconds() - lastUpated) > configl.EVALUTATION_GUI_WAIT_MS) or (p_self.match.positionUpdated)) {
+        if (timer.tick() or p_self.match.positionUpdated) {
             p_self.match.positionUpdated = false;
-            lastUpated = std.Io.Timestamp.now(mainl.getGlobalIo(), .real).toMilliseconds();
             if (p_self.config.printToScreen) {
                 try timeTickUserFacingInterface(p_self);
             }
@@ -993,7 +956,6 @@ fn matchRoutine(p_self: *guiState) !void {
     }
 }
 fn timeTickUserFacingInterface(p_self: *guiState) !void {
-    //
     utilsl.clear();
     chessl.print_board(&p_self.match.chessState);
     const times = try p_self.match.getGuiStr(p_self.alloc);
@@ -1018,10 +980,7 @@ fn onNextTurnTrigger(p_self: *guiState) !bool {
     }
 
     _ = p_self.nextTurn() catch |err| {
-        p_self.logErr(err) catch {
-            p_self.close();
-            return false;
-        };
+        try p_self.logErr(err);
         p_self.close();
         return false;
     };
@@ -1074,12 +1033,24 @@ pub fn launch_gui(infoPath: []const u8, alloc: std.mem.Allocator) !void {
     const servingThread = try std.Thread.spawn(.{}, entrypointServingThreading, .{&ret});
     try ret.workingThreads.append(ret.alloc, servingThread);
 
-    mainGuiThread(&ret);
+    mainGuiThread(&ret) catch {
+        ret.close();
+    };
 
     return;
 }
+const configSPRT = struct {
+    enabled: bool = false,
+    alpha: f32 = 0.05,
+    beta: f32 = 0.05,
+    elo_0: f32 = 0.0,
+    elo_1: f32 = 10.0,
+    // bounds exemples https:www.chessprogramming.org/Sequential_Probability_Ratio_Test
+    // gainer [0, 10], non regression [-10, 0]
+};
 const configMatch = struct {
-    nMatch: u8 = 0,
+    nMatch: usize = 0,
+    sprt: configSPRT = .{},
     playerSwitch: bool = false,
     timeF: timeFormat = standardTimeFormat,
     useOpeningBook: bool = false,
@@ -1090,7 +1061,6 @@ const configMatch = struct {
     logPath: string = undefined,
     logPathProvided: bool = false,
     infinite: bool = false,
-
     openingDb: bookl.openingDatabase = undefined,
     pub fn setOpeningBookPath(p_self: *configMatch, alloc: std.mem.Allocator, path: []const u8) anyerror!void {
         if (p_self.openingBookPathProvided) {
@@ -1275,7 +1245,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         const nbrStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
-        settings.match.nMatch = std.fmt.parseInt(u8, nbrStr, 10) catch {
+        settings.match.nMatch = std.fmt.parseInt(usize, nbrStr, 10) catch {
             return false;
         };
         return true;
@@ -1393,6 +1363,44 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         }
         return true;
+    } else if (buffer.containsE("sprtmode", .ignoreCase)) {
+        const boolStr = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.match.sprt.enabled = utilsl.contains(boolStr, "true", .ignoreCase);
+        return true;
+    } else if (buffer.containsE("alpha", .ignoreCase)) {
+        const val = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.match.sprt.alpha = std.fmt.parseFloat(f32, val) catch {
+            return false;
+        };
+        return true;
+    } else if (buffer.containsE("beta", .ignoreCase)) {
+        const val = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.match.sprt.beta = std.fmt.parseFloat(f32, val) catch {
+            return false;
+        };
+        return true;
+    } else if (buffer.containsE("elo_0", .ignoreCase)) {
+        const val = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.match.sprt.elo_0 = std.fmt.parseFloat(f32, val) catch {
+            return false;
+        };
+        return true;
+    } else if (buffer.containsE("elo_1", .ignoreCase)) {
+        const val = buffer.extractFromBounds("=", ";") catch {
+            return false;
+        };
+        settings.match.sprt.elo_1 = std.fmt.parseFloat(f32, val) catch {
+            return false;
+        };
+        return true;
     }
 
     return false;
@@ -1431,6 +1439,35 @@ fn handleInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: 
         return true;
     }
     return false;
+}
+
+pub fn LL(x: f32) f32 {
+    return 1.0 / (1.0 + std.math.pow(f32, 10, -x / 400.0));
+}
+pub fn LLR(elo_0: f32, elo_1: f32, wins: usize, draws: usize, losses: usize) f32 {
+    if (wins == 0 or draws == 0 or losses == 0) {
+        return 0.0;
+    }
+    const N: f32 = @floatFromInt(wins + draws + losses);
+    const n_wins: f32 = @as(f32, @floatFromInt(wins)) / N;
+    const n_draws = @as(f32, @floatFromInt(draws)) / N;
+    const score = n_wins + 0.5 * n_draws;
+    const varScore = ((n_wins + n_draws * 0.25) - (std.math.pow(f32, score, 2))) / N;
+    const s0 = LL(elo_0);
+    const s1 = LL(elo_1);
+    return 0.5 * ((s1 - s0) * (2 * score - s0 - s1)) / (varScore);
+}
+pub fn computeSPRT(elo_0: f32, elo_1: f32, alpha: f32, beta: f32, wins: usize, draws: usize, losses: usize) SPRT_RES {
+    const llr = LLR(elo_0, elo_1, wins, draws, losses);
+    const LA = std.math.log(f32, beta / (1.0 - alpha), 10);
+    const LB = std.math.log(f32, (1.0 - beta) / alpha, 10);
+    if (llr > LB) {
+        return .H1;
+    }
+    if (llr < LA) {
+        return .H0;
+    }
+    return .NULL;
 }
 
 pub fn _main() !void {

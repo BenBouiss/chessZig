@@ -44,6 +44,20 @@ pub const stopWatch = struct {
 // call .tick returns bool
 pub const timer = struct {
     sw: stopWatch = .{},
+    frequencyUs: i64 = std.time.us_per_s,
+    pub fn init(frequencyUs: i64) timer {
+        var ret: timer = .{ .frequencyUs = frequencyUs };
+        ret.sw.startTimeTick();
+        return ret;
+    }
+    pub fn tick(self: *timer) bool {
+        if (self.sw.timeSinceStartUs() > self.frequencyUs) {
+            self.sw.reset();
+            self.sw.startTimeTick();
+            return true;
+        }
+        return false;
+    }
 };
 
 pub fn main() !void {

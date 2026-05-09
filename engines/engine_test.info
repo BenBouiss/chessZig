@@ -1,26 +1,24 @@
 [engine1]
-path="engines/bin/engine_10_04_26";
-name="zwsi";
+path="engines/bin/engine_08_05_26";
+name="vanilla";
 "setoption name useHash value false";
-"setoption name searchtype value zwsi";
 
 [engine2]
-path="engines/bin/engine_10_04_26";
-name="zwsi+LMR";
+path="engines/bin/engine_08_05_26";
+name="limited razoring";
 "setoption name useHash value false";
-"setoption name searchtype value zwsi";
-"setoption name useLMR value true";
+"setoption name useRazoring value true";
 
 
 [match]
 nMatch=4;
+sprtmode=true;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-timeFormat=(10000, 0);
-
-logsLocation="logs/ben/ben";
-//saveLogs=true;
+timeFormat=(5000, 0);
+logsLocation="out/logs/evaluate";
+saveLogs=false;
 printToScreen=false;
 

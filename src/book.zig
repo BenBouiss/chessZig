@@ -5,6 +5,7 @@ const utilsl = @import("utils.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
 const filel = @import("file.zig");
+const hashl = @import("hashTable.zig");
 
 const string = stringl.string;
 
@@ -121,9 +122,9 @@ pub const openingDatabase = struct {
         return ret;
     }
     pub fn printInfo(p_self: *openingDatabase) void {
-        std.debug.print("Number of drawn openings: {d}\n", .{p_self.drawnEntries.items.len});
-        std.debug.print("Number of white won openings: {d}\n", .{p_self.whiteEntries.items.len});
-        std.debug.print("Number of black won openings: {d}\n", .{p_self.blackEntries.items.len});
+        std.log.info("Number of drawn openings: {d}", .{p_self.drawnEntries.items.len});
+        std.log.info("Number of white won openings: {d}", .{p_self.whiteEntries.items.len});
+        std.log.info("Number of black won openings: {d}", .{p_self.blackEntries.items.len});
     }
 };
 pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string) !void {
@@ -197,22 +198,31 @@ pub fn test_read(path: *string) !void {
     }
 }
 
-pub fn test_db(path: *string, alloc: std.mem.Allocator) !void {
+pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
     var db = try openingDatabase.init(alloc, path, 42);
     defer db.free(alloc);
-    var openings = try db.sample(alloc, 5, .draw);
-    defer openings.deinit(alloc);
+    var openings: std.ArrayList(string) = .empty;
+    if (full) {
+        openings.deinit(alloc);
+        openings = db.drawnEntries;
+    } else {
+        openings = try db.sample(alloc, 5, .draw);
+    }
 
     for (0..openings.items.len) |i| {
         var algeFen = openings.items[i];
         const moves = try chessl.algebraicLineToIMoveMatch(alloc, &algeFen);
-        var tmp = try chessl.getBoardFromFen(alloc, chessl.DEFAULT_FEN);
+        var tmp = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
         for (0..moves.len) |j| {
             const move = moves.moves[j];
             tmp.makeMove(move);
         }
-        //chessl.print_boardstate(&tmp);
     }
+    if (!full) {
+        openings.deinit(alloc);
+    }
+
+    //std.debug.print("Test db passed \n", .{});
     //for (openings.items) |*str| {
     //    defer str.free(alloc);
     //    //std.debug.print("{s}\n", .{str._slice()});
@@ -229,13 +239,18 @@ pub fn test_draw(path: *string, alloc: std.mem.Allocator) !void {
     std.debug.print("{s}\n", .{openings_2.items[0]._slice()});
 }
 
-pub fn main(path: *string, alloc: std.mem.Allocator) !void {
+pub fn main(alloc: std.mem.Allocator) !void {
     //
-    if (!filel.fileExists(path._slice())) {
-        std.debug.print("File {s} does not exists \n", .{path._slice()});
+    const path = "opening/8moves_v3.pgn";
+    var s = try stringl.string.initFromSlice(alloc, path);
+    defer s.free(alloc);
+    hashl.zobristKeys.free(alloc);
+    if (!filel.fileExists(s._slice())) {
+        std.debug.print("File {s} does not exists \n", .{s._slice()});
         return;
     }
-    try test_db(path, alloc);
+    try test_db(&s, alloc, true);
+    std.log.info("[TEST]: Reading random algebraic position passed", .{});
     //try test_read(path);
     //try test_draw(path, alloc);
 }
