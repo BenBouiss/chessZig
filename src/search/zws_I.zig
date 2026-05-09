@@ -100,10 +100,34 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
     if (p_features.useRazoring) {
         //https://www.chessprogramming.org/Razoring limited razoring
-        const eval = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin[2];
-        if (_depth == 3 and eval <= _alpha and p_state.getBigPieceCount(!p_state.whiteToMove()) > 3) {
-            _depth = 2;
+        //const eval = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin[2];
+        //if (_depth == 3 and eval <= _alpha and p_state.getBigPieceCount(!p_state.whiteToMove()) > 3) {
+        //    _depth = 2;
+        //}
+        // check are we deep enough, standard impl 2 or 3, deep = 4
+        // do qsearch check value < low val
+        // return value
+        if (depth <= 3 and depth != 1 and t == .NonPV) {
+            const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, p_features, ply, p_state.isChecked(), pv, prevLine, .NonPV);
+            if (val < _alpha) {
+                return val;
+            }
         }
+        //const color_mask = alphaBetal.getScoreMaskFromTurn(p_state.whiteToMove());
+        //const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+        //// copy of SF to check
+        //if (static_eval < (_alpha - 512 - 293 * _depth * _depth)) {
+        //    const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, p_features, ply, p_state.isChecked(), pv, prevLine, .NonPV);
+        //    if (val < alpha and val < weightl.simpleCheckMateScore) {
+        //        return val;
+        //    }
+        //}
+    }
+    var canFutility: bool = false;
+    var static_eval: scoreType = 0;
+    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and heuristicl.sideCountScore(p_state, p_state.whiteToMove(), &heuristicl.globalHeuristic) > heuristicl.globalHeuristic.RookValue and depth <= 2 and ply > 4) {
+        static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+        canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
     }
 
     var i: usize = 0;
@@ -120,7 +144,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     }
     var i_reset: bool = false;
     while (gen.pickNext(&order)) |move| : (i += 1) {
-        //std.debug.assert(move.isValid());
         if (i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
             captureOnly = false;
@@ -134,6 +157,11 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             i = 0;
             i_reset = false;
             if (hashMoveIsQuiet) {
+                continue;
+            }
+        }
+        if (canFutility) {
+            if (!moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion()) {
                 continue;
             }
         }

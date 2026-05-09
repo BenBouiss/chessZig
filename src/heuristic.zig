@@ -41,7 +41,7 @@ pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType
 
     var score: scoreType = 0;
     const phase: scoreType = @intCast(p_state.getPhase());
-    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+    const _phase: scoreType = @divFloor((phase >> 8) + (totalPhase >> 1), totalPhase);
 
     score += evaluate_PSQT(p_state, values, _phase);
 
@@ -94,7 +94,7 @@ pub fn evaluate_debug(p_state: *const chess.Board_state, values: *heuristicValue
     return ret;
 }
 pub fn computeTapered(score_mg: scoreType, score_eg: scoreType, _phase: scoreType) scoreType {
-    return @divFloor((score_mg * (256 - _phase)) + score_eg * _phase, 256);
+    return ((score_mg * (256 - _phase)) + score_eg * _phase) >> 8;
 }
 
 pub fn evaluate_PSQT(p_state: *const chess.Board_state, values: *heuristicValues, _phase: scoreType) scoreType {
@@ -285,7 +285,11 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
     }
 }
 pub fn materialImbalance(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
-    return sideCountScore(p_state, true, values) - sideCountScore(p_state, false, values);
+    return (p_state.pieceCount[@intFromEnum(e_piece.nWhitePawn)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackPawn)]) * values.PawnValue +
+        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackBishop)]) * values.BishopValue +
+        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteKnight)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackKnight)]) * values.KnightValue +
+        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteRook)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackRook)]) * values.RookValue +
+        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteQueen)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackQueen)]) * values.QueenValue;
 }
 pub fn sideCountScore(p_state: *const chess.Board_state, white: bool, values: *const heuristicValues) scoreType {
     var offset: usize = 0;
@@ -492,7 +496,6 @@ pub const heuristicValues = struct {
 // source: https://www.chessprogramming.org/King_Safety
 const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
-var STRUCTURE_PROTECTION: scoreType = 1;
 const N_PHASES: usize = 2;
 const N_WEIGHTS: usize = 256;
 const NTERMS: usize = 1024;
@@ -511,14 +514,14 @@ pub var globalHeuristic: heuristicValues = .{
     .KingProximityValue = .{ 1, 11 },
 };
 
-//const pawnPhase: usize = 0;
+const pawnPhase: usize = 0;
 pub const bishopPhase: usize = 1;
 pub const knightPhase: usize = 1;
 pub const rookPhase: usize = 2;
 pub const queenPhase: usize = 4;
 pub const totalPhase: scoreType = @intCast(knightPhase * 4 + bishopPhase * 4 + rookPhase * 4 + queenPhase * 2);
+pub const phases_arr = [_]usize{ pawnPhase, bishopPhase, knightPhase, rookPhase, queenPhase };
 // value between 0 and 1
-const TUNE_K: scoreType = 5;
 
 pub const MG: usize = 0;
 pub const EG: usize = 1;
@@ -640,10 +643,6 @@ pub const texelEntry = struct {
         return p_self.pFactors[MG] * E_mg + (p_self.pFactors[EG] * E_eg);
     }
 };
-
-pub fn sigmoid(comptime T: type, x: T) f32 {
-    return (1.0 / (1.0 + std.math.exp(@as(f32, @floatFromInt(-TUNE_K * x)))));
-}
 
 pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !void {
     // Normal:

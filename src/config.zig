@@ -12,6 +12,7 @@ pub const MAX_LINE_LENGTH: usize = 32;
 
 pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
 
+pub const MAX_SPRT_MATCH: usize = 10_000;
 pub const MAX_THREAD: u32 = 64;
 pub const MAX_HASHSIZE = 1000; // in MB => 1 GB
 

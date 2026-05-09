@@ -76,8 +76,6 @@ pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 
 
 pub const e_color = enum(u8) { BLACK = 0, WHITE = 1 };
 
-const arr_color_conv = [2]e_piece{ e_piece.nBlack, e_piece.nWhite };
-const arr_color_inv = [2]e_color{ e_color.WHITE, e_color.BLACK };
 const arr_piece_str = [_]u8{ 'P', 'B', 'N', 'R', 'Q', 'K', 'p', 'b', 'n', 'r', 'q', 'k', '_', '1', '2' };
 
 pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
@@ -541,10 +539,11 @@ pub const boardFrame = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
     key: hashl.Key = .{},
+    phase: usize = 0,
     lastMove: IMove = .{},
+    victim: e_piece = .nEmptySquare,
     enPassantIdx: u8 = 0,
     halfMoveClock: u8 = 0,
-    victim: e_piece = .nEmptySquare,
 };
 
 pub const boardStack = struct {
@@ -583,7 +582,7 @@ pub const boardStack = struct {
                 @panic("Board stack is full, forgot to pop?");
             }
         }
-        p_self.stack[p_self.len] = .{ .pinnedBB = p_state.pinnedBB, .victim = p_state.victim, .checkersBB = p_state.checkersBB, .enPassantIdx = p_state.enPassantIdx, .lastMove = p_state.lastMove, .key = p_state.key, .halfMoveClock = p_state.halfMoveClock };
+        p_self.stack[p_self.len] = .{ .pinnedBB = p_state.pinnedBB, .victim = p_state.victim, .checkersBB = p_state.checkersBB, .enPassantIdx = p_state.enPassantIdx, .lastMove = p_state.lastMove, .key = p_state.key, .halfMoveClock = p_state.halfMoveClock, .phase = p_state.phase };
         p_self.len += 1;
     }
 };
@@ -592,7 +591,7 @@ pub const Board_state = struct {
     pieceBB: [N_PIECES]u64 = std.mem.zeroes([N_PIECES]u64),
     c_occupiedBB: [NUMBER_PLAYER]u64,
     pieceArray: [N_SQUARES]e_piece = std.mem.zeroes([N_SQUARES]e_piece),
-    pieceCount: [N_PIECES]u8 = std.mem.zeroes([N_PIECES]u8),
+    pieceCount: [N_PIECES]i8 = std.mem.zeroes([N_PIECES]i8),
 
     wKingSq: e_square = .a1,
     bKingSq: e_square = .a1,
@@ -609,11 +608,13 @@ pub const Board_state = struct {
 
     s_stack: board_statusl.statusStack = .{},
     move_history: matchMoveContainer = .{},
+
+    stat: status = .{},
     stack: boardStack = .{},
+
+    phase: usize = 0,
     victim: e_piece = .nEmptySquare,
     turn_count: usize = 0,
-    stat: status = .{},
-
     lastMove: IMove = .{},
     rngIntGenerator: std.Random.DefaultPrng,
     randInt: std.Random,
@@ -681,7 +682,7 @@ pub const Board_state = struct {
         p_self.lastMove = p_frame.lastMove;
         p_self.key = p_frame.key;
         p_self.halfMoveClock = p_frame.halfMoveClock;
-        return;
+        p_self.phase = p_frame.phase;
     }
     pub fn getPreviousFrame(p_self: *Board_state) !*boardFrame {
         if (p_self.stack.len == 0) {
@@ -826,8 +827,10 @@ pub const Board_state = struct {
         p_self.pieceArray[@intFromEnum(square)] = piece;
         if (@intFromEnum(piece) < N_PIECES_TYPES) {
             p_self.c_occupiedBB[@intFromEnum(e_color.WHITE)] |= one_mask;
+            p_self.phase += heuristicl.phases_arr[@intFromEnum(piece)];
         } else {
             p_self.c_occupiedBB[@intFromEnum(e_color.BLACK)] |= one_mask;
+            p_self.phase += heuristicl.phases_arr[@intFromEnum(piece) - N_PIECES_TYPES];
         }
         if (piece == .nWhiteKing) {
             p_self.wKingSq = square;
@@ -1078,6 +1081,11 @@ pub const Board_state = struct {
 
         p_self.occupiedBB ^= fromBB;
         p_self.victim = victim;
+        if (comptime white) {
+            p_self.phase += heuristicl.phases_arr[@intFromEnum(victim) - N_PIECES_TYPES];
+        } else {
+            p_self.phase += heuristicl.phases_arr[@intFromEnum(victim)];
+        }
 
         hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
         p_self.halfMoveClock = 0;
@@ -1107,6 +1115,12 @@ pub const Board_state = struct {
 
                 p_self.pieceCount[@intFromEnum(fromPiece)] -= 1;
                 p_self.pieceCount[@intFromEnum(promPiece)] += 1;
+
+                if (comptime white) {
+                    p_self.phase += heuristicl.phases_arr[@intFromEnum(promPiece)];
+                } else {
+                    p_self.phase += heuristicl.phases_arr[@intFromEnum(promPiece) - N_PIECES_TYPES];
+                }
             } else if (move.isEnpassant()) {
                 const victimSq: e_square = getSqFromCoord(getSqIdxRank(fromSq), getSqIdxFile(toSq));
                 const victimBB = sqToBitboard(victimSq);
@@ -1232,6 +1246,11 @@ pub const Board_state = struct {
 
                 p_self.pieceCount[@intFromEnum(fromPiece)] -= 1;
                 p_self.pieceCount[@intFromEnum(promPiece)] += 1;
+                if (comptime white) {
+                    p_self.phase += heuristicl.phases_arr[@intFromEnum(promPiece)];
+                } else {
+                    p_self.phase += heuristicl.phases_arr[@intFromEnum(promPiece) - N_PIECES_TYPES];
+                }
             } else if (move.isDoublePush()) {
                 // middle between from and to
                 if (white) {
@@ -1276,21 +1295,16 @@ pub const Board_state = struct {
     pub inline fn isEmpty(self: Board_state) bool {
         return (self.occupiedBB == EMPTY);
     }
-    pub fn getPhase(self: *const Board_state) usize {
-        var ret: heuristicl.scoreType = heuristicl.totalPhase;
-
-        ret -= @intCast(heuristicl.bishopPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] + self.pieceCount[@intFromEnum(e_piece.nBlackBishop)]));
-        ret -= @intCast(heuristicl.knightPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteKnight)] + self.pieceCount[@intFromEnum(e_piece.nBlackKnight)]));
-        ret -= @intCast(heuristicl.rookPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteRook)] + self.pieceCount[@intFromEnum(e_piece.nBlackRook)]));
-        ret -= @intCast(heuristicl.queenPhase * (self.pieceCount[@intFromEnum(e_piece.nWhiteQueen)] + self.pieceCount[@intFromEnum(e_piece.nBlackQueen)]));
-        ret = @max(0, ret);
-        return @intCast(ret);
+    pub inline fn getPhase(self: *const Board_state) usize {
+        var ret: heuristicl.scoreType = @intCast(heuristicl.totalPhase);
+        ret -= @intCast(self.phase);
+        return @intCast(@min(0, ret));
     }
     pub fn isEndGame(self: *const Board_state) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteQueen) + self.getPieceCount(.nWhiteQueen);
         const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackQueen) + self.getPieceCount(.nBlackQueen);
 
-        return (nWhiteP < 2) and (nBlackP < 2);
+        return (nWhiteP < 3) and (nBlackP < 3);
     }
 
     pub inline fn getKingBB(self: Board_state, white: bool) u64 {
@@ -1344,11 +1358,11 @@ pub const Board_state = struct {
         return self.stat.canQueensideCastle(false) and canMove(.e8, .a8, self.occupiedBB) and ((attackedSquares & inBetween(.e8, .b8)) == EMPTY);
     }
 
-    pub inline fn getPieceCount(self: Board_state, piece: e_piece) u8 {
+    pub inline fn getPieceCount(self: Board_state, piece: e_piece) i8 {
         return self.pieceCount[@intFromEnum(piece)];
     }
 
-    pub fn getBigPieceCount(self: *const Board_state, white: bool) u8 {
+    pub fn getBigPieceCount(self: *const Board_state, white: bool) i8 {
         // putting inline in front of this causes the razoring in zws to segfault even if the razoring is not used ???
         if (white) {
             return self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
@@ -1882,18 +1896,6 @@ pub inline fn stackedPawns(pawn: u64) u64 {
     return upPawns | downPawns | tripleFiles;
 }
 
-pub fn getAllAttackingSquaresMask(sq: e_square) u64 {
-    const sqBB = sqToBitboard(sq);
-    const file = getSqFile(sq);
-    const rank = getSqRank(sq);
-
-    return knightAttacks(sqBB) | fileMaskFromFileN(file) | rankMaskFromRankN(rank) | diagonalMask(@intFromEnum(sq)) | antiDiagMask(@intFromEnum(sq));
-}
-pub inline fn getAllAttackingSquares(sq: e_square, occ: u64) u64 {
-    const sqBB = sqToBitboard(sq);
-    return knightAttacks(sqBB) | getRookAttacks(occ, sq) | getBishopAttacks(occ, sq);
-}
-
 pub inline fn _AllAttackPawnMask(bb_piece: u64, white: bool) u64 {
     if (white) {
         return _AllAttackPawnMask_cst(bb_piece, true);
@@ -2367,11 +2369,6 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) !IMove {
 
     return ret;
 }
-pub fn test_scenarios() !void {
-    std.debug.print("[DEBUG] pin scenario: \n", .{});
-    try pin_scenario();
-    return;
-}
 
 pub fn pin_scenario() !void {
     const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
@@ -2607,7 +2604,6 @@ pub fn main(alloc: std.mem.Allocator) !void {
     //try test_passed();
     //try test_safety();
     //try test_stackedPawn();
-    //try test_scenarios();
     //try test_single_algebraic();
     //try test_line_algebraic();
     //try test_move_heur();
