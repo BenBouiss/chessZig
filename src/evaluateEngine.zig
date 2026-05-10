@@ -642,9 +642,8 @@ const guiState = struct {
             if (err == err_eval.unknownMove_error) {
                 std.debug.print("[DEBUG] expected one of the following moves: \n", .{});
                 p_self.match.availableMoves.print();
-                var moveArr = chessl.getMoveListFromStr(&p_self.match.chessState, cmdBuffer.str, p_self.alloc) catch unreachable;
-                defer moveArr.deinit(p_self.alloc);
-                const move = moveArr.items[0];
+                const moveArr = chessl.getEmptyMoveListFromStr(cmdBuffer.str);
+                const move = moveArr.moves[0];
                 std.debug.print("[DEBUG] matchOnBestMove: move found: {s}-{}-{}-{} \n", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
                 chessl.print_boardstate(&p_self.match.chessState);
             }

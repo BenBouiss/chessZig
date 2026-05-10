@@ -33,8 +33,8 @@ const searchFeatures = schedulerl.searchFeatures;
 pub const texel_err = error{board_err};
 
 pub fn evaluate(p_state: *chess.Board_state, values: *heuristicValues) scoreType {
-    const allwhiteMoveBB = moveGenl._cst_moveGenBB(p_state, true);
-    const allblackMoveBB = moveGenl._cst_moveGenBB(p_state, false);
+    const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
+    const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
     const color_mask = alphaBetal.getScoreMaskFromTurn(p_state.whiteToMove());
@@ -72,8 +72,8 @@ pub const heuristicComponents = struct {
     }
 };
 pub fn evaluate_debug(p_state: *const chess.Board_state, values: *heuristicValues) heuristicComponents {
-    const allwhiteMoveBB = moveGenl._cst_moveGenBB(p_state, true);
-    const allblackMoveBB = moveGenl._cst_moveGenBB(p_state, false);
+    const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
+    const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
 
@@ -520,7 +520,7 @@ pub const knightPhase: usize = 1;
 pub const rookPhase: usize = 2;
 pub const queenPhase: usize = 4;
 pub const totalPhase: scoreType = @intCast(knightPhase * 4 + bishopPhase * 4 + rookPhase * 4 + queenPhase * 2);
-pub const phases_arr = [_]usize{ pawnPhase, bishopPhase, knightPhase, rookPhase, queenPhase };
+pub const phases_arr = [_]usize{ pawnPhase, bishopPhase, knightPhase, rookPhase, queenPhase, 0 };
 // value between 0 and 1
 
 pub const MG: usize = 0;

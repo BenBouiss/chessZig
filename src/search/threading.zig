@@ -142,6 +142,7 @@ pub const threadP = struct {
     status: threadStatus = .WAITING,
     searchPing: bool = false,
     alive: bool = false,
+    timeWorkingUs: i64 = 0,
 };
 
 pub const threadPool = struct {
@@ -158,6 +159,14 @@ pub const threadPool = struct {
         p_self.lock.acquireLock();
         defer p_self.lock.releaseLock();
         return p_self.running;
+    }
+    pub fn timeSpentSearchingUs(p_self: *threadPool) i64 {
+        //
+        var ret: i64 = 0;
+        for (0..p_self.nThread) |i| {
+            ret += p_self.threadProps[i].timeWorkingUs;
+        }
+        return ret;
     }
 
     pub fn addThread(p_self: *threadPool, n: usize) !void {
@@ -263,6 +272,7 @@ pub const threadPoolerr = error{ timedOut, alreadySearching };
 pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     p_self.threadProps[idx].status = .WAITING;
     p_self.threadProps[idx].alive = true;
+    p_self.threadProps[idx].timeWorkingUs = 0;
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
     const timeout = 2;
@@ -285,6 +295,8 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
             p_self.threadProps[idx].status = .WORKING;
             var pack = p_self.packages[idx];
             schedulerl._startSearch(pack.scheduler, &pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth);
+
+            p_self.threadProps[idx].timeWorkingUs += sw.timeSinceStartUs();
             p_self.threadProps[idx].status = .WAITING;
         }
     }
