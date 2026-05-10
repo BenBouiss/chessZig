@@ -276,7 +276,6 @@ pub const engine = struct {
     options: engineOptions = .{},
     startSw: timel.stopWatch = .{},
     metric: engineMetrics = .{},
-    //logs: std.ArrayList([]u8) = undefined,
     logs: logging = .{},
 
     pub fn init(alloc: std.mem.Allocator) !engine {
@@ -289,11 +288,8 @@ pub const engine = struct {
         ret.options.logsPath = try .initFromSlice(alloc, "out/engine.log");
         ret.startSw = .{};
         ret.startSw.startTimeTick();
-
         ret.metric = .{};
-
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
-        //ret.logs = try std.ArrayList([]u8).initCapacity(ret.alloc, 16);
         ret.logs = try logging.init(alloc, 16);
 
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
@@ -338,6 +334,7 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "useLMR ", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
 
         try p_self.addOption(.{ .name = "useSEE", .optionType = .USESEE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_SEE } } });
+
         try p_self.addOption(.{ .name = "useFutility", .optionType = .USEFUTILITY, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_FUTILITY } } });
 
         try p_self.addOption(.{ .name = "useRazoring", .optionType = .USERAZORING, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RAZORING } } });
@@ -439,6 +436,7 @@ pub const engine = struct {
         p_self.status.running = false;
         p_self.searcher.close() catch {};
         if (p_self.trackMetrics()) {
+            p_self.metric.addTimeToProcessingUs(p_self.searcher.schedul._threadPool.timeSpentSearchingUs());
             p_self.printMetrics();
         }
         p_self.waitOnWorkingThreads();

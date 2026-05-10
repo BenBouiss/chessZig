@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const assert = std.debug.assert;
 //https://stackoverflow.com/questions/76384694/how-to-do-conditional-compilation-with-zig
 const build_options = @import("build_options");
 
@@ -242,7 +241,7 @@ pub fn getStrFromPiece(piece: e_piece) u8 {
 }
 
 pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
-    var ret = getEmptyBoardState();
+    var ret = Board_state.init();
     var offset: i8 = 0;
     var board_offset = N_SQUARES - 8;
     var commitedRowSize: u8 = 0;
@@ -306,7 +305,7 @@ pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) debug_
 }
 
 pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool {
-    assert(turnToken.len != 0);
+    std.debug.assert(turnToken.len != 0);
     if (turnToken[0] == '-') {
         p_state.stat.WCastlingK = false;
         p_state.stat.WCastlingQ = false;
@@ -329,18 +328,18 @@ pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool
     return true;
 }
 pub fn getBoardFromFen_enPassant(p_state: *Board_state, turnToken: []const u8) bool {
-    assert(turnToken.len != 0);
+    std.debug.assert(turnToken.len != 0);
     if (turnToken[0] == '-') {
         p_state.enPassantIdx = 0;
     } else {
-        assert(turnToken.len == 2);
+        std.debug.assert(turnToken.len == 2);
         const sq = stringToLERF(turnToken[0..2]);
         p_state.enPassantIdx = @intFromEnum(sq);
     }
     return true;
 }
 pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
-    assert(turnToken.len != 0);
+    std.debug.assert(turnToken.len != 0);
     const nbr = std.fmt.parseInt(u16, turnToken, 10) catch {
         return 0;
     };
@@ -373,7 +372,7 @@ pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !Board_state {
     return ret;
 }
 pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, debug: bool) !void {
-    const moves = try getEmptyMoveListFromStr(uciStr);
+    const moves = getEmptyMoveListFromStr(uciStr);
     if (debug) {
         std.debug.print("[DEBUG] applyUciMoves: Moves found in str: ", .{});
         for (0..moves.len) |i| {
@@ -394,7 +393,7 @@ pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, debug: bool) !vo
         onMoveStaged(p_board, p_board.whiteToMove());
     }
 }
-pub fn getEmptyMoveListFromStr(strBuffer: []const u8) !movel.matchMoveContainer {
+pub fn getEmptyMoveListFromStr(strBuffer: []const u8) movel.matchMoveContainer {
     var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
     var ret: movel.matchMoveContainer = .{};
 
@@ -456,40 +455,6 @@ pub fn getFirstMoveFromStr(p_state: *Board_state, strBuffer: []const u8) IMove {
     return .{};
 }
 
-pub fn getMoveListFromStr(p_state: *Board_state, strBuffer: []const u8, alloc: std.mem.Allocator) !std.ArrayList(IMove) {
-    // /!\ this assumes that the p_state is updated for the corresponding move to "decode", not suitable for a position startpos parsing
-    //var cmd_split = try utils.split(u8, alloc, strBuffer, ' ');
-    //defer cmd_split.deinit(alloc);
-    var ret = try std.ArrayList(IMove).initCapacity(alloc, 16);
-
-    var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
-
-    while (gen.next()) |cmd| {
-        if (cmd.len != 4 and cmd.len != 5) {
-            continue;
-        }
-        const from = stringToLERF(cmd[0..2]);
-        const to = stringToLERF(cmd[2..4]);
-        if (from == .invalid or to == .invalid) {
-            continue;
-        }
-        const flag: u8 = inferFlagFromMovement(p_state, from, to, cmd);
-        const piece = p_state.get_piece(@intFromEnum(from));
-        var toPiece = p_state.get_piece(@intFromEnum(to));
-        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, piece);
-        if (move.isEnpassant()) {
-            if (p_state.whiteToMove()) {
-                toPiece = .nBlackPawn;
-            } else {
-                toPiece = .nWhitePawn;
-            }
-        }
-        move.setCapture(toPiece);
-        ret.append(alloc, move) catch unreachable;
-    }
-    return ret;
-}
-
 pub inline fn isPawnPiece(piece: e_piece) bool {
     return (piece == .nWhitePawn or piece == .nBlackPawn);
 }
@@ -530,10 +495,6 @@ pub const Board_stateContainer = struct {
         }
     }
 };
-
-pub inline fn getEmptyBoardState() Board_state {
-    return Board_state.init();
-}
 
 pub const boardFrame = struct {
     pinnedBB: u64 = 0,
@@ -599,7 +560,6 @@ pub const Board_state = struct {
     pinnedBB: u64 = 0,
     // contains 1 on the checkers and the squares in between
     checkersBB: u64 = 0,
-
     occupiedBB: u64 = 0,
 
     key: hashl.Key = .{},
@@ -616,9 +576,6 @@ pub const Board_state = struct {
     victim: e_piece = .nEmptySquare,
     turn_count: usize = 0,
     lastMove: IMove = .{},
-    rngIntGenerator: std.Random.DefaultPrng,
-    randInt: std.Random,
-    seed: u64 = 42,
 
     pub fn init() Board_state {
         var ret: Board_state = undefined;
@@ -646,6 +603,7 @@ pub const Board_state = struct {
         ret.move_history = .{};
         ret.stack = .{};
         ret.s_stack = .{};
+        ret.phase = 0;
 
         if (comptime useDebug) {
             std.debug.print("[DEBUG] from Board_state.init: size of board state: {d} bytes\n", .{@sizeOf(Board_state)});
@@ -654,8 +612,6 @@ pub const Board_state = struct {
             std.debug.print("[DEBUG] from Board_state.init: size of move history: {d} bytes\n", .{@sizeOf(matchMoveContainer)});
         }
 
-        ret.rngIntGenerator = std.Random.DefaultPrng.init(ret.seed);
-        ret.randInt = ret.rngIntGenerator.random();
         return ret;
     }
     pub fn free(p_self: *Board_state, alloc: std.mem.Allocator) void {
@@ -1082,9 +1038,9 @@ pub const Board_state = struct {
         p_self.occupiedBB ^= fromBB;
         p_self.victim = victim;
         if (comptime white) {
-            p_self.phase += heuristicl.phases_arr[@intFromEnum(victim) - N_PIECES_TYPES];
+            p_self.phase -= heuristicl.phases_arr[@intFromEnum(victim) - N_PIECES_TYPES];
         } else {
-            p_self.phase += heuristicl.phases_arr[@intFromEnum(victim)];
+            p_self.phase -= heuristicl.phases_arr[@intFromEnum(victim)];
         }
 
         hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(victim)][toSq]);
@@ -1298,7 +1254,7 @@ pub const Board_state = struct {
     pub inline fn getPhase(self: *const Board_state) usize {
         var ret: heuristicl.scoreType = @intCast(heuristicl.totalPhase);
         ret -= @intCast(self.phase);
-        return @intCast(@min(0, ret));
+        return @intCast(@max(0, ret));
     }
     pub fn isEndGame(self: *const Board_state) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteQueen) + self.getPieceCount(.nWhiteQueen);
@@ -1483,11 +1439,6 @@ pub const Board_state = struct {
     pub fn isStaleMateRepetition(p_self: *const Board_state) bool {
         return p_self.isFiftyMoveRepetition() or p_self.isStaleThreeFold();
     }
-
-    pub fn setSeed(p_self: *Board_state, seed: u64) void {
-        p_self.rngIntGenerator.seed(seed);
-        p_self.randInt = p_self.rngIntGenerator.random();
-    }
 };
 
 pub fn pieceArrayToBB(pieceArray: [N_SQUARES]e_piece) u64 {
@@ -1606,7 +1557,7 @@ pub fn print_boardstate(p_board_state: *const Board_state) void {
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
 
     const eval = heuristicl.evaluate_debug(p_board_state, &heuristicl.globalHeuristic);
-    std.debug.print("Current evaluation: \n", .{});
+    std.debug.print("Current evaluation: phase {d} \n", .{p_board_state.getPhase()});
     eval.print();
 
     sanityCheckBoardState(p_board_state);
@@ -2064,7 +2015,7 @@ pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
     directChecks |= knightAttacks(sqToBitboard(king_E)) & n;
 
     if (comptime useAVX2) {
-        @panic("");
+        @panic(":)");
     } else {
         var pinned: u64 = 0;
         const rBlockers = (p_board.occupiedBB & cachedRookAtt) ^ p_board.occupiedBB;
