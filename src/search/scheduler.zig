@@ -75,13 +75,6 @@ pub const uciSearcher = struct {
 };
 
 pub fn waitingRoomOneShot(self: *enginel.engine) !void {
-    //if (count % countTimePrint == 0) {
-    //    if (p_self.features.reportProgress) {
-    //        sendUpdate(p_self);
-    //    }
-    //    count = 0;
-    //}
-
     const stat = self.searcher.schedul.getSearchStatus();
     if (stat == .INTERRUPTED or stat == .FINISHED) {
         const decision = self.searcher.schedul.extractBest();
@@ -145,7 +138,6 @@ pub const scheduler = struct {
     p_engine: *enginel.engine = undefined,
     timeM: timeManager = .{},
     features: searchFeatures = .{},
-    reportProgress: bool = true,
     _threadPool: threadingl.threadPool = .{},
 
     pub fn setEngine(p_self: *scheduler, p_engine: *enginel.engine) void {
@@ -165,6 +157,7 @@ pub const scheduler = struct {
         p_self._threadPool.waitOnFinish();
     }
     pub fn entryPointSearch(p_self: *scheduler, depth: u16) searchReport {
+        // only used in the benchmark files
         if (!p_self._threadPool.running) {
             return .{};
         }
@@ -195,7 +188,7 @@ pub const scheduler = struct {
             @panic(":)");
         };
 
-        const tickrate = configl.WR_TICKRATE_NS;
+        const tickrate = configl.WAIT_TICKRATE_NS;
         var decision: moveDecisionExt = .{};
         var countTimePrint = @divFloor(configl.INFO_TICKRATE_NS, tickrate);
         countTimePrint = @max(1, countTimePrint);
@@ -239,11 +232,7 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config
     _ = cmdBuffer;
     const pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = getSearchFeatures(p_engine), .scheduler = &(p_engine.searcher.schedul) };
     p_engine.searcher.schedul.timeM.startSearchTick();
-    p_engine.searcher.schedul._threadPool.submit(&pack) catch {
-        p_engine.respond("engineOp threadPoolSubmit failed crashing");
-        _ = p_engine.executeQuitProcedure();
-        @panic(":)");
-    };
+
     p_engine.searcher.searching = true;
     p_engine.searcher.swSinceSearch.startTimeTick();
     p_engine.searcher.schedul.setEngine(p_engine);
@@ -252,6 +241,11 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config
     } else {
         p_engine.searcher.schedul.timeM.setRemainingTimeMs(config.btime);
     }
+    p_engine.searcher.schedul._threadPool.submit(&pack) catch {
+        p_engine.respond("engineOp threadPoolSubmit failed crashing");
+        _ = p_engine.executeQuitProcedure();
+        @panic(":)");
+    };
 
     return true;
 }

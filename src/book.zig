@@ -209,24 +209,25 @@ pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
         openings = try db.sample(alloc, 5, .draw);
     }
 
+    const base = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    var tmp = base.copy();
     for (0..openings.items.len) |i| {
         var algeFen = openings.items[i];
-        const moves = try chessl.algebraicLineToIMoveMatch(alloc, &algeFen);
-        var tmp = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+        const moves = try chessl._algebraicLineToIMoveMatch(alloc, &algeFen, &tmp);
+        for (0..moves.len) |_| {
+            _ = tmp.undoMove();
+        }
         for (0..moves.len) |j| {
             const move = moves.moves[j];
             tmp.makeMove(move);
+        }
+        for (0..moves.len) |_| {
+            _ = tmp.undoMove();
         }
     }
     if (!full) {
         openings.deinit(alloc);
     }
-
-    //std.debug.print("Test db passed \n", .{});
-    //for (openings.items) |*str| {
-    //    defer str.free(alloc);
-    //    //std.debug.print("{s}\n", .{str._slice()});
-    //}
 }
 pub fn test_draw(path: *string, alloc: std.mem.Allocator) !void {
     var db = try openingDatabase.init(alloc, path, 42);

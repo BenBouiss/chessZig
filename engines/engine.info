@@ -1,25 +1,23 @@
 [engine1]
-path="zig-out/bin/engine";
+//path="zig-out/bin/engine";
+path="engines/bin/engine_10_05_26_bitscan";
 name="1";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
 
 [engine2]
-//path="engines/bin/engine_02_05_26_tourney";
-path="zig-out/bin/engine";
-name="2";
-"setoption name useHash value false";
-"setoption name reportProgress value false";
-"setoption name useLMR value true";
+path="../tools/arena/Engines/Stockfish/stockfish_10_x64_modern_official";
+name="SF";
+"setoption name hash value 1";
 
 [match]
-nMatch=32;
+nMatch=4;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-timeFormat=(50000, 0);
+timeFormat=(5000, 0);
 logsLocation="out/logs/evaluate";
 saveLogs=false;
-printToScreen=false;
+printToScreen=true;
 

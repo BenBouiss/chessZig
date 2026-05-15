@@ -26,11 +26,16 @@ pub fn initAll(alloc: std.mem.Allocator, verbose: bool) void {
     magicl._initMagic(&magicl.magicTable, verbose);
 
     hashl._initZobrist(alloc, 42);
-    //hashl._initOrReallocHashTable(GLOBAL_ALLOC, 2000);
 
     moveTablel._initTables(verbose);
     if (comptime useDebug) {
         std.debug.print("[PRE] Building using the useDebug flag\n", .{});
+    }
+}
+pub fn freeAll(alloc: std.mem.Allocator, verbose: bool) void {
+    hashl._freeHash(alloc, verbose);
+    if (comptime useDebug) {
+        std.debug.print("[FREE] freeing hashl stuff\n", .{});
     }
 }
 
@@ -79,20 +84,7 @@ pub fn test_speed(alloc: std.mem.Allocator) !void {
     eng.executeBuffer("go depth 7");
     try waitOnEngine(&eng);
 }
-pub fn test_bug(alloc: std.mem.Allocator) !void {
-    initAll(alloc, false);
-    var eng = try initEngine(alloc);
-    defer eng.free();
-    eng.executeBuffer("setoption name UCI_elo value 3000");
-    eng.executeBuffer("setoption name fixedDepth value true");
-    eng.executeBuffer("setoption name useHash value false");
-    //eng.executeBuffer("setoption name useQuiescence value true");
-    eng.executeBuffer("ucinewgame");
-    eng.executeBuffer("position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0");
-    eng.executeBuffer("isready");
-    eng.executeBuffer("go wtime 300000 btime 300000 winc 5000 binc 5000");
-    try waitOnEngine(&eng);
-}
+
 pub fn test_bug2(alloc: std.mem.Allocator) !void {
     initAll(alloc, false);
     var eng = try initEngine(alloc);
@@ -103,14 +95,7 @@ pub fn test_bug2(alloc: std.mem.Allocator) !void {
     eng.executeBuffer("go wtime 45600 btime 48400 winc 0 binc 0");
     try waitOnEngine(&eng);
 }
-pub fn test_perft(alloc: std.mem.Allocator) !void {
-    initAll(alloc, false);
-    var eng = try initEngine(alloc);
-    defer eng.free();
-    eng.executeBuffer("position startpos");
-    eng.executeBuffer("go perft depth 5 batched");
-    try waitOnEngine(&eng);
-}
+
 pub fn test_bench(alloc: std.mem.Allocator) !void {
     initAll(alloc, false);
     var eng = try initEngine(alloc);
@@ -149,46 +134,16 @@ pub inline fn getGlobalGPA() std.mem.Allocator {
     return GLOBAL_CTX.gpa;
 }
 
-pub fn test_test() !void {
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
-    const arena = arena_allocator.allocator();
-    initAll(arena, true);
-    const perft_THREAD = 1;
-    const perft_BATCHED = true;
-    const perft_MAX_DEPTH = 6;
-    var board: chessl.Board_state = try chessl.getBoardFromFen(arena, chessl.DEFAULT_FEN);
-    //try std.testing.expect(!hashl.isHashTable_init());
-    var sw: timel.stopWatch = .{};
-    for (1..perft_MAX_DEPTH + 1) |depth| {
-        sw.startTimeTick();
-        const res = perftl.perftThreadStart(&board, arena, @intCast(depth), perft_THREAD, perft_BATCHED) catch {
-            std.debug.print("[PANIC]: Error when launching perft\n", .{});
-            try std.testing.expect(false);
-            return;
-        };
-        const expect: i64 = @intCast(res.searchStat.n_nodeExplored);
-        const timeTaken = sw.timeSinceStartUs();
-        sw.stop();
-        try std.testing.expectEqual(expect, benchl.ExpectedBenchmarkResults[depth]);
-        std.debug.print("\t[RES] perft({d} ms): depth {d} node: {d}, nps: {d}\n", .{ @divFloor(timeTaken, std.time.us_per_ms), depth, expect, @divFloor(expect * std.time.us_per_s, timeTaken + 1) });
-    }
-
-    std.debug.print("[TEST]: Perft checks passed\n", .{});
-}
-
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
-    //try test_test();
     //try test_perft(GPA);
     //try test_bench();
     //try test_speed();
     //try heuristicl.main(GPA);
     //try chessl.main(GPA);
-    //try test_bug();
     //try test_bug2(GPA);
     try bookl.main(GPA);
 

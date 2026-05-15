@@ -6,6 +6,8 @@ const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
 const stringl = @import("../string.zig");
 const filel = @import("../file.zig");
+const mainl = @import("../main.zig");
+const moveGenl = @import("../move_generation.zig");
 
 const std = @import("std");
 
@@ -58,6 +60,7 @@ test "SEE" {
     state = try chessl.getBoardFromFen(fen2);
     move.setCapture(state.get_piece(move.getTo()));
     try std.testing.expectEqual(heuristicl.SEE(&state, move), -200);
+    std.log.info("[TEST]: SEE passed\n", .{});
 }
 
 const testcases = [_][]const u8{
@@ -84,6 +87,8 @@ test "generator" {
             try std.testing.expect(utilsl.equal(u8, tokens.items[j], tok));
         }
     }
+
+    std.log.info("[TEST]: split generator passed\n", .{});
 }
 const join_testcases = [_][3][]const u8{
     [_][]const u8{ "out", "engine.log", "out/engine.log" },
@@ -100,4 +105,53 @@ test "join" {
         defer joined.free(arena);
         try std.testing.expect(utilsl.equal(u8, joined._slice(), join_testcases[i][2]));
     }
+    std.log.info("[TEST]: join passed\n", .{});
+}
+
+test "isolated pawns" {
+    try std.testing.expectEqual(chessl.EMPTY, chessl.isolatedPawns(0xFF00));
+    try std.testing.expectEqual(0x500, chessl.isolatedPawns(0xF500));
+    try std.testing.expectEqual(0x40004001500, chessl.isolatedPawns(0x44004400D500));
+
+    std.log.info("[TEST]: isolated pawns passed\n", .{});
+}
+test "passed pawns" {
+    try std.testing.expectEqual(chessl.EMPTY, chessl.passedPawns(0xFF00, 0xFF000000000000));
+    try std.testing.expectEqual(0x8100, chessl.passedPawns(0xFF00, 0x3C000000000000));
+    std.log.info("[TEST]: passed pawns passed\n", .{});
+}
+
+test "stacked pawns" {
+    try std.testing.expectEqual(chessl.EMPTY, chessl.stackedPawns(0xFF00));
+    try std.testing.expectEqual(0x440044024600, chessl.stackedPawns(0x44004402D700));
+    std.log.info("[TEST]: stacked pawns passed\n", .{});
+}
+
+test "safety area" {
+    moveTablel._initTables(false);
+    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.e4), 0x927c7cee7c7c92);
+    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a1), 0x907070e);
+    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a4), 0x907070e070709);
+    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a8), 0xe07070900000000);
+    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.e8), 0xee7c7c9200000000);
+
+    std.log.info("[TEST]: safety area passed\n", .{});
+}
+test "pins" {
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    mainl.initAll(arena, false);
+    const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
+    var board = chessl.getBoardFromFen(fen) catch unreachable;
+    chessl.getCheckers(&board, true);
+    try std.testing.expectEqual(0x80402000000000, board.checkersBB);
+    try std.testing.expectEqual(0x14186e380400, board.pinnedBB);
+
+    chessl.getCheckers(&board, false);
+
+    try std.testing.expectEqual(chessl.EMPTY, board.checkersBB);
+    try std.testing.expectEqual(0x7e00000000000000, board.pinnedBB);
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(movel.e_moveFlags.QUIETMOVE), .nWhiteKnight)));
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(movel.e_moveFlags.QUIETMOVE), .nWhiteQueen)));
 }
