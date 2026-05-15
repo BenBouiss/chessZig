@@ -101,7 +101,11 @@ pub fn evaluate_PSQT(p_state: *const chess.Board_state, values: *heuristicValues
     var score_count: scoreType = 0;
     var score_mg: scoreType = 0;
     var score_eg: scoreType = 0;
-    for (0..chess.N_SQUARES) |sq| {
+    var _bb = p_state.occupiedBB;
+
+    while (_bb != 0) {
+        const sq = chess.bitscan(_bb);
+        _bb &= _bb - 1;
         const piece = p_state.get_piece(@intCast(sq));
         switch (piece) {
             .nEmptySquare, .nWhite, .nBlack => {},

@@ -58,7 +58,7 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
         p_engine.searcher.searching = true;
         sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
         sched.features.fixedDepth = true;
-        sched.reportProgress = true;
+        sched.features.reportProgress = true;
 
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);

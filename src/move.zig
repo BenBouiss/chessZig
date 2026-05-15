@@ -349,11 +349,9 @@ pub const moveContainer = struct {
 pub const MAX_MATCH_LENGTH: usize = 4096;
 pub const MAX_MATCH_LENGTH_STR: usize = MAX_MATCH_LENGTH * (5 + 1);
 pub const matchMoveContainer = struct {
-    // replace the std.mem.zeros with undefined for faster init(?)
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     keyCodes: [MAX_MATCH_LENGTH]u64 = undefined,
     lastIrreversibleMoveIndex: u16 = 0,
-    //lastMove: IMove = .{},
     len: usize = 0,
 
     pub fn print(p_self: *const matchMoveContainer) void {
@@ -403,11 +401,9 @@ pub const matchMoveContainer = struct {
                 continue;
             }
             if (!p_self.moves[currentIndex].equal(move)) {
-                p_self.moves[currentIndex] = move;
+                currentIndex += 1;
             }
-            currentIndex += 1;
         }
-
         p_self.len = p_other.len;
     }
     pub fn getRepetitions(self: *const matchMoveContainer) u8 {

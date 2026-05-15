@@ -62,7 +62,6 @@ pub const DEFAULT_STATIC_SEARCH = false;
 
 pub const DEFAULT_LATE_MOVE_REDUCTION = false;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
-pub const LMR_CST_DEPTH = 2;
 
 pub const DEFAULT_SEARCH_TYPE: searchType = .ZWSI;
 pub const _DEFAULT_SEARCH_TYPE = "ZWSI";
@@ -89,12 +88,9 @@ pub const MAX_ELO: u32 = 3000;
 pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
 pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
 pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
-pub var SCHEDULER_MAX_DEPTH_INCREASE_PER_ITR: u16 = 3;
 
 // estimate of the time increase when increasing the depth by 1
 pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
-pub const SCHEDULER_TICKRATE_NS = (std.math.pow(u64, 10, 6));
-pub const WR_TICKRATE_NS = (std.math.pow(u64, 10, 5));
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 3;
@@ -110,20 +106,12 @@ pub const DEBUG_INACTIVITY_READING_US = DEBUG_INACTIVITY_READING_S * std.math.po
 //
 
 pub const START_TICKRATE_NS = 2 * std.math.pow(u64, 10, 9); // 2 seconds in ns
-pub const LIFE_TICKRATE: u16 = 10;
-pub const LIFE_TICKRATE_NS = std.math.pow(u64, 10, 8); // 2 seconds in ns
 
-pub const TICKRATE: u16 = 360; // alla MC 20 ticks/second
-pub const UPDATE_TICKRATE: u16 = 360; // 1 ticks/second
 pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 
 pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 500_000;
 pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
-pub const ENGINE_LOCK_TICKRATE_NS = 1_000;
-
-pub const UPDATE_TICKRATE_NS = 2777777;
-pub const READING_TICKRATE_NS = (2) * (std.math.pow(u64, 10, 6));
 
 pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";
 
@@ -131,20 +119,6 @@ pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";
 //pub const N_POSITIONS: usize = 800000;
 pub const N_POSITIONS: usize = 300000;
 //pub const N_POSITIONS: usize = 8;
-pub const EPOCH: usize = 2048;
-pub const BATCH_SIZE: usize = 16;
-pub const USE_ADAGRAD: bool = false;
-pub const TUNER_START_FROM_OLD: bool = true;
-
-pub const LEARNING_RATE: f16 = 0.1;
-pub const LEARNING_RATE_DROP: f16 = 0.80;
-pub const LEARNING_RATE_MIN: f16 = 0.00001;
-pub const LEARNING_RATE_FREQ: usize = 64;
-
-pub const WEIGHT_MIN: i64 = -1;
-pub const WEIGHT_MAX: i64 = 1;
-pub const WEIGHT_MU: f16 = 0;
-pub const WEIGHT_SIGMA: f16 = -2;
 
 pub const e_residue_type = enum(u4) { MSE = 0, RMSE };
 pub const TUNE_RESIDUE: e_residue_type = .MSE;

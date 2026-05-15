@@ -492,11 +492,12 @@ const guiState = struct {
             var w: std.Io.Writer = .fixed(&buffer);
             const n = reader.streamDelimiter(&w, '\n') catch |err| {
                 std.debug.print("[DEBUG] readingThread.gui (#{d}): caught err {}\n", .{ engineIndex, err });
-                p_self.crash();
-            };
-            if (n <= 1) {
                 break;
-            }
+                //p_self.crash();
+            };
+            //if (n <= 1) {
+            //    continue;
+            //}
             _ = reader.toss(1);
             const msg = buffer[0..n];
 
@@ -511,6 +512,9 @@ const guiState = struct {
                 defer p_self.alloc.free(respmsg);
                 try p_self.appendLog(respmsg);
             }
+        }
+        if (p_self.status.debugMode) {
+            std.debug.print("[DEBUG]  readingThread.gui (#{d}): exiting\n", .{engineIndex});
         }
     }
     pub fn servingGuiThread(p_self: *guiState) !void {
@@ -580,7 +584,7 @@ const guiState = struct {
         p_self.saveLog() catch |err| {
             std.debug.print("[CLOSE] error while saving: {}\n", .{err});
         };
-        p_self.respondAll("QUIT") catch {};
+        p_self.respondAll("quit") catch {};
         p_self.status.running = false;
         for (0..p_self.workingThreads.items.len) |i| {
             p_self.workingThreads.items[i].join();
@@ -662,7 +666,7 @@ const guiState = struct {
         defer line.free(p_self.alloc);
 
         try p_self.waitEngine();
-        const msg = try std.fmt.allocPrint(p_self.alloc, "position startpos {s}", .{line._slice()});
+        const msg = try std.fmt.allocPrint(p_self.alloc, "position startpos moves {s}", .{line._slice()});
         defer p_self.alloc.free(msg);
         p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
 
@@ -704,9 +708,9 @@ const guiState = struct {
     fn setDebugMode(p_self: *guiState, flag: bool) !void {
         p_self.status.debugMode = flag;
         if (flag) {
-            try p_self.respondAll("DEBUG on");
+            try p_self.respondAll("debug on");
         } else {
-            try p_self.respondAll("DEBUG off");
+            try p_self.respondAll("debug off");
         }
     }
 
@@ -717,7 +721,7 @@ const guiState = struct {
         const timeout = p_self.config.match.timeF.time;
         var sw: timel.stopWatch = .{};
         sw.startTimeTick();
-        try p_self.respond("ISREADY", p_player.engineUsed);
+        try p_self.respond("isready", p_player.engineUsed);
         while (!p_engine.isReady()) {
             try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
             if (sw.timeSinceStartMs() > timeout) {
@@ -733,7 +737,7 @@ const guiState = struct {
     fn sendPositionUpdate(p_self: *guiState) !void {
         var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
         const lineString = p_self.match.chessState.move_history.getLineStatic();
-        const msg = try std.fmt.bufPrint(&buffer, "position startpos {s}", .{utilsl.trimStr(&lineString)});
+        const msg = try std.fmt.bufPrint(&buffer, "position startpos moves {s}", .{utilsl.trimStr(&lineString)});
         try p_self.respond(msg, p_self.getCurrentPlayer().engineUsed);
     }
     fn sendGoSearchCommand(p_self: *guiState) !void {
@@ -846,9 +850,9 @@ fn getGuiCmdType(cmd: []const u8) e_guiCmd {
 
 fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u8) !void {
     if (p_self.status.debugMode) {
-        try p_self.respond("DEBUG on", engineIndex);
+        try p_self.respond("debug on", engineIndex);
     } else {
-        try p_self.respond("DEBUG off", engineIndex);
+        try p_self.respond("debug off", engineIndex);
     }
     for (options.items) |opt| {
         try p_self.respond(opt._slice(), engineIndex);
@@ -862,9 +866,9 @@ fn mainGuiThread(p_self: *guiState) !void {
         p_self.config.match.openingDb = try bookl.openingDatabase.init(p_self.alloc, &p_self.config.match.openingBookPath, configl.SEED);
     }
 
-    try p_self.respondAll("UCI");
+    try p_self.respondAll("uci");
     try p_self.waitAllPlayers();
-    try p_self.respondAll("ISREADY");
+    try p_self.respondAll("isready");
 
     for (0..p_self.config.nEngines) |i| {
         try sendOptions(p_self, p_self.config.engineOptions[i], @intCast(i));

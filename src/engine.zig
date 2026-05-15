@@ -1148,7 +1148,7 @@ fn inputThreading(p_self: *engine) void {
         }
         if (p_self.status.running) {
             if (p_self.searcher.searching and !p_self.status.benchmarking) {
-                // check things here that scheduler was doing
+                // check things here what scheduler is doing
                 schedulerl.waitingRoomOneShot(p_self) catch {};
             }
         }

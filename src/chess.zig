@@ -26,7 +26,6 @@ const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
 const moveContainer = movel.moveContainer;
 const matchMoveContainer = movel.matchMoveContainer;
-const cachedTables = tablel.cachedTables;
 const status = board_statusl.status;
 const string = stringl.string;
 
@@ -114,6 +113,21 @@ pub fn flagPromotionToPiece(flag: u8, white: bool) e_piece {
         return @enumFromInt(piece);
     }
     return e_piece.nEmptySquare;
+}
+pub fn letterPromoToFlag(letter: u8) e_moveFlags {
+    if (letter == 'b' or letter == 'B') {
+        return .BISHOPPROMO;
+    }
+    if (letter == 'n' or letter == 'N') {
+        return .KNIGHTPROMO;
+    }
+    if (letter == 'r' or letter == 'R') {
+        return .ROOKPROMO;
+    }
+    if (letter == 'q' or letter == 'Q') {
+        return .QUEENPROMO;
+    }
+    return .QUIETMOVE;
 }
 
 pub inline fn sqToBitboard(sq: e_square) u64 {
@@ -407,18 +421,8 @@ pub fn getEmptyMoveListFromStr(strBuffer: []const u8) movel.matchMoveContainer {
             continue;
         }
         var flag: u8 = 0;
-        if (cmd.len > 4) {
-            if (cmd[4] != 0) {
-                if (cmd[4] == 'b' or cmd[4] == 'B') {
-                    flag |= @intFromEnum(e_moveFlags.BISHOPPROMO);
-                } else if (cmd[4] == 'n' or cmd[4] == 'N') {
-                    flag |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
-                } else if (cmd[4] == 'r' or cmd[4] == 'R') {
-                    flag |= @intFromEnum(e_moveFlags.ROOKPROMO);
-                } else if (cmd[4] == 'q' or cmd[4] == 'Q') {
-                    flag |= @intFromEnum(e_moveFlags.QUEENPROMO);
-                }
-            }
+        if (cmd.len > 4 and cmd[4] != 0) {
+            flag |= @intFromEnum(letterPromoToFlag(cmd[4]));
         }
         const move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, .nEmptySquare);
         _ = ret.append(move, .{ .code = EMPTY });
@@ -438,18 +442,11 @@ pub fn getFirstMoveFromStr(p_state: *Board_state, strBuffer: []const u8) IMove {
         if (from == .invalid or to == .invalid) {
             continue;
         }
-        const flag: u8 = inferFlagFromMovement(p_state, from, to, cmd);
-        const piece = p_state.get_piece(@intFromEnum(from));
-        var toPiece = p_state.get_piece(@intFromEnum(to));
-        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag, piece);
-        if (move.isEnpassant()) {
-            if (p_state.whiteToMove()) {
-                toPiece = .nBlackPawn;
-            } else {
-                toPiece = .nWhitePawn;
-            }
+        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), 0, .nEmptySquare);
+        if (cmd.len > 4 and cmd[4] != 0) {
+            move.setFlag(@intFromEnum(letterPromoToFlag(cmd[4])));
         }
-        move.setCapture(toPiece);
+        fillMoveFromState(p_state, &move);
         return move;
     }
     return .{};
@@ -596,7 +593,6 @@ pub const Board_state = struct {
         ret.enPassantIdx = 0;
 
         ret.victim = .nEmptySquare;
-
         ret.lastMove = .{};
 
         // to reduce memory footprint on the stack, consider placing these somewhere else?
@@ -604,13 +600,6 @@ pub const Board_state = struct {
         ret.stack = .{};
         ret.s_stack = .{};
         ret.phase = 0;
-
-        if (comptime useDebug) {
-            std.debug.print("[DEBUG] from Board_state.init: size of board state: {d} bytes\n", .{@sizeOf(Board_state)});
-            std.debug.print("[DEBUG] from Board_state.init: size of stack : {d} bytes\n", .{@sizeOf(boardStack)});
-            std.debug.print("[DEBUG] from Board_state.init: size of status stack: {d} bytes\n", .{@sizeOf(board_statusl.statusStack)});
-            std.debug.print("[DEBUG] from Board_state.init: size of move history: {d} bytes\n", .{@sizeOf(matchMoveContainer)});
-        }
 
         return ret;
     }
@@ -804,7 +793,7 @@ pub const Board_state = struct {
         }
     }
     pub inline fn _undoMove(p_self: *Board_state, comptime white: bool) bool {
-        const move = p_self.getLastMove();
+        const move = p_self.move_history.popMove();
         if (move.isCapture()) {
             return undoMoveCapture_cst(p_self, move, white);
         } else {
@@ -870,7 +859,6 @@ pub const Board_state = struct {
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
-        p_self.move_history.popMoveVoid();
         const popped = (p_self.stack.pop());
         p_self.loadFrame(&popped);
         return true;
@@ -940,7 +928,6 @@ pub const Board_state = struct {
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
-        p_self.move_history.popMoveVoid();
         const popped = (p_self.stack.pop());
         p_self.loadFrame(&popped);
         return true;
@@ -968,7 +955,6 @@ pub const Board_state = struct {
         }
     }
     pub fn makeNullMove_cst(p_self: *Board_state, comptime white: bool) void {
-        //p_self.stack.push(&p_self.makeFrame());
         p_self.pushState();
         p_self.s_stack.push(p_self.stat);
 
@@ -1007,7 +993,6 @@ pub const Board_state = struct {
             sanityCheckBoardState(p_self);
         }
 
-        //p_self.stack.push(&p_self.makeFrame());
         p_self.pushState();
         p_self.s_stack.push(p_self.stat);
 
@@ -1536,14 +1521,13 @@ pub fn print_boardstate(p_board_state: *const Board_state) void {
     }
 
     print_board(p_board_state);
-    std.debug.print("Castling right: {d}\n", .{p_board_state.stat.castlingKey()});
-    std.debug.print("En passant idx: {d}\n", .{p_board_state.enPassantIdx});
+    //std.debug.print("Castling right: {d}\n", .{p_board_state.stat.castlingKey()});
+    //std.debug.print("En passant idx: {d}\n", .{p_board_state.enPassantIdx});
     std.debug.print("Zobrist key: {x}\n", .{p_board_state.key.code});
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len, moves.len });
-    moves.print();
 
     printBoardValidity(p_board_state);
 
@@ -1660,7 +1644,7 @@ pub inline fn rankMaskFromRankN(rank: u8) u64 {
 }
 
 pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) u64 {
-    const attacks = cachedTables.rayAttacks[@intFromEnum(square)][@intFromEnum(dir)];
+    const attacks = tablel.cachedTables.rayAttacks[@intFromEnum(square)][@intFromEnum(dir)];
     const blocking: u64 = occupied & attacks;
     if (blocking == 0) {
         return attacks;
@@ -1676,7 +1660,7 @@ pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) 
         },
     }
 
-    return attacks ^ cachedTables.rayAttacks[sq][@intFromEnum(dir)];
+    return attacks ^ tablel.cachedTables.rayAttacks[sq][@intFromEnum(dir)];
 }
 
 pub inline fn diagonalAttacks(bb: u64, sq: e_square) u64 {
@@ -2107,53 +2091,6 @@ pub fn fillMoveFromState(p_state: *Board_state, move: *IMove) void {
     move.setCapture(c_piece);
 }
 
-pub fn inferFlagFromMovement(p_state: *Board_state, from: e_square, to: e_square, line_buffer: []const u8) u8 {
-    const fromIdx: u8 = @intFromEnum(from);
-    const toIdx: u8 = @intFromEnum(to);
-
-    var ret_flag: u8 = @intFromEnum(e_moveFlags.QUIETMOVE);
-    var diff: i8 = 0;
-    const c_piece = p_state.get_piece(@intFromEnum(to));
-    if (c_piece != .nEmptySquare) {
-        ret_flag |= @intFromEnum(e_moveFlags.CAPTURE);
-    }
-
-    if (line_buffer.len > 4) {
-        if (line_buffer[4] != 0) {
-            if (line_buffer[4] == 'b' or line_buffer[4] == 'B') {
-                ret_flag |= @intFromEnum(e_moveFlags.BISHOPPROMO);
-            } else if (line_buffer[4] == 'n' or line_buffer[4] == 'N') {
-                ret_flag |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
-            } else if (line_buffer[4] == 'r' or line_buffer[4] == 'R') {
-                ret_flag |= @intFromEnum(e_moveFlags.ROOKPROMO);
-            } else if (line_buffer[4] == 'q' or line_buffer[4] == 'Q') {
-                ret_flag |= @intFromEnum(e_moveFlags.QUEENPROMO);
-            }
-        }
-    }
-    const pieceMove = p_state.get_piece(@intFromEnum(from));
-    if (isKingPiece(pieceMove)) {
-        diff = @intCast(fromIdx);
-        diff -= @intCast(toIdx);
-        if (utils.absolute(diff) == 2) {
-            if (fromIdx > toIdx) {
-                ret_flag = @intFromEnum(e_moveFlags.QUEENCASTLE);
-            } else {
-                ret_flag = @intFromEnum(e_moveFlags.KINGCASTLE);
-            }
-        }
-    } else if (isPawnPiece(pieceMove)) {
-        diff = @intCast(fromIdx);
-        diff -= @intCast(toIdx);
-        if (utils.absolute(diff) == 16) {
-            ret_flag |= @intFromEnum(e_moveFlags.DOUBLEPAWN);
-        }
-        if ((getSqIdxFile(fromIdx) != getSqIdxFile(toIdx)) and (c_piece == .nEmptySquare)) {
-            ret_flag |= @intFromEnum(e_moveFlags.ENPASSANT);
-        }
-    }
-    return ret_flag;
-}
 pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 {
     // only used in the algebraic "decoding"
     var ret: u64 = EMPTY;
@@ -2304,50 +2241,12 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) !IMove {
         };
         const prom = moveStr._slice()[eqIdx + 1];
         var flag = ret.getFlag();
-        if (prom == 'n') {
-            flag |= @intFromEnum(e_moveFlags.KNIGHTPROMO);
-        } else if (prom == 'b') {
-            flag |= @intFromEnum(e_moveFlags.BISHOPPROMO);
-        } else if (prom == 'r') {
-            flag |= @intFromEnum(e_moveFlags.ROOKPROMO);
-        } else if (prom == 'q') {
-            flag |= @intFromEnum(e_moveFlags.QUEENPROMO);
-        } else {
-            @panic("Unknown promotion piece found");
-        }
+        flag |= @intFromEnum(letterPromoToFlag(prom));
+
         ret.setFlag(flag);
     }
 
     return ret;
-}
-
-pub fn pin_scenario() !void {
-    const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
-    std.debug.print("[DEBUG] pin scenario: {s}\n", .{fen});
-
-    var board = getBoardFromFen(fen) catch {
-        return;
-    };
-    print_boardstate(&board);
-
-    getCheckers(&board, true);
-    std.debug.print("[DEBUG] _pin_scenario: W checkers\n", .{});
-    print_bitboard(board.checkersBB);
-    std.debug.print("[DEBUG] _pin_scenario: W pinned \n", .{});
-    print_bitboard(board.pinnedBB);
-
-    getCheckers(&board, false);
-    std.debug.print("[DEBUG] _pin_scenario: B checkers\n", .{});
-    print_bitboard(board.checkersBB);
-    std.debug.print("[DEBUG] _pin_scenario: B pinned \n", .{});
-    print_bitboard(board.pinnedBB);
-    std.debug.print("[DEBUG] _pin_scenario: does B5A5 gives check? {} \n", .{moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(e_square.b5), @intFromEnum(e_square.a5), @intFromEnum(e_moveFlags.QUIETMOVE), .nWhiteQueen))});
-
-    std.debug.print("[DEBUG] _pin_scenario: does C8D6 gives check? {} \n", .{moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(e_square.c8), @intFromEnum(e_square.d6), @intFromEnum(e_moveFlags.QUIETMOVE), .nWhiteKnight))});
-
-    utils.askContinue();
-
-    return;
 }
 
 pub fn test_avx() !void {
@@ -2370,53 +2269,12 @@ pub fn test_avx() !void {
     print_bitboard(state.pinnedBB);
     print_boardstate(&state);
 }
-pub fn test_passed() !void {
-    std.debug.print("[DEBUG] test_passed: starting\n", .{});
-    const initBBw: u64 = 0xFF00;
-    const initBBb: u64 = 0xFF000000000000;
-    print_bitboard(initBBw | initBBb);
-    print_bitboard(passedPawns(initBBw, initBBb));
-
-    const initBB_side_clearw: u64 = 0xFF00;
-    const initBB_side_clearb: u64 = 0x3C000000000000;
-    print_bitboard(initBB_side_clearw | initBB_side_clearb);
-    print_bitboard(passedPawns(initBB_side_clearw, initBB_side_clearb));
-    return;
-}
-pub fn test_isolated() !void {
-    std.debug.print("[DEBUG] test_isolated: starting\n", .{});
-    const initBB: u64 = 0xFF00;
-    print_bitboard(initBB);
-    print_bitboard(isolatedPawns(initBB));
-
-    const _initBB: u64 = 0xF500;
-    print_bitboard(_initBB);
-    print_bitboard(isolatedPawns(_initBB));
-
-    const overKill: u64 = 0x44004400D500;
-    print_bitboard(overKill);
-    print_bitboard(isolatedPawns(overKill));
-
-    return;
-}
-pub fn test_stackedPawn() !void {
-    std.debug.print("[DEBUG] test_stackedPawn: starting\n", .{});
-    const initBB: u64 = 0xFF00;
-    print_bitboard(initBB);
-    print_bitboard(stackedPawns(initBB));
-
-    const overKill: u64 = 0x44004402D700;
-    print_bitboard(overKill);
-    print_bitboard(stackedPawns(overKill));
-}
-
-pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !matchMoveContainer {
-    var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
-    //var tokens = try line.split(alloc, ' ');
-    //defer tokens.deinit(alloc);
+pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string, tmpBoard: *Board_state) !matchMoveContainer {
     var gen = utils.splitGenerator(u8).init(line._slice(), ' ');
 
-    var ret: matchMoveContainer = .{};
+    var ret: matchMoveContainer = undefined;
+    ret.len = 0;
+    ret.lastIrreversibleMoveIndex = 0;
     while (gen.next()) |str| {
         var offset: usize = 0;
         if (utils.contains(str, "1/2-1/2", .ignoreCase) or utils.contains(str, "1-0", .ignoreCase) or utils.contains(str, "0-1", .ignoreCase)) {
@@ -2432,7 +2290,7 @@ pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !match
 
         var moveStr = try string.initFromSlice(alloc, str[offset..str.len]);
         defer moveStr.free(alloc);
-        const move = algebraicToIMove(&tmpBoard, &moveStr) catch {
+        const move = algebraicToIMove(tmpBoard, &moveStr) catch {
             std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line._slice(), moveStr._slice() });
             @panic("???");
         };
@@ -2442,6 +2300,11 @@ pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !match
         }
     }
     return ret;
+}
+
+pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *string) !matchMoveContainer {
+    var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
+    return _algebraicLineToIMoveMatch(alloc, line, &tmpBoard);
 }
 pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *string) !Board_state {
     const moves = try algebraicLineToIMoveMatch(alloc, line);
@@ -2454,42 +2317,6 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *string) !Board
     return ret;
 }
 
-pub fn algebraicToFen(alloc: std.mem.Allocator, line: *string) ![MAX_FEN_LENGTH]u8 {
-    const moves = try algebraicLineToIMoveMatch(alloc, line);
-    var tmp: Board_state = try getBoardFromFen(DEFAULT_FEN);
-    for (0..moves.len) |i| {
-        const move = moves.moves[i];
-        tmp.makeMove(move);
-        sanityCheckBoardState(&tmp);
-    }
-    defer tmp.free(alloc);
-    return tmp.get_fen();
-}
-pub fn test_single_algebraic(alloc: std.mem.Allocator) !void {
-    var state = try getBoardFromFen(DEFAULT_FEN);
-    // 1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6
-    const algFen = "d4";
-    var _algFen: string = try string.initFromSlice(alloc, algFen);
-    defer _algFen.free(alloc);
-    const move = algebraicToIMove(&state, &_algFen);
-    std.debug.print("[DEBUG] test_single_algebraic: from {d} to {d} flag {d} fpiece {}\n", .{ move.getFrom(), move.getTo(), move.getFlag(), move.getFromPiece() });
-}
-pub fn test_line_algebraic(alloc: std.mem.Allocator) !void {
-    const algFen = "1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6";
-    var _algFen: string = try string.initFromSlice(alloc, algFen);
-    defer _algFen.free(alloc);
-    var moves = try algebraicLineToIMoveMatch(alloc, &_algFen);
-
-    std.debug.print("[DEBUG] test_line_algebraic: original: {s}, reconstructed: \n", .{algFen});
-    moves.print();
-}
-pub fn test_safety() !void {
-    print_bitboard(safetyArea(e_square.e4));
-    print_bitboard(safetyArea(e_square.a1));
-    print_bitboard(safetyArea(e_square.a4));
-    print_bitboard(safetyArea(e_square.a8));
-    print_bitboard(safetyArea(e_square.e8));
-}
 pub fn test_move_heur() !void {
     //var tmp: Board_state = try getBoardFromFen(mainl.GLOBAL_ALLOC, "1nbqkbnr/2pppppp/8/1p6/Rp6/2P5/4PPPP/1NBQKBNR b Hh b6 0 10");
     var tmp: Board_state = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
@@ -2507,56 +2334,12 @@ pub fn test_move_heur() !void {
         const depth = order.depths[i];
         std.debug.print("{s} : i:{d} idx:{d} score:{d} depth:{d}\n", .{ move.getStr(), i, idx, score, depth });
     }
-    std.debug.print("ben\n", .{});
-}
-pub fn test_parser(alloc: std.mem.Allocator) !void {
-    var tokens = utils.split(u8, alloc, DEFAULT_FEN, ' ') catch {
-        return debug_err.fenErr;
-    };
-    defer tokens.deinit(alloc);
-    for (0..tokens.items.len) |i| {
-        std.debug.print("'{s}' ", .{tokens.items[i]});
-    }
-    std.debug.print("\n", .{});
-    const nTokens = utils.str_countLetter(DEFAULT_FEN, ' ');
-    std.debug.print("{d} tokens\n", .{nTokens});
-
-    var gen = utils.splitGenerator(u8).init(DEFAULT_FEN, ' ');
-    while (gen.next()) |tok| {
-        std.debug.print("'{s}' ", .{tok});
-    }
-    std.debug.print("\n", .{});
-
-    const testcases = [_][]const u8{
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
-        " rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR  w HAha - 0 0 ",
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR   w   HAha - 0  0  ",
-        "   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
-    };
-    for (0..testcases.len) |i| {
-        const vers = testcases[i];
-        std.debug.print("Testion for version '{s}' \n", .{vers});
-        gen = utils.splitGenerator(u8).init(vers, ' ');
-        while (gen.next()) |tok| {
-            std.debug.print("'{s}' ", .{tok});
-        }
-        std.debug.print("\n", .{});
-    }
-
-    return;
 }
 
 pub fn main(alloc: std.mem.Allocator) !void {
-    mainl.initAll(alloc, true);
-    try test_parser(alloc);
+    _ = alloc;
+    //mainl.initAll(alloc, true);
     //try test_avx();
-    //try test_isolated();
-    //try test_passed();
-    //try test_safety();
-    //try test_stackedPawn();
-    //try test_single_algebraic();
-    //try test_line_algebraic();
     //try test_move_heur();
     return;
 }
