@@ -92,6 +92,9 @@ pub const Hash_bucket = struct {
             .ALWAYS_REPLACE => {
                 p_self.addEntry_AR(p_entry);
             },
+            .ALWAYS_REPLACE_OLDEST => {
+                p_self.addEntry_oldest(p_entry);
+            },
             .KEEP_DEEPER => {
                 p_self.addEntry_deep(p_entry);
             },
@@ -119,6 +122,34 @@ pub const Hash_bucket = struct {
             if (entry.exploredDepth < sDepth) {
                 idxS = i;
                 sDepth = entry.exploredDepth;
+            }
+        }
+
+        p_self.entries[idxS] = p_entry.*;
+        //p_self.len = @min(p_self.len + 1, p_self.entries.len);
+    }
+    pub fn addEntry_oldest(p_self: *Hash_bucket, p_entry: *const Hash_entry) void {
+        var idxS: usize = 0;
+        var sAge: usize = 0;
+        // if a better entry exists for this hash key we exit
+        for (0..configl.ITEM_PER_BUCKET) |i| {
+            const entry = p_self.entries[i];
+            if (!entry.valid or (entry.age + configl.SCHEDULER_MAX_ENDGAME_DEPTH) < p_entry.age) {
+                p_self.entries[i] = p_entry.*;
+                p_self.len = @min(p_self.len + 1, p_self.entries.len);
+                return;
+            }
+            if (entry.key.code == p_entry.key.code) {
+                if (entry.exploredDepth > p_entry.exploredDepth) {
+                    return;
+                }
+                p_self.entries[i] = p_entry.*;
+                return;
+            }
+
+            if (entry.age < sAge) {
+                idxS = i;
+                sAge = entry.age;
             }
         }
 

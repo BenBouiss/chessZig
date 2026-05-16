@@ -1853,41 +1853,33 @@ pub inline fn _AllAttackPawnMask_cst(bb_piece: u64, comptime white: bool) u64 {
 
 pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
     var ret: u64 = EMPTY;
-    var sq_e: e_square = e_square.a1;
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-
-        sq_e = @enumFromInt(sq);
-        ret |= getBishopAttacks(occ_bb, sq_e);
+        ret |= getBishopAttacks(occ_bb, @enumFromInt(sq));
     }
     return ret;
 }
 
 pub fn _AllAttackRookMask(bb_piece: u64, occ_bb: u64) u64 {
     var ret: u64 = EMPTY;
-    var sq_e: e_square = e_square.a1;
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-
-        sq_e = @enumFromInt(sq);
-        ret |= getRookAttacks(occ_bb, sq_e);
+        ret |= getRookAttacks(occ_bb, @enumFromInt(sq));
     }
     return ret;
 }
 
 pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
     var ret: u64 = EMPTY;
-    var sq_e: e_square = e_square.a1;
     var _bb_piece = bb_piece;
     while (_bb_piece != 0) {
         const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-        sq_e = @enumFromInt(sq);
-
+        const sq_e: e_square = @enumFromInt(sq);
         ret |= getRookAttacks(occ_bb, sq_e);
         ret |= getBishopAttacks(occ_bb, sq_e);
     }
@@ -2132,7 +2124,6 @@ pub fn algebraicIsLetterPiece(letter: u8) bool {
 pub fn algebraicIsLetterFile(letter: u8) bool {
     return letter >= 'a' and letter <= 'h';
 }
-
 pub fn algebraicIsLetterRank(letter: u8) bool {
     return letter >= '1' and letter <= '8';
 }
@@ -2197,7 +2188,6 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) !IMove {
 
     // here filter out the pinned direction only
     if (l_popcount(potentialFromBB) > 1) {
-        //const kingBB = p_state.getKingBB(p_state.whiteToMove());
         const kingSq = p_state.getKingSq(p_state.whiteToMove());
         var _bb = potentialFromBB;
         while (_bb != 0) {
