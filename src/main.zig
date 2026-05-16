@@ -133,6 +133,24 @@ pub inline fn getGlobalGPA() std.mem.Allocator {
     //std.debug.assert(GLOBAL_CTX.isInit);
     return GLOBAL_CTX.gpa;
 }
+pub fn test_test(alloc: std.mem.Allocator) !void {
+    //initAll(arena, false);
+    hashl._initOrReallocHashTable(alloc, 25, false);
+    defer hashl.hashTable.free(alloc, false);
+    const d = [_]u8{ 16, 4 };
+    const code: u64 = 42;
+    for (0..d.len) |i| {
+        //const entry: hashl.Hash_entry = .{ .exploredDepth = d[i], .key = .{ .code = code }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
+        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, d[i], 1);
+        std.debug.print("{}\n", .{@TypeOf(entry.val)});
+        std.debug.print("{d} {}\n", .{ entry.val.search.depth(), entry.val.search.nodeT() });
+
+        std.debug.print("{any}\n", .{entry.val.search});
+        std.debug.assert(hashl.hashTable.storeEntry(&entry, code));
+    }
+    const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
+    _ = _bucket;
+}
 
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
@@ -145,7 +163,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try heuristicl.main(GPA);
     //try chessl.main(GPA);
     //try test_bug2(GPA);
-    try bookl.main(GPA);
-
+    //try bookl.main(GPA);
+    try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
 }

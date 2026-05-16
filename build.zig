@@ -72,8 +72,8 @@ pub fn build(b: *std.Build) void {
     const engine = b.addExecutable(.{
         .name = "engine",
         .root_module = b.createModule(.{
-            .unwind_tables = .none,
-            .strip = true,
+            //.unwind_tables = .none,
+            //.strip = true,
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
             // this package, which is why in this case we don't have to give it a name.

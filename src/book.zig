@@ -126,7 +126,6 @@ pub const openingDatabase = struct {
     }
 };
 pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string) !void {
-    //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
     const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
     defer file.close(mainl.getGlobalIo());
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);

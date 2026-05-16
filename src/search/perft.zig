@@ -19,7 +19,6 @@ const build_options = @import("build_options");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
-const typedMoveContainer = movel.typedMoveContainer;
 const e_square = squarel.e_square;
 const scoreType = heuristicl.scoreType;
 const engine = enginel.engine;
@@ -185,7 +184,7 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
     }
     if (feats.useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
-        _ = hashl.hashTable.storeEntry(&entry);
+        _ = hashl.hashTable.storeEntry(&entry, p_state.key.code);
     }
 
     return count;
@@ -249,7 +248,7 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
     }
     if (comptime useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
-        _ = hashl.hashTable.storeEntry(&entry);
+        _ = hashl.hashTable.storeEntry(&entry, p_state.key.code);
     }
     return count;
 }
@@ -283,7 +282,7 @@ pub fn perft_debug_loop(p_state: *chess.Board_state, depth: u8, batched: bool, p
     }
     if (comptime useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.key, depth, count);
-        _ = hashl.hashTable.storeEntry(&entry);
+        _ = hashl.hashTable.storeEntry(&entry, p_state.key.code);
     }
     return count;
 }

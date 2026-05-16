@@ -43,13 +43,14 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             p_info.searchStat.n_hashRetrieve += 1;
             //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
             if (comptime t == .NonPV) {
-                if (_entry.val.search.t == .ALL) {
+                const tmp = _entry.val.search.nodeT();
+                if (tmp == .ALL) {
                     return _entry.eval();
-                } else if (_entry.val.search.t == .LOWER) {
+                } else if (tmp == .LOWER) {
                     if (_entry.eval() >= beta) {
                         return _entry.eval();
                     }
-                } else if (_entry.val.search.t == .UPPER) {
+                } else if (tmp == .UPPER) {
                     if (_entry.eval() >= _alpha) {
                         return _entry.eval();
                     }
@@ -87,7 +88,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
     var useLMR = false;
     var hashMoveIsQuiet: bool = false;
     if (hashMove.isValid()) {
-        if (hashMove.isQuietMove() and hashMove.getFromPiece() == p_state.pieceArray[hashMove.getFrom()]) {
+        if (hashMove.isQuietMove()) {
             gen.moves.append(hashMove);
             hashMoveIsQuiet = true;
         }
@@ -224,7 +225,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .LOWER, move, p_state.turn_count);
                 //if (p_state.lastMove.isValid()) {
-                _ = hashl.hashTable.storeEntry(&s_entry);
+                _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
                 //}
             }
 
@@ -243,7 +244,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         if (p_features.useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove, p_state.turn_count);
             //if (p_state.lastMove.isValid()) {
-            _ = hashl.hashTable.storeEntry(&s_entry);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
             // }
         }
     }
