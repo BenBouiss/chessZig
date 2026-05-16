@@ -60,16 +60,16 @@ pub const DEFAULT_FIXED_DEPTH = false;
 pub const _DEFAULT_STATIC_SEARCH = "false";
 pub const DEFAULT_STATIC_SEARCH = false;
 
-pub const DEFAULT_LATE_MOVE_REDUCTION = false;
-pub const _DEFAULT_LATE_MOVE_REDUCTION = "false";
+pub const DEFAULT_LATE_MOVE_REDUCTION = true;
+pub const _DEFAULT_LATE_MOVE_REDUCTION = "true";
 
 pub const DEFAULT_SEARCH_TYPE: searchType = .ZWSI;
 pub const _DEFAULT_SEARCH_TYPE = "ZWSI";
 
 pub const searchType = enum { STD, PVS, ZWS, ZWSI, ASPIRATION };
 
-pub const TT_strat = enum { ALWAYS_REPLACE, KEEP_DEEPER };
-pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
+pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
+pub const DEFAULT_TT_STRAT: TT_strat = .ALWAYS_REPLACE_OLDEST;
 
 pub const DEFAULT_USE_SEE = true;
 pub const _DEFAULT_USE_SEE = "true";

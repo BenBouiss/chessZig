@@ -111,11 +111,9 @@ pub const openingDatabase = struct {
             },
         }
         var ret: std.ArrayList(string) = try .initCapacity(alloc, 4);
-        std.debug.print("[DEBUG] sample: starting loop\n", .{});
         var randInt = p_self.rngIntGenerator.random();
         for (0..size) |i| {
             const randIdx = randInt.intRangeAtMost(usize, 0, drawing.items.len);
-            //std.debug.print("[DEBUG] sample: index: {d}\n", .{randIdx});
             try ret.append(alloc, drawing.items[randIdx]);
             _ = i;
         }

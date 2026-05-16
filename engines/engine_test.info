@@ -1,14 +1,15 @@
 [engine1]
-path="engines/bin/engine_15_05_26";
+path="engines/bin/engine_16_05_26";
 name="1";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_15_05_26_l";
+path="engines/bin/engine_16_05_26";
 name="2";
-"setoption name useHash value false";
+"setoption name useHash value true";
 "setoption name reportProgress value false";
+"setoption name hashS value 100";
 
 
 [match]
@@ -22,6 +23,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=true;
 
-//sprtmode=true;
+sprtmode=true;
 //maxSPRTMatch=100;
 

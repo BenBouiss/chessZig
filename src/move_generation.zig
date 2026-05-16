@@ -720,45 +720,26 @@ pub fn moveGenKingBB(p_board: *const Board_state, comptime white: bool, emptyOrE
     }
 }
 pub inline fn moveGenBishopBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
-    p_out.bishopMoves = chess.EMPTY;
-    var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)];
     if (comptime white) {
-        _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)];
+        p_out.bishopMoves = chess._AllAttackBishopMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)], p_board.occupiedBB) & emptyOrEnemy;
+    } else {
+        p_out.bishopMoves = chess._AllAttackBishopMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)], p_board.occupiedBB) & emptyOrEnemy;
     }
-    while (_bb != 0) {
-        const sq = chess.bitscan(_bb);
-        _bb &= _bb - 1;
-        p_out.bishopMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
-    }
-    p_out.bishopMoves &= emptyOrEnemy;
 }
 pub inline fn moveGenRookBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
-    p_out.rookMoves = chess.EMPTY;
-    var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)];
     if (comptime white) {
-        _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)];
+        p_out.rookMoves = chess._AllAttackRookMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)], p_board.occupiedBB) & emptyOrEnemy;
+    } else {
+        p_out.rookMoves = chess._AllAttackRookMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)], p_board.occupiedBB) & emptyOrEnemy;
     }
-    while (_bb != 0) {
-        const sq = chess.bitscan(_bb);
-        _bb &= _bb - 1;
-        p_out.rookMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
-    }
-    p_out.rookMoves &= emptyOrEnemy;
 }
 
 pub inline fn moveGenQueenBB(p_board: *const Board_state, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
-    p_out.queenMoves = chess.EMPTY;
-    var _bb = p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)];
     if (comptime white) {
-        _bb = p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)];
+        p_out.queenMoves = chess._AllAttackQueenMask(p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)], p_board.occupiedBB) & emptyOrEnemy;
+    } else {
+        p_out.queenMoves = chess._AllAttackQueenMask(p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)], p_board.occupiedBB) & emptyOrEnemy;
     }
-    while (_bb != 0) {
-        const sq = chess.bitscan(_bb);
-        _bb &= _bb - 1;
-        p_out.queenMoves |= chess.getRookAttacks(p_board.occupiedBB, @enumFromInt(sq));
-        p_out.queenMoves |= chess.getBishopAttacks(p_board.occupiedBB, @enumFromInt(sq));
-    }
-    p_out.queenMoves &= emptyOrEnemy;
 }
 
 pub inline fn moveGenBB(p_board: *const Board_state) moveBBState {

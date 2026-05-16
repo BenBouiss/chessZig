@@ -1209,6 +1209,17 @@ pub fn launch_engine(debugMode: bool) !void {
     return;
 }
 
+//pub fn main(init: std.process.Init.Minimal) anyerror!void {
+//    _ = init;
+//    const allocator = std.heap.page_allocator;
+//    var threaded: std.Io.Threaded = .init(allocator, .{});
+//    defer threaded.deinit();
+//    const io = threaded.io();
+//    mainl.GLOBAL_CTX.setIO(io);
+//    mainl.GLOBAL_CTX.setGPA(allocator);
+//    mainl.GLOBAL_CTX.isInit = true;
+//    try launch_engine(false);
+//}
 pub fn main(init: std.process.Init) anyerror!void {
     mainl.GLOBAL_CTX.setInit(init);
     try launch_engine(false);
