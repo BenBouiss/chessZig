@@ -22,44 +22,32 @@ pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 
 const MOVE_STR_MAX_LENGTH = 5;
 
-pub fn build_move(from: u8, to: u8, flag: u8, piece: e_piece) IMove {
+pub fn build_move(from: u8, to: u8, flag: u8) IMove {
     var m_move: u16 = (flag);
-    var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare));
-    m_piece <<= 8;
-    m_piece |= @intFromEnum(piece);
-
     m_move <<= 6;
     m_move |= (to);
     m_move <<= 6;
     m_move |= (from);
-    const ret: IMove = .{ .m_move = m_move, .m_piece = m_piece };
+    const ret: IMove = .{ .m_move = m_move };
     return ret;
 }
-pub fn build_move_in(from: u8, to: u8, flag: u8, piece: e_piece, p_out: *moveContainer) *IMove {
+pub fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
     var m_move: u16 = (flag);
-    var m_piece: u16 = (@intFromEnum(e_piece.nEmptySquare));
-    m_piece <<= 8;
-    m_piece |= @intFromEnum(piece);
     m_move <<= 6;
     m_move |= (to);
     m_move <<= 6;
     m_move |= (from);
-    //p_out.moves[p_out.len] = .{ .m_move = (((@as(u16, @intCast(flag)) & 0xF) << 12) | ((@as(u16, @intCast(to)) & 0x3F) << 6) | (@as(u16, @intCast(from)) & 0x3F)), .m_piece = m_piece };
-    p_out.moves[p_out.len] = .{ .m_move = m_move, .m_piece = m_piece };
+    p_out.moves[p_out.len] = .{ .m_move = m_move };
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];
 }
-pub fn build_capture_move_in(from: u8, to: u8, flag: u8, fPiece: e_piece, cPiece: e_piece, p_out: *moveContainer) *IMove {
+pub fn build_capture_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
     var m_move: u16 = (flag);
-    var m_piece: u16 = (@intFromEnum(cPiece));
-    m_piece <<= 8;
-    m_piece |= @intFromEnum(fPiece);
-
     m_move <<= 6;
     m_move |= (to);
     m_move <<= 6;
     m_move |= (from);
-    p_out.moves[p_out.len] = .{ .m_move = m_move, .m_piece = m_piece };
+    p_out.moves[p_out.len] = .{ .m_move = m_move };
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];
 }
@@ -68,21 +56,7 @@ pub const IMove = struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
     //tried to breakdown the m_move, into flag: u8, from: u8, to: u8, performance went down in perft ~130141000 nps at the end from ~155481000.
     m_move: u16 = 0,
-    // first 8 bits = start_piece, last = capture_piece
-    m_piece: u16 = 0,
 
-    pub inline fn setCapture(p_self: *IMove, capture: e_piece) void {
-        //p_self.c_piece = capture;
-        var m_piece: u16 = @intFromEnum(capture);
-        m_piece <<= 8;
-        p_self.m_piece &= (0xFF);
-        p_self.m_piece |= (m_piece);
-    }
-    pub fn setFromPiece(p_self: *IMove, piece: e_piece) void {
-        //p_self.c_piece = capture;
-        p_self.m_piece &= (0xFF00);
-        p_self.m_piece |= (@intFromEnum(piece));
-    }
     pub inline fn setFlag(p_self: *IMove, flag: u8) void {
         //reset the top 4 bits
         p_self.m_move &= (0xFFF);
@@ -91,7 +65,7 @@ pub const IMove = struct {
     }
 
     pub inline fn equal(self: IMove, other: IMove) bool {
-        return ((self.m_move == other.m_move) and (self.m_piece == other.m_piece));
+        return (self.m_move == other.m_move);
     }
 
     pub fn softEqual(self: IMove, other: IMove) bool {
@@ -107,18 +81,10 @@ pub const IMove = struct {
         return false;
     }
     pub inline fn isIrreversible(self: IMove) bool {
-        return self.isCapture() or chess.isPawnPiece(self.getFromPiece());
+        return self.isCapture();
     }
     pub inline fn getFrom(self: IMove) u8 {
         return @intCast((self.m_move & 0x3F));
-    }
-
-    pub inline fn getFromPiece(self: IMove) e_piece {
-        return @enumFromInt((self.m_piece & 0xFF));
-    }
-
-    pub inline fn getCapturePiece(self: IMove) e_piece {
-        return @enumFromInt((self.m_piece & 0xFF00) >> 8);
     }
 
     pub inline fn getTo(self: IMove) u8 {
@@ -157,7 +123,7 @@ pub const IMove = struct {
         return (self.m_move != 0);
     }
     pub inline fn copy(self: IMove) IMove {
-        return .{ .m_move = self.m_move, .m_piece = self.m_piece };
+        return .{ .m_move = self.m_move };
     }
     pub fn getStr(self: IMove) [5]u8 {
         var strM: [5]u8 = undefined;
@@ -176,37 +142,6 @@ pub const IMove = struct {
     }
     pub fn print(self: IMove) void {
         std.debug.print("{s} ", .{self.getStr()});
-    }
-};
-
-pub const typedMoveContainer = struct {
-    quietMoves: moveContainer = .{},
-    captureMoves: moveContainer = .{},
-    len: u64 = 0,
-    pub fn print(self: typedMoveContainer) void {
-        std.debug.print("[PRINT] typedMoveContainer: quiet moves: \n", .{});
-        self.quietMoves.print();
-
-        std.debug.print("[PRINT] typedMoveContainer: capture moves: \n", .{});
-        self.captureMoves.print();
-    }
-
-    pub fn flatten(self: typedMoveContainer) moveContainer {
-        var ret: moveContainer = .{ .len = 0 };
-        _ = ret.extend(&self.quietMoves);
-        _ = ret.extend(&self.captureMoves);
-        return ret;
-    }
-
-    fn append(p_self: *typedMoveContainer, move: IMove, comptime category: e_moveCategory) void {
-        if (comptime category == .QUIET) {
-            p_self.quietMoves.append(move);
-        } else if (comptime category == .CAPTURE) {
-            p_self.captureMoves.append(move);
-        } else {
-            @panic("");
-        }
-        p_self.len += 1;
     }
 };
 
@@ -248,22 +183,7 @@ pub const moveContainer = struct {
         p_self.len += p_other.len;
         return true;
     }
-    pub fn merge(p_self: *moveContainer, p_other: *moveContainer) void {
-        //std.debug.assert(p_self.len == p_other.len);
-        var currentIndex: usize = 0;
-        for (0..p_other.len) |i| {
-            const move: IMove = p_other.moves[i];
-            if (currentIndex == p_self.len) {
-                p_self.append(move);
-                continue;
-            }
-            if (!p_self.moves[i].equal(move)) {
-                p_self.moves[i] = move;
-            }
-            currentIndex += 1;
-        }
-        p_self.len = p_other.len;
-    }
+
     pub fn isDifferent(self: moveContainer, other: moveContainer) bool {
         for (0..self.len) |i| {
             const move = self.moves[i];
@@ -293,7 +213,7 @@ pub const moveContainer = struct {
         for (0..biggerContainer.len) |i| {
             const move = biggerContainer.moves[i];
             if (!move.isIn(smallerContainer)) {
-                std.debug.print("{s}-{}-{}-{} ", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
+                std.debug.print("{s}-{} ", .{ move.getStr(), move.getFlag() });
             }
         }
 
@@ -301,7 +221,7 @@ pub const moveContainer = struct {
         for (0..smallerContainer.len) |i| {
             const move = smallerContainer.moves[i];
             if (!move.isIn(biggerContainer)) {
-                std.debug.print("{s}-{}-{}-{} ", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
+                std.debug.print("{s}-{} ", .{ move.getStr(), move.getFlag() });
             }
         }
         std.debug.print(" '\n", .{});
@@ -351,7 +271,9 @@ pub const MAX_MATCH_LENGTH_STR: usize = MAX_MATCH_LENGTH * (5 + 1);
 pub const matchMoveContainer = struct {
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     keyCodes: [MAX_MATCH_LENGTH]u64 = undefined,
-    lastIrreversibleMoveIndex: u16 = 0,
+    irreversible: [MAX_MATCH_LENGTH]bool = undefined,
+
+    lastIrreversibleMoveIndex: usize = 0,
     len: usize = 0,
 
     pub fn print(p_self: *const matchMoveContainer) void {
@@ -363,49 +285,24 @@ pub const matchMoveContainer = struct {
         std.debug.print("{s}\n", .{line_str._slice()});
         return;
     }
-    pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
+    pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key, pawnMove: bool) bool {
         if (comptime useDebug) {
             if (p_self.len == MAX_MATCH_LENGTH) {
                 @panic("list is full");
             }
         }
-        if (move.isIrreversible()) {
-            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
+        if (move.isIrreversible() or pawnMove) {
+            p_self.lastIrreversibleMoveIndex = p_self.len;
+            p_self.irreversible[p_self.len] = true;
+        } else {
+            p_self.irreversible[p_self.len] = false;
         }
         p_self.moves[p_self.len] = move;
         p_self.keyCodes[p_self.len] = key.code;
         p_self.len += 1;
         return true;
     }
-    pub fn _append(p_self: *matchMoveContainer, move: IMove, key: u32) bool {
-        if (comptime useDebug) {
-            if (p_self.len == MAX_MATCH_LENGTH) {
-                @panic("list is full");
-            }
-        }
-        if (move.isIrreversible()) {
-            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len);
-        }
-        p_self.moves[p_self.len] = move;
-        p_self.keyCodes[p_self.len] = key;
-        p_self.len += 1;
-        return true;
-    }
-    pub fn merge(p_self: *matchMoveContainer, p_other: *matchMoveContainer, selfOffset: usize) void {
-        var currentIndex: usize = selfOffset;
-        for (0..p_other.len) |i| {
-            const move: IMove = p_other.moves[i];
-            const key: u32 = p_other.keyCodes[i];
-            if (currentIndex == p_self.len) {
-                _ = p_self._append(move, key);
-                continue;
-            }
-            if (!p_self.moves[currentIndex].equal(move)) {
-                currentIndex += 1;
-            }
-        }
-        p_self.len = p_other.len;
-    }
+
     pub fn getRepetitions(self: *const matchMoveContainer) u8 {
         var count: u8 = 0;
         if (self.len >= (self.lastIrreversibleMoveIndex + 4)) {
@@ -428,10 +325,10 @@ pub const matchMoveContainer = struct {
 
     pub fn popMove(p_self: *matchMoveContainer) IMove {
         if (comptime useDebug) {
-            if (p_self.len <= 1) {
-                //@panic("list is empty");
-                p_self.len = 0;
-                return .{};
+            if (p_self.len == 0) {
+                @panic("list is empty");
+                //p_self.len = 0;
+                //return .{};
             }
         }
         p_self.len -= 1;
@@ -440,8 +337,7 @@ pub const matchMoveContainer = struct {
         } else if (p_self.lastIrreversibleMoveIndex == p_self.len) {
             p_self.lastIrreversibleMoveIndex = @intCast(p_self.len - 1);
             while (p_self.lastIrreversibleMoveIndex > 0) : (p_self.lastIrreversibleMoveIndex -= 1) {
-                const move = p_self.moves[p_self.lastIrreversibleMoveIndex];
-                if (move.isIrreversible()) {
+                if (p_self.irreversible[p_self.lastIrreversibleMoveIndex]) {
                     break;
                 }
             }
@@ -452,18 +348,17 @@ pub const matchMoveContainer = struct {
     pub fn popMoveVoid(p_self: *matchMoveContainer) void {
         if (comptime useDebug) {
             if (p_self.len < 1) {
-                //@panic("list is empty");
-                p_self.len = 0;
+                @panic("list is empty");
+                //p_self.len = 0;
             }
         }
         p_self.len -= 1;
         if (p_self.len == 0) {
             p_self.lastIrreversibleMoveIndex = 0;
         } else if (p_self.lastIrreversibleMoveIndex == p_self.len) {
-            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len - 1);
+            p_self.lastIrreversibleMoveIndex -= 1;
             while (p_self.lastIrreversibleMoveIndex > 0) : (p_self.lastIrreversibleMoveIndex -= 1) {
-                const move = p_self.moves[p_self.lastIrreversibleMoveIndex];
-                if (move.isIrreversible()) {
+                if (p_self.irreversible[p_self.lastIrreversibleMoveIndex]) {
                     break;
                 }
             }

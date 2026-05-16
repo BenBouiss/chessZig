@@ -1,18 +1,6 @@
-const chessl = @import("../chess.zig");
-const moveGenl = @import("../move_generation.zig");
-const movel = @import("../move.zig");
-const squarel = @import("../square.zig");
-const benchmarkl = @import("../benchmark.zig");
 const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
-const perftl = @import("../search/perft.zig");
-const stringl = @import("../string.zig");
-const bookl = @import("../book.zig");
-const configl = @import("../config.zig");
-
 const std = @import("std");
-
-const Board_state = chessl.Board_state;
 
 test "entry retrievale" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
@@ -22,11 +10,15 @@ test "entry retrievale" {
     mainl.initAll(arena, false);
     hashl._initOrReallocHashTable(arena, 25, false);
     for (0..100) |i| {
-        const entry: hashl.Hash_entry = .{ .exploredDepth = 1, .key = .{ .code = @intCast(i) }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
-        try std.testing.expect(hashl.hashTable.storeEntry(&entry));
+        //const entry: hashl.Hash_entry = .{ .exploredDepth = 1, .key = .{ .code = @intCast(i) }, .val = .{ .search = .{ .evaluation = @intCast(i * i) } }, .valid = true };
+        const code1: u64 = @intCast(i);
+        const entry = hashl.buildEntryFromMatchResult(.{ .code = code1 }, 1, @intCast(i * i));
+        try std.testing.expect(hashl.hashTable.storeEntry(&entry, code1));
 
-        const entry2: hashl.Hash_entry = .{ .exploredDepth = 2, .key = .{ .code = @as(u64, @intCast(i)) + hashl.hashTable.size }, .val = .{ .search = .{ .evaluation = @intCast(i * i * i) } }, .valid = true };
-        try std.testing.expect(hashl.hashTable.storeEntry(&entry2));
+        //const entry2: hashl.Hash_entry = .{ .exploredDepth = 2, .key = .{ .code = @as(u64, @intCast(i)) + hashl.hashTable.size }, .val = .{ .search = .{ .evaluation = @intCast(i * i * i) } }, .valid = true };
+        const code2 = @as(u64, @intCast(i)) + hashl.hashTable.size;
+        const entry2 = hashl.buildEntryFromMatchResult(.{ .code = code2 }, 2, @intCast(i * i * i));
+        try std.testing.expect(hashl.hashTable.storeEntry(&entry2, code2));
     }
     for (0..100) |i| {
         const entry = hashl.getEntryFromMatch(.{ .code = @intCast(i) }, 1);
@@ -56,15 +48,17 @@ test "entry overwrite" {
     //const depths = [_]u8{ 1, 4 };
 
     for (0..100) |i| {
-        const entry: hashl.Hash_entry = .{ .exploredDepth = @intCast(i), .key = .{ .code = code }, .val = .{ .search = .{ .evaluation = @intCast(i) } }, .valid = true };
-        try std.testing.expect(hashl.hashTable.storeEntry(&entry));
+        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, @intCast(i), @intCast(i));
+        //const entry: hashl.Hash_entry = .{ .exploredDepth = @intCast(i), .key = .{ .code = code }, .val = .{ .search = .{ .evaluation = @intCast(i) } }, .valid = true };
+        try std.testing.expect(hashl.hashTable.storeEntry(&entry, code));
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
     try std.testing.expectEqual(1, bucket.len);
 
-    const entry: hashl.Hash_entry = .{ .exploredDepth = 200, .key = .{ .code = code + m }, .val = .{ .search = .{ .evaluation = 0 } }, .valid = true };
-    try std.testing.expect(hashl.hashTable.storeEntry(&entry));
+    //const entry: hashl.Hash_entry = .{ .exploredDepth = 200, .key = .{ .code = code + m }, .val = .{ .search = .{ .evaluation = 0 } }, .valid = true };
+    const entry = hashl.buildEntryFromMatchResult(.{ .code = code + m }, 200, 0);
+    try std.testing.expect(hashl.hashTable.storeEntry(&entry, code + m));
 
     try std.testing.expectEqual(2, bucket.len);
 
@@ -81,8 +75,9 @@ test "entry replacement" {
     const d = [_]u8{ 16, 4 };
     const code: u64 = 42;
     for (0..d.len) |i| {
-        const entry: hashl.Hash_entry = .{ .exploredDepth = d[i], .key = .{ .code = code }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
-        std.debug.assert(hashl.hashTable.storeEntry(&entry));
+        //const entry: hashl.Hash_entry = .{ .exploredDepth = d[i], .key = .{ .code = code }, .val = .{ .search = .{ .evaluation = 1 } }, .valid = true };
+        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, d[i], 1);
+        std.debug.assert(hashl.hashTable.storeEntry(&entry, code));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
     try std.testing.expectEqual(1, _bucket.len);

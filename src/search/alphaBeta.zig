@@ -81,9 +81,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     if (p_state.isStaleMateRepetition()) {
         if (p_features.useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
-            _ = hashl.hashTable.storeEntry(&s_entry);
-            // might be useful for late game
-            //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
         }
         return weightl.simpleStalemateScore;
     }
@@ -204,7 +202,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
             }
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .LOWER, move, p_state.turn_count);
-                _ = hashl.hashTable.storeEntry(&s_entry);
+                _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
             }
             p_info.searchStat.n_cutoffs += 1;
             return finalScore;
@@ -219,7 +217,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     } else {
         if (p_features.useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, hashFlag, bestMove, p_state.turn_count);
-            _ = hashl.hashTable.storeEntry(&s_entry);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
         }
     }
 
@@ -236,7 +234,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
     if (p_state.isStaleMateRepetition()) {
         if (p_features.useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
-            _ = hashl.hashTable.storeEntry(&s_entry);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
             // might be useful for late game
             //hashl.hashTable.overwriteEvaluationEntries(&s_entry, heuristicl.simpleStalemateScore);
         }

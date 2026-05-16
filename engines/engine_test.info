@@ -9,7 +9,6 @@ path="engines/bin/engine_16_05_26";
 name="2";
 "setoption name useHash value true";
 "setoption name reportProgress value false";
-"setoption name hashS value 100";
 
 
 [match]

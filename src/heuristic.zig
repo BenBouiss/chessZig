@@ -1148,8 +1148,8 @@ pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, 
         // previous best move at that ply
         return configl.ORDERING_LINE_VALUE;
     }
-    const fpiece = move.getFromPiece();
-    const cpiece = move.getCapturePiece();
+    const fpiece = p_state.getFromPiece(move);
+    const cpiece = p_state.getCapturePiece(move);
     const from = move.getFrom();
     const to = move.getTo();
 
@@ -1229,7 +1229,7 @@ pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrd
             p_order.depths[i] = depth - 1;
             continue;
         }
-        if ((to & safetyArea) != 0 or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move) or chess.isPawnPiece(move.getFromPiece())) {
+        if ((to & safetyArea) != 0 or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move) or chess.isPawnPiece(p_state.getFromPiece(move))) {
             p_order.depths[i] = depth - 1;
             continue;
         }

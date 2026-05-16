@@ -648,7 +648,7 @@ const guiState = struct {
                 p_self.match.availableMoves.print();
                 const moveArr = chessl.getEmptyMoveListFromStr(cmdBuffer.str);
                 const move = moveArr.moves[0];
-                std.debug.print("[DEBUG] matchOnBestMove: move found: {s}-{}-{}-{} \n", .{ move.getStr(), move.getFlag(), move.getFromPiece(), move.getCapturePiece() });
+                std.debug.print("[DEBUG] matchOnBestMove: move found: {s}-{} \n", .{ move.getStr(), move.getFlag() });
                 chessl.print_boardstate(&p_self.match.chessState);
             }
             return false;
