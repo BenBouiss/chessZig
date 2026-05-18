@@ -44,15 +44,16 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
             if (comptime t == .NonPV) {
                 const tmp = _entry.val.search.nodeT();
+                const eval = _entry.eval();
                 if (tmp == .ALL) {
-                    return _entry.eval();
+                    return eval;
                 } else if (tmp == .LOWER) {
-                    if (_entry.eval() >= beta) {
-                        return _entry.eval();
+                    if (eval >= beta) {
+                        return eval;
                     }
                 } else if (tmp == .UPPER) {
-                    if (_entry.eval() >= _alpha) {
-                        return _entry.eval();
+                    if (eval >= _alpha) {
+                        return eval;
                     }
                 }
             }
@@ -114,15 +115,6 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 return val;
             }
         }
-        //const color_mask = alphaBetal.getScoreMaskFromTurn(p_state.whiteToMove());
-        //const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
-        //// copy of SF to check
-        //if (static_eval < (_alpha - 512 - 293 * _depth * _depth)) {
-        //    const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, p_features, ply, p_state.isChecked(), pv, prevLine, .NonPV);
-        //    if (val < alpha and val < weightl.simpleCheckMateScore) {
-        //        return val;
-        //    }
-        //}
     }
     var canFutility: bool = false;
     var static_eval: scoreType = 0;
@@ -223,10 +215,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .LOWER, move, p_state.turn_count);
-                //if (p_state.lastMove.isValid()) {
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .LOWER, move);
                 _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
-                //}
             }
 
             p_info.searchStat.n_cutoffs += 1;
@@ -242,7 +232,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
     } else {
         if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove, p_state.turn_count);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove);
             //if (p_state.lastMove.isValid()) {
             _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
             // }

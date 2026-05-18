@@ -89,7 +89,7 @@ pub fn initRookBishopMagicCached(p_record: *magicRecord) void {
 pub fn bishopGenerateMoves(sq: squarel.e_square, magic: magic_entry, p_out: *[BISHOP_MOVE_SIZE]u64) void {
     var b: [BISHOP_MOVE_SIZE]u64 = undefined;
     const mask = bmask(@intFromEnum(sq));
-    const n = chess.l_popcount(mask);
+    const n = chess.popcount(mask);
     for (0..BISHOP_MOVE_SIZE) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
         const j = bishopMagicIndex(magic, b[i]);
@@ -99,7 +99,7 @@ pub fn bishopGenerateMoves(sq: squarel.e_square, magic: magic_entry, p_out: *[BI
 pub fn rookGenerateMoves(sq: squarel.e_square, magic: magic_entry, p_out: *[ROOK_MOVE_SIZE]u64) void {
     var b: [ROOK_MOVE_SIZE]u64 = undefined;
     const mask = rmask(@intFromEnum(sq));
-    const n = chess.l_popcount(mask);
+    const n = chess.popcount(mask);
     for (0..ROOK_MOVE_SIZE) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
         const j = rookMagicIndex(magic, b[i]);
@@ -339,14 +339,14 @@ pub fn bishop_find_magic(sq: squarel.e_square) !magic_entry {
     var j: i32 = 0;
 
     mask = bmask(@intFromEnum(sq));
-    const n = chess.l_popcount(mask);
+    const n = chess.popcount(mask);
     for (0..(chess.ONE << @intCast(n))) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
         a[i] = batt(@intFromEnum(sq), b[i]);
     }
     for (0..100000000) |_| {
         magic = getRandMagicFewBits();
-        if (chess.l_popcount((mask *% magic) & 0xFF00000000000000) < 6) {
+        if (chess.popcount((mask *% magic) & 0xFF00000000000000) < 6) {
             continue;
         }
         const _magic: magic_entry = .{ .magic = magic, .mask = mask };
@@ -380,14 +380,14 @@ pub fn rook_find_magic(sq: squarel.e_square) !magic_entry {
     var j: i32 = 0;
 
     mask = rmask(@intFromEnum(sq));
-    const n = chess.l_popcount(mask);
+    const n = chess.popcount(mask);
     for (0..(chess.ONE << @intCast(n))) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
         a[i] = ratt(@intFromEnum(sq), b[i]);
     }
     for (0..100000000) |_| {
         magic = getRandMagicFewBits();
-        if (chess.l_popcount((mask *% magic) & 0xFF00000000000000) < 6) {
+        if (chess.popcount((mask *% magic) & 0xFF00000000000000) < 6) {
             continue;
         }
         const _magic: magic_entry = .{ .magic = magic, .mask = mask };

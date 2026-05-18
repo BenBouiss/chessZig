@@ -37,8 +37,7 @@ const squareInfo = squarel.squareInfo;
 
 pub const NUMBER_PLAYER: u8 = 2;
 pub const ROW_SIZE: u8 = 8;
-pub const COL_SIZE: u8 = 8;
-pub const N_SQUARES: u8 = ROW_SIZE * COL_SIZE;
+pub const N_SQUARES: u8 = 64;
 pub const MAX_POSSIBLE_MOVE: u8 = 218;
 pub const N_PIECES = 12;
 pub const N_PIECES_TYPES = 6;
@@ -70,7 +69,7 @@ pub const blackPawnEnpassantRank: u64 = 0xFF0000;
 pub const MAX_FEN_LENGTH: u8 = 120;
 pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0";
 
-pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite = 13, nBlack = 14 };
+pub const e_piece = enum(u4) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite = 13, nBlack = 14 };
 
 pub const e_color = enum(u8) { BLACK = 0, WHITE = 1 };
 
@@ -95,7 +94,7 @@ pub fn stringToLERF(sq: *const [2]u8) e_square {
     if ((sq[1] < '1') or (sq[1] > '9')) {
         return .invalid;
     }
-    return @enumFromInt((sq[0] - 'a') + ((sq[1] - '1') * ROW_SIZE));
+    return @enumFromInt((sq[0] - 'a') + ((sq[1] - '1') << 3));
 }
 pub fn flagPromotionToPiece(flag: u8, white: bool) e_piece {
     const color_offset = getColorPieceOffset(white);
@@ -155,6 +154,13 @@ pub fn rotate180(bb: u64) u64 {
     return x;
 }
 
+pub inline fn ipopcount(x: u64) i8 {
+    return @intCast(popcount(x));
+}
+
+pub inline fn popcount(bb: u64) u8 {
+    return @as(u8, @popCount(bb));
+}
 pub inline fn bitscan(bb: u64) u8 {
     // assumes bb is non empty
     if (comptime fastBitscan) {
@@ -580,7 +586,7 @@ pub const Board_state = struct {
 
     phase: usize = 0,
     victim: e_piece = .nEmptySquare,
-    turn_count: usize = 0,
+    turn_count: u16 = 0,
     lastMove: IMove = .{},
 
     pub fn init() Board_state {
@@ -1370,7 +1376,7 @@ pub const Board_state = struct {
         }
     }
     pub inline fn getSidePieceCount(self: Board_state, color: e_color) u8 {
-        return l_popcount(self.c_occupiedBB[@intFromEnum(color)]);
+        return popcount(self.c_occupiedBB[@intFromEnum(color)]);
     }
 
     pub fn isLegal(p_self: *const Board_state, white: bool) bool {
@@ -1499,8 +1505,8 @@ pub fn sanityCheckBoardState(p_board_state: *const Board_state) void {
     }
 
     const _bbfromPieceArr = pieceArrayToBB(p_board_state.pieceArray);
-    const empty_count = l_popcount(~_bbfromPieceArr);
-    const piece_count = l_popcount(_bbfromPieceArr);
+    const empty_count = popcount(~_bbfromPieceArr);
+    const piece_count = popcount(_bbfromPieceArr);
 
     if (piece_count != (n_white_g + n_black_g)) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: Number of pieces in pieceArray not consistent with population counts. Expected {d} got {d}\n", .{ n_white_g + n_black_g, piece_count });
@@ -1525,7 +1531,7 @@ pub fn sanityCheckBoardState(p_board_state: *const Board_state) void {
         print_bitboard(p_board_state.occupiedBB);
         panic = true;
     }
-    const empty_count_g = l_popcount(~p_board_state.occupiedBB);
+    const empty_count_g = popcount(~p_board_state.occupiedBB);
     if (empty_count != (empty_count_g)) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: Number of empty spaces in pieceArray not consistent with population counts. Expected {d} got {d}. OccupiedBB: \n", .{ empty_count_g, empty_count });
         print_bitboard(p_board_state.occupiedBB);
@@ -1549,25 +1555,16 @@ pub fn print_boardstate(p_board_state: *const Board_state) void {
     } else {
         std.debug.print("Current turn: Black\n", .{});
     }
-
     print_board(p_board_state);
-    //std.debug.print("Castling right: {d}\n", .{p_board_state.stat.castlingKey()});
-    //std.debug.print("En passant idx: {d}\n", .{p_board_state.enPassantIdx});
-    std.debug.print("Zobrist key: {x}\n", .{p_board_state.key.code});
+    std.debug.print("Zobrist key: 0x{x}\n", .{p_board_state.key.code});
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
-    p_board_state.move_history.print();
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len, moves.len });
-    moves.print();
-
     printBoardValidity(p_board_state);
-
     if (p_board_state.turn_count > 0) {
-        std.debug.print("Previous move: ", .{});
-        p_board_state.lastMove.print();
-        std.debug.print("\n", .{});
+        std.debug.print("Previous move: {s}\n", .{p_board_state.lastMove.getStr()});
     }
 
     std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.halfMoveClock, p_board_state.move_history.getRepetitions(), p_board_state.move_history.lastIrreversibleMoveIndex });
@@ -1581,13 +1578,12 @@ pub fn print_boardstate(p_board_state: *const Board_state) void {
 }
 
 pub fn print_bitboard(bitboard: u64) void {
-    std.debug.print("Printing bitboard: {x} {d} ({b})\n", .{ bitboard, bitboard, bitboard });
+    std.debug.print("Printing bitboard: 0x{x} {d} ({b})\n", .{ bitboard, bitboard, bitboard });
     var _bitboard = bitboard;
     const mask: u64 = UNIVERSE & (~(UNIVERSE >> 8));
     var row: u8 = undefined;
     for (0..8) |_| {
         row = @intCast((_bitboard & mask) >> 56);
-        //row = @intCast(_bitboard % 256);
         if (row == 0) {
             std.debug.print("00000000\n", .{});
         } else {
@@ -1615,22 +1611,6 @@ pub fn l_getMsbIdx(x: u64) u8 {
         count += 1;
     }
     return count;
-}
-pub fn l_popcount(x: u64) u8 {
-    // Kernighan's way
-    // x &= (x - 1)
-    // (x - 1)  resets every bit before(and including)the LSB
-    // x & (x-1) removes the LSB
-    var count: u8 = 0;
-    var _x: u64 = x;
-    while (_x != 0) {
-        _x &= (_x - 1);
-        count += 1;
-    }
-    return count;
-}
-pub inline fn il_popcount(x: u64) i8 {
-    return @intCast(l_popcount(x));
 }
 
 pub fn knightAttacks(knights: u64) u64 {
@@ -2218,7 +2198,7 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) !IMove {
     potentialFromBB &= getAllMoveMaskFromX(p_state, white, toSq);
 
     // here filter out the pinned direction only
-    if (l_popcount(potentialFromBB) > 1) {
+    if (popcount(potentialFromBB) > 1) {
         const kingSq = p_state.getKingSq(p_state.whiteToMove());
         var _bb = potentialFromBB;
         while (_bb != 0) {
@@ -2233,13 +2213,13 @@ pub fn algebraicToIMove(p_state: *Board_state, moveStr: *string) !IMove {
         }
     }
 
-    if (l_popcount(potentialFromBB) != 1) {
+    if (popcount(potentialFromBB) != 1) {
         // possibly only a pawn move
         if (potentialFromBB & (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]) != 0) {
             potentialFromBB &= (p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]);
         }
 
-        if (l_popcount(potentialFromBB) != 1) {
+        if (popcount(potentialFromBB) != 1) {
             std.debug.print("[PANIC] algebraicToIMove: potentialFromBB contains 0 or multiple possible source square for token: '{s}'\n", .{moveStr._slice()});
             std.debug.print("[PANIC] algebraicToIMove: startXPos: {d} white: {}\n", .{ startXPos, p_state.whiteToMove() });
             p_state.move_history.print();

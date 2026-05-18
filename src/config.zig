@@ -69,7 +69,7 @@ pub const _DEFAULT_SEARCH_TYPE = "ZWSI";
 pub const searchType = enum { STD, PVS, ZWS, ZWSI, ASPIRATION };
 
 pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
-pub const DEFAULT_TT_STRAT: TT_strat = .ALWAYS_REPLACE_OLDEST;
+pub const DEFAULT_TT_STRAT: TT_strat = .ALWAYS_REPLACE;
 
 pub const DEFAULT_USE_SEE = true;
 pub const _DEFAULT_USE_SEE = "true";
@@ -85,7 +85,7 @@ pub const MAX_ELO: u32 = 3000;
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
-pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
+pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.02;
 pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
 pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
 
@@ -111,6 +111,7 @@ pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 
 pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 500_000;
+pub const WR_TICKRATE_NS = 500_000;
 pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
 
 pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";

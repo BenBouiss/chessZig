@@ -1,18 +1,19 @@
 [engine1]
-path="engines/bin/engine_16_05_26";
+path="engines/bin/engine_18_05_26";
 name="1";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_16_05_26";
-name="2";
-"setoption name useHash value true";
+path="engines/bin/engine_18_05_26_2";
+name="i16 scoretype";
+"setoption name useHash value false";
 "setoption name reportProgress value false";
+//"setoption name hashs value 100";
 
 
 [match]
-nMatch=32;
+nMatch=64;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
@@ -20,8 +21,8 @@ openingBookPath="opening/8moves_v3.pgn";
 timeFormat=(5000, 0);
 logsLocation="out/logs/evaluate";
 saveLogs=false;
-printToScreen=true;
+printToScreen=false;
 
-sprtmode=true;
+//sprtmode=true;
 //maxSPRTMatch=100;
 

@@ -1311,7 +1311,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         };
         return true;
-    } else if (buffer.containsE("saveLogs", .ignoreCase)) {
+    } else if (buffer.containsE("savelogs", .ignoreCase)) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
@@ -1357,7 +1357,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         };
 
-        std.debug.print("[DEBUG] handleMatchInfoStrBuffer: '{s}' '{s}'\n", .{ utilsl.stripStr(start), utilsl.stripStr(inc) });
+        //std.debug.print("[DEBUG] handleMatchInfoStrBuffer: '{s}' '{s}'\n", .{ utilsl.stripStr(start), utilsl.stripStr(inc) });
         settings.match.timeF = .{ .time = _start, .inc = _inc };
         return true;
     } else if (buffer.startsWith("infinite")) {
@@ -1462,10 +1462,10 @@ pub fn LL(x: f32) f32 {
     return 1.0 / (1.0 + std.math.pow(f32, 10, -x / 400.0));
 }
 pub fn LLR(elo_0: f32, elo_1: f32, wins: usize, draws: usize, losses: usize) f32 {
-    if (wins == 0 or draws == 0 or losses == 0) {
+    const N: f32 = @floatFromInt(wins + draws + losses);
+    if (N == 0) {
         return 0.0;
     }
-    const N: f32 = @floatFromInt(wins + draws + losses);
     const n_wins: f32 = @as(f32, @floatFromInt(wins)) / N;
     const n_draws = @as(f32, @floatFromInt(draws)) / N;
     const score = n_wins + 0.5 * n_draws;
