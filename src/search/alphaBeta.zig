@@ -201,7 +201,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .LOWER, move, p_state.turn_count);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .LOWER, move);
                 _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
             }
             p_info.searchStat.n_cutoffs += 1;
@@ -216,7 +216,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
     } else {
         if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, hashFlag, bestMove, p_state.turn_count);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, hashFlag, bestMove);
             _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
         }
     }
@@ -345,23 +345,33 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
 }
 pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
-    //if (p_features.useHash) {
-    //    const entry = hashl.getEntryFromMatch(p_state.key, 0);
-    //    if (entry) |_entry| {
-    //        p_info.searchStat.n_hashRetrieve += 1;
-    //        return color_mask * _entry.eval();
-    //    }
-    //}
+    if (p_features.useHash) {
+        const entry = hashl.getEntryFromMatch(p_state.key, 0);
+        if (entry) |_entry| {
+            p_info.searchStat.n_hashRetrieve += 1;
+            return _entry.eval();
+        }
+    }
     p_info.searchStat.n_nodeExplored += 1;
     if (p_features.useQuiescence) {
         const ischeck = p_state.isChecked();
         if (p_state.getLastMove().isCapture() or ischeck) {
             // perform quiesc
-            return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, t);
+            const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, t);
+            if (p_features.useHash) {
+                const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, 0, score);
+                _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+            }
+            return score;
         }
     }
 
     const score = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+
+    if (p_features.useHash) {
+        const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, 0, score);
+        _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+    }
     return score;
 }
 

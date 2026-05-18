@@ -760,7 +760,10 @@ pub const engine = struct {
                 p_self.options.hashTableSize = getSpinValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
-                return true;
+
+                return p_self.updateHash(p_self.options.hashTableSize) catch {
+                    return false;
+                };
             },
             .UCI_ELO => {
                 const val = getSpinValFromSetOptionCmd(tokens, entry) catch {

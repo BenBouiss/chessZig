@@ -10,7 +10,7 @@ pub const simpleBishopScore: scoreType = 300;
 pub const simpleKnightScore: scoreType = 300;
 pub const simpleRookScore: scoreType = 500;
 pub const simpleQueenScore: scoreType = 900;
-pub const simpleCheckMateScore: scoreType = 99999;
+pub const simpleCheckMateScore: scoreType = 31000;
 pub const simpleStalemateScore: scoreType = 0;
 
 // ============ pawn structure ============

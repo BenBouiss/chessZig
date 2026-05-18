@@ -121,7 +121,7 @@ pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const Board_state, p_moveB
     const generateCapture = comptime (extra == .CAPTURES or extra == .ALL);
     const generateQuiet = comptime (extra == .QUIETMOVE or extra == .ALL);
     if (inCheck) {
-        const doubleCheck: bool = chess.l_popcount(p_board.checkersBB & p_board.occupiedBB) > 1;
+        const doubleCheck: bool = chess.popcount(p_board.checkersBB & p_board.occupiedBB) > 1;
         if (doubleCheck) {
             // only king moves
             const kingBB = p_moveBB.kingMoves;
@@ -300,7 +300,7 @@ pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const Board_state, p_moveB
             while (toAtt_bb != chess.EMPTY) {
                 const from: u8 = chess.bitscan(toAtt_bb);
                 toAtt_bb &= toAtt_bb - 1;
-                _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.ENPASSANT), p_out);
+                _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.ENPASSANT), p_out);
             }
         }
 
@@ -314,7 +314,7 @@ pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const Board_state, p_moveB
             while (toAtt_bb != chess.EMPTY) {
                 const from: u8 = chess.bitscan(toAtt_bb);
                 toAtt_bb &= toAtt_bb - 1;
-                _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), p_out);
+                _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), p_out);
             }
         }
     }
@@ -409,7 +409,7 @@ pub fn genericStagedMovePushCapture(p_out: *moveContainer, iterBB: u64, from: u8
     while (_iter != chess.EMPTY) {
         const to: u8 = chess.bitscan(_iter);
         _iter &= _iter - 1;
-        _ = movel.build_capture_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), p_out);
+        _ = movel.build_move_in(from, to, @intFromEnum(e_moveFlags.CAPTURE), p_out);
     }
 }
 

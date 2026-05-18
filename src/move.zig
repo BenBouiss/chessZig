@@ -32,27 +32,12 @@ pub fn build_move(from: u8, to: u8, flag: u8) IMove {
     return ret;
 }
 pub fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
-    var m_move: u16 = (flag);
-    m_move <<= 6;
-    m_move |= (to);
-    m_move <<= 6;
-    m_move |= (from);
-    p_out.moves[p_out.len] = .{ .m_move = m_move };
-    p_out.len += 1;
-    return &p_out.moves[p_out.len - 1];
-}
-pub fn build_capture_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
-    var m_move: u16 = (flag);
-    m_move <<= 6;
-    m_move |= (to);
-    m_move <<= 6;
-    m_move |= (from);
-    p_out.moves[p_out.len] = .{ .m_move = m_move };
+    p_out.moves[p_out.len] = .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];
 }
 
-pub const IMove = struct {
+pub const IMove = packed struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
     //tried to breakdown the m_move, into flag: u8, from: u8, to: u8, performance went down in perft ~130141000 nps at the end from ~155481000.
     m_move: u16 = 0,
@@ -80,13 +65,10 @@ pub const IMove = struct {
         }
         return false;
     }
-    pub inline fn isIrreversible(self: IMove) bool {
-        return self.isCapture();
-    }
+
     pub inline fn getFrom(self: IMove) u8 {
         return @intCast((self.m_move & 0x3F));
     }
-
     pub inline fn getTo(self: IMove) u8 {
         return @intCast((self.m_move & (0xFC0)) >> 6);
     }
@@ -118,7 +100,6 @@ pub const IMove = struct {
     pub inline fn isDoublePush(self: IMove) bool {
         return (self.getFlag() == @intFromEnum(e_moveFlags.DOUBLEPAWN));
     }
-
     pub inline fn isValid(self: IMove) bool {
         return (self.m_move != 0);
     }
@@ -144,14 +125,6 @@ pub const IMove = struct {
         std.debug.print("{s} ", .{self.getStr()});
     }
 };
-
-pub fn arrayListMoveToMoveContainer(arr: *std.ArrayList(IMove)) moveContainer {
-    var ret: moveContainer = moveContainer.init(0);
-    for (0..arr.items.len) |i| {
-        ret.append(arr.items[i]);
-    }
-    return ret;
-}
 
 pub const moveContainer = struct {
     moves: [chess.MAX_POSSIBLE_MOVE]IMove = undefined,
@@ -229,13 +202,6 @@ pub const moveContainer = struct {
         biggerContainer.print();
     }
 
-    pub fn shuffle(p_self: *moveContainer, rand: std.Random) void {
-        //const tmp_buffer = p_self.moves[0..p_self.len];
-        std.Random.shuffle(rand, IMove, p_self.moves[0..p_self.len]);
-    }
-    pub fn sample(self: moveContainer, rand: std.Random) usize {
-        return rand.uintAtMost(u8, @intCast(self.len - 1));
-    }
     pub fn print(self: moveContainer) void {
         std.debug.print("Container's length: {d} \n", .{self.len});
         std.debug.print("<<<< ", .{});
@@ -273,8 +239,8 @@ pub const matchMoveContainer = struct {
     keyCodes: [MAX_MATCH_LENGTH]u64 = undefined,
     irreversible: [MAX_MATCH_LENGTH]bool = undefined,
 
-    lastIrreversibleMoveIndex: usize = 0,
-    len: usize = 0,
+    lastIrreversibleMoveIndex: u16 = 0,
+    len: u16 = 0,
 
     pub fn print(p_self: *const matchMoveContainer) void {
         // FOR DEBUG ONLY
@@ -291,7 +257,7 @@ pub const matchMoveContainer = struct {
                 @panic("list is full");
             }
         }
-        if (move.isIrreversible() or pawnMove) {
+        if (move.isCapture() or pawnMove) {
             p_self.lastIrreversibleMoveIndex = p_self.len;
             p_self.irreversible[p_self.len] = true;
         } else {
@@ -342,28 +308,10 @@ pub const matchMoveContainer = struct {
                 }
             }
         }
-        //p_self.lastMove = p_self.moves[p_self.len - 1];
         return p_self.moves[p_self.len];
     }
-    pub fn popMoveVoid(p_self: *matchMoveContainer) void {
-        if (comptime useDebug) {
-            if (p_self.len < 1) {
-                @panic("list is empty");
-                //p_self.len = 0;
-            }
-        }
-        p_self.len -= 1;
-        if (p_self.len == 0) {
-            p_self.lastIrreversibleMoveIndex = 0;
-        } else if (p_self.lastIrreversibleMoveIndex == p_self.len) {
-            p_self.lastIrreversibleMoveIndex -= 1;
-            while (p_self.lastIrreversibleMoveIndex > 0) : (p_self.lastIrreversibleMoveIndex -= 1) {
-                if (p_self.irreversible[p_self.lastIrreversibleMoveIndex]) {
-                    break;
-                }
-            }
-        }
-        return;
+    pub inline fn popMoveVoid(p_self: *matchMoveContainer) void {
+        _ = p_self.popMove();
     }
     pub inline fn getLastMove(self: matchMoveContainer) IMove {
         if (comptime useDebug) {
@@ -548,22 +496,22 @@ pub const moveBBState = struct {
         chess.print_bitboard(self.kingMoves);
     }
     pub fn count(self: *const moveBBState) u64 {
-        var ret: u64 = @intCast(chess.l_popcount(self.pawnMoves));
-        ret += @intCast(chess.l_popcount(self.bishopMoves));
-        ret += @intCast(chess.l_popcount(self.doubleMoves));
-        ret += @intCast(chess.l_popcount(self.enPassantMoves));
-        ret += @intCast(chess.l_popcount(self.kingMoves));
-        ret += @intCast(chess.l_popcount(self.kingSideCastlingMoves));
-        ret += @intCast(chess.l_popcount(self.knightMoves));
-        ret += @intCast(chess.l_popcount(self.pawnAttacks));
-        ret += @intCast(chess.l_popcount(self.promotionMoves));
-        ret += @intCast(chess.l_popcount(self.queenMoves));
-        ret += @intCast(chess.l_popcount(self.queenSideCastlingMoves));
-        ret += @intCast(chess.l_popcount(self.rookMoves));
+        var ret: u64 = @intCast(chess.popcount(self.pawnMoves));
+        ret += @intCast(chess.popcount(self.bishopMoves));
+        ret += @intCast(chess.popcount(self.doubleMoves));
+        ret += @intCast(chess.popcount(self.enPassantMoves));
+        ret += @intCast(chess.popcount(self.kingMoves));
+        ret += @intCast(chess.popcount(self.kingSideCastlingMoves));
+        ret += @intCast(chess.popcount(self.knightMoves));
+        ret += @intCast(chess.popcount(self.pawnAttacks));
+        ret += @intCast(chess.popcount(self.promotionMoves));
+        ret += @intCast(chess.popcount(self.queenMoves));
+        ret += @intCast(chess.popcount(self.queenSideCastlingMoves));
+        ret += @intCast(chess.popcount(self.rookMoves));
         return ret;
     }
     pub inline fn rawCount(p_self: *const moveBBState) u64 {
-        return @intCast(chess.l_popcount(p_self.collapse()));
+        return @intCast(chess.popcount(p_self.collapse()));
     }
 };
 
