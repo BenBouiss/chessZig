@@ -63,13 +63,13 @@ pub const DEFAULT_STATIC_SEARCH = false;
 pub const DEFAULT_LATE_MOVE_REDUCTION = true;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "true";
 
-pub const DEFAULT_SEARCH_TYPE: searchType = .ZWSI;
-pub const _DEFAULT_SEARCH_TYPE = "ZWSI";
+pub const DEFAULT_SEARCH_TYPE: searchType = .ZWS;
+pub const _DEFAULT_SEARCH_TYPE = "ZWS";
 
-pub const searchType = enum { STD, PVS, ZWS, ZWSI, ASPIRATION };
+pub const searchType = enum { STD, PVS, ZWS };
 
 pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
-pub const DEFAULT_TT_STRAT: TT_strat = .ALWAYS_REPLACE;
+pub const DEFAULT_TT_STRAT: TT_strat = .ALWAYS_REPLACE_OLDEST;
 
 pub const DEFAULT_USE_FUTILITY = false;
 pub const _DEFAULT_USE_FUTILITY = "false";
@@ -82,7 +82,7 @@ pub const MAX_ELO: u32 = 3000;
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
-pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.02;
+pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
 pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
 pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
 

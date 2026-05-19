@@ -45,16 +45,12 @@ pub const IMove = packed struct {
     pub inline fn setFlag(p_self: *IMove, flag: u8) void {
         //reset the top 4 bits
         p_self.m_move &= (0xFFF);
-        const _flag: u16 = @intCast(flag);
-        p_self.m_move |= (_flag & 0xF) << 12;
+        //const _flag: u16 = @intCast(flag);
+        p_self.m_move |= (@as(u16, flag) << 12);
     }
 
     pub inline fn equal(self: IMove, other: IMove) bool {
         return (self.m_move == other.m_move);
-    }
-
-    pub fn softEqual(self: IMove, other: IMove) bool {
-        return (self.getFrom() == other.getFrom()) and (self.getTo() == other.getTo());
     }
 
     pub fn isIn(self: IMove, move_arr: moveContainer) bool {
@@ -141,20 +137,6 @@ pub const moveContainer = struct {
     pub inline fn append(p_self: *moveContainer, move: IMove) void {
         p_self.moves[p_self.len] = move;
         p_self.len += 1;
-    }
-
-    pub fn extend(p_self: *moveContainer, p_other: *const moveContainer) bool {
-        if (comptime useDebug) {
-            if ((p_self.len + p_other.len) > chess.MAX_POSSIBLE_MOVE) {
-                @panic("lists too full ");
-                //return false;
-            }
-        }
-        for (0..p_other.len) |i| {
-            p_self.moves[p_self.len + i] = p_other.moves[i];
-        }
-        p_self.len += p_other.len;
-        return true;
     }
 
     pub fn isDifferent(self: moveContainer, other: moveContainer) bool {
@@ -284,7 +266,7 @@ pub const matchMoveContainer = struct {
         }
         return count;
     }
-    pub fn checkRepetitions(self: *const matchMoveContainer) bool {
+    pub inline fn checkRepetitions(self: *const matchMoveContainer) bool {
         const count = self.getRepetitions();
         return count >= 2;
     }
@@ -321,8 +303,7 @@ pub const matchMoveContainer = struct {
         }
         return self.moves[self.len - 1];
     }
-    pub fn getLineString(self: matchMoveContainer, alloc: std.mem.Allocator) !string {
-        var lineStr: string = try string.initZero(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
+    pub fn getLineFillString(self: matchMoveContainer, lineStr: *string) void {
         for (0..self.len) |i| {
             const move = self.moves[i];
             const moveStr = move.getStr();
@@ -333,20 +314,16 @@ pub const matchMoveContainer = struct {
             }
             _ = lineStr.put(' ');
         }
+        return;
+    }
+    pub fn getLineString(self: matchMoveContainer, alloc: std.mem.Allocator) !string {
+        var lineStr: string = try string.initZero(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
+        self.getLineFillString(&lineStr);
         return lineStr;
     }
     pub fn getLineFromBuffer(self: matchMoveContainer, buffer: []u8) string {
         var lineStr: string = string.initFromBuffer(buffer);
-        for (0..self.len) |i| {
-            const move = self.moves[i];
-            const moveStr = move.getStr();
-            if (moveStr[4] == 0) {
-                _ = lineStr.extend(moveStr[0..4]);
-            } else {
-                _ = lineStr.extend(&moveStr);
-            }
-            _ = lineStr.put(' ');
-        }
+        self.getLineFillString(&lineStr);
         return lineStr;
     }
     pub fn getLineStatic(self: matchMoveContainer) [MAX_MATCH_LENGTH_STR]u8 {

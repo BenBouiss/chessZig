@@ -13,13 +13,13 @@ pub const squareInfo = struct {
     pub fn init(sq: e_square) squareInfo {
         return .{ .sq = sq, .file = chess.getSqFile(sq), .rank = chess.getSqRank(sq), .diagonal = chess.getSqDiag(sq), .antidiagonal = chess.getSqAntiDiag(sq) };
     }
-    pub fn copy(self: squareInfo) squareInfo {
+    pub inline fn copy(self: squareInfo) squareInfo {
         return .{ .sq = self.sq, .file = self.file, .rank = self.rank, .diagonal = self.diagonal, .antidiagonal = self.antidiagonal };
     }
     pub fn print(self: squareInfo) void {
         std.debug.print("{} ", .{self.sq});
     }
-    pub fn getBB(self: squareInfo) u64 {
+    pub inline fn getBB(self: squareInfo) u64 {
         return chess.ONE << @intCast(@intFromEnum(self.sq));
     }
     pub inline fn getDiagBB(self: squareInfo) u64 {
