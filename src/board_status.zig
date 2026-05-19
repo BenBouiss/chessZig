@@ -48,80 +48,116 @@ pub const statusStack = struct {
     }
 };
 
+const whiteToMoveMask: u8 = 0x1;
+const WCastlingKMask: u8 = 0x2;
+const WCastlingQMask: u8 = 0x4;
+const WCastlingMask: u8 = 0x6;
+
+const BCastlingKMask: u8 = 0x8;
+const BCastlingQMask: u8 = 0x10;
+const BCastlingMask: u8 = 0x18;
+//offset size
+//0  1 bit whiteToMove
+//1  1 bit WCastlingK
+//2  1 bit WCastlingQ
+//3  1 bit BCastlingK
+//4  1 bit BCastlingQ
 pub const status = struct {
-    _whiteToMove: bool = true,
-
-    WCastlingK: bool = false,
-    WCastlingQ: bool = false,
-
-    BCastlingK: bool = false,
-    BCastlingQ: bool = false,
-    pub inline fn turn(self: status) chessl.e_color {
-        if (self._whiteToMove) {
-            return .WHITE;
-        }
-        return .BLACK;
+    val: u8 = 0x1,
+    pub inline fn init(whiteMove: bool, b_WCastlingK: bool, b_WCastlingQ: bool, b_BCastlingK: bool, b_BCastlingQ: bool) status {
+        return .{ .val = @as(u8, @intFromBool(whiteMove)) | (@as(u8, @intFromBool(b_WCastlingK)) << 1) | (@as(u8, @intFromBool(b_WCastlingQ)) << 2) | (@as(u8, @intFromBool(b_BCastlingK)) << 3) | (@as(u8, @intFromBool(b_BCastlingQ)) << 4) };
     }
-    pub inline fn setTurn(self: *status, white: bool) void {
-        self._whiteToMove = white;
-    }
-    pub inline fn whiteToMove(self: *const status) bool {
-        return self._whiteToMove;
+    pub inline fn whiteToMove(self: status) bool {
+        return (self.val & whiteToMoveMask) != 0;
     }
     pub inline fn invertTurn(self: *status) void {
-        self._whiteToMove = !self._whiteToMove;
+        self.val ^= whiteToMoveMask;
     }
+    pub inline fn WCastlingK(self: status) bool {
+        return (self.val & WCastlingKMask) != 0;
+    }
+    pub inline fn WCastlingQ(self: status) bool {
+        return (self.val & WCastlingQMask) != 0;
+    }
+    pub inline fn BCastlingK(self: status) bool {
+        return (self.val & BCastlingKMask) != 0;
+    }
+    pub inline fn BCastlingQ(self: status) bool {
+        return (self.val & BCastlingQMask) != 0;
+    }
+
+    pub inline fn setTurn(self: *status, white: bool) void {
+        self.val &= (~whiteToMoveMask);
+        self.val |= @intFromBool(white);
+    }
+    pub inline fn setWCastlingK(self: *status, b_castling: bool) void {
+        self.val &= (~WCastlingKMask);
+        self.val |= @as(u8, @intFromBool(b_castling)) << 1;
+    }
+    pub inline fn setWCastlingQ(self: *status, b_castling: bool) void {
+        self.val &= (~WCastlingQMask);
+        self.val |= @as(u8, @intFromBool(b_castling)) << 2;
+    }
+    pub inline fn setBCastlingK(self: *status, b_castling: bool) void {
+        self.val &= (~BCastlingKMask);
+        self.val |= @as(u8, @intFromBool(b_castling)) << 3;
+    }
+    pub inline fn setBCastlingQ(self: *status, b_castling: bool) void {
+        self.val &= (~BCastlingQMask);
+        self.val |= @as(u8, @intFromBool(b_castling)) << 4;
+    }
+
     pub inline fn canCastle(self: status, comptime whiteMove: bool) bool {
         if (comptime whiteMove) {
-            return self.WCastlingK | self.WCastlingQ;
+            return self.WCastlingK() | self.WCastlingQ();
         } else {
-            return self.BCastlingK | self.BCastlingQ;
+            return self.BCastlingK() | self.BCastlingQ();
         }
     }
     pub inline fn canKingsideCastle(self: status, comptime whiteMove: bool) bool {
         if (comptime whiteMove) {
-            return self.WCastlingK;
+            return self.WCastlingK();
         }
-        return self.BCastlingK;
+        return self.BCastlingK();
     }
     pub inline fn canQueensideCastle(self: status, comptime whiteMove: bool) bool {
         if (comptime whiteMove) {
-            return self.WCastlingQ;
+            return self.WCastlingQ();
         }
-        return self.BCastlingQ;
+        return self.BCastlingQ();
     }
     pub inline fn onKingMove(self: status) status {
-        if (self._whiteToMove) {
-            return .{ ._whiteToMove = false, .WCastlingK = false, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+        if (self.whiteToMove()) {
+            return .{ .val = self.val & (BCastlingMask) };
         } else {
-            return .{ ._whiteToMove = true, .BCastlingK = false, .BCastlingQ = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ };
+            return .{ .val = 1 | (self.val & (WCastlingMask)) };
         }
     }
     pub fn onRookMove(self: status, rooks: u64, comptime white: bool) status {
         if (comptime white) {
             if (isLeftRook(rooks)) {
-                return .{ ._whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = false, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ .val = self.val & (~(WCastlingQMask | 1)) };
             } else if (isRightRook(rooks)) {
-                return .{ ._whiteToMove = false, .WCastlingK = false, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ .val = self.val & (~(WCastlingKMask | 1)) };
             } else {
-                return .{ ._whiteToMove = false, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ .val = self.val & (~@as(u8, 1)) };
             }
         } else {
             if (isLeftRook(rooks)) {
-                return .{ ._whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = false };
+                return .{ .val = 1 | (self.val & (~(BCastlingQMask))) };
             } else if (isRightRook(rooks)) {
-                return .{ ._whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = false, .BCastlingQ = self.BCastlingQ };
+                return .{ .val = 1 | (self.val & (~(BCastlingKMask))) };
             } else {
-                return .{ ._whiteToMove = true, .WCastlingK = self.WCastlingK, .WCastlingQ = self.WCastlingQ, .BCastlingK = self.BCastlingK, .BCastlingQ = self.BCastlingQ };
+                return .{ .val = 1 | self.val };
             }
         }
     }
 
     pub inline fn castlingKey(self: status) u4 {
-        const r1: u4 = @intCast(@intFromBool(self.WCastlingK));
-        const r2: u4 = @intCast(@intFromBool(self.WCastlingQ));
-        const r3: u4 = @intCast(@intFromBool(self.BCastlingK));
-        const r4: u4 = @intCast(@intFromBool(self.BCastlingQ));
+        const r1: u4 = @intCast(@intFromBool(self.WCastlingK()));
+        const r2: u4 = @intCast(@intFromBool(self.WCastlingQ()));
+        const r3: u4 = @intCast(@intFromBool(self.BCastlingK()));
+        const r4: u4 = @intCast(@intFromBool(self.BCastlingQ()));
         return r1 | (r2 << 1) | (r3 << 2) | (r4 << 3);
     }
 };

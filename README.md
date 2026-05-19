@@ -108,7 +108,6 @@ UCI setoption options:
 - useQuiescence: [check] enables or disables the quiescence search at quiescent terminal nodes
 - useNullPruning: [check] enables or disables the null move pruning optimisation method
 - useLMR : [check] enables or disables the late move reduction optimisation method
-- useSEE: [check] enables or disables the static exchange evaluation used in the move ordering heuristic. Places good exchange in front of bad ones
 - useFutility: [check] enables or disables the futility optimisation method
 - useRazoring: [check] enables or disables the razoring optimisation method
 - useStaticSearch: [check] enables or disables static searches. Static searches bypass the iterative deepening method and launches the search directly to the depth set in the engine.

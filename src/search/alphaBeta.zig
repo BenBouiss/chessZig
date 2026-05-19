@@ -123,7 +123,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
     }
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, hashMove, depth);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, hashMove, depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
     if (p_features.useLMR and depth > 3 and !ischeck) {
@@ -245,7 +245,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
         p_info.searchStat.n_nodeExplored += 1;
         const ischeck = p_state.isChecked();
         // perform quiesc by default in aspiration mode ?
-        return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, .PV);
+        return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, pv, prevLine, .PV);
     }
 
     // null move prunning here
@@ -266,7 +266,7 @@ fn searchLoop_aspirationPvs(p_state: *chess.Board_state, p_info: *threadInfo, de
     }
 
     const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, p_features, undefined, depth);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, undefined, depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
     if (p_features.useLMR and depth > 3) {
@@ -357,7 +357,7 @@ pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alp
         const ischeck = p_state.isChecked();
         if (p_state.getLastMove().isCapture() or ischeck) {
             // perform quiesc
-            const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, p_features, ply, ischeck, pv, prevLine, t);
+            const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, pv, prevLine, t);
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, 0, score);
                 _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
@@ -375,7 +375,7 @@ pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alp
     return score;
 }
 
-pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, wasChecked: bool, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
+pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
     if (comptime t == .PV) {
         pv.setLen(ply);
@@ -405,7 +405,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
 
     var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
     gen.fetchNext(p_state);
-    const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, .{}, depth);
+    const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, .{}, depth);
     var i: usize = 0;
     while (gen.pickNext(&order)) |move| : (i += 1) {
         //const fmoves = moveGenl.generateLegalMoves_capture(p_state);
@@ -426,7 +426,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
 
         p_state.makeMove(move);
 
-        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, p_features, ply + 1, wasChecked, pv, prevLine, t);
+        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1, wasChecked, pv, prevLine, t);
 
         _ = p_state.undoMove();
 

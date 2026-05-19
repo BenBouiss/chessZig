@@ -15,9 +15,6 @@ const threadingl = @import("search/threading.zig");
 
 const std = @import("std");
 
-const build_options = @import("build_options");
-const useStaged = build_options.useStaged;
-
 const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
 const e_moveFlags = movel.e_moveFlags;
@@ -28,7 +25,6 @@ const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
 pub const scoreType: type = i32;
 pub const weightType: type = i32;
-const searchFeatures = schedulerl.searchFeatures;
 
 pub const texel_err = error{board_err};
 
@@ -45,7 +41,7 @@ pub fn evaluate(p_state: *const chess.Board_state, values: *const heuristicValue
 
     score += evaluate_PSQT(p_state, values, _phase);
 
-    score += evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
+    score += evaluate_mobility(&whiteMoveBB, &blackMoveBB, values, _phase);
     score += evaluate_king(p_state, color_mask, values, _phase);
 
     score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
@@ -83,7 +79,7 @@ pub fn evaluate_debug(p_state: *const chess.Board_state, values: *const heuristi
     const color_mask = alphaBetal.getScoreMaskFromTurn(p_state.whiteToMove());
     const ret: heuristicComponents = .{
         .PSQT = evaluate_PSQT(p_state, values, _phase),
-        .Mobility = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
+        .Mobility = evaluate_mobility(&whiteMoveBB, &blackMoveBB, values, _phase),
         .King = evaluate_king(p_state, color_mask, values, _phase),
 
         .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
@@ -199,10 +195,9 @@ pub fn evaluate_pawnStructure(p_state: *const chess.Board_state, values: *const 
     const passedPawnScore = computeTapered(values.PassedPawnValue[MG], values.PassedPawnValue[EG], _phase) * @as(scoreType, @intCast(nWhitePassed - nBlackPassed));
     return doubledPawnScore + isolatedScore + passedPawnScore;
 }
-pub fn evaluate_mobility(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_mobility(p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
     // going to use "raw" mobility only taking board coverage
     // now trying with only legals
-    _ = p_state;
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
     const moveAmountScore = (computeTapered(values.MobilityValue[MG], values.MobilityValue[EG], _phase)) * @as(scoreType, @intCast(moveW - moveB));
@@ -551,14 +546,13 @@ pub fn isBoardTexelValid(p_board: *chess.Board_state) bool {
     const color_mask = alphaBetal.getScoreMaskFromTurn(p_board.whiteToMove());
     const stat = color_mask * evaluate(p_board, &globalHeuristic);
     var info: threadingl.threadInfo = .{ .alive = true, .working = true };
-    const feature: searchFeatures = .{ .useStaticSearch = true };
 
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
 
     var pv: movel.pvContainer = .{};
     var line: movel.line = .{};
-    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, &feature, 1, p_board.isChecked(), &pv, &line, .NonPV);
+    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, p_board.isChecked(), &pv, &line, .NonPV);
     if (stat != quiesc) {
         return false;
     }
@@ -1146,7 +1140,7 @@ pub fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];
     killerMoves[ply][0] = move;
 }
-pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove, p_feature: *const searchFeatures) scoreType {
+pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
@@ -1155,16 +1149,11 @@ pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, 
         return configl.ORDERING_LINE_VALUE;
     }
     const fpiece = p_state.getFromPiece(move);
-    const cpiece = p_state.getCapturePiece(move);
     const from = move.getFrom();
     const to = move.getTo();
 
     if (move.isCapture()) {
-        if (p_feature.useSEE) {
-            return SEE(p_state, move) * configl.ORDERING_SEE_MULTI;
-        } else {
-            return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cpiece)];
-        }
+        return SEE(p_state, move) * configl.ORDERING_SEE_MULTI;
     } else {
         //
         if (move.isPromotion()) {
@@ -1204,13 +1193,13 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, p_feature: *const searchFeatures, hashMove: IMove, depth: u16) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, hashMove: IMove, depth: u16) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
 
     for (0..p_moves.len) |i| {
         ret.indexes[i] = @intCast(i);
-        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, prevLine, hashMove, p_feature);
+        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, prevLine, hashMove);
     }
     ret.len = p_moves.len;
 
@@ -1265,9 +1254,6 @@ pub const moveGenerator = struct {
     idx: usize = 0,
 
     pub fn init() moveGenerator {
-        if (comptime !useStaged) {
-            @panic("Cannot use without staged movegen");
-        }
         var ret: moveGenerator = .{};
         ret.moves.len = 0;
         ret.idx = 0;
