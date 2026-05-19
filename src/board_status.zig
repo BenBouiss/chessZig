@@ -1,8 +1,5 @@
 const std = @import("std");
 
-const chessl = @import("chess.zig");
-const movel = @import("move.zig");
-
 const build_options = @import("build_options");
 
 // Testing Gigantua approach
@@ -30,7 +27,7 @@ pub const statusStack = struct {
     //
     // if packed to u8 size = 1 byte
     // stacksize = 4096 bytes
-    items: [movel.MAX_MATCH_LENGTH]status = undefined,
+    items: [4096]status = undefined,
     len: usize = 0,
 
     pub inline fn push(p_self: *statusStack, item: status) void {
@@ -56,6 +53,8 @@ const WCastlingMask: u8 = 0x6;
 const BCastlingKMask: u8 = 0x8;
 const BCastlingQMask: u8 = 0x10;
 const BCastlingMask: u8 = 0x18;
+
+const AllCastlingMask: u8 = 0x1E;
 //offset size
 //0  1 bit whiteToMove
 //1  1 bit WCastlingK
@@ -126,8 +125,8 @@ pub const status = struct {
         }
         return self.BCastlingQ();
     }
-    pub inline fn onKingMove(self: status) status {
-        if (self.whiteToMove()) {
+    pub inline fn onKingMove(self: status, white: bool) status {
+        if (white) {
             return .{ .val = self.val & (BCastlingMask) };
         } else {
             return .{ .val = 1 | (self.val & (WCastlingMask)) };
@@ -153,17 +152,13 @@ pub const status = struct {
         }
     }
 
-    pub inline fn castlingKey(self: status) u4 {
-        const r1: u4 = @intCast(@intFromBool(self.WCastlingK()));
-        const r2: u4 = @intCast(@intFromBool(self.WCastlingQ()));
-        const r3: u4 = @intCast(@intFromBool(self.BCastlingK()));
-        const r4: u4 = @intCast(@intFromBool(self.BCastlingQ()));
-        return r1 | (r2 << 1) | (r3 << 2) | (r4 << 3);
+    pub inline fn castlingKey(self: status) u8 {
+        return (self.val & AllCastlingMask) >> 1;
     }
 };
 pub inline fn isLeftRook(rook: u64) bool {
-    return (rook & LEFT_ROOKS) != chessl.EMPTY;
+    return (rook & LEFT_ROOKS) != 0;
 }
 pub inline fn isRightRook(rook: u64) bool {
-    return (rook & RIGHT_ROOKS) != chessl.EMPTY;
+    return (rook & RIGHT_ROOKS) != 0;
 }

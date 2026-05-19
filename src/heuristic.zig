@@ -197,7 +197,6 @@ pub fn evaluate_pawnStructure(p_state: *const chess.Board_state, values: *const 
 }
 pub fn evaluate_mobility(p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
     // going to use "raw" mobility only taking board coverage
-    // now trying with only legals
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
     const moveAmountScore = (computeTapered(values.MobilityValue[MG], values.MobilityValue[EG], _phase)) * @as(scoreType, @intCast(moveW - moveB));
@@ -290,11 +289,11 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
     }
 }
 pub fn materialImbalance(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
-    return (p_state.pieceCount[@intFromEnum(e_piece.nWhitePawn)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackPawn)]) * values.PawnValue +
-        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackBishop)]) * values.BishopValue +
-        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteKnight)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackKnight)]) * values.KnightValue +
-        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteRook)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackRook)]) * values.RookValue +
-        (p_state.pieceCount[@intFromEnum(e_piece.nWhiteQueen)] - p_state.pieceCount[@intFromEnum(e_piece.nBlackQueen)]) * values.QueenValue;
+    return (p_state.getPieceCount(e_piece.nWhitePawn) - p_state.getPieceCount(e_piece.nBlackPawn)) * values.PawnValue +
+        (p_state.getPieceCount(e_piece.nWhiteBishop) - p_state.getPieceCount(e_piece.nBlackBishop)) * values.BishopValue +
+        (p_state.getPieceCount(e_piece.nWhiteKnight) - p_state.getPieceCount(e_piece.nBlackKnight)) * values.KnightValue +
+        (p_state.getPieceCount(e_piece.nWhiteRook) - p_state.getPieceCount(e_piece.nBlackRook)) * values.RookValue +
+        (p_state.getPieceCount(e_piece.nWhiteQueen) - p_state.getPieceCount(e_piece.nBlackQueen)) * values.QueenValue;
 }
 pub fn sideCountScore(p_state: *const chess.Board_state, white: bool, values: *const heuristicValues) scoreType {
     var offset: usize = 0;
@@ -621,10 +620,6 @@ pub const texelEntry = struct {
         if (!p_self.valid) {
             return texel_err.board_err;
         }
-        //p_self.seval = @intFromFloat(pastHeuristic(&board));
-        //if (!board.whiteToMove()) {
-        //    p_self.seval = -p_self.seval;
-        //}
         try getCoeffsFromBoard(&board, &p_self.tuples);
         return;
     }
@@ -1123,7 +1118,7 @@ pub const futilityMargin: [4]scoreType = .{ 0, 100, 150, 300 };
 
 // move heuristic "sections"
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
-pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
+//pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
 
 // indexes: ply, idx (either 1st or 2nd)
 pub var killerMoves: [64][2]IMove = undefined;
@@ -1308,7 +1303,7 @@ pub const SEE_context = struct {
     attadef: u64 = 0,
     diagPiece: u64 = 0,
     horizPiece: u64 = 0,
-    pub fn init(p_board: *const chess.Board_state, toSq: squarel.e_square) SEE_context {
+    pub fn init(p_board: *const chess.Board_state, toSq: squarel.e_square, white: bool) SEE_context {
         var ret: SEE_context = undefined;
         ret.horizPiece = (p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] |
             p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)] |
@@ -1319,8 +1314,8 @@ pub const SEE_context = struct {
             p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
             p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
 
-        const attacker = chess.getAllAttackerFromSq(p_board, !p_board.whiteToMove(), toSq);
-        const defender = chess.getAllAttackerFromSq(p_board, p_board.whiteToMove(), toSq);
+        const attacker = chess.getAllAttackerFromSq(p_board, !white, toSq);
+        const defender = chess.getAllAttackerFromSq(p_board, white, toSq);
         ret.attadef = attacker | defender;
         return ret;
     }
@@ -1328,7 +1323,7 @@ pub const SEE_context = struct {
 
 // source: https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
 pub inline fn _SEE_recalc(p_state: *const chess.Board_state, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool) scoreType {
-    const ctx: SEE_context = SEE_context.init(p_state, toSq);
+    const ctx: SEE_context = SEE_context.init(p_state, toSq, white);
     return _SEE_loop(p_state, toSq, fromSq, white, ctx.attadef, ctx.diagPiece, ctx.horizPiece);
 }
 pub fn _SEE_loop(p_state: *const chess.Board_state, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool, attadef: u64, diagPiece: u64, horizPiece: u64) scoreType {
@@ -1388,22 +1383,12 @@ pub const piecePosition = struct {
     sq: squarel.e_square = .invalid,
 };
 pub fn lowestAttackingPiece(p_state: *chess.Board_state, att: u64) piecePosition {
-    //const kingSq = p_state.getKingSq(p_state.whiteToMove());
-    //const prevPinned = (p_state.stack.stack[p_state.stack.len - 2].pinnedBB);
-    //var allAttack = chess.getAllAttackerFromSq(p_state, !p_state.whiteToMove(), sq);
     var ret: piecePosition = .{};
     var retHeur: scoreType = weightl.simpleCheckMateScore;
     var allAttack = att;
     while (allAttack != 0) {
         const targetSq = chess.bitscan(allAttack);
         allAttack &= allAttack - 1;
-        //const targetBB = chess.xToBitboard(targetSq);
-        //if ((targetBB & prevPinned) != 0) {
-        //    // FIXME: this might be a huge solution for my pinned computation further look needed
-        //    if (chess.inBetween(sq, @enumFromInt(targetSq)) & chess.inBetween(kingSq, @enumFromInt(targetSq)) == 0) {
-        //        continue;
-        //    }
-        //}
         const piece = p_state.get_piece(targetSq);
         const pieceH = e_pieceToHeuristic(piece, &globalHeuristic);
         if (pieceH < retHeur) {
