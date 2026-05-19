@@ -263,6 +263,7 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
         return static_eval;
     }
     var best_value = static_eval;
+    // stand pat https://www.chessprogramming.org/Quiescence_Search#StandPat
     if (best_value >= beta) {
         p_info.searchStat.n_cutoffs += 1;
         return best_value;

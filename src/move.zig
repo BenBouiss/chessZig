@@ -88,7 +88,8 @@ pub const IMove = packed struct {
         return (self.getFlag() == @intFromEnum(e_moveFlags.QUEENCASTLE));
     }
     pub inline fn isCastle(self: IMove) bool {
-        return self.isKingSideCastle() or self.isQueenSideCastle();
+        const flag = self.getFlag();
+        return (flag == @intFromEnum(e_moveFlags.KINGCASTLE)) or (flag == @intFromEnum(e_moveFlags.QUEENCASTLE));
     }
     pub inline fn isEnpassant(self: IMove) bool {
         return (self.getFlag() == @intFromEnum(e_moveFlags.ENPASSANT));
