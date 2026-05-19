@@ -71,9 +71,6 @@ pub const searchType = enum { STD, PVS, ZWS, ZWSI, ASPIRATION };
 pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .ALWAYS_REPLACE;
 
-pub const DEFAULT_USE_SEE = true;
-pub const _DEFAULT_USE_SEE = "true";
-
 pub const DEFAULT_USE_FUTILITY = false;
 pub const _DEFAULT_USE_FUTILITY = "false";
 

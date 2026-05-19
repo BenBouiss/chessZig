@@ -1,33 +1,20 @@
 const build_options = @import("build_options");
+const useStaged = build_options.useStaged;
 
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const squarel = @import("square.zig");
-const tablel = @import("moveTables.zig");
-const magicl = @import("magic.zig");
-const utilsl = @import("utils.zig");
-
-const std = @import("std");
 
 const moveContainer = movel.moveContainer;
-const IMove = movel.IMove;
 const moveBBState = movel.moveBBState;
-const magicRecord = magicl.magicRecord;
 
 const squareInfo = squarel.squareInfo;
 const e_square = squarel.e_square;
 
 const e_piece = chess.e_piece;
 const e_moveFlags = movel.e_moveFlags;
-const e_moveCategory = movel.e_moveCategory;
 
 const Board_state = chess.Board_state;
-
-const fastBitscan = build_options.fastBitscan;
-const ignoreChecks = build_options.fastBitscan;
-const useMagic = build_options.useMagic;
-const useStaged = build_options.useStaged;
-const useDebug = build_options.useDebug;
 
 pub const generationModifiers = enum { NONE, NORMAL, QUIETMOVE, CAPTURES, ALL };
 
@@ -1070,7 +1057,7 @@ pub fn southWestOne(bb: u64) u64 {
     return ((bb & chess.notHFile) >> 9);
 }
 
-pub fn moveDeliverCheck(p_state: *const chess.Board_state, move: IMove) bool {
+pub fn moveDeliverCheck(p_state: *const chess.Board_state, move: movel.IMove) bool {
     const fromSq = move.getFrom();
     const fromBB = chess.xToBitboard(fromSq);
     if ((p_state.pinnedBB & fromBB) != 0) {

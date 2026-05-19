@@ -25,10 +25,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         pv.setLen(ply);
     }
     var _alpha = alpha;
-    var _depth = depth;
-    if (false) {
-        _depth += 1;
-    }
+    const _depth = depth;
+
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
     }
@@ -61,7 +59,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
     }
 
-    if (_depth <= 0 or !p_info.alive) {
+    if (_depth == 0 or !p_info.alive) {
         return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine, t);
     }
 
@@ -94,7 +92,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
             hashMoveIsQuiet = true;
         }
     }
-    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, hashMove, _depth);
 
     if (p_features.useLMR and _depth > 3 and !ischeck) {
         heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
@@ -110,7 +108,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         // do qsearch check value < low val
         // return value
         if (depth <= 3 and depth != 1 and t == .NonPV) {
-            const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, p_features, ply, p_state.isChecked(), pv, prevLine, .NonPV);
+            const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, ply, p_state.isChecked(), pv, prevLine, .NonPV);
             if (val < _alpha) {
                 return val;
             }
@@ -129,7 +127,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
-        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
+        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, hashMove, _depth);
         captureOnly = false;
         if (useLMR) {
             heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
@@ -140,7 +138,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         if (i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
             captureOnly = false;
-            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, p_features, hashMove, _depth);
+            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, hashMove, _depth);
 
             if (useLMR) {
                 heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);

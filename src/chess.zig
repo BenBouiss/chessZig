@@ -327,21 +327,18 @@ pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) debug_
 pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool {
     std.debug.assert(turnToken.len != 0);
     if (turnToken[0] == '-') {
-        p_state.stat.WCastlingK = false;
-        p_state.stat.WCastlingQ = false;
-        p_state.stat.BCastlingK = false;
-        p_state.stat.BCastlingQ = false;
+        p_state.stat = .init(p_state.whiteToMove(), false, false, false, false);
     } else {
         for (0..turnToken.len) |i| {
             const letter = turnToken[i];
             if (letter == 'K' or letter == 'H') {
-                p_state.stat.WCastlingK = true;
+                p_state.stat.setWCastlingK(true);
             } else if (letter == 'Q' or letter == 'A') {
-                p_state.stat.WCastlingQ = true;
+                p_state.stat.setWCastlingQ(true);
             } else if (letter == 'k' or letter == 'h') {
-                p_state.stat.BCastlingK = true;
+                p_state.stat.setBCastlingK(true);
             } else if (letter == 'q' or letter == 'a') {
-                p_state.stat.BCastlingQ = true;
+                p_state.stat.setBCastlingQ(true);
             }
         }
     }
@@ -1559,6 +1556,7 @@ pub fn print_boardstate(p_board_state: *const Board_state) void {
     std.debug.print("Zobrist key: 0x{x}\n", .{p_board_state.key.code});
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
+    std.debug.print("Castling right: {d}\n", .{p_board_state.stat.castlingKey()});
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.turn_count, p_board_state.move_history.len, moves.len });
