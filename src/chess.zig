@@ -510,6 +510,7 @@ pub const boardFrame = struct {
     victim: e_piece = .nEmptySquare,
     enPassantIdx: u8 = 0,
     halfMoveClock: u8 = 0,
+    stat: status = .{},
 };
 
 pub const boardStack = struct {
@@ -541,7 +542,7 @@ pub const boardStack = struct {
                 @panic("Board stack is full, forgot to pop?");
             }
         }
-        p_self.stack[p_self.len] = .{ .pinnedBB = p_state.pinnedBB, .victim = p_state.victim, .checkersBB = p_state.checkersBB, .enPassantIdx = p_state.enPassantIdx, .lastMove = p_state.lastMove, .key = p_state.key, .halfMoveClock = p_state.halfMoveClock, .phase = p_state.phase };
+        p_self.stack[p_self.len] = .{ .pinnedBB = p_state.pinnedBB, .victim = p_state.victim, .checkersBB = p_state.checkersBB, .enPassantIdx = p_state.enPassantIdx, .lastMove = p_state.lastMove, .key = p_state.key, .halfMoveClock = p_state.halfMoveClock, .phase = p_state.phase, .stat = p_state.stat };
         p_self.len += 1;
     }
 };
@@ -564,7 +565,6 @@ pub const Board_state = struct {
     halfMoveClock: u8 = 0,
     enPassantIdx: u8 = 0,
 
-    s_stack: board_statusl.statusStack = .{},
     move_history: matchMoveContainer = .{},
 
     stat: status = .{},
@@ -599,7 +599,6 @@ pub const Board_state = struct {
         // to reduce memory footprint on the stack, consider placing these somewhere else?
         ret.move_history = .{};
         ret.stack = .{};
-        ret.s_stack = .{};
         ret.phase = 0;
 
         return ret;
@@ -629,13 +628,9 @@ pub const Board_state = struct {
         p_self.key = p_frame.key;
         p_self.halfMoveClock = p_frame.halfMoveClock;
         p_self.phase = p_frame.phase;
+        p_self.stat = p_frame.stat;
     }
-    pub fn getPreviousFrame(p_self: *Board_state) !*boardFrame {
-        if (p_self.stack.len == 0) {
-            return debug_err.memErr;
-        }
-        return &p_self.stack[p_self.stack.len - 1];
-    }
+
     pub fn duplicateNTimes(self: Board_state, alloc: std.mem.Allocator, n: usize) !Board_stateContainer {
         var ret: []Board_state = try alloc.alloc(Board_state, n);
         for (0..n) |i| {
@@ -794,10 +789,8 @@ pub const Board_state = struct {
         }
     }
     pub inline fn _undoMove(p_self: *Board_state, comptime white: bool) bool {
-        //const move = p_self.move_history.popMove();
         p_self.move_history.popMoveVoid();
         const move = p_self.lastMove;
-        //std.debug.print("undo {s}\n", .{move.getStr()});
         if (move.isCapture()) {
             return undoMoveCapture_cst(p_self, move, white);
         } else {
@@ -806,12 +799,10 @@ pub const Board_state = struct {
     }
     pub fn undoMoveCapture_cst(p_self: *Board_state, move: IMove, comptime white: bool) bool {
         // test to reduce the undoMove load
-
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
         p_self.turn_count -= 1;
-        p_self.stat = (p_self.s_stack.pop());
 
         const victim = p_self.victim;
 
@@ -876,7 +867,6 @@ pub const Board_state = struct {
             sanityCheckBoardState(p_self);
         }
         p_self.turn_count -= 1;
-        p_self.stat = (p_self.s_stack.pop());
 
         const toSq: u8 = move.getTo();
         const toBB = xToBitboard(toSq);
@@ -941,19 +931,10 @@ pub const Board_state = struct {
     }
 
     pub inline fn undoNullMove(p_self: *Board_state) void {
-        if (p_self.whiteToMove()) {
-            p_self.undoNullMove_cst(true);
-        } else {
-            p_self.undoNullMove_cst(false);
-        }
-    }
-    pub inline fn undoNullMove_cst(p_self: *Board_state, comptime white: bool) void {
-        //
         p_self.turn_count -= 1;
-        p_self.stat = p_self.s_stack.pop();
         p_self.loadFrame(&p_self.stack.pop());
-        _ = white;
     }
+
     pub inline fn makeNullMove(p_self: *Board_state) void {
         if (p_self.whiteToMove()) {
             p_self.makeNullMove_cst(true);
@@ -963,7 +944,6 @@ pub const Board_state = struct {
     }
     pub fn makeNullMove_cst(p_self: *Board_state, comptime white: bool) void {
         p_self.pushState();
-        p_self.s_stack.push(p_self.stat);
 
         p_self.lastMove = .{};
         p_self.victim = .nEmptySquare;
@@ -987,7 +967,7 @@ pub const Board_state = struct {
             p_self._makeMove(move, false);
         }
     }
-    pub fn _makeMove(p_self: *Board_state, move: IMove, comptime white: bool) void {
+    pub inline fn _makeMove(p_self: *Board_state, move: IMove, comptime white: bool) void {
         if (move.isCapture()) {
             p_self.makeMoveCapture_cst(move, white);
         } else {
@@ -1001,7 +981,6 @@ pub const Board_state = struct {
         }
 
         p_self.pushState();
-        p_self.s_stack.push(p_self.stat);
 
         p_self.lastMove = move;
         p_self.victim = .nEmptySquare;
@@ -1115,7 +1094,6 @@ pub const Board_state = struct {
         }
 
         p_self.pushState();
-        p_self.s_stack.push(p_self.stat);
 
         p_self.lastMove = move;
         p_self.victim = .nEmptySquare;

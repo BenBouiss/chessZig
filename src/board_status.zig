@@ -20,30 +20,6 @@ pub const bCastleQKingBit: u64 = 0x1400000000000000;
 pub const bCastleQRookBit: u64 = 0x900000000000000;
 
 pub const e_turn = enum(u2) { BLACK = 0, WHITE = 1 };
-pub const statusStack = struct {
-    // status: 5 bools
-    // size: 5 bytes
-    // stacksize = 5 * 4096 = 20 480 bytes
-    //
-    // if packed to u8 size = 1 byte
-    // stacksize = 4096 bytes
-    items: [4096]status = undefined,
-    len: usize = 0,
-
-    pub inline fn push(p_self: *statusStack, item: status) void {
-        p_self.items[p_self.len] = item;
-        p_self.len += 1;
-    }
-    pub inline fn pop(p_self: *statusStack) status {
-        if (comptime useDebug) {
-            if (p_self.len == 0) {
-                @panic("Popping from empty boardframe, forgot to push?");
-            }
-        }
-        p_self.len -= 1;
-        return p_self.items[p_self.len];
-    }
-};
 
 const whiteToMoveMask: u8 = 0x1;
 const WCastlingKMask: u8 = 0x2;

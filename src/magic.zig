@@ -131,7 +131,6 @@ pub fn bishopMagicIndex(entry: magic_entry, blockers: u64) u64 {
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
     const magic = p_magicTable.rookMagic[@intFromEnum(sq)];
-
     const _blockers = blockers & magic.mask;
     const hash = _blockers *% magic.magic;
     const magic_index = (hash >> (64 - ROOK_FIXED_BIT));
