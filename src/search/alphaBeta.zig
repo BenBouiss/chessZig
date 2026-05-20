@@ -5,7 +5,6 @@ const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
 const weightl = @import("../weights.zig");
 const hashl = @import("../hashTable.zig");
-const utilsl = @import("../utils.zig");
 const configl = @import("../config.zig");
 
 const threadingl = @import("threading.zig");
@@ -14,14 +13,8 @@ const zwsl = @import("zws.zig");
 const pvsl = @import("pvs.zig");
 
 const IMove = movel.IMove;
-const moveContainer = movel.moveContainer;
 const pvContainer = movel.pvContainer;
-
 const scoreType = heuristicl.scoreType;
-
-const moveDecisionExt = schedulerl.moveDecisionExt;
-const searchFeatures = schedulerl.searchFeatures;
-
 const threadInfo = threadingl.threadInfo;
 
 pub fn getScoreMaskFromTurn(white: bool) scoreType {
@@ -31,7 +24,7 @@ pub fn getScoreMaskFromTurn(white: bool) scoreType {
     return -1;
 }
 
-pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const searchFeatures, prevLine: *const movel.line) i8 {
+pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, prevLine: *const movel.line) i8 {
     p_info.working = true;
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
@@ -49,7 +42,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
             score = pvsl.searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
         },
         .ZWS => {
-            score = zwsl.searchLoop(p_state, p_info, depth, alpha, beta, p_features, 0, &pv, prevLine, .PV);
+            score = zwsl.searchLoop(p_state, p_info, p_features, &pv, prevLine, depth, 0, alpha, beta, .PV, false);
         },
     }
 
@@ -66,7 +59,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 }
 pub const searchType = enum { NonPV, PV };
 
-fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
+fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     if (comptime t == .PV) {
         pv.setLen(ply);
     }
@@ -115,7 +108,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
         canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
     }
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    const fmoves = moveGenl.generateLegalMoves(p_state);
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, hashMove, depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions
@@ -217,7 +210,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     return finalScore;
 }
 
-pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
+pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.key, 0);

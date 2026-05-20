@@ -1382,23 +1382,7 @@ pub const piecePosition = struct {
     piece: e_piece = .nEmptySquare,
     sq: squarel.e_square = .invalid,
 };
-pub fn lowestAttackingPiece(p_state: *chess.Board_state, att: u64) piecePosition {
-    var ret: piecePosition = .{};
-    var retHeur: scoreType = weightl.simpleCheckMateScore;
-    var allAttack = att;
-    while (allAttack != 0) {
-        const targetSq = chess.bitscan(allAttack);
-        allAttack &= allAttack - 1;
-        const piece = p_state.get_piece(targetSq);
-        const pieceH = e_pieceToHeuristic(piece, &globalHeuristic);
-        if (pieceH < retHeur) {
-            retHeur = pieceH;
-            ret.piece = piece;
-            ret.sq = @enumFromInt(targetSq);
-        }
-    }
-    return ret;
-}
+
 pub fn lowestAttackDefPiece(p_state: *const chess.Board_state, attDef: u64, white: bool) piecePosition {
     var ret: piecePosition = .{};
     var retHeur: scoreType = weightl.simpleCheckMateScore;

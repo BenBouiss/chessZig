@@ -6,20 +6,14 @@ const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
 const weightl = @import("../weights.zig");
 const hashl = @import("../hashTable.zig");
-const configl = @import("../config.zig");
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const alphaBetal = @import("alphaBeta.zig");
 
 const IMove = movel.IMove;
-const moveContainer = movel.moveContainer;
-const pvContainer = movel.pvContainer;
 const scoreType = heuristicl.scoreType;
-const moveDecisionExt = schedulerl.moveDecisionExt;
-const searchFeatures = schedulerl.searchFeatures;
-const threadInfo = threadingl.threadInfo;
 
-pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: alphaBetal.searchType) scoreType {
+pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *movel.pvContainer, prevLine: *const movel.line, comptime t: alphaBetal.searchType) scoreType {
     if (comptime t == .PV) {
         pv.setLen(ply);
     }
@@ -64,7 +58,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         }
     }
 
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    const fmoves = moveGenl.generateLegalMoves(p_state);
     var order = heuristicl.eval_move_sorting_mask(p_state, &fmoves, ply, prevLine, hashMove, depth);
     var useLMR: bool = false;
     //https://www.chessprogramming.org/Late_Move_Reductions

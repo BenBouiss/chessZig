@@ -12,15 +12,10 @@ const schedulerl = @import("scheduler.zig");
 const alphaBetal = @import("alphaBeta.zig");
 
 const IMove = movel.IMove;
-const moveContainer = movel.moveContainer;
-const pvContainer = movel.pvContainer;
 const scoreType = heuristicl.scoreType;
-const moveDecisionExt = schedulerl.moveDecisionExt;
-const searchFeatures = schedulerl.searchFeatures;
-const threadInfo = threadingl.threadInfo;
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, p_features: *const searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: alphaBetal.searchType) scoreType {
+pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, pv: *movel.pvContainer, prevLine: *const movel.line, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, comptime t: alphaBetal.searchType, comptime cut: bool) scoreType {
     if (comptime t == .PV) {
         pv.setLen(ply);
     }
@@ -72,7 +67,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         const R: u16 = 2 + 1;
         if (_depth > R and !ischeck and !p_state.isEndGame()) {
             p_state.makeNullMove();
-            const score = -searchLoop(p_state, p_info, _depth - R, -beta, 1 - beta, p_features, ply + R, pv, prevLine, .NonPV);
+            const score = -searchLoop(p_state, p_info, p_features, pv, prevLine, _depth - R, ply + R, -beta, 1 - beta, .NonPV, cut);
             p_state.undoNullMove();
             if (score >= beta) {
                 p_info.searchStat.n_cutoffs += 1;
@@ -162,20 +157,21 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
         var score: scoreType = 0;
         if (i == 0) {
-            score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, t);
+            score = -searchLoop(p_state, p_info, p_features, pv, prevLine, _depth - 1, ply + 1, -beta, -_alpha, t, cut);
         } else {
             if (useLMR and (order.depths[i] < (_depth - 1))) {
-                score = -searchLoop(p_state, p_info, order.depths[i], -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
+                score = -searchLoop(p_state, p_info, p_features, pv, prevLine, order.depths[i], ply + 1, -_alpha - 1, -_alpha, .NonPV, cut);
             } else {
                 score = _alpha + 1;
             }
             if (score > _alpha) {
-                score = -searchLoop(p_state, p_info, _depth - 1, -_alpha - 1, -_alpha, p_features, ply + 1, pv, prevLine, .NonPV);
+                score = -searchLoop(p_state, p_info, p_features, pv, prevLine, _depth - 1, ply + 1, -_alpha - 1, -_alpha, .NonPV, cut);
             }
 
             //https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html
-            if (score > _alpha and score < beta) {
-                score = -searchLoop(p_state, p_info, _depth - 1, -beta, -_alpha, p_features, ply + 1, pv, prevLine, .PV);
+            //if (score > _alpha and score < beta) {
+            if (score > _alpha and comptime t == .PV) {
+                score = -searchLoop(p_state, p_info, p_features, pv, prevLine, _depth - 1, ply + 1, -beta, -_alpha, .PV, cut);
             }
         }
 
@@ -184,7 +180,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
         if (tot == 0 or finalScore < score) {
             finalScore = score;
             bestMove = move;
-            if (tot == 0 and ply == 0 and comptime t == .PV) {
+            if (ply == 0) {
                 pv.onBestMove(move, ply);
             }
         }
@@ -238,4 +234,3 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, 
 
     return _alpha;
 }
-
