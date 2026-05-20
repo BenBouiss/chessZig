@@ -1,20 +1,13 @@
 const std = @import("std");
-
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
-const squarel = @import("square.zig");
 const configl = @import("config.zig");
 const heuristicl = @import("heuristic.zig");
-const mainl = @import("main.zig");
 
 const build_options = @import("build_options");
-const useDebug = build_options.useDebug;
 
 const e_piece = chess.e_piece;
-const e_square = squarel.e_square;
-const useHash = build_options.useHash;
 const scoreType = heuristicl.scoreType;
-const IMove = movel.IMove;
 const TT_strat = configl.TT_strat;
 
 pub const Key = struct {
@@ -69,7 +62,7 @@ pub const searchEntry = packed struct {
     evaluation: scoreType = 0,
     val: u16 = 0,
     // bestMove also known as hash move (I think) is to be explored first
-    bestMove: IMove = .{},
+    bestMove: movel.IMove = .{},
     pub inline fn depth(self: *const searchEntry) u8 {
         return @intCast((self.val & DEPTH_MASK) >> DEPTH_SHIFT);
     }
@@ -118,7 +111,7 @@ pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Ha
     return .{ .val = .{ .search = .{ .evaluation = eval, .key = keyToUpperKey(key.code), .val = makeVal(.ALL, depth, hashTable.stat.insertion) } } };
 }
 
-pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: IMove) Hash_entry {
+pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove) Hash_entry {
     return .{ .val = .{ .search = .{ .evaluation = eval, .bestMove = bestMove, .key = keyToUpperKey(key.code), .val = makeVal(nodeT, depth, hashTable.stat.insertion) } } };
 }
 pub const Hash_bucket = struct {
@@ -293,8 +286,6 @@ pub const Hash_table = struct {
         }
     }
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
-        //return hash % self.entries.len;
-        //return hash >> @intCast(64 - self.closestBit);
         return hash & self.mask;
     }
     pub inline fn getBucketFromFullHashIndex(self: Hash_table, hash: u64) *Hash_bucket {
@@ -452,16 +443,10 @@ pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
     return retKey;
 }
 
-pub fn updateKey(keyDst: *Key, keySrc: *Key) void {
+pub inline fn updateKey(keyDst: *Key, keySrc: *Key) void {
     keyDst.code ^= keySrc.code;
 }
 
-pub fn convertEPIdxBoardToZobrist(enPassantIdx: u8) u8 {
-    if (enPassantIdx == 0) {
-        return chess.INVALID_ENPASSANT_FILE;
-    }
-    return chess.getSqIdxFile(enPassantIdx);
-}
 pub fn printTTStats() void {
     const n = hashTable.countNonEmpty();
     const frac: f64 = @as(f64, @floatFromInt(n)) / @as(f64, @floatFromInt(hashTable.entries.len)) * 100;

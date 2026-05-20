@@ -23,13 +23,14 @@ pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 const MOVE_STR_MAX_LENGTH = 5;
 
 pub fn build_move(from: u8, to: u8, flag: u8) IMove {
-    var m_move: u16 = (flag);
-    m_move <<= 6;
-    m_move |= (to);
-    m_move <<= 6;
-    m_move |= (from);
-    const ret: IMove = .{ .m_move = m_move };
-    return ret;
+    //var m_move: u16 = (flag);
+    //m_move <<= 6;
+    //m_move |= (to);
+    //m_move <<= 6;
+    //m_move |= (from);
+    //const ret: IMove = .{ .m_move = m_move };
+    //return ret;
+    return .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
 }
 pub fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
     p_out.moves[p_out.len] = .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };

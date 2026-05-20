@@ -780,6 +780,44 @@ pub const Board_state = struct {
         }
         return true;
     }
+    pub fn updateKeyOnMove(p_self: *Board_state, comptime white: bool, move: IMove, promotion: bool, castle: bool, comptime capture: bool) void {
+        const to = move.getTo();
+        const from = move.getFrom();
+        var fromPiece = p_self.get_piece();
+
+        // make the piece at the dest appear
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][to]);
+        if (promotion) {
+            fromPiece = if (comptime white) .nWhitePawn else .nBlackPawn;
+        }
+        // removed the starting piece
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][from]);
+        if (comptime capture) {
+            // take care of the victim
+            if (move.isEnpassant()) {
+                const victimSq: e_square = getSqFromCoord(getSqIdxRank(from), getSqIdxFile(to));
+                const p = if (comptime white) .nBlackPawn else .nWhitePawn;
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)]);
+            } else {
+                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(p_self.victim)][to]);
+            }
+        } else {
+            // check castling
+            if (castle) {
+                const r = if (comptime white) .nWhiteRook else .nBlackRook;
+                if (move.isQueenSideCastle()) {
+                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 2]);
+                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
+                } else {
+                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
+                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 1]);
+                }
+            }
+        }
+
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
+        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
+    }
 
     pub inline fn undoMove(p_self: *Board_state) bool {
         if (p_self.whiteToMove()) {
@@ -803,12 +841,9 @@ pub const Board_state = struct {
             sanityCheckBoardState(p_self);
         }
         p_self.turn_count -= 1;
-
         const victim = p_self.victim;
-
         const toSq: u8 = move.getTo();
         const toBB = xToBitboard(toSq);
-
         const fromSq: u8 = move.getFrom();
         const fromBB = xToBitboard(fromSq);
 
@@ -1934,24 +1969,11 @@ pub inline fn onMoveStaged(p_board: *Board_state, white: bool) void {
 }
 
 pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
-    var rq: u64 = undefined;
-    var bq: u64 = undefined;
-    var n: u64 = undefined;
-    var p: u64 = undefined;
-    var king_E: e_square = undefined;
-    if (comptime white) {
-        rq = p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen);
-        bq = p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen);
-        n = p_board.getPieceBB(.nBlackKnight);
-        p = p_board.getPieceBB(.nBlackPawn);
-        king_E = p_board.wKingSq;
-    } else {
-        rq = p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen);
-        bq = p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen);
-        n = p_board.getPieceBB(.nWhiteKnight);
-        p = p_board.getPieceBB(.nWhitePawn);
-        king_E = p_board.bKingSq;
-    }
+    const rq: u64 = if (comptime white) (p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen)) else (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
+    const bq: u64 = if (comptime white) (p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen)) else (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
+    const n: u64 = if (comptime white) p_board.getPieceBB(.nBlackKnight) else p_board.getPieceBB(.nWhiteKnight);
+    const p: u64 = if (comptime white) p_board.getPieceBB(.nBlackPawn) else p_board.getPieceBB(.nWhitePawn);
+    const king_E = if (comptime white) p_board.wKingSq else p_board.bKingSq;
 
     const cachedBishAtt = getBishopAttacks(p_board.occupiedBB, king_E);
     const cachedRookAtt = getRookAttacks(p_board.occupiedBB, king_E);
