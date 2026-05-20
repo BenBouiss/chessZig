@@ -101,14 +101,29 @@ pub const status = struct {
         }
         return self.BCastlingQ();
     }
-    pub inline fn onKingMove(self: status, white: bool) status {
-        if (white) {
-            return .{ .val = self.val & (BCastlingMask) };
+    pub inline fn onKingMove(self: *status, comptime white: bool) void {
+        if (comptime white) {
+            self.val &= ~WCastlingMask;
         } else {
-            return .{ .val = 1 | (self.val & (WCastlingMask)) };
+            self.val &= ~BCastlingMask;
         }
     }
-    pub fn onRookMove(self: status, rooks: u64, comptime white: bool) status {
+    pub fn onRookMove(self: *status, rooks: u64, comptime white: bool) void {
+        if (comptime white) {
+            if (isLeftRook(rooks)) {
+                self.val &= ~WCastlingQMask;
+            } else if (isRightRook(rooks)) {
+                self.val &= ~WCastlingKMask;
+            }
+        } else {
+            if (isLeftRook(rooks)) {
+                self.val &= ~BCastlingQMask;
+            } else if (isRightRook(rooks)) {
+                self.val &= ~BCastlingKMask;
+            }
+        }
+    }
+    pub fn onRookMoveN(self: status, rooks: u64, comptime white: bool) status {
         if (comptime white) {
             if (isLeftRook(rooks)) {
                 return .{ .val = self.val & (~(WCastlingQMask | 1)) };
