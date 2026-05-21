@@ -1322,6 +1322,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         } else {
             return false;
         }
+        return true;
     } else if (buffer.containsE("printToScreen", .ignoreCase)) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
@@ -1357,7 +1358,6 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         };
 
-        //std.debug.print("[DEBUG] handleMatchInfoStrBuffer: '{s}' '{s}'\n", .{ utilsl.stripStr(start), utilsl.stripStr(inc) });
         settings.match.timeF = .{ .time = _start, .inc = _inc };
         return true;
     } else if (buffer.startsWith("infinite")) {
