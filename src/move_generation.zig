@@ -923,7 +923,7 @@ pub fn northOccl(pieceBB: u64, free: u64) u64 {
     gen |= pro & (gen << 32);
     return gen;
 }
-pub fn northOne(bb: u64) u64 {
+pub inline fn northOne(bb: u64) u64 {
     return (bb << 8);
 }
 pub fn southOccl(pieceBB: u64, free: u64) u64 {
@@ -937,7 +937,7 @@ pub fn southOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 
-pub fn southOne(bb: u64) u64 {
+pub inline fn southOne(bb: u64) u64 {
     return (bb >> 8);
 }
 
@@ -952,7 +952,7 @@ pub fn eastOccl(pieceBB: u64, free: u64) u64 {
     gen |= pro & (gen << 4);
     return gen;
 }
-pub fn eastOne(bb: u64) u64 {
+pub inline fn eastOne(bb: u64) u64 {
     return ((bb & chess.notHFile) << 1);
 }
 
@@ -967,7 +967,7 @@ pub fn westOccl(pieceBB: u64, free: u64) u64 {
     gen |= pro & (gen >> 4);
     return gen;
 }
-pub fn westOne(bb: u64) u64 {
+pub inline fn westOne(bb: u64) u64 {
     return ((bb & chess.notAFile) >> 1);
 }
 
@@ -982,7 +982,7 @@ pub fn northEastOccl(pieceBB: u64, free: u64) u64 {
     gen |= pro & (gen << 36);
     return gen;
 }
-pub fn northEastOne(bb: u64) u64 {
+pub inline fn northEastOne(bb: u64) u64 {
     return (bb & chess.notHFile) << 9;
 }
 
@@ -997,7 +997,7 @@ pub fn northWestOccl(pieceBB: u64, free: u64) u64 {
     gen |= pro & (gen << 28);
     return gen;
 }
-pub fn northWestOne(bb: u64) u64 {
+pub inline fn northWestOne(bb: u64) u64 {
     return (bb & chess.notHFile) << 7;
 }
 
@@ -1012,7 +1012,7 @@ pub fn southEastOccl(pieceBB: u64, free: u64) u64 {
     gen |= pro & (gen >> 28);
     return gen;
 }
-pub fn southEastOne(bb: u64) u64 {
+pub inline fn southEastOne(bb: u64) u64 {
     return ((bb & chess.notAFile) >> 7);
 }
 
@@ -1027,7 +1027,7 @@ pub fn southWestOccl(pieceBB: u64, free: u64) u64 {
     gen |= pro & (gen >> 36);
     return gen;
 }
-pub fn southWestOne(bb: u64) u64 {
+pub inline fn southWestOne(bb: u64) u64 {
     return ((bb & chess.notHFile) >> 9);
 }
 
