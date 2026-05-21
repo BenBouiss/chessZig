@@ -18,7 +18,6 @@ const Key = hashl.Key;
 const useDebug = build_options.useDebug;
 
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
-pub const e_moveCategory = enum(u4) { QUIET, CAPTURE };
 
 const MOVE_STR_MAX_LENGTH = 5;
 
