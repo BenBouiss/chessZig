@@ -1,5 +1,5 @@
 [engine1]
-path="engines/bin/engine_18_05_26";
+path="engines/bin/engine_21_05_26";
 name="prev";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
@@ -7,8 +7,9 @@ name="prev";
 [engine2]
 path="engines/bin/engine_21_05_26";
 name="new";
-"setoption name useHash value false";
+"setoption name useHash value true";
 "setoption name reportProgress value false";
+"setoption name hashs value 50";
 
 
 [match]
@@ -22,6 +23,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-//sprtmode=true;
+sprtmode=true;
 //maxSPRTMatch=100;
 

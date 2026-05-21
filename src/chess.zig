@@ -786,37 +786,38 @@ pub const Board_state = struct {
         var fromPiece = p_self.get_piece(to);
 
         // make the piece at the dest appear
-        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][to]);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][to]);
         if (promotion) {
             fromPiece = if (comptime white) .nWhitePawn else .nBlackPawn;
         }
         // removed the starting piece
-        hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][from]);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(fromPiece)][from]);
         if (comptime capture) {
             // take care of the victim
             if (move.isEnpassant()) {
                 const victimSq: e_square = getSqFromCoord(getSqIdxRank(from), getSqIdxFile(to));
                 const p: e_piece = if (comptime white) .nBlackPawn else .nWhitePawn;
-                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)]);
+                hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)]);
             } else {
-                hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(p_self.victim)][to]);
+                hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(p_self.victim)][to]);
             }
         } else {
             // check castling
             if (castle) {
                 const r: e_piece = if (comptime white) .nWhiteRook else .nBlackRook;
                 if (move.isQueenSideCastle()) {
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 2]);
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
+                    hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 2]);
+                    hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
                 } else {
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
-                    hashl.updateKey(&p_self.key, &hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 1]);
+                    hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
+                    hashl.updateKey(&p_self.key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 1]);
                 }
             }
         }
 
-        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
-        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.playKey);
     }
 
     pub inline fn undoMove(p_self: *Board_state) bool {
@@ -968,9 +969,9 @@ pub const Board_state = struct {
 
         p_self.lastMove = .{};
         p_self.victim = .nEmptySquare;
-        hashl.updateKey(&p_self.key, &hashl.zobristKeys.playKey);
-        hashl.updateKey(&p_self.key, &hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
-        hashl.updateKey(&p_self.key, &hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.playKey);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.castlingKeys[p_self.stat.castlingKey()]);
+        hashl.updateKey(&p_self.key, hashl.zobristKeys.enPassantKeys[p_self.enPassantIdx]);
 
         p_self.enPassantIdx = 0;
         p_self.halfMoveClock = 0;
