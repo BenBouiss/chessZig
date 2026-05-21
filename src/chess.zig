@@ -863,7 +863,6 @@ pub const Board_state = struct {
         }
         p_self.pieceBB[@intFromEnum(piece)] ^= fromBB;
         p_self.c_occupiedBB[@intFromBool(white)] ^= (fromBB | toBB);
-        p_self.occupiedBB ^= (fromBB);
         p_self.pieceArray[fromSq] = piece;
 
         p_self.pieceBB[@intFromEnum(victim)] ^= toBB;
@@ -880,7 +879,6 @@ pub const Board_state = struct {
             p_self.pieceArray[@intFromEnum(victimSq)] = victim;
             p_self.pieceBB[@intFromEnum(victim)] ^= bisBB;
             p_self.c_occupiedBB[@intFromBool(!white)] ^= bisBB;
-            p_self.occupiedBB ^= bisBB;
         } else if (isKingPiece(piece)) {
             if (comptime white) {
                 p_self.wKingSq = @enumFromInt(fromSq);
@@ -888,6 +886,7 @@ pub const Board_state = struct {
                 p_self.bKingSq = @enumFromInt(fromSq);
             }
         }
+        p_self.occupiedBB = p_self.c_occupiedBB[0] | p_self.c_occupiedBB[1];
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
@@ -905,14 +904,9 @@ pub const Board_state = struct {
 
         const toSq: u8 = move.getTo();
         const toBB = xToBitboard(toSq);
-
         const fromSq: u8 = move.getFrom();
         const fromBB = xToBitboard(fromSq);
-        const moveBB = fromBB | toBB;
-        var castlePiece: e_piece = .nWhiteRook;
-        if (comptime !white) {
-            castlePiece = .nBlackRook;
-        }
+
         var piece = p_self.get_piece(toSq);
 
         p_self.pieceBB[@intFromEnum(piece)] ^= toBB;
@@ -920,16 +914,11 @@ pub const Board_state = struct {
             // this is the promotion piece
             p_self.pieceCount[@intFromEnum(piece)] -= 1;
             // fromPiece is the pawn
-            if (comptime white) {
-                piece = e_piece.nWhitePawn;
-            } else {
-                piece = e_piece.nBlackPawn;
-            }
+            piece = if (comptime white) (.nWhitePawn) else (.nBlackPawn);
             p_self.pieceCount[@intFromEnum(piece)] += 1;
         }
         p_self.pieceBB[@intFromEnum(piece)] ^= fromBB;
-        p_self.c_occupiedBB[@intFromBool(white)] ^= moveBB;
-        p_self.occupiedBB ^= moveBB;
+        p_self.c_occupiedBB[@intFromBool(white)] ^= (fromBB | toBB);
         p_self.pieceArray[toSq] = .nEmptySquare;
         p_self.pieceArray[fromSq] = piece;
 
@@ -939,24 +928,21 @@ pub const Board_state = struct {
             } else {
                 p_self.bKingSq = @enumFromInt(fromSq);
             }
-            if (toSq == (fromSq + 2)) {
-                const castleBB = (xToBitboard(toSq - 1) | (xToBitboard(toSq + 1)));
-                p_self.pieceArray[toSq + 1] = castlePiece;
-                p_self.pieceArray[toSq - 1] = .nEmptySquare;
+            if (move.isCastle()) {
+                const r: e_piece = (if (comptime white) .nWhiteRook else .nBlackRook);
+                const isKingC = move.isKingSideCastle();
+                const rStart: e_square = if (isKingC) (if (comptime white) (.h1) else (.h8)) else (if (comptime white) (.a1) else (.a8));
+                const rEnd: e_square = if (isKingC) (if (comptime white) (.f1) else (.f8)) else (if (comptime white) (.d1) else (.d8));
+                const mask: u64 = if (isKingC) (if (comptime white) (board_statusl.wCastleKRookBit) else (board_statusl.bCastleKRookBit)) else (if (comptime white) (board_statusl.wCastleQRookBit) else (board_statusl.bCastleQRookBit));
 
-                p_self.pieceBB[@intFromEnum(castlePiece)] ^= castleBB;
-                p_self.c_occupiedBB[@intFromBool(white)] ^= (castleBB);
-                p_self.occupiedBB ^= castleBB;
-            } else if (toSq == (fromSq -% 2)) {
-                const castleBB = (xToBitboard(toSq + 1) | (xToBitboard(toSq - 2)));
-                p_self.pieceArray[toSq - 2] = castlePiece;
-                p_self.pieceArray[toSq + 1] = .nEmptySquare;
-
-                p_self.pieceBB[@intFromEnum(castlePiece)] ^= castleBB;
-                p_self.c_occupiedBB[@intFromBool(white)] ^= (castleBB);
-                p_self.occupiedBB ^= castleBB;
+                p_self.pieceBB[@intFromEnum(r)] ^= mask;
+                p_self.c_occupiedBB[@intFromBool(white)] ^= (mask);
+                p_self.pieceArray[@intFromEnum(rStart)] = r;
+                p_self.pieceArray[@intFromEnum(rEnd)] = .nEmptySquare;
             }
         }
+
+        p_self.occupiedBB = p_self.c_occupiedBB[0] | p_self.c_occupiedBB[1];
         if (comptime useDebug) {
             sanityCheckBoardState(p_self);
         }
