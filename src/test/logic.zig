@@ -140,13 +140,13 @@ test "pins" {
     const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     var board = chessl.getBoardFromFen(fen) catch unreachable;
     chessl.getCheckers(&board, true);
-    try std.testing.expectEqual(0x80402000000000, board.checkersBB);
-    try std.testing.expectEqual(0x14186e380400, board.pinnedBB);
+    try std.testing.expectEqual(0x80402000000000, board.frame.checkersBB);
+    try std.testing.expectEqual(0x14186e380400, board.frame.pinnedBB);
 
     chessl.getCheckers(&board, false);
 
-    try std.testing.expectEqual(chessl.EMPTY, board.checkersBB);
-    try std.testing.expectEqual(0x7e00000000000000, board.pinnedBB);
+    try std.testing.expectEqual(chessl.EMPTY, board.frame.checkersBB);
+    try std.testing.expectEqual(0x7e00000000000000, board.frame.pinnedBB);
 
     try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(movel.e_moveFlags.QUIETMOVE))));
     try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(movel.e_moveFlags.QUIETMOVE))));

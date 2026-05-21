@@ -31,8 +31,8 @@ pub const texel_err = error{board_err};
 pub fn evaluate(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
-    const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
     const color_mask = alphaBetal.getScoreMaskFromTurn(p_state.whiteToMove());
 
     var score: scoreType = 0;
@@ -70,8 +70,8 @@ pub const heuristicComponents = struct {
 pub fn evaluate_debug(p_state: *const chess.Board_state, values: *const heuristicValues) heuristicComponents {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
-    const blackMoveBB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
     const phase: scoreType = @intCast(p_state.getPhase());
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
@@ -103,7 +103,7 @@ pub fn evaluate_PSQT(p_state: *const chess.Board_state, values: *const heuristic
     var score_count: scoreType = 0;
     var score_mg: scoreType = 0;
     var score_eg: scoreType = 0;
-    var _bb = p_state.occupiedBB;
+    var _bb = p_state.b.occupiedBB();
 
     while (_bb != 0) {
         const sq = chess.bitscan(_bb);
@@ -177,8 +177,8 @@ pub fn evaluate_PSQT(p_state: *const chess.Board_state, values: *const heuristic
 }
 
 pub fn evaluate_pawnStructure(p_state: *const chess.Board_state, values: *const heuristicValues, _phase: scoreType) scoreType {
-    const wp = p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
-    const bp = p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
+    const wp = p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
+    const bp = p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
     // in an effort to have the weights all positive I swapped the diff, (nBlackIsolated - nWhiteIsolated) * (w>0) means that white is advantaged (s>0) if (nBlackIsolated > nWhiteIsolated) and black is advantaged(s<0) if (nBlackIsolated < nWhiteIsolated)
     // same for doubled as doubled and isolated are seen as negative attributes hence why I chose negative weights to penalize the respective sides.
 
@@ -213,8 +213,8 @@ pub fn evaluate_mobility(p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *cons
     //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
 }
 pub fn evaluate_king(p_state: *const chess.Board_state, color_mask: scoreType, values: *const heuristicValues, _phase: scoreType) scoreType {
-    const wKing = squarel.squareInfo.init(p_state.wKingSq);
-    const bKing = squarel.squareInfo.init(p_state.bKingSq);
+    const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
+    const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
     const distance: scoreType = @intCast(wKing.computeBenDistance(bKing));
     const bonus = color_mask * (squarel.maxBenDistance - distance);
     return computeTapered(bonus * values.KingProximityValue[MG], bonus * values.KingProximityValue[EG], _phase);
@@ -222,8 +222,8 @@ pub fn evaluate_king(p_state: *const chess.Board_state, color_mask: scoreType, v
 pub fn evaluate_safety(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
     // counting negative for white as the best safety is not attackers => 0 heuristic
     var retSaf: scoreType = 0;
-    const kingWSafety = chess.safetyArea(p_state.wKingSq);
-    const kingBSafety = chess.safetyArea(p_state.bKingSq);
+    const kingWSafety = chess.safetyArea(p_state.b.wKingSq);
+    const kingBSafety = chess.safetyArea(p_state.b.bKingSq);
     const bKnightAtt: scoreType = @intCast(chess.popcount(kingWSafety & p_blackMoveBB.knightMoves));
     const bBishopAtt: scoreType = @intCast(chess.popcount(kingWSafety & p_blackMoveBB.bishopMoves));
     const bRookAtt: scoreType = @intCast(chess.popcount(kingWSafety & p_blackMoveBB.rookMoves));
@@ -244,8 +244,8 @@ pub fn evaluate_safety(p_state: *const chess.Board_state, p_whiteMoveBB: *const 
 pub fn evaluate_structure(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
     // structure protection,
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
-    const w_pieceProtect = p_whiteMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.wKingSq));
-    const b_pieceProtect = p_blackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
+    const w_pieceProtect = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.b.wKingSq));
+    const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.b.bKingSq));
     return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * computeTapered(values.StructureProtectionValue[MG], values.StructureProtectionValue[EG], _phase);
 }
 pub fn evaluate_tempo(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
@@ -255,9 +255,9 @@ pub fn evaluate_tempo(p_state: *const chess.Board_state, p_whiteMoveBB: *const m
     }
     const isChecked: scoreType = coeff * @intFromBool(p_state.isChecked());
     const wMoves: u64 = p_whiteMoveBB.collapse();
-    const wThreats: u64 = wMoves & p_state.c_occupiedBB[@intFromBool(false)];
+    const wThreats: u64 = wMoves & p_state.b.c_occupiedBB[@intFromBool(false)];
     const bMoves: u64 = p_blackMoveBB.collapse();
-    const bThreats: u64 = bMoves & p_state.c_occupiedBB[@intFromBool(true)];
+    const bThreats: u64 = bMoves & p_state.b.c_occupiedBB[@intFromBool(true)];
     const deltaThreat: scoreType = @as(scoreType, (@intCast(chess.popcount(wThreats)))) - @as(scoreType, (@intCast(chess.popcount(bThreats))));
 
     return computeTapered(values.tempoChecksScore[MG], values.tempoChecksScore[EG], _phase) * isChecked + computeTapered(values.pieceThreatScore[MG], values.pieceThreatScore[EG], _phase) * deltaThreat;
@@ -300,7 +300,7 @@ pub fn sideCountScore(p_state: *const chess.Board_state, white: bool, values: *c
     if (!white) {
         offset = chess.N_PIECES_TYPES;
     }
-    return p_state.pieceCount[offset] * values.PawnValue + p_state.pieceCount[offset + 1] * values.BishopValue + p_state.pieceCount[offset + 2] * values.KnightValue + p_state.pieceCount[offset + 3] * values.RookValue + p_state.pieceCount[offset + 4] * values.QueenValue;
+    return p_state.b.pieceCount[offset] * values.PawnValue + p_state.b.pieceCount[offset + 1] * values.BishopValue + p_state.b.pieceCount[offset + 2] * values.KnightValue + p_state.b.pieceCount[offset + 3] * values.RookValue + p_state.b.pieceCount[offset + 4] * values.QueenValue;
 }
 
 pub fn getMaskFromBB(bb: u64) [chess.N_SQUARES]scoreType {
@@ -530,7 +530,7 @@ pub const phases_arr = [_]usize{ pawnPhase, bishopPhase, knightPhase, rookPhase,
 pub const MG: usize = 0;
 pub const EG: usize = 1;
 
-pub fn computePhase(p_board: *chess.Board_state) scoreType {
+pub fn computePhase(p_board: *const chess.Board_state) scoreType {
     const phase: i32 = 24 - 4 * (p_board.getPieceCount(.nWhiteQueen) + p_board.getPieceCount(.nBlackQueen)) - 2 * (p_board.getPieceCount(.nWhiteRook) + p_board.getPieceCount(.nBlackRook)) - (p_board.getPieceCount(.nWhiteBishop) + p_board.getPieceCount(.nBlackBishop)) - (p_board.getPieceCount(.nWhiteKnight) + p_board.getPieceCount(.nBlackKnight));
     const _phase: scoreType = @intCast(phase);
     return @divFloor(256 * (24 - _phase), 24);
@@ -672,8 +672,8 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
 
         const allwhiteMoveBB = moveGenl._cst_moveGenBB(p_state, true);
         const allblackMoveBB = moveGenl._cst_moveGenBB(p_state, false);
-        const moveW = allwhiteMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(true)]);
-        const moveB = allblackMoveBB.andFn(~p_state.c_occupiedBB[@intFromBool(false)]);
+        const moveW = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
+        const moveB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(moveW.count()), .bcoeff = @intCast(moveB.count()) });
         std.debug.assert(idx == configl.TEXEL_MOVE_COUNT_IDX);
@@ -687,24 +687,24 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         idx += 1;
 
         // structure protection
-        const w_pieceProtect = allwhiteMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.wKingSq));
-        const b_pieceProtect = allblackMoveBB.andFn(p_state.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.bKingSq));
+        const w_pieceProtect = allwhiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.b.wKingSq));
+        const b_pieceProtect = allblackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.b.bKingSq));
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(w_pieceProtect.count()), .bcoeff = @intCast(b_pieceProtect.count()) });
         std.debug.assert(idx == configl.TEXEL_PROTECTION_COUNT_IDX);
         idx += 1;
 
         // pawn structure
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.ipopcount(chess.isolatedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(chess.isolatedPawns(p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.ipopcount(chess.isolatedPawns(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
         std.debug.assert(idx == configl.TEXEL_PAWN_ISOL_IDX);
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.ipopcount(chess.stackedPawns(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(chess.stackedPawns(p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)]))), .bcoeff = @intCast(chess.ipopcount(chess.stackedPawns(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)]))) });
         std.debug.assert(idx == configl.TEXEL_PAWN_STACKED_IDX);
         idx += 1;
 
-        const wp = p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
-        const bp = p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
+        const wp = p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
+        const bp = p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
         const nWhitePassed: i8 = @intCast(chess.popcount(chess.passedPawns(wp, bp)));
         const nBlackPassed: i8 = @intCast(chess.popcount(chess.passedPawns(bp, wp)));
 
@@ -722,31 +722,31 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
         idx += 1;
     }
     if (comptime (configl.TUNE_SAFETY)) {
-        const maskW = chess.safetyArea(p_state.wKingSq);
-        const maskB = chess.safetyArea(p_state.bKingSq);
+        const maskW = chess.safetyArea(p_state.b.wKingSq);
+        const maskB = chess.safetyArea(p_state.b.bKingSq);
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)])) });
         std.debug.assert(idx == configl.TEXEL_SAFETY_PAWN_PROX_IDX);
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.b.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteBishop)])) });
         std.debug.assert(idx == configl.TEXEL_SAFETY_BISHOP_PROX_IDX);
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.b.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteKnight)])) });
         std.debug.assert(idx == configl.TEXEL_SAFETY_KNIGHT_PROX_IDX);
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.b.pieceBB[@intFromEnum(e_piece.nBlackRook)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteRook)])) });
         std.debug.assert(idx == configl.TEXEL_SAFETY_ROOK_PROX_IDX);
         idx += 1;
 
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.ipopcount(maskW & p_state.b.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), .bcoeff = @intCast(chess.ipopcount(maskB & p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteQueen)])) });
         std.debug.assert(idx == configl.TEXEL_SAFETY_QUEEN_PROX_IDX);
         idx += 1;
 
-        const wKing = squarel.squareInfo.init(p_state.wKingSq);
-        const bKing = squarel.squareInfo.init(p_state.bKingSq);
+        const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
+        const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
         const distance: scoreType = squarel.maxBenDistance - @as(scoreType, @intCast(wKing.computeBenDistance(bKing)));
 
         p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = distance, .bcoeff = distance });
@@ -758,22 +758,22 @@ pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !voi
     if (comptime (configl.TUNE_PSQT)) {
         // piece psqt
         std.debug.assert(idx == configl.TEXEL_PAWN_PSQT_IDX);
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), &idx);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)]), &getMaskFromBB(chess.rotate180(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)])), &idx);
 
         std.debug.assert(idx == configl.TEXEL_BISHOP_PSQT_IDX);
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), &idx);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteBishop)]), &getMaskFromBB(chess.rotate180(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackBishop)])), &idx);
 
         std.debug.assert(idx == configl.TEXEL_KNIGHT_PSQT_IDX);
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), &idx);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteKnight)]), &getMaskFromBB(chess.rotate180(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackKnight)])), &idx);
 
         std.debug.assert(idx == configl.TEXEL_ROOK_PSQT_IDX);
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteRook)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackRook)])), &idx);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteRook)]), &getMaskFromBB(chess.rotate180(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackRook)])), &idx);
 
         std.debug.assert(idx == configl.TEXEL_QUEEN_PSQT_IDX);
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), &idx);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteQueen)]), &getMaskFromBB(chess.rotate180(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackQueen)])), &idx);
 
         std.debug.assert(idx == configl.TEXEL_KING_PSQT_IDX);
-        p_out.add1DCoeff(&getMaskFromBB(p_state.pieceBB[@intFromEnum(e_piece.nWhiteKing)]), &getMaskFromBB(chess.rotate180(p_state.pieceBB[@intFromEnum(e_piece.nBlackKing)])), &idx);
+        p_out.add1DCoeff(&getMaskFromBB(p_state.b.pieceBB[@intFromEnum(e_piece.nWhiteKing)]), &getMaskFromBB(chess.rotate180(p_state.b.pieceBB[@intFromEnum(e_piece.nBlackKing)])), &idx);
     }
     return;
 }
@@ -1305,14 +1305,14 @@ pub const SEE_context = struct {
     horizPiece: u64 = 0,
     pub fn init(p_board: *const chess.Board_state, toSq: squarel.e_square, white: bool) SEE_context {
         var ret: SEE_context = undefined;
-        ret.horizPiece = (p_board.pieceBB[@intFromEnum(e_piece.nWhiteRook)] |
-            p_board.pieceBB[@intFromEnum(e_piece.nBlackRook)] |
-            p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
-            p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
-        ret.diagPiece = (p_board.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] |
-            p_board.pieceBB[@intFromEnum(e_piece.nBlackBishop)] |
-            p_board.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
-            p_board.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+        ret.horizPiece = (p_board.b.pieceBB[@intFromEnum(e_piece.nWhiteRook)] |
+            p_board.b.pieceBB[@intFromEnum(e_piece.nBlackRook)] |
+            p_board.b.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
+            p_board.b.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
+        ret.diagPiece = (p_board.b.pieceBB[@intFromEnum(e_piece.nWhiteBishop)] |
+            p_board.b.pieceBB[@intFromEnum(e_piece.nBlackBishop)] |
+            p_board.b.pieceBB[@intFromEnum(e_piece.nWhiteQueen)] |
+            p_board.b.pieceBB[@intFromEnum(e_piece.nBlackQueen)]);
 
         const attacker = chess.getAllAttackerFromSq(p_board, !white, toSq);
         const defender = chess.getAllAttackerFromSq(p_board, white, toSq);
@@ -1334,7 +1334,7 @@ pub fn _SEE_loop(p_state: *const chess.Board_state, toSq: squarel.e_square, from
     const toSqInfo = squarel.squareInfo.init(toSq);
     const toSqDiags = toSqInfo.getDiagonalsBB();
 
-    var occ = p_state.occupiedBB;
+    var occ = p_state.b.occupiedBB();
 
     var gain: [32]scoreType = undefined;
     var d: usize = 0;
@@ -1386,7 +1386,7 @@ pub const piecePosition = struct {
 pub fn lowestAttackDefPiece(p_state: *const chess.Board_state, attDef: u64, white: bool) piecePosition {
     var ret: piecePosition = .{};
     var retHeur: scoreType = weightl.simpleCheckMateScore;
-    var allAttack = attDef & p_state.c_occupiedBB[@intFromBool(white)];
+    var allAttack = attDef & p_state.b.c_occupiedBB[@intFromBool(white)];
     while (allAttack != 0) {
         const targetSq = chess.bitscan(allAttack);
         allAttack &= allAttack - 1;

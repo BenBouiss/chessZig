@@ -66,8 +66,8 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var _alpha = alpha;
     if (p_state.isStaleMateRepetition()) {
         if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, @intCast(depth), weightl.simpleStalemateScore);
-            _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, @intCast(depth), weightl.simpleStalemateScore);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
         }
         return weightl.simpleStalemateScore;
     }
@@ -79,7 +79,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
     var hashMove: IMove = .{};
     var hashFlag: hashl.nodeType = .UPPER;
     if (p_features.useHash) {
-        const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
+        const entry = hashl.getEntryFromMatch(p_state.frame.key, @intCast(depth));
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             hashMove = _entry.val.search.bestMove;
@@ -187,8 +187,8 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, .LOWER, move);
-                _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(depth), finalScore, .LOWER, move);
+                _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
             }
             p_info.searchStat.n_cutoffs += 1;
             return finalScore;
@@ -202,8 +202,8 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
         }
     } else {
         if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), finalScore, hashFlag, bestMove);
-            _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(depth), finalScore, hashFlag, bestMove);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
         }
     }
 
@@ -213,7 +213,7 @@ fn searchLoop(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alph
 pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (p_features.useHash) {
-        const entry = hashl.getEntryFromMatch(p_state.key, 0);
+        const entry = hashl.getEntryFromMatch(p_state.frame.key, 0);
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             return _entry.eval();
@@ -226,8 +226,8 @@ pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alp
             // perform quiesc
             const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, pv, prevLine, t);
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, 0, score);
-                _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
+                _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
             }
             return score;
         }
@@ -236,8 +236,8 @@ pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alp
     const score = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
 
     if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.key, 0, score);
-        _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+        const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
+        _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
     }
     return score;
 }

@@ -12,12 +12,13 @@ const heuristicl = @import("heuristic.zig");
 const mathl = @import("math.zig");
 const timel = @import("time.zig");
 const lockl = @import("lock.zig");
+const typel = @import("type.zig");
 const hashTablel = @import("hashTable.zig");
 
 const stringl = @import("string.zig");
 const std = @import("std");
 
-const e_color = chessl.e_color;
+const e_color = typel.e_color;
 pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleMateRepetition, StaleMateInsuficientMaterial, Flagged, Dnf };
 
 pub const SPRT_RES = enum(u8) { NULL, H0, H1 };
@@ -125,7 +126,7 @@ const matchResultContainer = struct {
             p_self.items[currEng].stdTimePerTurn = 0;
             p_self.items[currEng].avgTimePerTurn = @divFloor(match.playerInv[i].timeTakenCum, match.playerInv[i].movesMade + 1);
         }
-        const lineString = try match.chessState.move_history.getLineString(alloc);
+        const lineString = try match.chessState.moveHistory.getLineString(alloc);
 
         try p_self.fens.append(alloc, lineString);
     }
@@ -662,7 +663,7 @@ const guiState = struct {
         p_self.status.phase = .MATCH;
         try p_self.respondAll("ucinewgame");
 
-        var line = try p_self.match.chessState.move_history.getLineString(p_self.alloc);
+        var line = try p_self.match.chessState.moveHistory.getLineString(p_self.alloc);
         defer line.free(p_self.alloc);
 
         try p_self.waitEngine();
@@ -736,7 +737,7 @@ const guiState = struct {
     }
     fn sendPositionUpdate(p_self: *guiState) !void {
         var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-        const lineString = p_self.match.chessState.move_history.getLineStatic();
+        const lineString = p_self.match.chessState.moveHistory.getLineStatic();
         const msg = try std.fmt.bufPrint(&buffer, "position startpos moves {s}", .{utilsl.trimStr(&lineString)});
         try p_self.respond(msg, p_self.getCurrentPlayer().engineUsed);
     }
