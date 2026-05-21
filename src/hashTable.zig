@@ -354,29 +354,27 @@ pub const Zobrist_Keys = struct {
     playKey: Key = .{},
     castlingKeys: [16]Key = std.mem.zeroes([16]Key),
     enPassantKeys: [64]Key = std.mem.zeroes([64]Key),
-    pub fn init(alloc: std.mem.Allocator) *Zobrist_Keys {
-        var ret = alloc.create(Zobrist_Keys) catch unreachable;
-        ret.pieceKeys = std.mem.zeroes([12][64]Key);
-        @memset(&ret.turnKey, .{});
-        @memset(&ret.castlingKeys, .{});
-        @memset(&ret.enPassantKeys, .{});
-        ret.playKey = .{};
+    pub fn init(seed: u64) Zobrist_Keys {
+        var ret: Zobrist_Keys = .{};
+        var rngIntGenerator = std.Random.DefaultPrng.init(seed);
+        const rng = rngIntGenerator.random();
+        initZobristKeys(rng, &ret);
         return ret;
     }
-    pub fn free(p_self: *Zobrist_Keys, alloc: std.mem.Allocator) void {
-        alloc.destroy(p_self);
-    }
+    //pub fn free(p_self: *Zobrist_Keys, alloc: std.mem.Allocator) void {
+    //    alloc.destroy(p_self);
+    //}
 };
 
-pub var zobristKeys: *Zobrist_Keys = undefined;
+pub const zobristKeys: Zobrist_Keys = Zobrist_Keys.init(configl.SEED);
 pub var hashTable: Hash_table = .{ .entries = undefined };
 
-pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
-    var rngIntGenerator = std.Random.DefaultPrng.init(seed);
-    zobristKeys = Zobrist_Keys.init(alloc);
-    const rng = rngIntGenerator.random();
-    initZobristKeys(rng);
-}
+//pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
+//    var rngIntGenerator = std.Random.DefaultPrng.init(seed);
+//    zobristKeys = Zobrist_Keys.init(alloc);
+//    const rng = rngIntGenerator.random();
+//    initZobristKeys(rng);
+//}
 pub fn isHashTable_init() bool {
     return hashTable.initialized;
 }
@@ -396,34 +394,37 @@ pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32, ver
 }
 
 pub fn _initHash(alloc: std.mem.Allocator, seed: u64, bitsHashTable: u8) void {
-    _initZobrist(alloc, seed);
+    _ = alloc;
+    _ = seed;
+    //_initZobrist(alloc, seed);
     _ = bitsHashTable;
     return;
 }
 pub fn _freeHash(alloc: std.mem.Allocator, verbose: bool) void {
     hashTable.free(alloc, verbose);
-    zobristKeys.free(alloc);
+    //zobristKeys.free(alloc);
 }
 
-pub fn initZobristKeys(rng: std.Random) void {
+pub fn initZobristKeys(rng: std.Random, zob: *Zobrist_Keys) void {
+    @setEvalBranchQuota(100000);
     for (0..12) |i| {
         for (0..64) |j| {
-            zobristKeys.pieceKeys[i][j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+            zob.pieceKeys[i][j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
         }
     }
 
-    zobristKeys.turnKey[0] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
-    zobristKeys.turnKey[1] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+    zob.turnKey[0] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+    zob.turnKey[1] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
 
     for (0..16) |j| {
-        zobristKeys.castlingKeys[j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+        zob.castlingKeys[j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
     }
 
     for (0..64) |j| {
-        zobristKeys.enPassantKeys[j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+        zob.enPassantKeys[j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
     }
-    zobristKeys.playKey = zobristKeys.turnKey[0];
-    updateKey(&zobristKeys.playKey, &zobristKeys.turnKey[1]);
+    zob.playKey = zob.turnKey[0];
+    zob.playKey.code ^= zob.turnKey[1].code;
 }
 pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
     // for better perfs look for incremental xor key update using the previous move
@@ -443,7 +444,7 @@ pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
     return retKey;
 }
 
-pub inline fn updateKey(keyDst: *Key, keySrc: *Key) void {
+pub inline fn updateKey(keyDst: *Key, keySrc: Key) void {
     keyDst.code ^= keySrc.code;
 }
 

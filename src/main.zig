@@ -25,7 +25,8 @@ const moveDecisionExt = schedulerl.moveDecisionExt;
 pub fn initAll(alloc: std.mem.Allocator, verbose: bool) void {
     magicl._initMagic(&magicl.magicTable, verbose);
 
-    hashl._initZobrist(alloc, 42);
+    _ = alloc;
+    //hashl._initZobrist(alloc, 42);
 
     moveTablel._initTables(verbose);
     if (comptime useDebug) {

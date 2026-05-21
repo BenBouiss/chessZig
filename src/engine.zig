@@ -586,7 +586,7 @@ pub const engine = struct {
         p_self.alloc.destroy(p_self.searcher);
         if (p_self.status.initializedInternals) {
             hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
-            hashTablel.zobristKeys.free(p_self.alloc);
+            //hashTablel.zobristKeys.free(p_self.alloc);
         }
         p_self.logs.free(p_self.alloc);
         p_self.options.logsPath.free(p_self.alloc);
@@ -871,7 +871,7 @@ pub const engine = struct {
         magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
 
         moveTablel._initTables(p_self.status.debugMode);
-        hashTablel._initZobrist(p_self.alloc, configl.SEED);
+        //hashTablel._initZobrist(p_self.alloc, configl.SEED);
         hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
 
         _ = p_self.updateElo(p_self.options.engineElo);

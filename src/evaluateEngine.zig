@@ -568,7 +568,7 @@ const guiState = struct {
         p_self.workingThreads.deinit(p_self.alloc);
 
         hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
-        hashTablel.zobristKeys.free(p_self.alloc);
+        //hashTablel.zobristKeys.free(p_self.alloc);
         if (p_self.config.match.useOpeningBook) {
             p_self.config.match.openingDb.free(p_self.alloc);
         }
