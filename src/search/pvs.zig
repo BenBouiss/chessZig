@@ -29,7 +29,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, d
     var hashMove: IMove = .{};
     var hashFlag: hashl.nodeType = .UPPER;
     if (p_features.useHash) {
-        const entry = hashl.getEntryFromMatch(p_state.key, @intCast(depth));
+        const entry = hashl.getEntryFromMatch(p_state.frame.key, @intCast(depth));
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             if (comptime t == .NonPV) {
@@ -126,8 +126,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, d
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), beta, .LOWER, move);
-                _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(depth), beta, .LOWER, move);
+                _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
             }
 
             p_info.searchStat.n_cutoffs += 1;
@@ -143,8 +143,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, d
     }
 
     if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(depth), _alpha, hashFlag, bestMove);
-        _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(depth), _alpha, hashFlag, bestMove);
+        _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
     }
 
     return _alpha;

@@ -32,7 +32,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
     var hashMove: IMove = .{};
     var hashFlag: hashl.nodeType = .UPPER;
     if (p_features.useHash and depth > 2) {
-        const entry = hashl.getEntryFromMatch(p_state.key, @intCast(_depth));
+        const entry = hashl.getEntryFromMatch(p_state.frame.key, @intCast(_depth));
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
@@ -210,8 +210,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
                 }
             }
             if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, .LOWER, move);
-                _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move);
+                _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
             }
 
             p_info.searchStat.n_cutoffs += 1;
@@ -227,8 +227,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
         }
     } else {
         if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.key, @intCast(_depth), _alpha, hashFlag, bestMove);
-            _ = hashl.hashTable.storeEntry(&s_entry, p_state.key.code);
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
         }
     }
 

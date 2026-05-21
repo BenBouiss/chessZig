@@ -124,14 +124,14 @@ test "zobrist key consistency" {
 
         if (map.contains(fen[0..fen.len])) {
             const k = map.get(fen[0..fen.len]).?;
-            if (k != tmp.key.code) {
+            if (k != tmp.frame.key.code) {
                 std.debug.print("error at fen {s}\n", .{fen});
-                try std.testing.expectEqual(k, tmp.key.code);
+                try std.testing.expectEqual(k, tmp.frame.key.code);
             }
         } else {
             //std.debug.print("put\n", .{});
             const n: *fenNode = try .init(alloc, &fen);
-            try map.put(n.val[0..n.val.len], tmp.key.code);
+            try map.put(n.val[0..n.val.len], tmp.frame.key.code);
             keys.append(&n.node);
         }
 
