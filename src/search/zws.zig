@@ -10,6 +10,7 @@ const configl = @import("../config.zig");
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const alphaBetal = @import("alphaBeta.zig");
+const boardl = @import("../board.zig");
 
 const IMove = movel.IMove;
 const scoreType = heuristicl.scoreType;
@@ -58,6 +59,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
     if (_depth == 0 or !p_info.alive) {
         return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, prevLine, t);
     }
+    const f: boardl.boardFrame = .copy(p_state);
 
     // null move prunning here
     // R = 3
@@ -69,6 +71,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, p_features, pv, prevLine, _depth - R, ply + R, -beta, 1 - beta, .NonPV, cut);
             p_state.undoNullMove();
+            p_state.frame = f;
             if (score >= beta) {
                 p_info.searchStat.n_cutoffs += 1;
                 return score;
@@ -176,6 +179,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
         }
 
         _ = p_state.undoMove();
+        p_state.frame = f;
 
         if (tot == 0 or finalScore < score) {
             finalScore = score;

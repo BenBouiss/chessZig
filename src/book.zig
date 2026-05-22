@@ -6,6 +6,7 @@ const configl = @import("config.zig");
 const chessl = @import("chess.zig");
 const filel = @import("file.zig");
 const hashl = @import("hashTable.zig");
+const boardl = @import("board.zig");
 
 const string = stringl.string;
 
@@ -207,19 +208,21 @@ pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
     }
 
     const base = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
-    var tmp = base.copy();
+    var stack: boardl.boardStack = .{};
     for (0..openings.items.len) |i| {
+        var tmp = base.copy();
         var algeFen = openings.items[i];
         const moves = try chessl._algebraicLineToIMoveMatch(alloc, &algeFen, &tmp);
-        for (0..moves.len) |_| {
-            _ = tmp.undoMove();
-        }
+        tmp = base.copy();
+
         for (0..moves.len) |j| {
             const move = moves.moves[j];
+            stack.pushState(tmp.frame);
             tmp.makeMove(move);
         }
         for (0..moves.len) |_| {
             _ = tmp.undoMove();
+            tmp.frame = stack.pop();
         }
     }
     if (!full) {

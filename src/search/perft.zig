@@ -141,11 +141,11 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
 
-        _ = p_state.makeMoveI(move);
+        p_state.makeMoveI(move);
 
         _ = perftUciDepth(p_state, p_info, @intCast(depth - 1), feats);
 
-        _ = p_state.undoMoveI();
+        p_state.undoMoveI();
         p_state.frame = f;
     }
 }
@@ -159,8 +159,7 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
         p_info.searchStat.n_nodeExplored += 1;
         return 1;
     }
-    //var fmoves: moveContainer = undefined;
-    //fmoves.len = 0;
+
     const fmoves = moveGenl.generateLegalMoves(p_state);
 
     if (feats.useBatched and depth == 1) {
@@ -177,13 +176,16 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
     }
 
     var count: u64 = 0;
+
+    const f: boardl.boardFrame = .copy(p_state);
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        _ = p_state.makeMove(move);
+        p_state.makeMoveI(move);
 
         count += perftUciDepth(p_state, p_info, depth - 1, feats);
 
-        _ = p_state.undoMove();
+        p_state.undoMoveI();
+        p_state.frame = f;
     }
     if (feats.useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
@@ -215,11 +217,13 @@ pub fn perftThreadStart(p_state: *chess.Board_state, alloc: std.mem.Allocator, d
     return threadingl.getCombinedFromPack(&pack);
 }
 pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_info: *threadInfo, p_startingMoves: *std.ArrayList(IMove), batched: bool) void {
+    const f: boardl.boardFrame = .copy(p_state);
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
         _ = p_state.makeMove(move);
         p_info.searchStat.n_nodeExplored += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
         _ = p_state.undoMove();
+        p_state.frame = f;
     }
 }
 pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: bool, p_info: *threadInfo) u64 {
@@ -242,12 +246,14 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
         }
     }
     var count: u64 = 0;
+    const f: boardl.boardFrame = .copy(p_state);
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
 
         _ = p_state.makeMove(move);
         count += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
         _ = p_state.undoMove();
+        p_state.frame = f;
     }
     if (comptime useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
@@ -276,12 +282,14 @@ pub fn perft_debug_loop(p_state: *chess.Board_state, depth: u8, batched: bool, p
         }
     }
     var count: u64 = 0;
+    const f: boardl.boardFrame = .copy(p_state);
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
 
         _ = p_state.makeMove(move);
         count += perft_debug_loop(p_state, depth - 1, batched, p_res);
         _ = p_state.undoMove();
+        p_state.frame = f;
     }
     if (comptime useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);

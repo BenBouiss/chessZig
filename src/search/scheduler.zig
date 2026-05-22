@@ -36,7 +36,6 @@ pub const searchFeatures = struct {
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
-    searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
@@ -45,11 +44,9 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.useQuiescence = p_engine.options.useQuiescence;
     ret.useNullPrune = p_engine.options.useNullPrune;
     ret.useLMR = p_engine.options.useLMR;
-
     ret.useStaticSearch = p_engine.options.useStaticSearch;
     ret.fixedDepth = p_engine.options.fixedDepth;
     ret.useFutility = p_engine.options.useFutility;
-    ret.searchType = p_engine.options.searchType;
     ret.useRazoring = p_engine.options.useRazoring;
     ret.reportProgress = p_engine.options.reportProgress;
     return ret;
@@ -340,8 +337,4 @@ pub fn sendUpdate(p_self: *scheduler) void {
     defer p_self.p_engine.alloc.free(msg);
     p_self.p_engine.respond(msg);
     return;
-}
-
-pub fn main() void {
-    @panic("");
 }
