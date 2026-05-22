@@ -27,7 +27,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USERAZORING, TRACKMETRICS, SEARCHTYPE, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USERAZORING, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
@@ -228,7 +228,6 @@ pub const engineOptions = struct {
     depthLevel: u16 = configl.DEFAULT_DEPTH,
     trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
-    searchType: configl.searchType = configl.DEFAULT_SEARCH_TYPE,
     setOptions: std.ArrayList(setOptionEntry) = .empty,
 
     saveLogs: bool = false,
@@ -351,8 +350,6 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
 
         try p_self.addOption(.{ .name = "reportProgress", .optionType = .REPORTPROG, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_REPORTPROGRESS } } });
-
-        try p_self.addOption(.{ .name = "searchType", .optionType = .SEARCHTYPE, .argType = .COMBO, .info = optionInfo{ .str = optionInfo_str{ ._var = "STD PVS ZWS ASP", .default = configl._DEFAULT_SEARCH_TYPE } } });
     }
     pub inline fn trackMetrics(p_self: *engine) bool {
         return p_self.options.trackMetrics;
@@ -813,15 +810,7 @@ pub const engine = struct {
                 }
                 return p_self.updateHeuristicWeights(path);
             },
-            .SEARCHTYPE => {
-                const val = getStringValFromSetOptionCmd(tokens) catch {
-                    return false;
-                };
-                if (!entry.info.str.validateValue(val)) {
-                    return false;
-                }
-                return p_self.updateSearchType(val);
-            },
+
             .INVALID => {
                 return false;
             },
@@ -888,18 +877,7 @@ pub const engine = struct {
         };
         return true;
     }
-    fn updateSearchType(p_self: *engine, token: []const u8) bool {
-        if (utilsl.contains(token, "std", .ignoreCase)) {
-            p_self.options.searchType = .STD;
-        } else if (utilsl.contains(token, "pvs", .ignoreCase)) {
-            p_self.options.searchType = .PVS;
-        } else if (utilsl.contains(token, "zws", .ignoreCase)) {
-            p_self.options.searchType = .ZWS;
-        } else {
-            return false;
-        }
-        return true;
-    }
+
     fn updateHash(p_self: *engine, hashSize: spinVarType) !bool {
         if (p_self.searcher.searching) {
             p_self.searcher.interrupt = true;
