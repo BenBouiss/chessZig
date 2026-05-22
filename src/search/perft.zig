@@ -11,6 +11,7 @@ const hashl = @import("../hashTable.zig");
 const enginel = @import("../engine.zig");
 const configl = @import("../config.zig");
 const timel = @import("../time.zig");
+const boardl = @import("../board.zig");
 
 const threadingl = @import("threading.zig");
 const alphaBetal = @import("alphaBeta.zig");
@@ -136,14 +137,16 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
         p_info.searchStat.n_nodeExplored += 1;
         return;
     }
+    const f: boardl.boardFrame = .copy(p_state);
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
 
-        _ = p_state.makeMove(move);
+        _ = p_state.makeMoveI(move);
 
         _ = perftUciDepth(p_state, p_info, @intCast(depth - 1), feats);
 
-        _ = p_state.undoMove();
+        _ = p_state.undoMoveI();
+        p_state.frame = f;
     }
 }
 pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8, feats: perftSearchFeatures) u64 {

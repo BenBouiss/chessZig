@@ -7,6 +7,7 @@ const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const stringl = @import("string.zig");
 const configl = @import("config.zig");
+const typel = @import("type.zig");
 
 const utilsl = @import("utils.zig");
 
@@ -60,6 +61,18 @@ pub const IMove = packed struct {
             }
         }
         return false;
+    }
+    pub fn getType(self: IMove) typel.e_moveType {
+        if (self.isEnpassant()) {
+            return .EP;
+        }
+        if (self.isCastle()) {
+            return .CASTLE;
+        }
+        if (self.isPromotion()) {
+            return .PROMOTION;
+        }
+        return .STANDARD;
     }
 
     pub inline fn getFrom(self: IMove) u8 {
