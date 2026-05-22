@@ -5,6 +5,7 @@ const stringl = @import("string.zig");
 const utilsl = @import("utils.zig");
 const configl = @import("config.zig");
 const statusl = @import("board_status.zig");
+const boardl = @import("board.zig");
 const weightl = @import("weights.zig");
 const squarel = @import("square.zig");
 const mainl = @import("main.zig");
@@ -28,7 +29,7 @@ pub const weightType: type = i32;
 
 pub const texel_err = error{board_err};
 
-pub fn evaluate(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
+pub fn evaluate(p_state: *const boardl.boardState, values: *const heuristicValues) scoreType {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
@@ -67,7 +68,7 @@ pub const heuristicComponents = struct {
         std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Tempo = {d}, King = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.Tempo, self.King, self.total() });
     }
 };
-pub fn evaluate_debug(p_state: *const chess.Board_state, values: *const heuristicValues) heuristicComponents {
+pub fn evaluate_debug(p_state: *const boardl.boardState, values: *const heuristicValues) heuristicComponents {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
@@ -99,7 +100,7 @@ pub fn computeTapered(score_mg: scoreType, score_eg: scoreType, _phase: scoreTyp
     return ((score_mg * (256 - _phase)) + score_eg * _phase) >> 8;
 }
 
-pub fn evaluate_PSQT(p_state: *const chess.Board_state, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_PSQT(p_state: *const boardl.boardState, values: *const heuristicValues, _phase: scoreType) scoreType {
     var score_count: scoreType = 0;
     var score_mg: scoreType = 0;
     var score_eg: scoreType = 0;
@@ -176,7 +177,7 @@ pub fn evaluate_PSQT(p_state: *const chess.Board_state, values: *const heuristic
     return score_count + computeTapered(score_mg, score_eg, _phase);
 }
 
-pub fn evaluate_pawnStructure(p_state: *const chess.Board_state, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_pawnStructure(p_state: *const boardl.boardState, values: *const heuristicValues, _phase: scoreType) scoreType {
     const wp = p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
     const bp = p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
     // in an effort to have the weights all positive I swapped the diff, (nBlackIsolated - nWhiteIsolated) * (w>0) means that white is advantaged (s>0) if (nBlackIsolated > nWhiteIsolated) and black is advantaged(s<0) if (nBlackIsolated < nWhiteIsolated)
@@ -212,14 +213,14 @@ pub fn evaluate_mobility(p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *cons
     //const moveB = moveGenl.generateMoveCountLegalMoves(p_state, false);
     //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
 }
-pub fn evaluate_king(p_state: *const chess.Board_state, color_mask: scoreType, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_king(p_state: *const boardl.boardState, color_mask: scoreType, values: *const heuristicValues, _phase: scoreType) scoreType {
     const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
     const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
     const distance: scoreType = @intCast(wKing.computeBenDistance(bKing));
     const bonus = color_mask * (squarel.maxBenDistance - distance);
     return computeTapered(bonus * values.KingProximityValue[MG], bonus * values.KingProximityValue[EG], _phase);
 }
-pub fn evaluate_safety(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
     // counting negative for white as the best safety is not attackers => 0 heuristic
     var retSaf: scoreType = 0;
     const kingWSafety = chess.safetyArea(p_state.b.wKingSq);
@@ -241,14 +242,14 @@ pub fn evaluate_safety(p_state: *const chess.Board_state, p_whiteMoveBB: *const 
     retSaf -= @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt))]);
     return retSaf;
 }
-pub fn evaluate_structure(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
     // structure protection,
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
     const w_pieceProtect = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.b.wKingSq));
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.b.bKingSq));
     return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * computeTapered(values.StructureProtectionValue[MG], values.StructureProtectionValue[EG], _phase);
 }
-pub fn evaluate_tempo(p_state: *const chess.Board_state, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
     var coeff: scoreType = 1;
     if (p_state.whiteToMove()) {
         coeff = -1;
@@ -288,14 +289,14 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
         },
     }
 }
-pub fn materialImbalance(p_state: *const chess.Board_state, values: *const heuristicValues) scoreType {
+pub fn materialImbalance(p_state: *const boardl.boardState, values: *const heuristicValues) scoreType {
     return (p_state.getPieceCount(e_piece.nWhitePawn) - p_state.getPieceCount(e_piece.nBlackPawn)) * values.PawnValue +
         (p_state.getPieceCount(e_piece.nWhiteBishop) - p_state.getPieceCount(e_piece.nBlackBishop)) * values.BishopValue +
         (p_state.getPieceCount(e_piece.nWhiteKnight) - p_state.getPieceCount(e_piece.nBlackKnight)) * values.KnightValue +
         (p_state.getPieceCount(e_piece.nWhiteRook) - p_state.getPieceCount(e_piece.nBlackRook)) * values.RookValue +
         (p_state.getPieceCount(e_piece.nWhiteQueen) - p_state.getPieceCount(e_piece.nBlackQueen)) * values.QueenValue;
 }
-pub fn sideCountScore(p_state: *const chess.Board_state, white: bool, values: *const heuristicValues) scoreType {
+pub fn sideCountScore(p_state: *const boardl.boardState, white: bool, values: *const heuristicValues) scoreType {
     var offset: usize = 0;
     if (!white) {
         offset = chess.N_PIECES_TYPES;
@@ -530,12 +531,12 @@ pub const phases_arr = [_]usize{ pawnPhase, bishopPhase, knightPhase, rookPhase,
 pub const MG: usize = 0;
 pub const EG: usize = 1;
 
-pub fn computePhase(p_board: *const chess.Board_state) scoreType {
+pub fn computePhase(p_board: *const boardl.boardState) scoreType {
     const phase: i32 = 24 - 4 * (p_board.getPieceCount(.nWhiteQueen) + p_board.getPieceCount(.nBlackQueen)) - 2 * (p_board.getPieceCount(.nWhiteRook) + p_board.getPieceCount(.nBlackRook)) - (p_board.getPieceCount(.nWhiteBishop) + p_board.getPieceCount(.nBlackBishop)) - (p_board.getPieceCount(.nWhiteKnight) + p_board.getPieceCount(.nBlackKnight));
     const _phase: scoreType = @intCast(phase);
     return @divFloor(256 * (24 - _phase), 24);
 }
-pub fn isBoardTexelValid(p_board: *chess.Board_state) bool {
+pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
     //https://github.com/maksimKorzh/wukongJS/blob/main/docs/TEXEL'S_TUNING.MD
     const fmoves = moveGenl.generateLegalMoves(p_board);
     if (fmoves.len == 0) {
@@ -583,7 +584,7 @@ pub const texelEntry = struct {
     // E = L . (Cw - Cb)
     tuples: coeffVector = .{},
     valid: bool = true,
-    pub fn initFromBoard(p_state: *chess.Board_state) texelEntry {
+    pub fn initFromBoard(p_state: *boardl.boardState) texelEntry {
         var ret: texelEntry = .{};
         ret.phase = computePhase(p_state);
         ret.pFactors[MG] = @divFloor(256 - ret.phase, 256);
@@ -592,7 +593,7 @@ pub const texelEntry = struct {
         try getCoeffsFromBoard(p_state, &ret.tuples);
         return ret;
     }
-    pub fn initFromBoardFast(p_state: *chess.Board_state) texelEntry {
+    pub fn initFromBoardFast(p_state: *boardl.boardState) texelEntry {
         var ret: texelEntry = .{};
         ret.phase = computePhase(p_state);
         ret.pFactors[MG] = @divFloor(256 - ret.phase, 256);
@@ -643,7 +644,7 @@ pub const texelEntry = struct {
     }
 };
 
-pub fn getCoeffsFromBoard(p_state: *chess.Board_state, p_out: *coeffVector) !void {
+pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !void {
     // Normal:
     var idx: usize = 0;
     if (configl.TUNE_NORMAL) {
@@ -1135,7 +1136,7 @@ pub fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];
     killerMoves[ply][0] = move;
 }
-pub fn eval_move_heuristic_line(p_state: *const chess.Board_state, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
+pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
@@ -1188,7 +1189,7 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, hashMove: IMove, depth: u16) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, hashMove: IMove, depth: u16) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
 
@@ -1208,7 +1209,7 @@ pub fn eval_move_sorting_mask(p_state: *const chess.Board_state, p_moves: *const
 }
 //pub const moveReductionAmount = 4;
 pub const moveReductionAmount = 6;
-pub fn computeLateMoveReduc(p_state: *const chess.Board_state, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer) void {
+pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer) void {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     for (0..p_order.len) |i| {
@@ -1255,16 +1256,16 @@ pub const moveGenerator = struct {
         ret.extra = .NONE;
         return ret;
     }
-    pub fn getMoveState(p_self: *moveGenerator, p_state: *const chess.Board_state) void {
+    pub fn getMoveState(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
         p_self.bbState = moveGenl.moveGenBB(p_state);
     }
-    pub fn capture(p_self: *moveGenerator, p_state: *const chess.Board_state) void {
+    pub fn capture(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
         moveGenl.moveGenBBToMoveContainer(p_state, &p_self.bbState, &p_self.moves, .CAPTURES);
     }
-    pub fn quiet(p_self: *moveGenerator, p_state: *const chess.Board_state) void {
+    pub fn quiet(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
         moveGenl.moveGenBBToMoveContainer(p_state, &p_self.bbState, &p_self.moves, .QUIETMOVE);
     }
-    pub fn fetchNext(p_self: *moveGenerator, p_state: *const chess.Board_state) void {
+    pub fn fetchNext(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
         p_self.idx = 0;
         p_self.moves.len = 0;
         if (p_self.extra == .NONE) {
@@ -1291,7 +1292,7 @@ pub const moveGenerator = struct {
     }
 };
 
-pub fn SEE(p_state: *const chess.Board_state, move: IMove) scoreType {
+pub fn SEE(p_state: *const boardl.boardState, move: IMove) scoreType {
     if (!move.isCapture()) {
         return 0;
     }
@@ -1303,7 +1304,7 @@ pub const SEE_context = struct {
     attadef: u64 = 0,
     diagPiece: u64 = 0,
     horizPiece: u64 = 0,
-    pub fn init(p_board: *const chess.Board_state, toSq: squarel.e_square, white: bool) SEE_context {
+    pub fn init(p_board: *const boardl.boardState, toSq: squarel.e_square, white: bool) SEE_context {
         var ret: SEE_context = undefined;
         ret.horizPiece = (p_board.b.pieceBB[@intFromEnum(e_piece.nWhiteRook)] |
             p_board.b.pieceBB[@intFromEnum(e_piece.nBlackRook)] |
@@ -1322,11 +1323,11 @@ pub const SEE_context = struct {
 };
 
 // source: https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
-pub inline fn _SEE_recalc(p_state: *const chess.Board_state, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool) scoreType {
+pub inline fn _SEE_recalc(p_state: *const boardl.boardState, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool) scoreType {
     const ctx: SEE_context = SEE_context.init(p_state, toSq, white);
     return _SEE_loop(p_state, toSq, fromSq, white, ctx.attadef, ctx.diagPiece, ctx.horizPiece);
 }
-pub fn _SEE_loop(p_state: *const chess.Board_state, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool, attadef: u64, diagPiece: u64, horizPiece: u64) scoreType {
+pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool, attadef: u64, diagPiece: u64, horizPiece: u64) scoreType {
     var fromSet = chess.sqToBitboard(fromSq);
     const mayXray = diagPiece | horizPiece;
     var _attadef = attadef;
@@ -1383,7 +1384,7 @@ pub const piecePosition = struct {
     sq: squarel.e_square = .invalid,
 };
 
-pub fn lowestAttackDefPiece(p_state: *const chess.Board_state, attDef: u64, white: bool) piecePosition {
+pub fn lowestAttackDefPiece(p_state: *const boardl.boardState, attDef: u64, white: bool) piecePosition {
     var ret: piecePosition = .{};
     var retHeur: scoreType = weightl.simpleCheckMateScore;
     var allAttack = attDef & p_state.b.c_occupiedBB[@intFromBool(white)];

@@ -2,8 +2,6 @@ const std = @import("std");
 
 const enginel = @import("../engine.zig");
 const movel = @import("../move.zig");
-const chessl = @import("../chess.zig");
-const perftl = @import("perft.zig");
 const alphaBetal = @import("alphaBeta.zig");
 const threadingl = @import("threading.zig");
 const heuristicl = @import("../heuristic.zig");
@@ -13,8 +11,8 @@ const configl = @import("../config.zig");
 const weightl = @import("../weights.zig");
 const timel = @import("../time.zig");
 const mainl = @import("../main.zig");
+const boardl = @import("../board.zig");
 
-const moveContainer = movel.moveContainer;
 const IMove = movel.IMove;
 const scoreType = heuristicl.scoreType;
 
@@ -245,7 +243,7 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config
     return true;
 }
 
-pub fn _startSearch(sched: *const scheduler, p_state: *chessl.Board_state, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
+pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
     // everything gets "returned" via the p_info
     // launched as single threaded
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened

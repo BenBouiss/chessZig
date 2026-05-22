@@ -33,7 +33,6 @@ const status = board_statusl.status;
 
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
-pub const Board_state = boardl.boardState;
 
 pub const NUMBER_PLAYER: u8 = 2;
 pub const ROW_SIZE: u8 = 8;
@@ -196,7 +195,7 @@ pub fn r_bitscanK(b: u64) u8 {
     }
     return count;
 }
-pub fn print_board(p_board: *const Board_state) void {
+pub fn print_board(p_board: *const boardl.boardState) void {
     var print_buffer: [8][8]u8 = undefined;
     @memset(&print_buffer, .{ 0, 0, 0, 0, 0, 0, 0, 0 });
     //var bb: u64 = undefined;
@@ -226,7 +225,7 @@ pub fn print_board(p_board: *const Board_state) void {
     return;
 }
 
-pub fn printBoardValidity(p_state: *const Board_state) void {
+pub fn printBoardValidity(p_state: *const boardl.boardState) void {
     const valid_w = p_state.isLegal(true);
     const valid_b = p_state.isLegal(false);
     var v: bool = true;
@@ -256,8 +255,8 @@ pub fn getStrFromPiece(piece: e_piece) u8 {
     return arr_piece_str[@intFromEnum(piece)];
 }
 
-pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
-    var ret = Board_state.init();
+pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
+    var ret = boardl.boardState.init();
     var offset: i8 = 0;
     var board_offset = N_SQUARES - 8;
     var commitedRowSize: u8 = 0;
@@ -304,7 +303,7 @@ pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!Board_state {
     }
     return ret;
 }
-pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) debug_err!bool {
+pub fn getBoardFromFen_turn(p_state: *boardl.boardState, turnToken: []const u8) debug_err!bool {
     if (turnToken.len != 1) {
         return debug_err.fenErr;
     }
@@ -320,7 +319,7 @@ pub fn getBoardFromFen_turn(p_state: *Board_state, turnToken: []const u8) debug_
     return true;
 }
 
-pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool {
+pub fn getBoardFromFen_castle(p_state: *boardl.boardState, turnToken: []const u8) bool {
     std.debug.assert(turnToken.len != 0);
     if (turnToken[0] == '-') {
         p_state.frame.stat = .init(p_state.whiteToMove(), false, false, false, false);
@@ -340,7 +339,7 @@ pub fn getBoardFromFen_castle(p_state: *Board_state, turnToken: []const u8) bool
     }
     return true;
 }
-pub fn getBoardFromFen_enPassant(p_state: *Board_state, turnToken: []const u8) bool {
+pub fn getBoardFromFen_enPassant(p_state: *boardl.boardState, turnToken: []const u8) bool {
     std.debug.assert(turnToken.len != 0);
     if (turnToken[0] == '-') {
         p_state.frame.enPassantIdx = 0;
@@ -358,7 +357,7 @@ pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
     };
     return nbr;
 }
-pub fn getBoardFromFen(fen: []const u8) debug_err!Board_state {
+pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
     const nTokens = utils.str_countLetter(fen, ' ');
     if (nTokens < 5) {
         return debug_err.fenErr;
@@ -376,7 +375,7 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!Board_state {
     return board;
 }
 
-pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !Board_state {
+pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !boardl.boardState {
     var ret = getBoardFromFen(uciStr) catch {
         std.debug.print("[PANIC] getboardFromUciFen: error while parsing {s}\n", .{uciStr});
         @panic("");
@@ -384,7 +383,7 @@ pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !Board_state {
     try applyUciMoves(&ret, uciStr, debug);
     return ret;
 }
-pub fn applyUciMoves(p_board: *Board_state, uciStr: []const u8, debug: bool) !void {
+pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: bool) !void {
     const moves = getEmptyMoveListFromStr(uciStr);
     if (debug) {
         std.debug.print("[DEBUG] applyUciMoves: Moves found in str: ", .{});
@@ -428,7 +427,7 @@ pub fn getEmptyMoveListFromStr(strBuffer: []const u8) movel.matchMoveContainer {
     }
     return ret;
 }
-pub fn getFirstMoveFromStr(p_state: *Board_state, strBuffer: []const u8) IMove {
+pub fn getFirstMoveFromStr(p_state: *boardl.boardState, strBuffer: []const u8) IMove {
     // /!\ this assumes that the p_state is updated for the corresponding move to "decode", not suitable for a position startpos parsing
     var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
 
@@ -490,7 +489,7 @@ pub inline fn getColorFromPiece(piece: e_piece) bool {
     return @intFromEnum(piece) < N_PIECES_TYPES;
 }
 pub const Board_stateContainer = struct {
-    array: []Board_state,
+    array: []boardl.boardState,
     len: usize,
 
     pub fn free(p_self: *Board_stateContainer, alloc: std.mem.Allocator) void {
@@ -554,7 +553,7 @@ pub fn pieceArrayToBB(pieceArray: [N_SQUARES]e_piece) u64 {
     }
     return ret;
 }
-pub fn sanityCheckBoardState(p_board_state: *const Board_state) void {
+pub fn sanityCheckBoardState(p_board_state: *const boardl.boardState) void {
     var panic: bool = false;
 
     // white checks
@@ -641,7 +640,7 @@ pub fn sanityCheckBoardState(p_board_state: *const Board_state) void {
     }
 }
 
-pub fn print_boardstate(p_board_state: *const Board_state) void {
+pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
     if (p_board_state.whiteToMove()) {
         std.debug.print("Current turn: White\n", .{});
     } else {
@@ -992,7 +991,7 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
     return ret;
 }
 
-pub fn getAllAttackMask(p_board: *const Board_state, occBB: u64, white: bool) u64 {
+pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bool) u64 {
     var ret: u64 = EMPTY;
     var color_offset: u8 = 0;
     if (white) {
@@ -1011,14 +1010,14 @@ pub fn getAllAttackMask(p_board: *const Board_state, occBB: u64, white: bool) u6
     return ret;
 }
 
-pub inline fn getAllAttackerFromKing(p_board: *const Board_state, white: bool) u64 {
+pub inline fn getAllAttackerFromKing(p_board: *const boardl.boardState, white: bool) u64 {
     if (white) {
         return cst_getAllAttackerFromSq(p_board, true, p_board.b.wKingSq);
     } else {
         return cst_getAllAttackerFromSq(p_board, false, p_board.b.bKingSq);
     }
 }
-pub inline fn getAllAttackerFromSq(p_board: *const Board_state, white: bool, sq: e_square) u64 {
+pub inline fn getAllAttackerFromSq(p_board: *const boardl.boardState, white: bool, sq: e_square) u64 {
     if (white) {
         return cst_getAllAttackerFromSq(p_board, true, sq);
     } else {
@@ -1026,7 +1025,7 @@ pub inline fn getAllAttackerFromSq(p_board: *const Board_state, white: bool, sq:
     }
 }
 
-pub fn cst_getAllAttackerFromSq(p_board: *const Board_state, comptime white: bool, sq: e_square) u64 {
+pub fn cst_getAllAttackerFromSq(p_board: *const boardl.boardState, comptime white: bool, sq: e_square) u64 {
     var ret: u64 = EMPTY;
     const bb = sqToBitboard(sq);
     if (comptime white) {
@@ -1044,7 +1043,7 @@ pub fn cst_getAllAttackerFromSq(p_board: *const Board_state, comptime white: boo
     }
     return ret;
 }
-pub inline fn getCheckers(p_board: *Board_state, white: bool) void {
+pub inline fn getCheckers(p_board: *boardl.boardState, white: bool) void {
     // this method is responsible for ~30-40% of the compute cost of perft when using staged move generation
     // plan when loading a fen do a "full" get checkers
     // when making a move: do a "partial" get checkers using the previous state
@@ -1057,12 +1056,12 @@ pub inline fn getCheckers(p_board: *Board_state, white: bool) void {
     return;
 }
 
-pub inline fn onMoveStaged(p_board: *Board_state, white: bool) void {
+pub inline fn onMoveStaged(p_board: *boardl.boardState, white: bool) void {
     getCheckers(p_board, white);
     return;
 }
 
-pub fn getCheckers_cst(p_board: *Board_state, comptime white: bool) void {
+pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
     const rq: u64 = if (comptime white) (p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen)) else (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
     const bq: u64 = if (comptime white) (p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen)) else (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
     const n: u64 = if (comptime white) p_board.getPieceBB(.nBlackKnight) else p_board.getPieceBB(.nWhiteKnight);
@@ -1135,7 +1134,7 @@ pub fn isPiecePinned(occBB: u64, sq: e_square, p_kingSq: *const squareInfo, diag
     return EMPTY;
 }
 
-pub fn fillMoveFromState(p_state: *Board_state, move: *IMove) void {
+pub fn fillMoveFromState(p_state: *boardl.boardState, move: *IMove) void {
     const fromIdx: u8 = move.getFrom();
     const toIdx: u8 = move.getTo();
     var c_piece = p_state.get_piece(toIdx);
@@ -1172,7 +1171,7 @@ pub fn fillMoveFromState(p_state: *Board_state, move: *IMove) void {
     move.setFlag(flag);
 }
 
-pub fn getAllMoveMaskFromX(p_board: *Board_state, white: bool, X: e_square) u64 {
+pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square) u64 {
     // only used in the algebraic "decoding"
     var ret: u64 = EMPTY;
 
@@ -1216,7 +1215,7 @@ pub fn algebraicIsLetterFile(letter: u8) bool {
 pub fn algebraicIsLetterRank(letter: u8) bool {
     return letter >= '1' and letter <= '8';
 }
-pub fn algebraicToIMove(p_state: *Board_state, moveStr: *stringl.string) !IMove {
+pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !IMove {
     // exemple of match "1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6"
     // O-O: castling kingside
     // O-O-O: castling queenside
@@ -1344,7 +1343,7 @@ pub fn test_avx() !void {
     print_bitboard(state.frame.pinnedBB);
     print_boardstate(&state);
 }
-pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *stringl.string, tmpBoard: *Board_state) !matchMoveContainer {
+pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *stringl.string, tmpBoard: *boardl.boardState) !matchMoveContainer {
     var gen = utils.splitGenerator(u8).init(line._slice(), ' ');
 
     var ret: matchMoveContainer = undefined;
@@ -1381,7 +1380,7 @@ pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *stringl.string
     var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
     return _algebraicLineToIMoveMatch(alloc, line, &tmpBoard);
 }
-pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string) !Board_state {
+pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string) !boardl.boardState {
     const moves = try algebraicLineToIMoveMatch(alloc, line);
     var ret = try getBoardFromFen(DEFAULT_FEN);
     for (0..moves.len) |i| {
@@ -1393,7 +1392,7 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string
 }
 
 pub fn test_move_heur() !void {
-    var tmp: Board_state = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+    var tmp: boardl.boardState = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
     print_boardstate(&tmp);
     const moves = moveGenl.generateLegalMoves(&tmp);
     const pv: movel.line = .{};

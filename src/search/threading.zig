@@ -1,7 +1,6 @@
-const enginel = @import("../engine.zig");
+const boardl = @import("../board.zig");
 const movel = @import("../move.zig");
 const chessl = @import("../chess.zig");
-const heuristicl = @import("../heuristic.zig");
 const schedulerl = @import("scheduler.zig");
 const configl = @import("../config.zig");
 const mainl = @import("../main.zig");
@@ -10,11 +9,7 @@ const lockl = @import("../lock.zig");
 
 const std = @import("std");
 
-const engine = enginel.engine;
 const IMove = movel.IMove;
-const Board_state = chessl.Board_state;
-const scoreType = heuristicl.scoreType;
-const debug_err = chessl.debug_err;
 const moveDecisionExt = schedulerl.moveDecisionExt;
 
 pub const searchStatistic = struct {
@@ -77,19 +72,19 @@ pub const threadInfo_container = struct {
 // The original idea behind this was that a threadPackage was supposed to run alongside other threadPackages thus moves was necessary to properly distrube the work among the running packages. In current version of the scheduler this feature is not used and moves is defaulted to undefined as the search is currently single threaded.
 
 pub const threadPackageFrame = struct {
-    chessState: Board_state,
+    chessState: boardl.boardState,
     moves: std.ArrayList(IMove),
     threadHandle: std.Thread,
     _tInfo: threadInfo,
 };
 pub const threadPackageArray = std.MultiArrayList(threadPackageFrame);
 
-pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *const Board_state, moveArray: *const movel.moveContainer, n_threads: u32) !threadPackageArray {
+pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *const boardl.boardState, moveArray: *const movel.moveContainer, n_threads: u32) !threadPackageArray {
     const _nThread = @min(n_threads, moveArray.len);
     var ret: threadPackageArray = .{};
     var threadedMoves = moveArray.cutEvenly(alloc, _nThread) catch {
         std.debug.print("[ERROR] getThreadPackArray: move container init\n", .{});
-        return debug_err.valueErr;
+        return chessl.debug_err.valueErr;
     };
     defer threadedMoves.deinit(alloc);
     for (0.._nThread) |i| {
@@ -119,7 +114,7 @@ pub fn freeThreadPackArray(alloc: std.mem.Allocator, p_array: *threadPackageArra
     for (0..p_array.len) |i| {
         var cell: std.ArrayList(IMove) = p_array.items(.moves)[i];
         cell.deinit(alloc);
-        var state: Board_state = p_array.items(.chessState)[i];
+        var state: boardl.boardState = p_array.items(.chessState)[i];
         state.free(alloc);
     }
     p_array.deinit(alloc);
@@ -131,7 +126,7 @@ pub fn joinOnThreadPack(p_array: *threadPackageArray) void {
 }
 
 pub const searchPackage = struct {
-    chessState: chessl.Board_state = undefined,
+    chessState: boardl.boardState = undefined,
     depth: u16 = 0,
     features: schedulerl.searchFeatures = .{},
     scheduler: *schedulerl.scheduler = undefined,

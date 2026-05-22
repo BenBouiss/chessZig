@@ -1,6 +1,7 @@
 const std = @import("std");
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
+const boardl = @import("board.zig");
 const configl = @import("config.zig");
 const heuristicl = @import("heuristic.zig");
 
@@ -426,7 +427,7 @@ pub fn initZobristKeys(rng: std.Random, zob: *Zobrist_Keys) void {
     zob.playKey = zob.turnKey[0];
     zob.playKey.code ^= zob.turnKey[1].code;
 }
-pub fn fullComputeZobristKeys(p_board: *chess.Board_state) Key {
+pub fn fullComputeZobristKeys(p_board: *boardl.boardState) Key {
     // for better perfs look for incremental xor key update using the previous move
 
     var retKey = zobristKeys.turnKey[@intFromBool(p_board.whiteToMove())];

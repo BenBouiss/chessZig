@@ -1,8 +1,6 @@
 const std = @import("std");
 const mainl = @import("../main.zig");
-const chess = @import("../chess.zig");
 const movel = @import("../move.zig");
-const benchmarkl = @import("../benchmark.zig");
 const moveGenl = @import("../move_generation.zig");
 const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
@@ -20,15 +18,11 @@ const build_options = @import("build_options");
 
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
-const e_square = squarel.e_square;
-const scoreType = heuristicl.scoreType;
 const engine = enginel.engine;
 const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
-const benchmarkResult = benchmarkl.benchmarkResult;
 
 const useHash = build_options.useHash;
-const useDebug = build_options.useDebug;
 
 const assert = std.debug.assert;
 
@@ -128,7 +122,7 @@ const perftSearchFeatures = struct {
     useHash: bool = false,
 };
 
-pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feats: perftSearchFeatures) void {
+pub fn perftUciEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feats: perftSearchFeatures) void {
     p_info.working = true;
     defer p_info.working = false;
     defer p_info.alive = false;
@@ -149,7 +143,7 @@ pub fn perftUciEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Arr
         p_state.frame = f;
     }
 }
-pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8, feats: perftSearchFeatures) u64 {
+pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8, feats: perftSearchFeatures) u64 {
     if (depth <= 0 or !p_info.alive) {
         p_info.searchStat.n_nodeExplored += 1;
         return 1;
@@ -198,7 +192,7 @@ pub fn perftUciDepth(p_state: *chess.Board_state, p_info: *threadInfo, depth: u8
 // non uci depth
 //
 
-pub fn perftThreadStart(p_state: *chess.Board_state, alloc: std.mem.Allocator, depth: u8, nThread: u8, batched: bool) !threadInfo {
+pub fn perftThreadStart(p_state: *boardl.boardState, alloc: std.mem.Allocator, depth: u8, nThread: u8, batched: bool) !threadInfo {
     var moves = moveGenl.generateLegalMoves(p_state);
     var _nThread: usize = @intCast(nThread);
     if (_nThread == 0) {
@@ -216,7 +210,7 @@ pub fn perftThreadStart(p_state: *chess.Board_state, alloc: std.mem.Allocator, d
     threadingl.joinOnThreadPack(&pack);
     return threadingl.getCombinedFromPack(&pack);
 }
-pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_info: *threadInfo, p_startingMoves: *std.ArrayList(IMove), batched: bool) void {
+pub fn perftWorkerJob(p_state: *boardl.boardState, depth: u8, p_info: *threadInfo, p_startingMoves: *std.ArrayList(IMove), batched: bool) void {
     const f: boardl.boardFrame = .copy(p_state);
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
@@ -226,7 +220,7 @@ pub fn perftWorkerJob(p_state: *chess.Board_state, depth: u8, p_info: *threadInf
         p_state.frame = f;
     }
 }
-pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: bool, p_info: *threadInfo) u64 {
+pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: bool, p_info: *threadInfo) u64 {
     if (depth <= 0) {
         return 1;
     }
@@ -252,42 +246,6 @@ pub fn explorationNDepthPerft(p_state: *chess.Board_state, depth: u8, batched: b
 
         _ = p_state.makeMove(move);
         count += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
-        _ = p_state.undoMove();
-        p_state.frame = f;
-    }
-    if (comptime useHash) {
-        const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
-        _ = hashl.hashTable.storeEntry(&entry, p_state.frame.key.code);
-    }
-    return count;
-}
-pub fn perft_debug_loop(p_state: *chess.Board_state, depth: u8, batched: bool, p_res: *benchmarkResult) u64 {
-    if (depth <= 0) {
-        p_res.addNode(&p_state.getLastMove());
-        return 1;
-    }
-    if (p_state.isStaleMateRepetition()) {
-        return 1;
-    }
-
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
-    if (depth == 1 and batched) {
-        return fmoves.len;
-    }
-    if (comptime useHash) {
-        const entry = hashl.getEntryFromPerft(p_state.frame.key, depth);
-        if (entry) |_entry| {
-            p_res.searchStat.n_hashRetrieve += @intCast(entry._moveA());
-            return _entry.moveA();
-        }
-    }
-    var count: u64 = 0;
-    const f: boardl.boardFrame = .copy(p_state);
-    for (0..fmoves.len) |i| {
-        const move: IMove = fmoves.moves[i];
-
-        _ = p_state.makeMove(move);
-        count += perft_debug_loop(p_state, depth - 1, batched, p_res);
         _ = p_state.undoMove();
         p_state.frame = f;
     }

@@ -3,11 +3,10 @@ const std = @import("std");
 const utilsl = @import("utils.zig");
 const chess = @import("chess.zig");
 const configl = @import("config.zig");
-const movel = @import("move.zig");
+const boardl = @import("board.zig");
 const hashTablel = @import("hashTable.zig");
 const magicl = @import("magic.zig");
 const moveTablel = @import("moveTables.zig");
-const speedTestl = @import("speedTest.zig");
 const heuristicl = @import("heuristic.zig");
 const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
@@ -19,10 +18,8 @@ const timel = @import("time.zig");
 const mainl = @import("main.zig");
 const lockl = @import("lock.zig");
 const stringl = @import("string.zig");
+const typel = @import("type.zig");
 
-const Board_state = chess.Board_state;
-const e_moveFlags = movel.e_moveFlags;
-const IMove = movel.IMove;
 const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
@@ -262,7 +259,7 @@ pub const logging = struct {
 };
 
 pub const engine = struct {
-    state: Board_state,
+    state: boardl.boardState = .{},
     workingThreads: std.ArrayList(std.Thread),
     status: engineStatus = .{},
     input: inputChannel,

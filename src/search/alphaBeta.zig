@@ -1,7 +1,5 @@
 const std = @import("std");
-const chess = @import("../chess.zig");
 const movel = @import("../move.zig");
-const moveGenl = @import("../move_generation.zig");
 const heuristicl = @import("../heuristic.zig");
 const weightl = @import("../weights.zig");
 const hashl = @import("../hashTable.zig");
@@ -24,7 +22,7 @@ pub fn getScoreMaskFromTurn(white: bool) scoreType {
     return -1;
 }
 
-pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, prevLine: *const movel.line) i8 {
+pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, prevLine: *const movel.line) i8 {
     p_info.working = true;
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
@@ -47,7 +45,7 @@ pub fn searchEntrypoint(p_state: *chess.Board_state, p_startingMoves: *std.Array
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
+pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.frame.key, 0);
@@ -79,7 +77,7 @@ pub fn handleTerminalState(p_state: *chess.Board_state, p_info: *threadInfo, alp
     return score;
 }
 
-pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
+pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
     if (comptime t == .PV) {
         pv.setLen(ply);
@@ -114,9 +112,6 @@ pub fn quiescenceSearch(p_state: *chess.Board_state, p_info: *threadInfo, depth:
     const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, .{}, depth);
     var i: usize = 0;
     while (gen.pickNext(&order)) |move| : (i += 1) {
-        //const fmoves = moveGenl.generateLegalMoves_capture(p_state);
-        //for (0..fmoves.len) |i| {
-        //const move = fmoves.moves[i];
         var _delta = BIG_DELTA;
         if (move.isPromotion()) {
             _delta += weightl.simpleQueenScore - 200;

@@ -16,7 +16,7 @@ const IMove = movel.IMove;
 const scoreType = heuristicl.scoreType;
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, pv: *movel.pvContainer, prevLine: *const movel.line, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, comptime t: alphaBetal.searchType, comptime cut: bool) scoreType {
+pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, pv: *movel.pvContainer, prevLine: *const movel.line, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, comptime t: alphaBetal.searchType, comptime cut: bool) scoreType {
     if (comptime t == .PV) {
         pv.setLen(ply);
     }
@@ -106,6 +106,7 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
         // check are we deep enough, standard impl 2 or 3, deep = 4
         // do qsearch check value < low val
         // return value
+
         if (depth <= 3 and depth != 1 and t == .NonPV) {
             const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, ply, p_state.isChecked(), pv, prevLine, .NonPV);
             if (val < _alpha) {

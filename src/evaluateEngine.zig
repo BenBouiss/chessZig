@@ -14,6 +14,7 @@ const timel = @import("time.zig");
 const lockl = @import("lock.zig");
 const typel = @import("type.zig");
 const hashTablel = @import("hashTable.zig");
+const boardl = @import("board.zig");
 
 const stringl = @import("string.zig");
 const std = @import("std");
@@ -23,7 +24,6 @@ pub const e_matchFlag = enum(u8) { Error, Continue, CheckMate, StaleMate, StaleM
 
 pub const SPRT_RES = enum(u8) { NULL, H0, H1 };
 
-const Board_state = chessl.Board_state;
 const string = stringl.string;
 const scoreType = heuristicl.scoreType;
 
@@ -220,7 +220,7 @@ const signedCmd = struct {
     }
 };
 const matchStatus = struct {
-    chessState: Board_state = undefined,
+    chessState: boardl.boardState = undefined,
     // [black / white], same as the c_occupiedBB
     playerInv: [chessl.NUMBER_PLAYER]player = undefined,
     availableMoves: movel.moveContainer = .{},
@@ -881,7 +881,7 @@ fn mainGuiThread(p_self: *guiState) !void {
     if (p_self.config.match.playerSwitch) {
         _nMatch = _nMatch * 2;
     }
-    var currState: Board_state = undefined;
+    var currState: boardl.boardState = undefined;
     while (matchCount < _nMatch or (p_self.config.match.sprt.enabled and record.sprtTag(0, p_self.config.match.sprt) == .NULL and matchCount < p_self.config.match.sprt.maxMatch)) {
         if (matchCount != 0 and p_self.config.match.playerSwitch) {
             const tmp = p_self.match.playerInv[0].engineUsed;
@@ -911,7 +911,7 @@ fn mainGuiThread(p_self: *guiState) !void {
         p_self.close();
     }
 }
-fn pickBoardState(p_self: *guiState) !Board_state {
+fn pickBoardState(p_self: *guiState) !boardl.boardState {
     if (p_self.config.match.useOpeningBook and p_self.config.match.openingBookPathProvided) {
         var openings = try p_self.config.match.openingDb.sample(p_self.alloc, 1, .draw);
         defer openings.deinit(p_self.alloc);
