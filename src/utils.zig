@@ -28,8 +28,8 @@ pub fn min(comptime T: type, x: T, y: T) T {
 
 pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.ArrayList(T), size: usize) !std.ArrayList(std.ArrayList(T)) {
     const sizeEach: usize = arr.items.len / size;
-    var ret: std.ArrayList(std.ArrayList(T)) = .{};
-    try ret.append(alloc, .{});
+    var ret: std.ArrayList(std.ArrayList(T)) = try .initCapacity(alloc, 4);
+    try ret.append(alloc, try .initCapacity(alloc, 2));
     var cell: usize = 0;
     var count: usize = 0;
     const last_cell = sizeEach * size;
@@ -39,7 +39,7 @@ pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.A
             if (i != last_cell) {
                 count = 0;
                 cell += 1;
-                try ret.append(alloc, .{});
+                try ret.append(alloc, try .initCapacity(alloc, 2));
             } else {
                 remainder_start = i;
                 break;
@@ -136,7 +136,92 @@ pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
     }
     return -1;
 }
+pub fn splitGenerator(comptime T: type) type {
+    return struct {
+        slice: []const T,
+        sep: T,
+        idx: usize = 0,
+        const self = @This();
 
+        pub fn init(a: []const T, sep: T) splitGenerator(T) {
+            return .{ .sep = sep, .slice = a, .idx = 0 };
+        }
+        pub fn len(p_self: *self) usize {
+            var ret: usize = 0;
+            const prevIdx = p_self.idx;
+            p_self.idx = 0;
+            while (p_self.next()) |_| {
+                ret += 1;
+            }
+            p_self.idx = prevIdx;
+            return ret;
+        }
+        pub fn next(p_self: *self) ?[]const T {
+            if (p_self.idx >= p_self.slice.len) {
+                return null;
+            }
+            while (p_self.slice[p_self.idx] == p_self.sep) {
+                if (p_self.idx == p_self.slice.len - 1) {
+                    break;
+                }
+                p_self.idx += 1;
+            }
+            if (p_self.slice[p_self.idx] == p_self.sep) {
+                return null;
+            }
+            for (p_self.idx..p_self.slice.len) |i| {
+                const l = p_self.slice[i];
+                if (l == p_self.sep) {
+                    const start = p_self.idx;
+                    p_self.idx = i + 1;
+                    return p_self.slice[start..i];
+                }
+            }
+
+            const start = p_self.idx;
+            p_self.idx = p_self.slice.len;
+            return p_self.slice[start..];
+        }
+    };
+}
+//pub fn linkedListNode(comptime T: type) type {
+//    return struct {
+//        val: T,
+//        next: ?*linkedListNode,
+//    };
+//}
+//
+//pub fn linkedList(comptime T: type) type {
+//    return struct {
+//        head: ?linkedListNode(T),
+//        len: usize = 0,
+//        const self = @This();
+//        pub fn init(alloc: std.mem.Allocator) !void {
+//            _ = alloc;
+//            return;
+//        }
+//        pub fn gotoLast(p_self: *self) ?linkedListNode(T) {
+//            var node = p_self.head;
+//            while (node.next) |new| {
+//                node = new;
+//            }
+//            return node;
+//        }
+//        pub fn push(p_self: *self, alloc: std.mem.Allocator, item: T) !void {
+//            var node = p_self.head;
+//            if (p_self.len != 0) {
+//                node = p_self.gotoLast();
+//            }
+//            var next = try alloc.create(linkedListNode(T));
+//            next.val = item;
+//            node.next = next;
+//            p_self.len += 1;
+//        }
+//        pub fn pop(p_self: *self, alloc: std.mem.Allocator) T {
+//            //
+//        }
+//    };
+//}
 pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !std.ArrayList([]const T) {
     var ret = try std.ArrayList([]const T).initCapacity(alloc, 4);
     if (a.len == 0) {
@@ -286,17 +371,5 @@ pub fn printArrayListTasStr(comptime T: type, a: std.ArrayList(T)) void {
         }
     }
     std.debug.print(") \n", .{});
-    return;
-}
-pub fn askContinue() void {
-    std.debug.print("Press continue: ", .{});
-    var stdin_buffer: [32]u8 = undefined;
-    var line_buffer: [32]u8 = undefined;
-    var stdin = std.fs.File.stdin().reader(&stdin_buffer);
-    var w: std.io.Writer = .fixed(&line_buffer);
-
-    _ = stdin.interface.streamDelimiterLimit(&w, '\n', .unlimited) catch void;
-
-    std.debug.print("\n", .{});
     return;
 }

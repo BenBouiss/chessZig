@@ -14,7 +14,10 @@ cmd
 
 engines/bin/*
 engines/heuristics/tmp/*
+engines/heuristics/archive/*
 engines/tmp/*
 #test/*
 opening
+zig-pkg
+
 

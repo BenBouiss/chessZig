@@ -1,0 +1,40 @@
+paths:
+  infoTemplate: "engines/engine_tourney.info"
+  evaluatorBinaryPath: "zig-out/bin/evaluate"
+  tmpFolder: "out/heuristics/MH/tmp"
+  resultFolder: "out/heuristics/MH/res"
+
+  tournamentBaselinePaths:
+    - engines/heuristics/weight_iter_26_popsize_16_baseline.winfo # can take a path to a .winfo file, atleast one baseline is required when in type "baseline" or "los"
+
+  metaHeuristicExtraIndividuals:
+    - # can take a path to a .winfo file
+
+
+tournament:
+  nThreads: 4
+  timeFormat: "5000, 0" # if given the argument is expected as such: "{time}, {inc}" in ms, if none given default to the timeformat from the template info file, if not default to standardTimeFormat(300000, 5000)
+  tournamentType: "LOS" #available type of tournament "std", "baseline", "los" case incensitive.
+  baselineLimit: 4
+  deleteTmp: True 
+
+
+mh:
+  popsize: 16
+  maxiter: 32
+  variant: "GWO" # for now (GW or GWO) Grey wolf optimizer, (DE) differential evolution are available
+  maximize: True
+  lowerBound: 0
+  upperBound: 100
+
+  optimizerOpt:
+    useGreedy: True
+    preEval: True
+    debugMode: False
+
+  variantParameters:
+    # type specific mh arguments (ie: CR for DE ...)
+
+    
+    
+

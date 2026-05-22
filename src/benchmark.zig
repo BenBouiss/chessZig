@@ -4,10 +4,10 @@ const std = @import("std");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const perftl = @import("search/perft.zig");
+const timel = @import("time.zig");
 
 const build_options = @import("build_options");
 
-const GLOBAL_ALLOCATOR = mainl.GLOBAL_ALLOC;
 const IMove = movel.IMove;
 
 const useHash = build_options.useHash;
@@ -118,57 +118,56 @@ pub const ExpectedPerftResKiwipete = [_]i64{
 };
 pub const KIWIPETE_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0";
 
-pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, n_max: u8, nThread: u8, batched: bool) void {
-    var _start: i64 = 0;
-    var _end: i64 = 0;
+pub fn nodeExplorationBenchmark(p_state: *chess.Board_state, alloc: std.mem.Allocator, n_max: u8, nThread: u8, batched: bool) void {
+    var sw: timel.stopWatch = .{};
     for (1..(n_max + 1)) |depth| {
-        _start = std.time.milliTimestamp();
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
-        const res = perftl.perftThreadStart(p_state, @intCast(depth), nThread, batched) catch unreachable;
+        const res = perftl.perftThreadStart(p_state, alloc, @intCast(depth), nThread, batched) catch unreachable;
+        sw.startTimeTick();
         const _node: i64 = @intCast(res.searchStat.n_nodeExplored);
-        _end = std.time.milliTimestamp();
-        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, res.searchStat.n_nodeExplored, @divFloor(_node, (_end - _start + 1)) * 1000 });
+        const timeTaken = sw.timeSinceStartMs();
+        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, timeTaken + 1, res.searchStat.n_nodeExplored, @divFloor(_node, timeTaken + 1) * 1000 });
+        sw.stop();
         if (res.searchStat.n_nodeExplored != ExpectedBenchmarkResults[depth]) {
             std.debug.print("[DEBUG] nodeExplorationBenchmark: At deph {d} expected {d} nodes found {d} (diff: {d} node(s))\n", .{ depth, ExpectedBenchmarkResults[depth], res.searchStat.n_nodeExplored, ExpectedBenchmarkResults[depth] - _node });
         }
         if (comptime useHash) {
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{res.n_hashRetrieve});
-            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
+            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.stat.insertion});
         }
     }
 }
 pub fn nodeBenchmark_debug(p_state: *chess.Board_state, n_max: u8, batched: bool) void {
-    var _start: i64 = 0;
-    var _end: i64 = 0;
+    var sw: timel.stopWatch = .{};
     var bench_res: benchmarkResult = .{};
     for (1..(n_max + 1)) |depth| {
         bench_res.reset();
-        _start = std.time.milliTimestamp();
+        sw.startTimeTick();
         std.debug.print("[DEBUG] nodeExplorationBenchmark: Starting benchmark depth = {d}\n", .{depth});
         _ = perftl.perft_debug_loop(p_state, @intCast(depth), batched, &bench_res);
         const _node: i64 = @intCast(bench_res.n_nodes);
-        _end = std.time.milliTimestamp();
-        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, _end - _start, _node, @divFloor(_node, (_end - _start + 1)) * 1000 });
+        const timeTaken = sw.timeSinceStartMs();
+        std.debug.print("Move generation (depth = {d}): {d} ms for {d} nodes ({d} nodes/s)\n", .{ depth, timeTaken + 1, _node, @divFloor(_node, timeTaken + 1) * 1000 });
         bench_res.printInfo();
+        sw.stop();
         if (comptime useHash) {
             std.debug.print("[DEBUG] hash moves retrieved: {d}\n", .{bench_res.n_hashRetrieve});
-            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.n_insertion});
+            std.debug.print("[DEBUG] Explored position: {d}\n", .{hashl.hashTable.stat.insertion});
         }
         //        std.debug.assert(bench_res.n_nodes == ExpectedBenchmarkResults[depth]);
     }
 }
 
-pub fn test_benchmark() void {
-    //var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, KIWIPETE_FEN) catch unreachable;
-    var game_state = chess.getBoardFromFen(GLOBAL_ALLOCATOR, chess.DEFAULT_FEN) catch unreachable;
+pub fn test_benchmark(alloc: std.mem.Allocator) void {
+    var game_state = chess.getBoardFromFen(alloc, chess.DEFAULT_FEN) catch unreachable;
     std.debug.print("[DEBUG] test_bencharmk: successfully loaded fen code\n", .{});
     game_state.setSeed(42);
     chess.print_boardstate(&game_state);
-    nodeExplorationBenchmark(&game_state, 7, 1, true);
+    nodeExplorationBenchmark(&game_state, alloc, 7, 1, true);
     //nodeBenchmark_debug(&game_state, 6, false);
 }
 
-pub fn main() !void {
-    mainl.initAll(true);
-    test_benchmark();
+pub fn main(alloc: std.mem.Allocator) !void {
+    mainl.initAll(alloc, true);
+    test_benchmark(alloc);
 }

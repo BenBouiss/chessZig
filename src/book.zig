@@ -5,8 +5,9 @@ const utilsl = @import("utils.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
 const filel = @import("file.zig");
+const hashl = @import("hashTable.zig");
+const boardl = @import("board.zig");
 
-const _alloc = mainl.GLOBAL_ALLOC;
 const string = stringl.string;
 
 pub const outcomeFlag = enum(u8) { draw, blackWin, whiteWin };
@@ -51,9 +52,9 @@ pub const openingDatabase = struct {
         // ... next ones afterwards
 
         var ret: openingDatabase = .{};
-        ret.drawnEntries = .{};
-        ret.whiteEntries = .{};
-        ret.blackEntries = .{};
+        ret.drawnEntries = try .initCapacity(alloc, 4);
+        ret.whiteEntries = try .initCapacity(alloc, 4);
+        ret.blackEntries = try .initCapacity(alloc, 4);
         ret.initialized = true;
         try readEntries(&ret, alloc, path);
         ret.setSeed(seed);
@@ -110,28 +111,26 @@ pub const openingDatabase = struct {
                 drawing = p_self.blackEntries;
             },
         }
-        var ret: std.ArrayList(string) = .{};
-        std.debug.print("[DEBUG] sample: starting loop\n", .{});
+        var ret: std.ArrayList(string) = try .initCapacity(alloc, 4);
         var randInt = p_self.rngIntGenerator.random();
         for (0..size) |i| {
             const randIdx = randInt.intRangeAtMost(usize, 0, drawing.items.len);
-            //std.debug.print("[DEBUG] sample: index: {d}\n", .{randIdx});
             try ret.append(alloc, drawing.items[randIdx]);
             _ = i;
         }
         return ret;
     }
     pub fn printInfo(p_self: *openingDatabase) void {
-        std.debug.print("Number of drawn openings: {d}\n", .{p_self.drawnEntries.items.len});
-        std.debug.print("Number of white won openings: {d}\n", .{p_self.whiteEntries.items.len});
-        std.debug.print("Number of black won openings: {d}\n", .{p_self.blackEntries.items.len});
+        std.log.info("Number of drawn openings: {d}", .{p_self.drawnEntries.items.len});
+        std.log.info("Number of white won openings: {d}", .{p_self.whiteEntries.items.len});
+        std.log.info("Number of black won openings: {d}", .{p_self.blackEntries.items.len});
     }
 };
 pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string) !void {
-    const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
-    defer file.close();
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
+    defer file.close(mainl.getGlobalIo());
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-    var f_reader = file.reader(&buffer);
+    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     const buffer_size = 1024;
     var currentEntriesType: outcomeFlag = .draw;
@@ -141,7 +140,7 @@ pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string
     lineStr.clearRetainingCapacity();
     while (true) {
         var _buffer: [buffer_size]u8 = std.mem.zeroes([buffer_size]u8);
-        var w: std.io.Writer = .fixed(&_buffer);
+        var w: std.Io.Writer = .fixed(&_buffer);
         var s = string.initFromBuffer(&_buffer);
 
         const size = reader.streamDelimiter(&w, '\n') catch {
@@ -176,16 +175,17 @@ pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string
 }
 
 pub fn test_read(path: *string) !void {
-    const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
-    defer file.close();
+    //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
+    defer file.close(mainl.getGlobalIo());
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-    var f_reader = file.reader(&buffer);
+    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     const buffer_size = 1024;
     // in this only to depth 8, thus it should not be that big
     while (true) {
         var _buffer: [buffer_size]u8 = std.mem.zeroes([buffer_size]u8);
-        var w: std.io.Writer = .fixed(&_buffer);
+        var w: std.Io.Writer = .fixed(&_buffer);
         var s = string.initFromBuffer(&_buffer);
         const size = reader.streamDelimiter(&w, '\n') catch {
             break;
@@ -196,53 +196,62 @@ pub fn test_read(path: *string) !void {
     }
 }
 
-pub const GLOBAL_ALLOC = mainl.GLOBAL_ALLOC;
+pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
+    var db = try openingDatabase.init(alloc, path, 42);
+    defer db.free(alloc);
+    var openings: std.ArrayList(string) = .empty;
+    if (full) {
+        openings.deinit(alloc);
+        openings = db.drawnEntries;
+    } else {
+        openings = try db.sample(alloc, 5, .draw);
+    }
 
-pub fn test_db(path: *string) !void {
-    var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
-    var openings = try db.sample(GLOBAL_ALLOC, 5, .draw);
-    defer openings.deinit(GLOBAL_ALLOC);
-
+    const base = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    var stack: boardl.boardStack = .{};
     for (0..openings.items.len) |i| {
+        var tmp = base.copy();
         var algeFen = openings.items[i];
-        const moves = try chessl.algebraicLineToIMoveMatch(&algeFen);
-        var tmp = try chessl.getBoardFromFen(GLOBAL_ALLOC, chessl.DEFAULT_FEN);
+        const moves = try chessl._algebraicLineToIMoveMatch(alloc, &algeFen, &tmp);
+        tmp = base.copy();
+
         for (0..moves.len) |j| {
             const move = moves.moves[j];
+            stack.push(tmp.frame);
             tmp.makeMove(move);
         }
-        //chessl.print_boardstate(&tmp);
+        for (0..moves.len) |_| {
+            _ = tmp.undoMove();
+            tmp.frame = stack.pop();
+        }
     }
-    for (openings.items) |*str| {
-        defer str.free(GLOBAL_ALLOC);
-        //std.debug.print("{s}\n", .{str._slice()});
+    if (!full) {
+        openings.deinit(alloc);
     }
 }
-pub fn test_draw(path: *string) !void {
-    var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
-    var openings_1 = try db.sample(GLOBAL_ALLOC, 1, .draw);
-    defer openings_1.deinit(GLOBAL_ALLOC);
+pub fn test_draw(path: *string, alloc: std.mem.Allocator) !void {
+    var db = try openingDatabase.init(alloc, path, 42);
+    var openings_1 = try db.sample(alloc, 1, .draw);
+    defer openings_1.deinit(alloc);
 
-    var openings_2 = try db.sample(GLOBAL_ALLOC, 1, .draw);
-    defer openings_2.deinit(GLOBAL_ALLOC);
+    var openings_2 = try db.sample(alloc, 1, .draw);
+    defer openings_2.deinit(alloc);
     std.debug.print("{s}\n", .{openings_1.items[0]._slice()});
     std.debug.print("{s}\n", .{openings_2.items[0]._slice()});
 }
 
-pub fn main(path: *string) !void {
+pub fn main(alloc: std.mem.Allocator) !void {
     //
-    if (!filel.fileExists(path._slice())) {
-        std.debug.print("File {s} does not exists \n", .{path._slice()});
+    const path = "opening/8moves_v3.pgn";
+    var s = try stringl.string.initFromSlice(alloc, path);
+    defer s.free(alloc);
+    hashl.zobristKeys.free(alloc);
+    if (!filel.fileExists(s._slice())) {
+        std.debug.print("File {s} does not exists \n", .{s._slice()});
         return;
     }
+    try test_db(&s, alloc, true);
+    std.log.info("[TEST]: Reading random algebraic position passed", .{});
     //try test_read(path);
-
-    try test_draw(path);
-    //var db = try openingDatabase.init(GLOBAL_ALLOC, path, 42);
-    //var openings = try db.sample(GLOBAL_ALLOC, 5, .draw);
-    //defer openings.deinit(GLOBAL_ALLOC);
-    //for (openings.items) |*str| {
-    //    defer str.free(GLOBAL_ALLOC);
-    //    std.debug.print("{s}\n", .{str._slice()});
-    //}
+    //try test_draw(path, alloc);
 }

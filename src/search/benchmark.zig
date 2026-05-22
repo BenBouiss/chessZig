@@ -23,15 +23,19 @@ pub const benchmarkEntries = [_][]const u8{
 
 pub fn dispatchUciBenchmark(p_engine: *engine) bool {
     // executes the benchmark steps
+
     const dispatchThread = std.Thread.spawn(.{}, dispatchUciBenchmarkThreads, .{p_engine}) catch {
         return false;
     };
     p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
         return false;
     };
+    //p_engine.searcher.searchingThread.appendThread(dispatchThread);
+
     return true;
 }
 pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
+    defer p_engine.status.benchmarking = false;
     //
     var results: std.ArrayList(schedulerl.searchReport) = std.ArrayList(schedulerl.searchReport).initCapacity(p_engine.alloc, 4) catch {
         //
@@ -40,39 +44,29 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
     };
     defer results.deinit(p_engine.alloc);
     const benchmarkDepth: u16 = 8;
+
+    var sched = &p_engine.searcher.schedul;
+    sched.setEngine(p_engine);
+    if (!sched._threadPool.running) {
+        sched._threadPool.addThread(1) catch {
+            std.debug.print("[ERROR] dispatchUciBenchmarkThreads: Cant init threadpool and none found\n", .{});
+        };
+    }
     std.debug.print("============ Benchmark evaluation ============\n", .{});
     for (0..benchmarkEntries.len) |i| {
-        var stopWatch: timel.stopWatch = .{};
-        stopWatch.startTimeTick();
-        defer stopWatch.stop();
+        p_engine.refreshInternals();
+        p_engine.searcher.searching = true;
+        sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
+        sched.features.fixedDepth = true;
+        sched.features.reportProgress = true;
+
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
-
-        const fmoves = moveGenl.generateLegalMoves(&p_engine.state);
-        var pack = threadingl.getThreadPackArray(p_engine.alloc, &p_engine.state, &fmoves, p_engine.searcher.nThreads) catch {
-            std.debug.print("[ERROR] dispatchUciGoThreads: Cant init thread pack array\n", .{});
-            return;
-        };
-        defer threadingl.freeThreadPackArray(p_engine.alloc, &pack);
-        p_engine.searcher.searching = true;
-        defer p_engine.searcher.searching = false;
-        var sched = &p_engine.searcher.schedul;
-        sched.setThreadPack(&pack);
-        sched.setEngine(p_engine);
-        sched.features.fixedDepth = true;
-        sched.reportProgress = true;
-
-        if (sched.turn) {
-            sched.timeM.remainingTimeMs = p_engine.searcher.config.wtime;
-        } else {
-            sched.timeM.remainingTimeMs = p_engine.searcher.config.btime;
-        }
-        if (p_engine.trackMetrics()) {
-            p_engine.metric.addTimeToProcessingMs(stopWatch.timeSinceStartMs());
-        }
         const res = sched.entryPointSearch(benchmarkDepth);
         results.append(p_engine.alloc, res) catch unreachable;
+        p_engine.searcher.searching = false;
     }
+    p_engine.searcher.searching = false;
     printResults(&benchmarkEntries, &results);
     std.debug.print("============ Benchmark perft ============\nComing soon\n", .{});
 }

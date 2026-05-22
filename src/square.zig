@@ -1,6 +1,7 @@
 const chess = @import("chess.zig");
+const typel = @import("type.zig");
 const std = @import("std");
-pub const e_square = enum(u8) { a1 = 0, b1, c1, d1, e1, f1, g1, h1, a2, b2, c2, d2, e2, f2, g2, h2, a3, b3, c3, d3, e3, f3, g3, h3, a4, b4, c4, d4, e4, f4, g4, h4, a5, b5, c5, d5, e5, f5, g5, h5, a6, b6, c6, d6, e6, f6, g6, h6, a7, b7, c7, d7, e7, f7, g7, h7, a8, b8, c8, d8, e8, f8, g8, h8, invalid };
+pub const e_square = typel.e_square;
 
 pub const MAX_CHECKS: u8 = 2;
 
@@ -13,13 +14,13 @@ pub const squareInfo = struct {
     pub fn init(sq: e_square) squareInfo {
         return .{ .sq = sq, .file = chess.getSqFile(sq), .rank = chess.getSqRank(sq), .diagonal = chess.getSqDiag(sq), .antidiagonal = chess.getSqAntiDiag(sq) };
     }
-    pub fn copy(self: squareInfo) squareInfo {
+    pub inline fn copy(self: squareInfo) squareInfo {
         return .{ .sq = self.sq, .file = self.file, .rank = self.rank, .diagonal = self.diagonal, .antidiagonal = self.antidiagonal };
     }
     pub fn print(self: squareInfo) void {
         std.debug.print("{} ", .{self.sq});
     }
-    pub fn getBB(self: squareInfo) u64 {
+    pub inline fn getBB(self: squareInfo) u64 {
         return chess.ONE << @intCast(@intFromEnum(self.sq));
     }
     pub inline fn getDiagBB(self: squareInfo) u64 {

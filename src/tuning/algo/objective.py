@@ -1,22 +1,37 @@
-
-import numpy.typing as npt 
+import numpy.typing as npt
 import numpy as np
 
+
 class objective(object):
-    def __init__(self, maximize: bool, bounds: npt.NDArray[np.float64] | list[list[float]], steps: npt.NDArray[np.float64] | list[float]):
+    def __init__(
+        self,
+        maximize: bool,
+        bounds: npt.NDArray[np.float64] | list[list[float]],
+        steps: npt.NDArray[np.float64] | list[float],
+    ):
         assert len(bounds) == len(steps)
         self.maximize: bool = maximize
-        self.bounds: npt.NDArray[np.float64]  = np.array(bounds)
+        self.bounds: npt.NDArray[np.float64] = np.array(bounds)
         self.steps: npt.NDArray[np.float64] = np.array(steps)
         self.nDims: int = len(self.steps)
 
-    def evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
+    def evaluate(
+        self,
+        positions: list[npt.NDArray[np.float64]]
+        | npt.NDArray[np.float64]
+        | list[list[float]],
+    ) -> list[float]:
         ret = self._evaluate(positions)
-        if (self.maximize):
+        if self.maximize:
             return ret
         return [-x for x in ret]
 
-    def _evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
+    def _evaluate(
+        self,
+        positions: list[npt.NDArray[np.float64]]
+        | npt.NDArray[np.float64]
+        | list[list[float]],
+    ) -> list[float]:
         _ = positions
         raise NotImplementedError("this function needs to be implemented")
 
@@ -30,7 +45,7 @@ class objective(object):
 
     def _saveToFile(self, log: dict) -> None:
         _ = log
-        return 
+        return
 
     def loadFromFile(self, config: dict) -> None:
         if config.get("bounds") is not None:
@@ -48,25 +63,72 @@ class objective(object):
         pass
 
 
-
-def dummyObjectiveFunction(position: npt.NDArray[np.float64], target: npt.NDArray[np.float64]):
+def dummyObjectiveFunction(
+    position: npt.NDArray[np.float64], target: npt.NDArray[np.float64]
+):
     return np.sum(np.absolute(position - target))
+
 
 class dummyObjective(objective):
     def __init__(self, target: list[float], **parentKwargs):
         super().__init__(**parentKwargs)
         self.target: npt.NDArray[np.float64] = np.array(target)
 
-    def _evaluate(self, positions: list[npt.NDArray[np.float64]] | npt.NDArray[np.float64] | list[list[float]]) -> list[float]:
+    def _evaluate(
+        self,
+        positions: list[npt.NDArray[np.float64]]
+        | npt.NDArray[np.float64]
+        | list[list[float]],
+    ) -> list[float]:
         ret = []
         for pos in positions:
             ret.append(dummyObjectiveFunction(np.array(pos), self.target))
         return ret
 
+
+def makeDummyObjective(
+    nDim: int, minV: float, maxV: float, step: float, maximize: bool
+) -> dummyObjective:
+    assert nDim > 0
+    target = minV + (np.random.random(size=nDim)) * (maxV - minV)
+    target = step * np.rint(target / step)
+
+    return dummyObjective(
+        target=target.tolist(),
+        bounds=dummyBounds(lbound=minV, rbound=maxV, nDim=nDim),
+        steps=dummyStep(step=step, nDim=nDim),
+        maximize=maximize,
+    )
+
+
+# since all the current positions are "similar" enough might
+# be a good idea to do a dummy func with only nDim in input
+def dummyBounds(lbound: float, rbound: float, nDim: int) -> npt.NDArray[np.float64]:
+    """
+    ex: for [-10.0; 10] with ndim = 4
+    res = np.array(
+                   [-10.0, 10],
+                   [-10.0, 10],
+                   [-10.0, 10],
+                   [-10.0, 10]
+                   )
+
+    """
+    return np.tile(np.array([lbound, rbound]), [nDim, 1])
+
+
+def dummyStep(step: float, nDim: int) -> npt.NDArray[np.float64]:
+    """
+    ex: for 0.01 with ndim = 4
+    res = np.array(0.01, 0.01, 0.01, 0.01)
+    """
+    return np.repeat(np.array([step]), nDim)
+
+
 if __name__ == "__main__":
     target = [1.5, 1.5]
     steps = [0.1, 0.1]
     bounds = [[0, 10]] * len(target)
-    test = dummyObjective(target = target, steps = steps, bounds = bounds, maximize = True)
+    test = dummyObjective(target=target, steps=steps, bounds=bounds, maximize=True)
 
-    print(test.evaluate(positions = [[1.5, 1.5], [0, 0]]))
+    print(test.evaluate(positions=[[1.5, 1.5], [0, 0]]))
