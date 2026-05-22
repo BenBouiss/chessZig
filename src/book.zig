@@ -217,7 +217,7 @@ pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
 
         for (0..moves.len) |j| {
             const move = moves.moves[j];
-            stack.pushState(tmp.frame);
+            stack.push(tmp.frame);
             tmp.makeMove(move);
         }
         for (0..moves.len) |_| {
