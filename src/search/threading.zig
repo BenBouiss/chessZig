@@ -154,6 +154,7 @@ pub const threadPool = struct {
     running: bool = false,
     working: bool = false,
     lock: lockl.lock = .{},
+    debugMode: bool = false,
 
     pub fn isRunning(p_self: *threadPool) bool {
         p_self.lock.acquireLock();
@@ -172,7 +173,9 @@ pub const threadPool = struct {
     pub fn addThread(p_self: *threadPool, n: usize) !void {
         p_self.running = true;
 
-        std.debug.print("[DEBUG] addThread: Adding {d} thread(s) current nbr {d}\n", .{ n, p_self.nThread });
+        if (p_self.debugMode) {
+            std.debug.print("[DEBUG] addThread: Adding {d} thread(s) current nbr {d}\n", .{ n, p_self.nThread });
+        }
         for (0..n) |_| {
             p_self.threadInfos[p_self.nThread] = .{ .alive = true };
             p_self.threadProps[p_self.nThread]._handle = try std.Thread.spawn(.{}, waitingRoom, .{ p_self, p_self.nThread });
@@ -278,7 +281,9 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     const timeout = 2;
     const alive = &p_self.threadProps[idx].alive;
 
-    std.debug.print("[DEBUG] threadPool.WaitingRoom: Thread {d} entering loop\n", .{idx});
+    if (p_self.debugMode) {
+        std.debug.print("[DEBUG] threadPool.WaitingRoom: Thread {d} entering loop\n", .{idx});
+    }
     while (p_self.isRunning() and alive.*) {
         if (!p_self.working) {
             std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch unreachable;
@@ -286,7 +291,9 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
         if (sw.timeSinceStartSec() > timeout) {
             sw.reset();
             sw.startTimeTick();
-            std.debug.print("[INACTIVITY] threadPool.WaitingRoom: Thread {d} no activity in the last {d} seconds. Running {} alive {}\n", .{ idx, timeout, p_self.running, alive.* });
+            if (p_self.debugMode) {
+                std.debug.print("[INACTIVITY] threadPool.WaitingRoom: Thread {d} no activity in the last {d} seconds. Running {} alive {}\n", .{ idx, timeout, p_self.running, alive.* });
+            }
         }
         if (p_self.threadProps[idx].searchPing) {
             sw.reset();
@@ -302,6 +309,9 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     }
     p_self.running = false;
     const pack = p_self.packages[idx];
-    std.debug.print("[EXIT] threadPool.WaitingRoom: Thread {d} exiting\n", .{idx});
+
+    if (p_self.debugMode) {
+        std.debug.print("[EXIT] threadPool.WaitingRoom: Thread {d} exiting\n", .{idx});
+    }
     pack.scheduler.p_engine.respond("engineOp threadPool.waitingroom .EXITING");
 }

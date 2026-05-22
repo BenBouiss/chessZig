@@ -114,9 +114,8 @@ pub fn searchLoop(p_state: *chess.Board_state, p_info: *threadingl.threadInfo, p
         }
     }
     var canFutility: bool = false;
-    var static_eval: scoreType = 0;
     if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and heuristicl.sideCountScore(p_state, white, &heuristicl.globalHeuristic) > heuristicl.globalHeuristic.RookValue and depth <= 2 and ply > 4) {
-        static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+        const static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
         canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
     }
 

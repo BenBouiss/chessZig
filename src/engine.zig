@@ -486,7 +486,11 @@ pub const engine = struct {
                 return p_self.executeSetOptionCmd(cmdBuffer);
             },
             .DEBUG => {
-                return p_self.executeDebugCmd(cmdBuffer);
+                const ret = p_self.executeDebugCmd(cmdBuffer);
+                if (ret) {
+                    p_self.searcher.schedul._threadPool.debugMode = p_self.status.debugMode;
+                }
+                return ret;
             },
             .UCI => {
                 p_self.respond("ICU");
@@ -1125,7 +1129,9 @@ fn inputThreading(p_self: *engine) void {
         std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.ENGINE_SERVING_TICKRATE_NS) }, .real) catch unreachable;
     }
 
-    std.debug.print("[DEBUG] inputThreading.engine: exiting \n", .{});
+    if (p_self.status.debugMode) {
+        std.debug.print("[DEBUG] inputThreading.engine: exiting \n", .{});
+    }
 }
 
 fn entrypointReaderThreading(p_self: *engine) void {
