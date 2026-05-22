@@ -1,10 +1,7 @@
-const configl = @import("config.zig");
 const heuristicl = @import("heuristic.zig");
 const chessl = @import("chess.zig");
 
 const scoreType = heuristicl.scoreType;
-const weightType = heuristicl.weightType;
-const NVector = heuristicl.NVector;
 const heuristicValues = heuristicl.heuristicValues;
 
 // values from https://www.chessprogramming.org/Evaluation for now
@@ -13,7 +10,7 @@ pub const simpleBishopScore: scoreType = 300;
 pub const simpleKnightScore: scoreType = 300;
 pub const simpleRookScore: scoreType = 500;
 pub const simpleQueenScore: scoreType = 900;
-pub const simpleCheckMateScore: scoreType = 99999;
+pub const simpleCheckMateScore: scoreType = 31000;
 pub const simpleStalemateScore: scoreType = 0;
 
 // ============ pawn structure ============
@@ -28,6 +25,7 @@ pub const simpleStructureProtectionScore: scoreType = 1;
 
 // ============ tempo ============
 pub const simpleTempoChecksScore: scoreType = 25;
+pub const simplePieceThreatScore: scoreType = 4;
 
 // source: https://www.chessprogramming.org/King_Safety
 // ============ safety ============
@@ -38,8 +36,6 @@ pub const simpleSafetyQueenScore: scoreType = 80;
 
 // ============ king ============
 pub const simpleKingProximity: scoreType = 5;
-
-pub var weights: heuristicl.coeffTuple = .{ .val = [_]NVector{ .{ .val = undefined }, .{ .val = undefined } } };
 
 pub const pawnScoreArr = [chessl.N_SQUARES]scoreType{ 0, 0, 0, 0, 0, 0, 0, 0, -31, 8, -7, -37, -36, -14, 3, -31, -22, 9, 5, -11, -10, -2, 3, -19, -26, 3, 10, 9, 6, 1, 0, -23, -17, 16, -2, 15, 14, 0, 15, -13, 7, 28, 21, 44, 40, 31, 44, 7, 78, 83, 86, 73, 102, 82, 85, 90, 0, 0, 0, 0, 0, 0, 0, 0 };
 
@@ -58,9 +54,10 @@ pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20
 
 // optionnal pre filled heuristic values
 // ============ presets ============
-const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = .{ -12, -12 }, .PassedPawnValue = .{ 93, 93 }, .IsolatedPawnValue = .{ 6, 6 }, .SafetyKnightValue = .{ 36, 36 }, .SafetyBishopValue = .{ 8, 8 }, .SafetyRookValue = .{ -5, -5 }, .SafetyQueenValue = .{ 44, 44 }, .StructureProtectionValue = .{ 1, 1 }, .MobilityValue = .{ -4, -4 } };
+//const simple: heuristicValues = .{};
+//const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = .{ -12, -12 }, .PassedPawnValue = .{ 93, 93 }, .IsolatedPawnValue = .{ 6, 6 }, .SafetyKnightValue = .{ 36, 36 }, .SafetyBishopValue = .{ 8, 8 }, .SafetyRookValue = .{ -5, -5 }, .SafetyQueenValue = .{ 44, 44 }, .StructureProtectionValue = .{ 1, 1 }, .MobilityValue = .{ -4, -4 } };
 
-const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = .{ .{-16}, -16, .{-16}, -16 }, .PassedPawnValue = .{ -12, -12 }, .IsolatedPawnValue = .{ 27, 27 }, .SafetyKnightValue = .{ 6, 6 }, .SafetyBishopValue = .{ 5, 5 }, .SafetyRookValue = .{ -7, -7 }, .SafetyQueenValue = .{ 12, 12 }, .StructureProtectionValue = .{ 2, 2 }, .MobilityValue = .{ -2, -2 } };
+//const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = .{ .{-16}, -16, .{-16}, -16 }, .PassedPawnValue = .{ -12, -12 }, .IsolatedPawnValue = .{ 27, 27 }, .SafetyKnightValue = .{ 6, 6 }, .SafetyBishopValue = .{ 5, 5 }, .SafetyRookValue = .{ -7, -7 }, .SafetyQueenValue = .{ 12, 12 }, .StructureProtectionValue = .{ 2, 2 }, .MobilityValue = .{ -2, -2 } };
 
 //https://www.chessprogramming.org/Futility_Pruning
 // ============ futility prunning ============

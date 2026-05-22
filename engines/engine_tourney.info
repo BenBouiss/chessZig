@@ -1,19 +1,26 @@
 [engine1]
-path="engines/bin/engine_12_04_26";
+path="engines/bin/engine_08_05_26_tourney";
 name="1";
 "setoption name useHash value false";
+"setoption name reportProgress value false";
+"setoption name useQuiescence value true";
+//"debug on";
 
 [engine2]
-path="engines/bin/engine_12_04_26";
+path="engines/bin/engine_08_05_26_tourney";
 name="2";
 "setoption name useHash value false";
+"setoption name reportProgress value false";
+"setoption name useQuiescence value true";
+//"debug on";
 
 [match]
 nMatch=1;
 playerSwitch=true;
 debugMode=false;
-useOpeningBook=false;
+useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
 logsLocation="out/logs/tourney";
-timeFormat=(10000, 0);
+timeFormat=(5000, 0);
 printToScreen=false;
+saveLogs=false;

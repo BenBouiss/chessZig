@@ -72,6 +72,8 @@ pub fn build(b: *std.Build) void {
     const engine = b.addExecutable(.{
         .name = "engine",
         .root_module = b.createModule(.{
+            //.unwind_tables = .none,
+            //.strip = true,
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
             // this package, which is why in this case we don't have to give it a name.
@@ -119,17 +121,6 @@ pub fn build(b: *std.Build) void {
     engine.root_module.addOptions("build_options", build_options);
     chess.root_module.addOptions("build_options", build_options);
     evaluate.root_module.addOptions("build_options", build_options);
-
-    //const raylib_dep = b.dependency("raylib", .{
-    //    .target = target,
-    //    .optimize = optimize,
-    //});
-
-    //const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
-    //
-    //chess.linkLibrary(raylib_artifact);
-    //engine.linkLibrary(raylib_artifact);
-    //evaluate.linkLibrary(raylib_artifact);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
