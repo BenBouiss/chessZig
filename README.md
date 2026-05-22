@@ -2,12 +2,11 @@ Uci complient chess engine project to try out the zig programming language.
 
 Multiple files exist in the build/ directory due to a bug with the zig build command on wsl. The current work around is to set the env variable ZIG_LOCAL_CACHE_DIR to somewhere in the linux filesystem part and the the windows part.
 
-Running for zig version 0.15.2
-Installation:
+Running for zig version 0.16
+Make and run:
 ```
  ./build/build.sh && ./zig-out/bin/engine
 ```
-make and run
 
 comptime build arguments:
 - useStaged: Staged move generation or not
@@ -114,13 +113,6 @@ UCI setoption options:
 - printMetric: [button] prints the metrics kept in the engine's internals
 - trackMetrics: [check] enables or disables the tracking of metrics in the engine's internals
 
-- searchType: [combo] type of searches to be performed. Currently supported search types:
-    - STD: Standard alpha-beta implementation
-    - PVS: Principal Variation Searches
-    - ZWS: Zero Width Search
-    - ZWSI: Zero Width Search but with capture moves explored first. This tech will be applied to other in due time and become just ZWS.
-    - ASP: (Experimental) Aspiration window searches
-
 File structures:
 A running theme here, a line will be ignored if it is malformed and/or doest correspond to the wanted format. Same behavior as the uci engine when in a similar position
 
@@ -152,6 +144,3 @@ Currently the way to test wether a feature accelerates chess operations is to la
 ```
  samply record ./zig-out/bin/chess
 ```
-Samply has been a great tool to debug performance issues, especially the tricky ones (ie: magic table indexing see src/magic.zig getBishopMoves()).
-
-

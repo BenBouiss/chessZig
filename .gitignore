@@ -16,7 +16,8 @@ engines/bin/*
 engines/heuristics/tmp/*
 engines/heuristics/archive/*
 engines/tmp/*
-#test/*
+test/
+test/*
 opening
 zig-pkg
 
