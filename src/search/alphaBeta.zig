@@ -30,7 +30,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
     _ = p_startingMoves;
     var pv: pvContainer = .{};
 
-    const score = zwsl.searchLoop(p_state, p_info, p_features, &pv, prevLine, depth, 0, alpha, beta, .PV, false);
+    const score = zwsl.searchLoop(p_state, p_info, p_features, &pv, prevLine, depth, 0, alpha, beta, .PV);
 
     const move = pv.pv_arr[0][0];
     p_info.currentBest.move = move;

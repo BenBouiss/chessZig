@@ -732,7 +732,7 @@ pub fn cst_moveGenBB_all(p_board: *const boardState, comptime white: bool, p_out
 }
 
 pub const qbb = struct {
-    bb: [4]u64,
+    bb: @Vector(4, u64),
     pub fn init(bb: u64) qbb {
         return .{ .bb = [_]u64{ bb, bb, bb, bb } };
     }
@@ -1051,6 +1051,9 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
     if (chess.isKingPiece(piece)) {
         return false;
     }
-    const att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), p_state.b.occupiedBB() ^ fromBB);
+    const att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), p_state.b.occupiedBB() ^ fromBB) catch {
+        chess.sanityCheckBoardState(p_state);
+        @panic("???");
+    };
     return (att & p_state.getKingBB(!white)) != 0;
 }

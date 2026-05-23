@@ -4,14 +4,12 @@ const mainl = @import("../main.zig");
 
 const std = @import("std");
 
-const Board_state = chessl.Board_state;
-
 test "apply moves" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
     mainl.initAll(arena, false);
-    var tmp: Board_state = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    var tmp = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     try chessl.applyUciMoves(&tmp, "position startpos moves a2a4 a7a5 b2b4 a5b4 c2c4 b4c3 d2c3 a8a4 a1a4 b7b5", false);
     chessl.sanityCheckBoardState(&tmp);
 
@@ -25,7 +23,7 @@ test "fen" {
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
     mainl.initAll(arena, false);
-    var tmp: Board_state = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    var tmp = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     try std.testing.expect(true);
     var str = tmp.get_fen();
     var comp = utilsl.trimStr(&str);

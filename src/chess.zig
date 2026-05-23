@@ -828,7 +828,7 @@ pub inline fn getPawnAttacksFromBB(bb: u64, comptime white: bool) u64 {
 pub inline fn getKingAttacks(sq: e_square) u64 {
     return tablel.cachedKingTable.KingAttack[@intFromEnum(sq)];
 }
-pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) u64 {
+pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
     switch (piece) {
         .nWhiteKing, .nBlackKing => {
             return getKingAttacks(sq);
@@ -852,7 +852,8 @@ pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) u64 {
             return getQueenAttacks(occ, sq);
         },
         .nWhite, .nBlack, .nEmptySquare => {
-            @panic("???");
+            std.debug.print("[PANIC] getRelevantAttacks for piece {} at {d}\n", .{ piece, sq });
+            return debug_err.valueErr;
         },
     }
 }
