@@ -1037,12 +1037,16 @@ pub inline fn southWestOne(bb: u64) u64 {
 
 pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
     const white: bool = p_state.whiteToMove();
-    const fromSq = move.getFrom();
-    const fromBB = chess.xToBitboard(fromSq);
+    const from = move.getFrom();
+    const fromBB = chess.xToBitboard(from);
+    const to = move.getTo();
+    const otherKing: u8 = @intFromEnum(p_state.getKingSq(!white));
     if ((p_state.frame.pinnedBB & fromBB) != 0) {
-        return true;
+        if ((chess.inBetweenX(from, to) & (chess.inBetweenX(from, otherKing) | fromBB)) == 0) {
+            return true;
+        }
     }
-    var piece = p_state.get_piece(fromSq);
+    var piece = p_state.get_piece(from);
     const toSq = move.getTo();
     if (move.isPromotion()) {
         piece = chess.flagPromotionToPiece(move.getFlag(), white);
@@ -1055,5 +1059,5 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
         chess.sanityCheckBoardState(p_state);
         @panic("???");
     };
-    return (att & p_state.getKingBB(!white)) != 0;
+    return (att & chess.xToBitboard(otherKing)) != 0;
 }

@@ -1,15 +1,20 @@
-const boardl = @import("../board.zig");
+const enginel = @import("../engine.zig");
 const movel = @import("../move.zig");
 const chessl = @import("../chess.zig");
+const heuristicl = @import("../heuristic.zig");
 const schedulerl = @import("scheduler.zig");
 const configl = @import("../config.zig");
 const mainl = @import("../main.zig");
 const timel = @import("../time.zig");
 const lockl = @import("../lock.zig");
+const boardl = @import("../board.zig");
 
 const std = @import("std");
 
+const engine = enginel.engine;
 const IMove = movel.IMove;
+const scoreType = heuristicl.scoreType;
+const debug_err = chessl.debug_err;
 const moveDecisionExt = schedulerl.moveDecisionExt;
 
 pub const searchStatistic = struct {
@@ -84,7 +89,7 @@ pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *const boardl.board
     var ret: threadPackageArray = .{};
     var threadedMoves = moveArray.cutEvenly(alloc, _nThread) catch {
         std.debug.print("[ERROR] getThreadPackArray: move container init\n", .{});
-        return chessl.debug_err.valueErr;
+        return debug_err.valueErr;
     };
     defer threadedMoves.deinit(alloc);
     for (0.._nThread) |i| {
@@ -167,7 +172,6 @@ pub const threadPool = struct {
 
     pub fn addThread(p_self: *threadPool, n: usize) !void {
         p_self.running = true;
-
         if (p_self.debugMode) {
             std.debug.print("[DEBUG] addThread: Adding {d} thread(s) current nbr {d}\n", .{ n, p_self.nThread });
         }
@@ -204,7 +208,9 @@ pub const threadPool = struct {
             if (sw.timeSinceStartSec() > timeout) {
                 sw.reset();
                 sw.startTimeTick();
-                std.debug.print("[INACTIVITY] threadPool.waitOnFinish : no activity in the last {d} seconds\n", .{timeout});
+                if (p_self.debugMode) {
+                    std.debug.print("[INACTIVITY] threadPool.waitOnFinish : no activity in the last {d} seconds\n", .{timeout});
+                }
             }
         }
     }

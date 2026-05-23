@@ -131,11 +131,9 @@ pub const board = struct {
     }
     pub inline fn nextTurn(self: *board) void {
         self.turnCount += 1;
-        //self.info.stat.invertTurn();
     }
     pub inline fn undoTurn(self: *board) void {
         self.turnCount -= 1;
-        //self.info.stat.invertTurn();
     }
 
     pub inline fn getCapturePiece(self: board, move: IMove) e_piece {
@@ -957,7 +955,7 @@ pub const boardState = struct {
         const king_attacks = chessl.getAllAttackerFromKing(p_self, white);
         return king_attacks == 0;
     }
-    pub fn isChecked(p_self: *const boardState) bool {
+    pub inline fn isChecked(p_self: *const boardState) bool {
         if (comptime useStaged) {
             return p_self.frame.checkersBB != 0;
         }

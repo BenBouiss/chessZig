@@ -64,10 +64,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     // null move prunning here
     // R = 3
     const ischeck = p_state.isChecked();
+    const isEndGame = p_state.isEndGame();
     if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
         const R: u16 = 2 + 1;
-        if (_depth > R and !ischeck and !p_state.isEndGame()) {
+        if (_depth > R and !ischeck and !isEndGame) {
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, p_features, pv, prevLine, _depth - R, ply + R, -beta, 1 - beta, .NonPV);
             p_state.undoNullMove();
@@ -107,8 +108,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         // do qsearch check value < low val
         // return value
 
-        if (depth <= 3 and depth != 1 and t == .NonPV) {
-            const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, ply, p_state.isChecked(), pv, prevLine, .NonPV);
+        if (depth <= 3 and depth != 1 and comptime t == .NonPV) {
+            const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, ply, ischeck, pv, prevLine, .NonPV);
             if (val < _alpha) {
                 return val;
             }
@@ -117,8 +118,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
     var canFutility: bool = false;
     var futilityScore: scoreType = 0;
-    if (p_features.useFutility and _depth == 1) {
-        futilityScore = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin;
+    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and _depth == 1 and comptime t == .NonPV) {
+        futilityScore = heuristicl.materialImbalanceSigned(p_state, &heuristicl.globalHeuristic, white) + heuristicl.futilityMargin;
         canFutility = true;
     }
     //if (p_features.useFutility and comptime t == .NonPV) {
@@ -159,7 +160,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             }
         }
         if (canFutility) {
-            if (!moveGenl.moveDeliverCheck(p_state, move) and (futilityScore + heuristicl.mat_gain(p_state, move)) < _alpha) {
+            if (!moveGenl.moveDeliverCheck(p_state, move) and (futilityScore + heuristicl.mat_gain(p_state, move)) < _alpha and tot > 4) {
                 continue;
             }
             //if (!moveGenl.moveDeliverCheck(p_state, move) and !move.isCapture() and !move.isPromotion() and tot > 4) {

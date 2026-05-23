@@ -472,6 +472,9 @@ pub inline fn canMove(from: e_square, to: e_square, occ: u64) bool {
     return (inBetween(from, to) & occ) == 0;
 }
 
+pub inline fn inBetweenX(from: u8, to: u8) u64 {
+    return tablel.arrRectangular[from][to];
+}
 pub inline fn inBetween(from: e_square, to: e_square) u64 {
     return tablel.arrRectangular[@intFromEnum(from)][@intFromEnum(to)];
 }

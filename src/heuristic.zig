@@ -289,6 +289,16 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
         },
     }
 }
+pub fn materialImbalanceSigned(p_state: *const boardl.boardState, values: *const heuristicValues, white: bool) scoreType {
+    const ret = (p_state.getPieceCount(e_piece.nWhitePawn) - p_state.getPieceCount(e_piece.nBlackPawn)) * values.PawnValue +
+        (p_state.getPieceCount(e_piece.nWhiteBishop) - p_state.getPieceCount(e_piece.nBlackBishop)) * values.BishopValue +
+        (p_state.getPieceCount(e_piece.nWhiteKnight) - p_state.getPieceCount(e_piece.nBlackKnight)) * values.KnightValue +
+        (p_state.getPieceCount(e_piece.nWhiteRook) - p_state.getPieceCount(e_piece.nBlackRook)) * values.RookValue +
+        (p_state.getPieceCount(e_piece.nWhiteQueen) - p_state.getPieceCount(e_piece.nBlackQueen)) * values.QueenValue;
+    if (white) return ret;
+    return -ret;
+}
+
 pub fn materialImbalance(p_state: *const boardl.boardState, values: *const heuristicValues) scoreType {
     return (p_state.getPieceCount(e_piece.nWhitePawn) - p_state.getPieceCount(e_piece.nBlackPawn)) * values.PawnValue +
         (p_state.getPieceCount(e_piece.nWhiteBishop) - p_state.getPieceCount(e_piece.nBlackBishop)) * values.BishopValue +
@@ -1116,7 +1126,7 @@ pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !
 //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
 // test for first futility implem
 //pub const futilityMargin: [4]scoreType = .{ 0, 100, 150, 300 };
-pub const futilityMargin: scoreType = 300;
+pub const futilityMargin: scoreType = 500;
 
 // move heuristic "sections"
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
