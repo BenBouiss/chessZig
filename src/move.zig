@@ -55,7 +55,8 @@ pub const IMove = packed struct {
     }
 
     pub fn isIn(self: IMove, move_arr: moveContainer) bool {
-        for (move_arr.moves) |move| {
+        for (0..move_arr.len) |i| {
+            const move = move_arr.moves[i];
             if (self.equal(move)) {
                 return true;
             }

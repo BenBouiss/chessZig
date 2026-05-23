@@ -8,6 +8,7 @@ const perftl = @import("../search/perft.zig");
 const stringl = @import("../string.zig");
 const bookl = @import("../book.zig");
 const timel = @import("../time.zig");
+const typel = @import("../type.zig");
 
 const std = @import("std");
 
@@ -22,6 +23,20 @@ test "en passant checking" {
     const move = allMoves.moves[0];
     try std.testing.expect(move.isEnpassant());
     try std.testing.expectEqual(allMoves.len, 1);
+
+    std.log.info("[TEST]: En passant checking passed\n", .{});
+}
+test "en passant pinned" {
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    mainl.initAll(arena, false);
+    var tmp = try chessl.getBoardFromFen("4Q3/7p/8/8/4RPpk/4B2q/P7/5RK b - f3 0 69");
+    const allMoves = moveGenl.generateLegalMoves(&tmp);
+    const badMove = movel.build_move(@intFromEnum(typel.e_square.g4), @intFromEnum(typel.e_square.f3), @intFromEnum(typel.e_moveFlags.ENPASSANT));
+    try std.testing.expect(!badMove.isIn(allMoves));
+    //std.debug.print("{s} {}\n", .{ badMove.getStr(), badMove.isIn(allMoves) });
+    //allMoves.print();
 
     std.log.info("[TEST]: En passant checking passed\n", .{});
 }

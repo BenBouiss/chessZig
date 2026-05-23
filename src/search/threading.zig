@@ -287,7 +287,7 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     }
     while (p_self.isRunning() and alive.*) {
         if (!p_self.working) {
-            std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real) catch unreachable;
+            std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.THREADPOOL_TICKRATE_NS) }, .real) catch unreachable;
         }
         if (sw.timeSinceStartSec() > timeout) {
             sw.reset();

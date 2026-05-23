@@ -11,6 +11,7 @@ pub const MAX_USER_INPUT: u64 = MAX_MATCH_STR_LENGTH;
 pub const MAX_LINE_LENGTH: usize = 32;
 
 pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
+pub const EVALUTATION_TIMEOUT_ERROR_MS: u64 = 10000; // 2 sec
 
 pub const MAX_SPRT_MATCH: usize = 10_000;
 pub const MAX_THREAD: u32 = 16;
@@ -88,7 +89,6 @@ pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
 pub const ITEM_PER_BUCKET = 3;
 
 // inactivity timers:
-//
 pub const DEBUG_INACTIVITY_SERVING_S = 30; // 30 seconds in ns
 pub const DEBUG_INACTIVITY_SERVING_NS = DEBUG_INACTIVITY_SERVING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
 //
@@ -101,9 +101,9 @@ pub const START_TICKRATE_NS = 2 * std.math.pow(u64, 10, 9); // 2 seconds in ns
 
 pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 
-pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
+pub const INFO_TICKRATE_NS = INFO_TICKRATE * (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 500_000;
-pub const WR_TICKRATE_NS = 500_000;
+pub const THREADPOOL_TICKRATE_NS = 100_000;
 pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
 
 pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";
@@ -113,15 +113,11 @@ pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";
 pub const N_POSITIONS: usize = 300000;
 //pub const N_POSITIONS: usize = 8;
 
-pub const e_residue_type = enum(u4) { MSE = 0, RMSE };
-pub const TUNE_RESIDUE: e_residue_type = .MSE;
-
 pub const TUNE_NORMAL: bool = true; // 392 weights
 pub const TUNE_SAFETY: bool = true; // > 5 weights
 pub const TUNE_COMPLEXITY: bool = false; // ? weights
 pub const TUNE_PSQT: bool = true; // > 5 weights
 
-//pub const N_TERMS: usize = 392 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
 pub const N_TERMS: usize = 397 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
 
 // TEXEL indexes

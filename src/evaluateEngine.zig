@@ -46,6 +46,7 @@ pub const err_eval = error{
     nei_error,
     unknownMove_error,
     timeout_error,
+    match_error,
 };
 
 const matchResult = struct {
@@ -93,7 +94,6 @@ const matchResultContainer = struct {
         switch (match.status) {
             .Continue, .Error => {
                 std.debug.print("[PANIC] bad status found: {}\n", .{match.status});
-                @panic("???");
             },
             .CheckMate => {
                 p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
@@ -259,10 +259,9 @@ const matchStatus = struct {
         }
         return true;
     }
-    pub fn turnComplete(p_self: *matchStatus, alloc: std.mem.Allocator) !void {
+    pub fn turnComplete(p_self: *matchStatus) !void {
         // turnComplete now before makemove thus whitetomove()
         var p = &p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())];
-        _ = alloc;
         p.timeTakenCum += p_self.turnSW.timeSinceStartMs();
         p.movesMade += 1;
         p.time -= p_self.turnSW.timeSinceStartMs();
@@ -550,7 +549,6 @@ const guiState = struct {
             fileName = try std.fmt.allocPrint(self.alloc, "logs/logs_{d}.txt", .{std.Io.Timestamp.now(mainl.getGlobalIo(), .real)});
         }
         defer self.alloc.free(fileName);
-        //const file = try std.fs.cwd().createFile(fileName, .{ .read = true });
         const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), fileName, .{ .read = true });
         defer file.close(mainl.getGlobalIo());
 
@@ -581,7 +579,6 @@ const guiState = struct {
         p_self.status.closing = true;
         std.debug.print("[CLOSE] saving logs to log file\n", .{});
 
-        p_self.match.status = .Error;
         p_self.saveLog() catch |err| {
             std.debug.print("[CLOSE] error while saving: {}\n", .{err});
         };
@@ -596,7 +593,7 @@ const guiState = struct {
         p_self.free();
     }
     pub fn crash(p_self: *guiState) noreturn {
-        std.debug.print("[CRASH] crashing this gui, with no survivors\n", .{});
+        std.log.err("[CRASH] crashing this gui, with no survivors\n", .{});
         p_self.close();
         std.process.exit(1);
     }
@@ -708,24 +705,24 @@ const guiState = struct {
     }
     fn setDebugMode(p_self: *guiState, flag: bool) !void {
         p_self.status.debugMode = flag;
-        if (flag) {
-            try p_self.respondAll("debug on");
-        } else {
-            try p_self.respondAll("debug off");
-        }
     }
 
     fn waitEngine(p_self: *guiState) !void {
+        try p_self.appendLog("Entering waitEngine\n");
         const p_player = p_self.getCurrentPlayer();
         const p_engine = p_self.getCurrentEngine();
         p_engine.ready = false;
-        const timeout = p_self.config.match.timeF.time;
         var sw: timel.stopWatch = .{};
         sw.startTimeTick();
-        try p_self.respond("isready", p_player.engineUsed);
+        const heartBeatUs = 10_000; // every 10 ms retry
+        var timer: timel.timer = .init(heartBeatUs);
         while (!p_engine.isReady()) {
             try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
-            if (sw.timeSinceStartMs() > timeout) {
+            if (timer.tick()) {
+                try p_self.respond("isready", p_player.engineUsed);
+            }
+            if (sw.timeSinceStartMs() > configl.EVALUTATION_TIMEOUT_ERROR_MS) {
+                std.log.err("[ERROR] timeout error after {d} s\n", .{configl.EVALUTATION_TIMEOUT_ERROR_MS});
                 return err_eval.timeout_error;
             }
         }
@@ -763,18 +760,18 @@ const guiState = struct {
         // bug fixed with this:
         try p_self.waitEngine();
     }
-    pub fn setPlayerEngine(p_self: *guiState, white: bool, engineIndex: u8) void {
+    pub inline fn setPlayerEngine(p_self: *guiState, white: bool, engineIndex: u8) void {
         p_self.match.playerInv[@intFromBool(white)].engineUsed = engineIndex;
     }
     pub inline fn getCurrentPlayer(self: *guiState) *player {
         return &self.match.playerInv[@intFromBool(self.match.chessState.whiteToMove())];
     }
 
-    pub fn getCurrentEngine(self: *guiState) *engine_info {
+    pub inline fn getCurrentEngine(self: *guiState) *engine_info {
         const p = self.getCurrentPlayer();
         return self.engineInventory.items.items[p.engineUsed];
     }
-    pub fn allPlayersConnected(self: *guiState) bool {
+    pub inline fn allPlayersConnected(self: *guiState) bool {
         return self.engineInventory.items.items[self.match.playerInv[0].engineUsed].alive and self.engineInventory.items.items[self.match.playerInv[1].engineUsed].alive;
     }
     pub fn executeBestMove(p_self: *guiState, cmdBuffer: []const u8) err_eval!bool {
@@ -850,11 +847,11 @@ fn getGuiCmdType(cmd: []const u8) e_guiCmd {
 }
 
 fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u8) !void {
-    if (p_self.status.debugMode) {
-        try p_self.respond("debug on", engineIndex);
-    } else {
-        try p_self.respond("debug off", engineIndex);
-    }
+    //if (p_self.status.debugMode) {
+    //    try p_self.respond("debug on", engineIndex);
+    //} else {
+    //    try p_self.respond("debug off", engineIndex);
+    //}
     for (options.items) |opt| {
         try p_self.respond(opt._slice(), engineIndex);
     }
@@ -896,7 +893,9 @@ fn mainGuiThread(p_self: *guiState) !void {
 
             p_self.match.chessState = currState.copy();
         }
-        try matchRoutine(p_self);
+        matchRoutine(p_self) catch {
+            break;
+        };
         chessl.print_boardstate(&p_self.match.chessState);
         matchCount += 1;
         try record.addOutCome(p_self.alloc, &p_self.match);
@@ -932,7 +931,9 @@ fn matchRoutine(p_self: *guiState) !void {
             p_self.match.nextTurnTrigger = false;
             const stat = try onNextTurnTrigger(p_self);
             if (!stat) {
-                break;
+                std.debug.print("[ERROR] matchRoutine: err match status {}\n", .{p_self.match.status});
+                chessl.print_boardstate(&p_self.match.chessState);
+                return err_eval.match_error;
             }
             p_self.match.positionUpdated = true;
         }
@@ -975,7 +976,7 @@ fn onNextTurnTrigger(p_self: *guiState) !bool {
     if (p_self.status.debugMode) {
         std.debug.print("onNextTurnTrigger: next turn trigger received \n", .{});
     }
-    try p_self.match.turnComplete(p_self.alloc);
+    try p_self.match.turnComplete();
 
     p_self.match.chessState.makeMove(p_self.match.nextTurn_move);
     p_self.match.availableMoves = move_genl.generateLegalMoves(&p_self.match.chessState);
@@ -1072,7 +1073,7 @@ const configMatch = struct {
             p_self.openingBookPath.free(alloc);
         }
         if (!filel.fileExists(path)) {
-            return stringl.string_err.itemNotFound_error;
+            return filel.file_err.fileNotFound_error;
         }
         p_self.openingBookPathProvided = true;
         p_self.openingBookPath = try string.initFromSlice(alloc, path);

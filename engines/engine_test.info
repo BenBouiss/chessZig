@@ -1,27 +1,29 @@
 [engine1]
-path="engines/bin/engine_19_05_26";
-name="prev";
+path="engines/bin/engine_23_05_26";
+name="1";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
+//"setoption name usefutility value true";
+//"setoption name userazoring value true";
 
 [engine2]
 path="engines/bin/engine_23_05_26";
-name="next";
+name="2";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
 
 
 [match]
-nMatch=128;
-playerSwitch=true;
+nMatch=100;
+playerSwitch=false;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
 timeFormat=(5000, 0);
 logsLocation="out/logs/evaluate";
 saveLogs=false;
-printToScreen=false;
+printToScreen=true;
 
-//sprtmode=true;
+sprtmode=false;
 //maxSPRTMatch=100;
 

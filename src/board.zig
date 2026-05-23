@@ -823,10 +823,10 @@ pub const boardState = struct {
         return self.get_piece(move.getTo());
     }
     pub inline fn getPhase(self: *const boardState) usize {
-        //var ret: heuristicl.scoreType = @intCast(heuristicl.totalPhase);
-        //ret -= @intCast(self.frame.phase);
-        //return @intCast(@max(0, ret));
-        return @intCast(@max(0, heuristicl.computePhase(self)));
+        var ret: heuristicl.scoreType = @intCast(heuristicl.totalPhase);
+        ret -= @intCast(self.frame.phase);
+        return @intCast(@max(0, ret));
+        //return @intCast(@max(0, heuristicl.computePhase(self)));
     }
     pub fn isEndGame(self: *const boardState) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);

@@ -156,7 +156,6 @@ pub const engineStatus = struct {
     running: bool = false,
     benchmarking: bool = false,
     debugMode: bool = false,
-    positionProvided: bool = false,
     initializedInternals: bool = false,
 };
 pub const engineIdentification = struct {
@@ -241,20 +240,22 @@ pub const logging = struct {
     }
     pub fn free(self: *logging, alloc: std.mem.Allocator) void {
         self.lock.acquireLock();
-        defer self.lock.releaseLock();
         for (0..self._logs.items.len) |i| {
             alloc.free(self._logs.items[i]);
         }
         self._logs.deinit(alloc);
         self.freed = true;
+        self.lock.releaseLock();
     }
     pub fn append(self: *logging, alloc: std.mem.Allocator, msg: []u8) !void {
         self.lock.acquireLock();
-        defer self.lock.releaseLock();
         if (self.freed) {
+            self.lock.releaseLock();
+            std.debug.print("[DEBUG] logging.append: appending to freed logging, early return", .{});
             return;
         }
         try self._logs.append(alloc, msg);
+        self.lock.releaseLock();
     }
 };
 
@@ -294,6 +295,7 @@ pub const engine = struct {
 
         ret.uciMode = false;
         try ret.initOptions();
+        ret.state = try chess.getBoardFromFen(chess.DEFAULT_FEN);
 
         return ret;
     }
@@ -456,10 +458,8 @@ pub const engine = struct {
                 };
             },
             .GO => {
-                if (!p_self.status.positionProvided or p_self.searcher.searching) {
-                    if (p_self.status.debugMode) {
-                        std.debug.print("[DEBUG]uci_executeCmd: failed go cmd, position not provided or searcher still searching\n", .{});
-                    }
+                if (p_self.searcher.searching) {
+                    if (p_self.status.debugMode) {}
                     return false;
                 }
                 if (!p_self.status.initializedInternals) {
@@ -505,11 +505,8 @@ pub const engine = struct {
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINT => {
-                if (p_self.status.positionProvided) {
-                    chess.print_boardstate(&p_self.state);
-                    return true;
-                }
-                return false;
+                chess.print_boardstate(&p_self.state);
+                return true;
             },
         }
         return true;
@@ -624,7 +621,6 @@ pub const engine = struct {
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
-        p_self.status.positionProvided = false;
         p_self.refreshInternals();
         return true;
     }
@@ -849,7 +845,6 @@ pub const engine = struct {
         } else {
             return false;
         }
-        p_self.status.positionProvided = true;
         return true;
     }
     pub fn setFen(p_self: *engine, fen: []const u8) void {
@@ -915,7 +910,6 @@ pub const engine = struct {
         var goArg = parseGoCmd(&tokens);
 
         p_self.searcher.reset();
-        p_self.status.positionProvided = false;
 
         if (goArg.depth == 0) {
             if (p_self.status.debugMode) {
@@ -1123,7 +1117,7 @@ fn inputThreading(p_self: *engine) void {
                 schedulerl.waitingRoomOneShot(p_self) catch {};
             }
         }
-        std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.ENGINE_SERVING_TICKRATE_NS) }, .real) catch unreachable;
+        std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real) catch unreachable;
     }
 
     if (p_self.status.debugMode) {

@@ -98,7 +98,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
         useLMR = true;
     }
-    if (p_features.useRazoring) {
+    if (p_features.useRazoring and !ischeck) {
         //https://www.chessprogramming.org/Razoring limited razoring
         //const eval = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin[2];
         //if (_depth == 3 and eval <= _alpha and p_state.getBigPieceCount(!p_state.whiteToMove()) > 3) {

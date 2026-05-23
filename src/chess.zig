@@ -657,6 +657,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.b.turnCount, p_board_state.moveHistory.len, moves.len });
+    //moves.print();
     printBoardValidity(p_board_state);
     if (p_board_state.b.turnCount > 0) {
         std.debug.print("Previous move: {s}\n", .{p_board_state.frame.lastMove.getStr()});
@@ -1071,9 +1072,10 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
     const n: u64 = if (comptime white) p_board.getPieceBB(.nBlackKnight) else p_board.getPieceBB(.nWhiteKnight);
     const p: u64 = if (comptime white) p_board.getPieceBB(.nBlackPawn) else p_board.getPieceBB(.nWhitePawn);
     const king_E = if (comptime white) p_board.b.wKingSq else p_board.b.bKingSq;
+    const occ = p_board.b.occupiedBB();
 
-    const cachedBishAtt = getBishopAttacks(p_board.b.occupiedBB(), king_E);
-    const cachedRookAtt = getRookAttacks(p_board.b.occupiedBB(), king_E);
+    const cachedBishAtt = getBishopAttacks(occ, king_E);
+    const cachedRookAtt = getRookAttacks(occ, king_E);
     var directChecks = (cachedBishAtt & bq) | (cachedRookAtt & rq);
     var _check = directChecks;
     while (_check != EMPTY) {
@@ -1088,7 +1090,7 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
         @panic(":)");
     } else {
         var pinned: u64 = 0;
-        const rBlockers = (p_board.b.occupiedBB() & cachedRookAtt) ^ p_board.b.occupiedBB();
+        const rBlockers = (occ & cachedRookAtt) ^ occ;
         var pinner = (cachedRookAtt ^ getRookAttacks(rBlockers, king_E)) & rq;
         while (pinner != EMPTY) {
             const pinsq = bitscan(pinner);
@@ -1096,7 +1098,7 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
             pinned |= inBetween(@enumFromInt(pinsq), king_E);
         }
 
-        const bBlockers = (p_board.b.occupiedBB() & cachedBishAtt) ^ p_board.b.occupiedBB();
+        const bBlockers = (occ & cachedBishAtt) ^ occ;
         pinner = (cachedBishAtt ^ getBishopAttacks(bBlockers, king_E)) & bq;
         while (pinner != EMPTY) {
             const pinsq = bitscan(pinner);
