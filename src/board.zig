@@ -26,6 +26,7 @@ pub const board = struct {
     wKingSq: e_square = .a1,
     bKingSq: e_square = .a1,
     turnCount: u16 = 0,
+    _whiteToMove: bool = false,
 
     info: *boardFrame = undefined,
 
@@ -127,13 +128,15 @@ pub const board = struct {
         return chessl.popcount(self.c_occupiedBB[@intFromEnum(color)]);
     }
     pub inline fn invertTurn(self: *board) void {
-        self.info.stat.invertTurn();
+        self._whiteToMove = !self._whiteToMove;
     }
     pub inline fn nextTurn(self: *board) void {
         self.turnCount += 1;
+        self.invertTurn();
     }
     pub inline fn undoTurn(self: *board) void {
         self.turnCount -= 1;
+        self.invertTurn();
     }
 
     pub inline fn getCapturePiece(self: board, move: IMove) e_piece {
@@ -249,7 +252,8 @@ pub const boardState = struct {
         return p_self.*;
     }
     pub inline fn whiteToMove(self: *const boardState) bool {
-        return self.frame.stat.whiteToMove();
+        return self.b._whiteToMove;
+        //return self.frame.stat.whiteToMove();
     }
     pub inline fn makeFrame(self: *const boardState) boardFrame {
         return self.frame;
@@ -366,20 +370,6 @@ pub const boardState = struct {
         return p_self.b.pieceArray[sq];
     }
 
-    pub inline fn invertTurn(p_self: *boardState) void {
-        p_self.frame.stat.invertTurn();
-    }
-
-    pub inline fn next_turn(p_self: *boardState) void {
-        p_self.invertTurn();
-        p_self.b.turnCount += 1;
-    }
-
-    pub inline fn undo_turn(p_self: *boardState) void {
-        p_self.invertTurn();
-        p_self.b.turnCount -= 1;
-    }
-
     //pub fn placePiece(p_self: *boardState, piece: e_piece, square: e_square) bool {
     //    p_self.b.placePiece(piece, @intFromEnum(square));
     //    return true;
@@ -430,13 +420,13 @@ pub const boardState = struct {
         } else {
             undoMoveQuiet_cst(p_self, move, white);
         }
+        p_self.b.undoTurn();
     }
     pub fn undoMoveCapture_cst(p_self: *boardState, move: IMove, comptime white: bool) void {
         // test to reduce the undoMove load
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
-        p_self.b.undoTurn();
         const victim = p_self.frame.victim;
         const toSq: u8 = move.getTo();
         const toBB = chessl.xToBitboard(toSq);
@@ -492,7 +482,6 @@ pub const boardState = struct {
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
-        p_self.b.undoTurn();
 
         const toSq: u8 = move.getTo();
         const toBB = chessl.xToBitboard(toSq);
@@ -539,7 +528,7 @@ pub const boardState = struct {
     }
 
     pub inline fn undoNullMove(p_self: *boardState) void {
-        p_self.b.turnCount -= 1;
+        p_self.b.undoTurn();
     }
 
     pub inline fn makeNullMove(p_self: *boardState) void {
@@ -548,6 +537,7 @@ pub const boardState = struct {
         } else {
             p_self.makeNullMove_cst(false);
         }
+        p_self.b.nextTurn();
     }
     pub fn makeNullMove_cst(p_self: *boardState, comptime white: bool) void {
         p_self.frame.lastMove = .{};
@@ -559,8 +549,6 @@ pub const boardState = struct {
         p_self.frame.enPassantIdx = 0;
         p_self.frame.halfMoveClock = 0;
 
-        p_self.invertTurn();
-        p_self.b.turnCount += 1;
         if (comptime useStaged) {
             chessl.onMoveStaged(p_self, !white);
         }
@@ -600,6 +588,7 @@ pub const boardState = struct {
         } else {
             p_self.makeMoveQuiet_cst(move, white);
         }
+        p_self.b.nextTurn();
     }
     pub fn generalMakeMove(p_self: *boardState, move: IMove, comptime white: bool, comptime t: typel.e_moveType) void {
         if (comptime useDebug) {
@@ -665,9 +654,6 @@ pub const boardState = struct {
         } else {
             p_self.frame.halfMoveClock += 1;
         }
-
-        p_self.invertTurn();
-        p_self.b.nextTurn();
 
         p_self.frame.key = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame);
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
@@ -740,8 +726,6 @@ pub const boardState = struct {
         p_self.b.pieceBB[@intFromEnum(victim)] &= p_self.b.c_occupiedBB[@intFromBool(!white)];
         p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame);
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
-        p_self.invertTurn();
-        p_self.b.nextTurn();
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
@@ -811,8 +795,6 @@ pub const boardState = struct {
             p_self.frame.stat.onRookMove(fromBB, white);
         }
 
-        p_self.invertTurn();
-        p_self.b.nextTurn();
         p_self.b.pieceArray[to] = toPiece;
         p_self.b.pieceBB[@intFromEnum(toPiece)] ^= toBB;
 

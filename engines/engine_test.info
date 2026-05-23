@@ -1,16 +1,14 @@
 [engine1]
-path="engines/bin/engine_23_05_26";
-name="std";
+path="engines/bin/engine_19_05_26";
+name="prev";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
 
 [engine2]
 path="engines/bin/engine_23_05_26";
-name="mix - futility rook value";
+name="next";
 "setoption name useHash value false";
 "setoption name reportProgress value false";
-"setoption name usefutility value true";
-"setoption name userazoring value true";
 
 
 [match]
@@ -24,6 +22,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=true;
+//sprtmode=true;
 //maxSPRTMatch=100;
 

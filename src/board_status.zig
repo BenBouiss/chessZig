@@ -21,32 +21,24 @@ pub const bCastleQRookBit: u64 = 0x900000000000000;
 
 pub const e_turn = enum(u2) { BLACK = 0, WHITE = 1 };
 
-const whiteToMoveMask: u8 = 0x1;
-const WCastlingKMask: u8 = 0x2;
-const WCastlingQMask: u8 = 0x4;
-const WCastlingMask: u8 = 0x6;
+const WCastlingKMask: u8 = 0x1;
+const WCastlingQMask: u8 = 0x2;
+const WCastlingMask: u8 = 0x3;
 
-const BCastlingKMask: u8 = 0x8;
-const BCastlingQMask: u8 = 0x10;
-const BCastlingMask: u8 = 0x18;
+const BCastlingKMask: u8 = 0x4;
+const BCastlingQMask: u8 = 0x8;
+const BCastlingMask: u8 = 0xC;
 
-const AllCastlingMask: u8 = 0x1E;
+const AllCastlingMask: u8 = 0xF;
 //offset size
-//0  1 bit whiteToMove
 //1  1 bit WCastlingK
 //2  1 bit WCastlingQ
 //3  1 bit BCastlingK
 //4  1 bit BCastlingQ
 pub const status = struct {
-    val: u8 = 0x1,
-    pub inline fn init(whiteMove: bool, b_WCastlingK: bool, b_WCastlingQ: bool, b_BCastlingK: bool, b_BCastlingQ: bool) status {
-        return .{ .val = @as(u8, @intFromBool(whiteMove)) | (@as(u8, @intFromBool(b_WCastlingK)) << 1) | (@as(u8, @intFromBool(b_WCastlingQ)) << 2) | (@as(u8, @intFromBool(b_BCastlingK)) << 3) | (@as(u8, @intFromBool(b_BCastlingQ)) << 4) };
-    }
-    pub inline fn whiteToMove(self: status) bool {
-        return (self.val & whiteToMoveMask) != 0;
-    }
-    pub inline fn invertTurn(self: *status) void {
-        self.val ^= whiteToMoveMask;
+    val: u8 = 0,
+    pub inline fn init(b_WCastlingK: bool, b_WCastlingQ: bool, b_BCastlingK: bool, b_BCastlingQ: bool) status {
+        return .{ .val = (@as(u8, @intFromBool(b_WCastlingK))) | (@as(u8, @intFromBool(b_WCastlingQ)) << 1) | (@as(u8, @intFromBool(b_BCastlingK)) << 2) | (@as(u8, @intFromBool(b_BCastlingQ)) << 3) };
     }
     pub inline fn WCastlingK(self: status) bool {
         return (self.val & WCastlingKMask) != 0;
@@ -61,25 +53,21 @@ pub const status = struct {
         return (self.val & BCastlingQMask) != 0;
     }
 
-    pub inline fn setTurn(self: *status, white: bool) void {
-        self.val &= (~whiteToMoveMask);
-        self.val |= @intFromBool(white);
-    }
     pub inline fn setWCastlingK(self: *status, b_castling: bool) void {
         self.val &= (~WCastlingKMask);
-        self.val |= @as(u8, @intFromBool(b_castling)) << 1;
+        self.val |= @as(u8, @intFromBool(b_castling));
     }
     pub inline fn setWCastlingQ(self: *status, b_castling: bool) void {
         self.val &= (~WCastlingQMask);
-        self.val |= @as(u8, @intFromBool(b_castling)) << 2;
+        self.val |= @as(u8, @intFromBool(b_castling)) << 1;
     }
     pub inline fn setBCastlingK(self: *status, b_castling: bool) void {
         self.val &= (~BCastlingKMask);
-        self.val |= @as(u8, @intFromBool(b_castling)) << 3;
+        self.val |= @as(u8, @intFromBool(b_castling)) << 2;
     }
     pub inline fn setBCastlingQ(self: *status, b_castling: bool) void {
         self.val &= (~BCastlingQMask);
-        self.val |= @as(u8, @intFromBool(b_castling)) << 4;
+        self.val |= @as(u8, @intFromBool(b_castling)) << 3;
     }
 
     pub inline fn canCastle(self: status, comptime whiteMove: bool) bool {
@@ -126,25 +114,25 @@ pub const status = struct {
     pub fn onRookMoveN(self: status, rooks: u64, comptime white: bool) status {
         if (comptime white) {
             if (isLeftRook(rooks)) {
-                return .{ .val = self.val & (~(WCastlingQMask | 1)) };
+                return .{ .val = self.val & (~WCastlingQMask) };
             } else if (isRightRook(rooks)) {
-                return .{ .val = self.val & (~(WCastlingKMask | 1)) };
+                return .{ .val = self.val & (~WCastlingKMask) };
             } else {
-                return .{ .val = self.val & (~@as(u8, 1)) };
+                return .{ .val = self.val };
             }
         } else {
             if (isLeftRook(rooks)) {
-                return .{ .val = 1 | (self.val & (~(BCastlingQMask))) };
+                return .{(self.val & (~BCastlingQMask))};
             } else if (isRightRook(rooks)) {
-                return .{ .val = 1 | (self.val & (~(BCastlingKMask))) };
+                return .{(self.val & (~BCastlingKMask))};
             } else {
-                return .{ .val = 1 | self.val };
+                return .{ .val = self.val };
             }
         }
     }
 
     pub inline fn castlingKey(self: status) u8 {
-        return (self.val & AllCastlingMask) >> 1;
+        return (self.val & AllCastlingMask);
     }
 };
 pub inline fn isLeftRook(rook: u64) bool {

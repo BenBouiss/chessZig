@@ -309,9 +309,9 @@ pub fn getBoardFromFen_turn(p_state: *boardl.boardState, turnToken: []const u8) 
     }
     const turnLetter = utils.lowerLetter(turnToken[0]);
     if (turnLetter == 'w') {
-        p_state.frame.stat.setTurn(true);
+        p_state.b._whiteToMove = true;
     } else if (turnLetter == 'b') {
-        p_state.frame.stat.setTurn(false);
+        p_state.b._whiteToMove = false;
     } else {
         std.debug.print("[PANIC] getBoardFromFen_turn: turn letter found: letter: {c} token: {s}\n", .{ turnLetter, turnToken });
         @panic("Unknown turn found");
@@ -322,7 +322,7 @@ pub fn getBoardFromFen_turn(p_state: *boardl.boardState, turnToken: []const u8) 
 pub fn getBoardFromFen_castle(p_state: *boardl.boardState, turnToken: []const u8) bool {
     std.debug.assert(turnToken.len != 0);
     if (turnToken[0] == '-') {
-        p_state.frame.stat = .init(p_state.whiteToMove(), false, false, false, false);
+        p_state.frame.stat = .init(false, false, false, false);
     } else {
         for (0..turnToken.len) |i| {
             const letter = turnToken[i];
