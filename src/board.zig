@@ -841,6 +841,13 @@ pub const boardState = struct {
     pub inline fn getPieceBB(self: boardState, piece: e_piece) u64 {
         return self.b.pieceBB[@intFromEnum(piece)];
     }
+    pub inline fn getTotalPieceCount(self: *const boardState, white: bool) i8 {
+        // putting inline in front of this causes the razoring in zws to segfault even if the razoring is not used ???
+        if (white) {
+            return self.getPieceCount(.nWhitePawn) + self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
+        }
+        return self.getPieceCount(.nBlackPawn) + self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
+    }
 
     pub fn getBigPieceCount(self: *const boardState, white: bool) i8 {
         // putting inline in front of this causes the razoring in zws to segfault even if the razoring is not used ???

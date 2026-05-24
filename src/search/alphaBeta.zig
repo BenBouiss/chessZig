@@ -56,15 +56,13 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
     p_info.searchStat.n_nodeExplored += 1;
     if (p_features.useQuiescence) {
         const ischeck = p_state.isChecked();
-        if (p_state.getLastMove().isCapture() or ischeck) {
-            // perform quiesc
-            const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, pv, prevLine, t);
-            if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
-                _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
-            }
-            return score;
+        // perform quiesc
+        const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, pv, prevLine, t);
+        if (p_features.useHash) {
+            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
+            _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
         }
+        return score;
     }
 
     const score = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, p_state.whiteToMove());

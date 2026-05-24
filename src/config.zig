@@ -67,11 +67,14 @@ pub const _DEFAULT_LATE_MOVE_REDUCTION = "true";
 pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 
-pub const DEFAULT_USE_FUTILITY = false;
-pub const _DEFAULT_USE_FUTILITY = "false";
+pub const DEFAULT_USE_FUTILITY = true;
+pub const _DEFAULT_USE_FUTILITY = "true";
 
 pub const DEFAULT_USE_RAZORING = false;
 pub const _DEFAULT_USE_RAZORING = "false";
+
+pub const DEFAULT_USE_RFP = false;
+pub const _DEFAULT_USE_RFP = "false";
 
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;

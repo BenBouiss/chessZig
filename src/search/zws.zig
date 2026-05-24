@@ -21,7 +21,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         pv.setLen(ply);
     }
     var _alpha = alpha;
-    const _depth = depth;
+    var _depth = depth;
     const white: bool = p_state.whiteToMove();
 
     if (p_state.isStaleMateRepetition()) {
@@ -32,6 +32,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var bestMove: IMove = .{};
     var hashMove: IMove = .{};
     var hashFlag: hashl.nodeType = .UPPER;
+    const skipQuietMoves: bool = false;
     if (p_features.useHash and depth > 2) {
         const entry = hashl.getEntryFromMatch(p_state.frame.key, @intCast(_depth));
         if (entry) |_entry| {
@@ -98,54 +99,61 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
         useLMR = true;
     }
-    if (p_features.useRazoring and !ischeck) {
-        //https://www.chessprogramming.org/Razoring limited razoring
-        //const eval = heuristicl.materialImbalance(p_state, &heuristicl.globalHeuristic) + heuristicl.futilityMargin[2];
-        //if (_depth == 3 and eval <= _alpha and p_state.getBigPieceCount(!p_state.whiteToMove()) > 3) {
-        //    _depth = 2;
-        //}
-        // check are we deep enough, standard impl 2 or 3, deep = 4
-        // do qsearch check value < low val
-        // return value
-
-        if (depth <= 3 and depth != 1 and comptime t == .NonPV) {
-            const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, ply, ischeck, pv, prevLine, .NonPV);
-            if (val < _alpha) {
-                return val;
-            }
-        }
-    }
     //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
     var canFutility: bool = false;
     var futilityScore: scoreType = 0;
     if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and _depth == 1 and comptime t == .NonPV) {
-        futilityScore = heuristicl.materialImbalanceSigned(p_state, &heuristicl.globalHeuristic, white) + heuristicl.futilityMargin;
+        futilityScore = heuristicl.c_materialImbalance(p_state, &heuristicl.globalHeuristic, white) + heuristicl.futilityMargin;
         canFutility = true;
     }
+
     //if (p_features.useFutility and comptime t == .NonPV) {
     //    if (!ischeck and @abs(alpha) < weightl.simpleCheckMateScore and heuristicl.sideCountScore(p_state, white, &heuristicl.globalHeuristic) > heuristicl.globalHeuristic.RookValue and depth <= 2) {
     //        const static_eval = heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
     //        canFutility = (static_eval + heuristicl.futilityMargin[depth]) < _alpha;
     //    }
     //}
+    if (!ischeck and comptime t == .NonPV) {
+        //https://www.chessprogramming.org/Razoring limited razoring
+        if (p_features.useRFP and _depth == 2) {
+            const eval = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, white);
+            if (eval >= (beta + 300)) {
+                return (eval + beta) >> 1;
+            }
+        }
+        if (p_features.useRazoring) {
+            const eval = heuristicl.c_materialImbalance(p_state, &heuristicl.globalHeuristic, white);
+            if (_depth == 3 and (eval + 600) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
+                _depth = 2;
+            }
+        }
+
+        // check are we deep enough, standard impl 2 or 3, deep = 4
+        // do qsearch check value < low val
+        // return value
+
+        //if (depth <= 3 and depth != 1 and comptime t == .NonPV) {
+        //    const val = alphaBetal.quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha - 1, _alpha, ply, ischeck, pv, prevLine, .NonPV);
+        //    if (val < _alpha) {
+        //        return val;
+        //    }
+        //}
+    }
 
     var i: usize = 0;
     var tot: usize = 0;
-    var captureOnly: bool = true;
 
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
         order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, hashMove, _depth);
-        captureOnly = false;
         if (useLMR) {
             heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
         }
     }
     var i_reset: bool = false;
     while (gen.pickNext(&order)) |move| : (i += 1) {
-        if (i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
+        if (!skipQuietMoves and i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
-            captureOnly = false;
             order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, prevLine, hashMove, _depth);
 
             if (useLMR) {
@@ -184,7 +192,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             }
 
             //https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html
-            //if (score > _alpha and score < beta) {
             if (score > _alpha and comptime t == .PV) {
                 score = -searchLoop(p_state, p_info, p_features, pv, prevLine, _depth - 1, ply + 1, -beta, -_alpha, .PV);
             }
@@ -206,13 +213,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             if (comptime t == .PV) {
                 pv.onBestMove(move, ply);
             }
-            if (!captureOnly) {
+            if (!(gen.extra == .CAPTURES)) {
                 heuristicl.updateHistoryHeurist(white, move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(_depth));
             }
         }
         if (_alpha >= beta) {
             // save here the killer moves
-            if (!captureOnly) {
+            if (!(gen.extra == .CAPTURES)) {
                 heuristicl.onKillerMove(move, ply);
             }
 
