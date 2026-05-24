@@ -1190,7 +1190,7 @@ pub fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) voi
     //const add = @divFloor(mulScoreType(historyHeuristic[turnIdx][from][to], @as(scoreType, @intCast(@abs(_bonus)))), configl.MAX_HIST_HEURISTIC_VALUE);
     //historyHeuristic[turnIdx][from][to] += _bonus - @as(scoreType, @intCast(add));
     //historyHeuristic[turnIdx][from][to] = @min(historyHeuristic[turnIdx][from][to], configl.MAX_HIST_HEURISTIC_VALUE);
-    const _bonus = @max(-configl.MAX_HIST_HEURISTIC_VALUE, @min(configl.MAX_HIST_HEURISTIC_VALUE, bonus));
+    const _bonus = std.math.clamp(bonus, -configl.MAX_HIST_HEURISTIC_VALUE, configl.MAX_HIST_HEURISTIC_VALUE);
     const turnIdx = @intFromBool(white);
     historyHeuristic[turnIdx][from][to] += _bonus - @divFloor(historyHeuristic[turnIdx][from][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
 }

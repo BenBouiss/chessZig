@@ -864,6 +864,31 @@ pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
         },
     }
 }
+pub fn e_pieceTo_e_pieceType(piece: e_piece) typel.e_pieceType {
+    switch (piece) {
+        .nEmptySquare, .nWhite, .nBlack => {
+            @panic("Incorrect piece found");
+        },
+        .nWhiteKing, .nBlackKing => {
+            return .KING;
+        },
+        .nWhitePawn, .nBlackPawn => {
+            return .PAWN;
+        },
+        .nWhiteBishop, .nBlackBishop => {
+            return .BISHOP;
+        },
+        .nWhiteKnight, .nBlackKnight => {
+            return .KNIGHT;
+        },
+        .nWhiteRook, .nBlackRook => {
+            return .ROOK;
+        },
+        .nWhiteQueen, .nBlackQueen => {
+            return .QUEEN;
+        },
+    }
+}
 
 pub inline fn xrayRookAttacks(occ: u64, blockers: u64, rookSq: e_square) u64 {
     const attacks = getRookAttacks(occ, rookSq);
