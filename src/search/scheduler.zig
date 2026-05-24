@@ -263,11 +263,12 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
         depth = maxDepth;
     }
     var line: movel.line = .{};
+    var ss: alphaBetal.searchStack = .{};
     if (sched.isDebugMode()) {
         std.debug.print("[DEBUG] _startSearch: starting from depth {d} max depth {d} remaining time {d} ms\n", .{ depth, maxDepth, sched.timeM.remainingTimeMs });
     }
 
-    _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line);
+    _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line, &ss);
     var decision = &p_info.currentBest;
     if (features.reportProgress) {
         sendPartial(sched, depth, decision, p_info);
@@ -279,7 +280,7 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
             std.debug.print("[DEBUG] _startSearch: starting line ", .{});
             line.print();
         }
-        _ = (alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line));
+        _ = (alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line, &ss));
         line.copyFromLine(&p_info.currentBest.line);
         decision = &p_info.currentBest;
         if (features.reportProgress) {

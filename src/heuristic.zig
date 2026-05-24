@@ -10,6 +10,7 @@ const weightl = @import("weights.zig");
 const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const movel = @import("move.zig");
+const typel = @import("type.zig");
 const schedulerl = @import("search/scheduler.zig");
 const alphaBetal = @import("search/alphaBeta.zig");
 const threadingl = @import("search/threading.zig");
@@ -35,27 +36,27 @@ pub fn evaluate(p_state: *const boardl.boardState, values: *const heuristicValue
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
-    var score: scoreType = 0;
+    var ret: scoreType = 0;
     const phase: scoreType = @intCast(p_state.getPhase());
     const _phase: scoreType = @divFloor((phase >> 8) + (totalPhase >> 1), totalPhase);
 
-    score += evaluate_PSQT(p_state, values, _phase);
+    ret += evaluate_PSQT(p_state, values, _phase);
 
-    score += evaluate_mobility(&whiteMoveBB, &blackMoveBB, values, _phase);
-    score += evaluate_king(p_state, values, _phase);
+    ret += evaluate_mobility(&whiteMoveBB, &blackMoveBB, values, _phase);
+    ret += evaluate_king(p_state, values, _phase);
 
-    score += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
-    score += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
-    score += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
-    score += evaluate_pawnStructure(p_state, values, _phase);
+    ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
+    ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
+    ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
+    ret += evaluate_pawnStructure(p_state, values, _phase);
 
-    return score;
+    return ret;
 }
 
 pub inline fn c_evaluate(p_state: *const boardl.boardState, values: *const heuristicValues, white: bool) scoreType {
-    const score = evaluate(p_state, values);
-    if (white) return score;
-    return -score;
+    const ret = evaluate(p_state, values);
+    if (white) return ret;
+    return -ret;
 }
 
 pub const heuristicComponents = struct {
@@ -1248,6 +1249,20 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
     //std.debug.print("[DEBUG] computeLateMoveReduc: LMR new depths: {any}", .{p_order.depths[0..p_order.len]});
     return;
 }
+pub const score = struct {
+    s: scoreType = 0,
+    t: typel.e_scoreType = .NONE,
+    pub inline fn isTerminal(self: score) bool {
+        return self.t == .DRAW or self.t == .MATE;
+    }
+    pub inline fn getScore(self: score) scoreType {
+        return self.s;
+    }
+    pub inline fn invert(self: score) score {
+        return .{ .s = -self.s, .t = self.t };
+    }
+};
+
 pub const moveOrdering = struct {
     indexes: [chess.MAX_POSSIBLE_MOVE]u8 = undefined,
     depths: [chess.MAX_POSSIBLE_MOVE]u16 = undefined,
@@ -1418,15 +1433,15 @@ pub fn lowestAttackDefPiece(p_state: *const boardl.boardState, attDef: u64, whit
     return ret;
 }
 
-pub fn dummyScaling(score: scoreType, phase: scoreType) scoreType {
+pub fn dummyScaling(s: scoreType, phase: scoreType) scoreType {
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
-    return @divFloor((score * (256 - _phase)) + score * _phase, 256);
+    return @divFloor((s * (256 - _phase)) + s * _phase, 256);
 }
 pub fn test_scaling() !void {
     const scoreTest = [_]scoreType{ 0, 100, -100, -500, 500, 1000 };
-    for (scoreTest) |score| {
+    for (scoreTest) |s| {
         for (0..32) |phase| {
-            std.debug.print("{d} ", .{dummyScaling(score, @intCast(phase))});
+            std.debug.print("{d} ", .{dummyScaling(s, @intCast(phase))});
         }
         std.debug.print("\n", .{});
     }
