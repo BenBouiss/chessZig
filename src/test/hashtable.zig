@@ -102,6 +102,7 @@ test "zobrist key consistency" {
     //const alloc = arena_allocator.allocator();
     const alloc = std.heap.page_allocator;
     mainl.initAll(alloc, false);
+    //std.debug.print("key_shift: {d}\n", .{hashl.KEY_SHIFT});
     //
     const path = "opening/8moves_v3.pgn";
     var s = try stringl.string.initFromSlice(alloc, path);
@@ -119,6 +120,7 @@ test "zobrist key consistency" {
         var algeFen = openings.items[i];
 
         _ = try chessl._algebraicLineToIMoveMatch(alloc, &algeFen, &tmp);
+        try std.testing.expectEqual(hashl.fullComputeZobristKeys(&tmp).code, tmp.frame.key.code);
 
         const fen = tmp.get_fen();
 

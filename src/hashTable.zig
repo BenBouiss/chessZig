@@ -19,9 +19,8 @@ pub const Key = struct {
 // will try to implement the chess programming version where way more stuff is stored
 const entryComponents = union { search: searchEntry, perft: perftEntry };
 
-pub const subKeyType = u48;
-
-const KEY_SHIFT = 16;
+pub const subKeyType = u64;
+pub const KEY_SHIFT = 64 - @bitSizeOf(subKeyType);
 pub inline fn keyToUpperKey(key: u64) subKeyType {
     return @intCast(key >> KEY_SHIFT);
 }
@@ -258,7 +257,6 @@ pub const Hash_table = struct {
         ret.closestBit = chess.l_getMsbIdx(total_size);
         ret.size = chess.xToBitboard(ret.closestBit);
         ret.mask = ret.size - 1;
-
         ret.stat.insertion = 0;
 
         ret.entries = (try alloc.alloc(Hash_bucket, ret.size));
@@ -362,20 +360,11 @@ pub const Zobrist_Keys = struct {
         initZobristKeys(rng, &ret);
         return ret;
     }
-    //pub fn free(p_self: *Zobrist_Keys, alloc: std.mem.Allocator) void {
-    //    alloc.destroy(p_self);
-    //}
 };
 
 pub const zobristKeys: Zobrist_Keys = Zobrist_Keys.init(configl.SEED);
 pub var hashTable: Hash_table = .{ .entries = undefined };
 
-//pub fn _initZobrist(alloc: std.mem.Allocator, seed: u64) void {
-//    var rngIntGenerator = std.Random.DefaultPrng.init(seed);
-//    zobristKeys = Zobrist_Keys.init(alloc);
-//    const rng = rngIntGenerator.random();
-//    initZobristKeys(rng);
-//}
 pub fn isHashTable_init() bool {
     return hashTable.initialized;
 }
@@ -427,20 +416,19 @@ pub fn initZobristKeys(rng: std.Random, zob: *Zobrist_Keys) void {
     zob.playKey = zob.turnKey[0];
     zob.playKey.code ^= zob.turnKey[1].code;
 }
-pub fn fullComputeZobristKeys(p_board: *boardl.boardState) Key {
+pub fn fullComputeZobristKeys(p_board: *const boardl.boardState) Key {
     // for better perfs look for incremental xor key update using the previous move
-
     var retKey = zobristKeys.turnKey[@intFromBool(p_board.whiteToMove())];
-    for (0..(chess.N_PIECES_TYPES) * 2) |i| {
-        var bb = p_board.pieceBB[i];
-        while (bb != chess.EMPTY) {
-            const sq: u8 = chess.bitscan(bb);
-            bb &= bb - 1;
-            retKey.code ^= zobristKeys.pieceKeys[i][sq].code;
+
+    for (0..chess.N_SQUARES) |i| {
+        const piece = p_board.getPiece(@intCast(i));
+        if (piece != .nEmptySquare) {
+            retKey.code ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i].code;
         }
     }
-    retKey.code ^= zobristKeys.castlingKeys[p_board.castling].code;
-    retKey.code ^= zobristKeys.enPassantKeys[p_board.enPassantIdx].code;
+
+    retKey.code ^= zobristKeys.castlingKeys[p_board.frame.stat.castlingKey()].code;
+    retKey.code ^= zobristKeys.enPassantKeys[p_board.frame.enPassantIdx].code;
 
     return retKey;
 }

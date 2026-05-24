@@ -139,51 +139,6 @@ pub const board = struct {
         self.invertTurn();
     }
 
-    pub inline fn getCapturePiece(self: board, move: IMove) e_piece {
-        if (move.isEnpassant()) {
-            return chessl.pawnFromColor(!chessl.getColorFromPiece(self.getPiece(move.getFrom())));
-        }
-        return self.getPiece(move.getTo());
-    }
-
-    pub inline fn canKingSideCastle(self: board, comptime white: bool) bool {
-        if (comptime white) {
-            return self.info.stat.canKingsideCastle(white) and (chessl.canMove(.e1, .h1, self.occupiedBB));
-        }
-        return (self.info.stat.canKingsideCastle(white) and (chessl.canMove(.e8, .h8, self.occupiedBB)));
-    }
-    pub inline fn canQueenSideCastle(self: board, comptime white: bool) bool {
-        if (comptime white) {
-            return self.info.stat.canQueensideCastle(true) and (chessl.canMove(.e1, .a1, self.occupiedBB));
-        }
-        return self.info.stat.canQueensideCastle(false) and (chessl.canMove(.e8, .a8, self.occupiedBB));
-    }
-    pub inline fn canKingSideCastleAtt(self: board, white: bool, attackedSquares: u64) bool {
-        if (white) {
-            return self.canKingSideCastle(true) and ((attackedSquares & chessl.inBetween(.e1, .h1)) == chessl.EMPTY);
-        }
-        return self.canKingSideCastle(false) and ((attackedSquares & chessl.inBetween(.e8, .h8)) == chessl.EMPTY);
-    }
-    pub inline fn canQueenSideCastleAtt(self: board, white: bool, attackedSquares: u64) bool {
-        if (white) {
-            return self.canQueenSideCastle(true) and ((attackedSquares & chessl.inBetween(.e1, .b1)) == chessl.EMPTY);
-        }
-        return self.canQueenSideCastle(false) and ((attackedSquares & chessl.inBetween(.e8, .b8)) == chessl.EMPTY);
-    }
-    pub fn isCastleLegalPreMove(p_self: board, white: bool, move: IMove, all_attacks: u64) bool {
-        const kingBB = chessl.xToBitboard(@intFromEnum(p_self.getKingSq(white)));
-        if (move.isKingSideCastle()) {
-            if ((all_attacks & (kingBB | (kingBB << 1) | (kingBB << 2))) != 0) {
-                return false;
-            }
-        } else {
-            if ((all_attacks & (kingBB | (kingBB >> 1) | (kingBB >> 2))) != 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     pub fn printCount(self: board) void {
         std.debug.print("{any}\n", .{self.pieceCount});
     }
@@ -286,7 +241,7 @@ pub const boardState = struct {
                 miscOffset += 1;
                 board_offset -= 16;
             }
-            const piece = self.get_piece(board_offset);
+            const piece = self.getPiece(board_offset);
             if (piece != .nEmptySquare) {
                 if (emptyNumber != 0) {
                     ret[miscOffset] = '0' + emptyNumber;
@@ -366,14 +321,10 @@ pub const boardState = struct {
         }
         return ret;
     }
-    pub inline fn get_piece(p_self: *const boardState, sq: u8) e_piece {
+    pub inline fn getPiece(p_self: *const boardState, sq: u8) e_piece {
         return p_self.b.pieceArray[sq];
     }
 
-    //pub fn placePiece(p_self: *boardState, piece: e_piece, square: e_square) bool {
-    //    p_self.b.placePiece(piece, @intFromEnum(square));
-    //    return true;
-    //}
     pub fn placePiece(p_self: *boardState, piece: e_piece, square: e_square) bool {
         const one_mask: u64 = chessl.sqToBitboard(square);
         if (p_self.b.occupiedBB() & one_mask != 0) {
@@ -405,13 +356,7 @@ pub const boardState = struct {
             _undoMove(p_self, true);
         }
     }
-    pub inline fn undoMoveI(p_self: *boardState) void {
-        if (p_self.whiteToMove()) {
-            _undoMove(p_self, false);
-        } else {
-            _undoMove(p_self, true);
-        }
-    }
+
     pub inline fn _undoMove(p_self: *boardState, comptime white: bool) void {
         p_self.moveHistory.popMoveVoid();
         const move = p_self.frame.lastMove;
@@ -433,7 +378,7 @@ pub const boardState = struct {
         const fromSq: u8 = move.getFrom();
         const fromBB = chessl.xToBitboard(fromSq);
 
-        var piece = p_self.get_piece(toSq);
+        var piece = p_self.getPiece(toSq);
 
         p_self.b.pieceBB[@intFromEnum(piece)] ^= toBB;
         if (move.isPromotion()) {
@@ -488,7 +433,7 @@ pub const boardState = struct {
         const fromSq: u8 = move.getFrom();
         const fromBB = chessl.xToBitboard(fromSq);
 
-        var piece = p_self.get_piece(toSq);
+        var piece = p_self.getPiece(toSq);
 
         p_self.b.pieceBB[@intFromEnum(piece)] ^= toBB;
         if (move.isPromotion()) {
@@ -543,11 +488,12 @@ pub const boardState = struct {
         p_self.frame.lastMove = .{};
         p_self.frame.victim = .nEmptySquare;
         hashl.updateKey(&p_self.frame.key, hashl.zobristKeys.playKey);
-        hashl.updateKey(&p_self.frame.key, hashl.zobristKeys.castlingKeys[p_self.frame.stat.castlingKey()]);
         hashl.updateKey(&p_self.frame.key, hashl.zobristKeys.enPassantKeys[p_self.frame.enPassantIdx]);
 
         p_self.frame.enPassantIdx = 0;
         p_self.frame.halfMoveClock = 0;
+
+        hashl.updateKey(&p_self.frame.key, hashl.zobristKeys.enPassantKeys[0]);
 
         if (comptime useStaged) {
             chessl.onMoveStaged(p_self, !white);
@@ -560,13 +506,7 @@ pub const boardState = struct {
             p_self._makeMove(move, false);
         }
     }
-    pub inline fn makeMoveI(p_self: *boardState, move: IMove) void {
-        if (p_self.whiteToMove()) {
-            p_self._makeMove(move, true);
-        } else {
-            p_self._makeMove(move, false);
-        }
-    }
+
     pub fn _makeMove(p_self: *boardState, move: IMove, comptime white: bool) void {
         //const t = move.getType();
         //switch (t) {
@@ -594,6 +534,9 @@ pub const boardState = struct {
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
+        const prevCastle: u8 = p_self.frame.stat.castlingKey();
+        const prevEp: u8 = p_self.frame.enPassantIdx;
+
         p_self.frame.lastMove = move;
         p_self.frame.enPassantIdx = 0;
         const to = move.getTo();
@@ -655,7 +598,7 @@ pub const boardState = struct {
             p_self.frame.halfMoveClock += 1;
         }
 
-        p_self.frame.key = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame);
+        p_self.frame.key = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame, prevCastle, prevEp);
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
 
         if (comptime useDebug) {
@@ -669,6 +612,9 @@ pub const boardState = struct {
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
+        const prevCastle: u8 = p_self.frame.stat.castlingKey();
+        const prevEp: u8 = p_self.frame.enPassantIdx;
+
         p_self.frame.lastMove = move;
         const victim = p_self.getCapturePiece(move);
         p_self.frame.victim = victim;
@@ -724,7 +670,9 @@ pub const boardState = struct {
         p_self.b.pieceArray[to] = toPiece;
         p_self.b.pieceBB[@intFromEnum(toPiece)] ^= toBB;
         p_self.b.pieceBB[@intFromEnum(victim)] &= p_self.b.c_occupiedBB[@intFromBool(!white)];
-        p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame);
+
+        p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame, prevCastle, prevEp);
+
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
@@ -738,6 +686,8 @@ pub const boardState = struct {
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
+        const prevCastle: u8 = p_self.frame.stat.castlingKey();
+        const prevEp: u8 = p_self.frame.enPassantIdx;
 
         p_self.frame.lastMove = move;
         p_self.frame.victim = .nEmptySquare;
@@ -747,7 +697,7 @@ pub const boardState = struct {
         const from = move.getFrom();
         const toBB = chessl.xToBitboard(to);
         const fromBB = chessl.xToBitboard(from);
-        var toPiece = p_self.get_piece(from);
+        var toPiece = p_self.getPiece(from);
         var isCastle: bool = false;
         var isPromo: bool = false;
 
@@ -798,7 +748,7 @@ pub const boardState = struct {
         p_self.b.pieceArray[to] = toPiece;
         p_self.b.pieceBB[@intFromEnum(toPiece)] ^= toBB;
 
-        p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, isCastle, false, toPiece, &p_self.frame);
+        p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, isCastle, false, toPiece, &p_self.frame, prevCastle, prevEp);
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
 
         if (comptime useDebug) {
@@ -814,13 +764,13 @@ pub const boardState = struct {
     }
 
     pub inline fn getFromPiece(self: *const boardState, move: IMove) e_piece {
-        return self.get_piece(move.getFrom());
+        return self.getPiece(move.getFrom());
     }
     pub inline fn getCapturePiece(self: *const boardState, move: IMove) e_piece {
         if (move.isEnpassant()) {
             return chessl.pawnFromColor(!chessl.getColorFromPiece(self.getFromPiece(move)));
         }
-        return self.get_piece(move.getTo());
+        return self.getPiece(move.getTo());
     }
     pub inline fn getPhase(self: *const boardState) usize {
         var ret: heuristicl.scoreType = @intCast(heuristicl.totalPhase);

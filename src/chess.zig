@@ -202,7 +202,7 @@ pub fn print_board(p_board: *const boardl.boardState) void {
     //var curr_letter: u8 = 0;
     for (0..N_SQUARES) |sq| {
         const _sq: u8 = @intCast(sq);
-        const piece = p_board.get_piece(_sq);
+        const piece = p_board.getPiece(_sq);
         const pieceStr = getStrFromPiece(piece);
         print_buffer[getSqIdxRank(_sq)][getSqIdxFile(_sq)] = pieceStr;
     }
@@ -372,6 +372,7 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
     if (comptime useStaged) {
         onMoveStaged(&board, board.whiteToMove());
     }
+    board.frame.key = hashl.fullComputeZobristKeys(&board);
     return board;
 }
 
@@ -503,7 +504,7 @@ pub const Board_stateContainer = struct {
     }
 };
 
-pub fn updateKeyOnMove(comptime white: bool, move: IMove, promotion: bool, castle: bool, comptime capture: bool, fromPiece: e_piece, info: *const boardl.boardFrame) hashl.Key {
+pub fn updateKeyOnMove(comptime white: bool, move: IMove, promotion: bool, castle: bool, comptime capture: bool, fromPiece: e_piece, info: *const boardl.boardFrame, prevCastle: u8, prevEp: u8) hashl.Key {
     var key = info.key;
     const to = move.getTo();
     const from = move.getFrom();
@@ -538,6 +539,8 @@ pub fn updateKeyOnMove(comptime white: bool, move: IMove, promotion: bool, castl
             }
         }
     }
+    hashl.updateKey(&key, hashl.zobristKeys.castlingKeys[prevCastle]);
+    hashl.updateKey(&key, hashl.zobristKeys.enPassantKeys[prevEp]);
 
     hashl.updateKey(&key, hashl.zobristKeys.castlingKeys[info.stat.castlingKey()]);
     hashl.updateKey(&key, hashl.zobristKeys.enPassantKeys[info.enPassantIdx]);
@@ -1143,8 +1146,8 @@ pub fn isPiecePinned(occBB: u64, sq: e_square, p_kingSq: *const squareInfo, diag
 pub fn fillMoveFromState(p_state: *boardl.boardState, move: *IMove) void {
     const fromIdx: u8 = move.getFrom();
     const toIdx: u8 = move.getTo();
-    var c_piece = p_state.get_piece(toIdx);
-    const f_piece = p_state.get_piece(fromIdx);
+    var c_piece = p_state.getPiece(toIdx);
+    const f_piece = p_state.getPiece(fromIdx);
     var flag: u8 = move.getFlag();
     if (c_piece != .nEmptySquare) {
         flag |= @intFromEnum(e_moveFlags.CAPTURE);
@@ -1186,7 +1189,7 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         ret |= knightAttacks(destBB) & p_board.getPieceBB(.nBlackKnight);
         ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen));
         ret |= _AllAttackRookMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen));
-        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) {
+        if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) {
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.getPieceBB(.nBlackPawn)));
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nBlackKing));
@@ -1199,7 +1202,7 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
         ret |= _AllAttackRookMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
 
-        if (p_board.get_piece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) {
+        if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) {
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.getPieceBB(.nWhitePawn)));
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nWhiteKing));
@@ -1376,7 +1379,7 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *stringl.strin
         };
         if (move.isValid()) {
             tmpBoard.makeMove(move);
-            _ = ret.append(move, .{}, isPawnPiece(tmpBoard.get_piece(move.getFrom())));
+            _ = ret.append(move, .{}, isPawnPiece(tmpBoard.getPiece(move.getFrom())));
         }
     }
     return ret;

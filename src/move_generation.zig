@@ -1058,7 +1058,7 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
             return true;
         }
     }
-    var piece = p_state.get_piece(from);
+    var piece = p_state.getPiece(from);
     const toSq = move.getTo();
     if (move.isPromotion()) {
         piece = chess.flagPromotionToPiece(move.getFlag(), white);

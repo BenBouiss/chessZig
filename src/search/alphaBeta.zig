@@ -46,7 +46,6 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
 pub const searchType = enum { NonPV, PV };
 
 pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, prevLine: *const movel.line, comptime t: searchType) scoreType {
-    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
     if (p_features.useHash) {
         const entry = hashl.getEntryFromMatch(p_state.frame.key, 0);
         if (entry) |_entry| {
@@ -68,7 +67,7 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
         }
     }
 
-    const score = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+    const score = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, p_state.whiteToMove());
 
     if (p_features.useHash) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
@@ -83,8 +82,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         pv.setLen(ply);
     }
     var _alpha = alpha;
-    const color_mask = getScoreMaskFromTurn(p_state.whiteToMove());
-    const static_eval = color_mask * heuristicl.evaluate(p_state, &heuristicl.globalHeuristic);
+    const static_eval = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, p_state.whiteToMove());
 
     if (depth == 0 or !p_info.alive) {
         p_info.searchStat.n_nodeExplored += 1;

@@ -135,11 +135,11 @@ pub fn perftUciEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Arr
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
 
-        p_state.makeMoveI(move);
+        p_state.makeMove(move);
 
         _ = perftUciDepth(p_state, p_info, @intCast(depth - 1), feats);
 
-        p_state.undoMoveI();
+        p_state.undoMove();
         p_state.frame = f;
     }
 }
@@ -174,11 +174,11 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
     const f: boardl.boardFrame = .copy(p_state);
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        p_state.makeMoveI(move);
+        p_state.makeMove(move);
 
         count += perftUciDepth(p_state, p_info, depth - 1, feats);
 
-        p_state.undoMoveI();
+        p_state.undoMove();
         p_state.frame = f;
     }
     if (feats.useHash) {

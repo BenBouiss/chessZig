@@ -5,9 +5,6 @@ const squarel = @import("square.zig");
 
 const std = @import("std");
 
-const N_SQUARES = chess.N_SQUARES;
-const NUMBER_PLAYER = chess.NUMBER_PLAYER;
-const ONE = chess.ONE;
 const e_color = chess.e_color;
 const e_direction = chess.e_direction;
 const squareInfo = squarel.squareInfo;
@@ -24,7 +21,6 @@ pub fn _initTables(verbose: bool) void {
         std.debug.print("[PRE] Starting the table move build\n", .{});
     }
     initInbetween(&arrRectangular);
-
     initSafetyArea(&safetyArea);
 
     if (verbose) {
@@ -46,7 +42,7 @@ pub const AttackTable = struct {
     }
 };
 pub const kingTable = struct {
-    KingAttack: [N_SQUARES]u64 = undefined,
+    KingAttack: [chess.N_SQUARES]u64 = undefined,
 
     pub fn init() kingTable {
         var ret: kingTable = .{};
@@ -56,13 +52,13 @@ pub const kingTable = struct {
 };
 
 pub fn initKingAttacks(table: *kingTable) void {
-    for (0..N_SQUARES) |sq| {
+    for (0..chess.N_SQUARES) |sq| {
         table.KingAttack[sq] = kingAttacks(@intCast(sq));
     }
 }
 pub fn kingAttacks(sq: i8) u64 {
     var ret: u64 = chess.EMPTY;
-    const pos: u64 = (ONE << @intCast(sq));
+    const pos: u64 = (chess.ONE << @intCast(sq));
 
     ret |= (pos >> 8);
     ret |= (pos << 8);
@@ -87,13 +83,13 @@ pub fn initRayAttacks(table: *AttackTable) void {
     var nort: u64 = (0x0101010101010100);
     var sout: u64 = (0x0080808080808080);
     var _sq: u6 = 0;
-    for (0..N_SQUARES) |sq| {
+    for (0..chess.N_SQUARES) |sq| {
         _sq = @intCast(sq);
         table.rayAttacks[sq][@intFromEnum(e_direction.NORTH)] = nort;
         table.rayAttacks[63 - sq][@intFromEnum(e_direction.SOUTH)] = sout;
         // optionnal can be computed on the fly
-        table.rayAttacks[sq][@intFromEnum(e_direction.WEST)] = (ONE << _sq) - (ONE << (_sq & 56));
-        table.rayAttacks[sq][@intFromEnum(e_direction.EAST)] = 2 * ((ONE << (_sq | 7)) - (ONE << _sq));
+        table.rayAttacks[sq][@intFromEnum(e_direction.WEST)] = (chess.ONE << _sq) - (chess.ONE << (_sq & 56));
+        table.rayAttacks[sq][@intFromEnum(e_direction.EAST)] = 2 * ((chess.ONE << (_sq | 7)) - (chess.ONE << _sq));
         nort <<= 1;
         sout >>= 1;
     }
@@ -107,7 +103,7 @@ pub fn initRayAttackDiag(table: *AttackTable) void {
     var diag: u64 = undefined;
     var antidiag: u64 = undefined;
 
-    for (0..N_SQUARES) |sq| {
+    for (0..chess.N_SQUARES) |sq| {
         _sq = @intCast(sq);
         delMask = one << _sq;
         delMask = delMask ^ (delMask - 1);
