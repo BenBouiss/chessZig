@@ -139,6 +139,7 @@ pub const Hash_bucket = struct {
             },
         }
     }
+
     pub fn addEntry_deep(p_self: *Hash_bucket, p_entry: *const Hash_entry) bool {
         var idxS: usize = 0;
         var sDepth: u8 = 255;
@@ -301,6 +302,14 @@ pub const Hash_table = struct {
                 ent.val.search.evaluation = score;
             }
         }
+    }
+    pub fn storeEntry_cst(p_self: *Hash_table, p_entry: *const Hash_entry, key: u64, comptime strategy: TT_strat) bool {
+        var p_bucket = p_self.getBucketFromFullHashIndex(key);
+        const stat = p_bucket.addEntry(p_entry, strategy);
+        if (stat) {
+            p_self.stat.insertion += 1;
+        }
+        return true;
     }
     pub fn storeEntry(p_self: *Hash_table, p_entry: *const Hash_entry, key: u64) bool {
         var p_bucket = p_self.getBucketFromFullHashIndex(key);

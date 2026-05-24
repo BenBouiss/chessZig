@@ -54,14 +54,6 @@ pub inline fn generateLegalMoves(p_board: *const boardState) moveContainer {
         return fmoves;
     }
 }
-pub inline fn generateLegalMovesCut(p_board: *const boardState, p_out: *moveContainer) void {
-    if (comptime useStaged) {
-        var bbMoves = moveGenBB(p_board);
-        return moveGenBBToMoveContainer(p_board, &bbMoves, p_out, .ALL);
-    } else {
-        @panic("Not implemented");
-    }
-}
 
 pub fn moveGenBBToMoveContainer(p_board: *const boardState, p_moveBB: *moveBBState, p_out: *moveContainer, comptime extra: generationModifiers) void {
     if (p_board.whiteToMove()) {

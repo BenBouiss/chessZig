@@ -241,11 +241,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         } else {
             _alpha = weightl.simpleStalemateScore;
         }
-    } else {
-        if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove);
-            _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
-        }
+    }
+    if (p_features.useHash) {
+        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove);
+        _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
     }
 
     return _alpha;

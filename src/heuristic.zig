@@ -1129,7 +1129,7 @@ pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !
 //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
 // test for first futility implem
 //pub const futilityMargin: [4]scoreType = .{ 0, 100, 150, 300 };
-pub const futilityMargin: scoreType = 500;
+pub const futilityMargin: scoreType = 400;
 
 // move heuristic "sections"
 // https://github.com/maksimKorzh/chess_programming MVA_lva table

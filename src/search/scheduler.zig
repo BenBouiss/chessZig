@@ -76,6 +76,13 @@ pub fn waitingRoomOneShot(self: *enginel.engine) !void {
         self.searcher.searching = false;
         self.searcher.swSinceSearch.reset();
         self.searcher.schedul.timeM.reset();
+    } else {
+        // .CONTINUE
+        // test for critical time use here
+        if (self.searcher.schedul.timeM.isOvertimeCritical()) {
+            std.debug.print("[CRITICAL] interruped due to critical time constraints\n", .{});
+            self.searcher.schedul.handleInterrupt();
+        }
     }
 }
 pub const moveDecisionExt = struct {
