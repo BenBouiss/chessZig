@@ -298,7 +298,7 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
         },
     }
 }
-pub fn updatePSQTOnMove(comptime white: bool, move: IMove, isPromo: bool, isCastle: bool, toPiece: e_piece, phase: usize, info: *const boardl.boardFrame) scoreType {
+pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IMove, isPromo: bool, isCastle: bool, toPiece: e_piece, phase: usize, info: *const boardl.boardFrame) scoreType {
     var fromPiece = toPiece;
     var sV: @Vector(3, scoreType) = .{ 0, 0, 0 };
     const from = move.getFrom();
@@ -309,7 +309,7 @@ pub fn updatePSQTOnMove(comptime white: bool, move: IMove, isPromo: bool, isCast
     }
     sV -= globalHeuristic.getPieceInfos(fromPiece, @enumFromInt(from));
 
-    if (info.victim == .nEmptySquare) {
+    if (!isCapture) {
         if (isCastle) {
             const toBis: u8 = if (comptime white) to else (to ^ 56);
             if (move.isQueenSideCastle()) {

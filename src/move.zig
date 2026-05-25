@@ -38,15 +38,42 @@ pub fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
     return &p_out.moves[p_out.len - 1];
 }
 
+pub const moveInfo = struct {
+    //// <pieces>: 0th bit, 4 bit from piece, 4 bit to piece, 4 bit capture piece, 4 bit left
+    //pieces: u16 = 0,
+    fromP: e_piece = .nEmptySquare,
+    toP: e_piece = .nEmptySquare,
+    to: u8 = 0,
+    from: u8 = 0,
+    flag: e_moveFlags = .QUIETMOVE,
+
+    //pub inline fn fromPiece(self: moveInfo) e_piece {
+    //    return @enumFromInt(self.pieces & 0xF);
+    //}
+    //pub inline fn toPiece(self: moveInfo) e_piece {
+    //    return @enumFromInt((self.pieces >> 4) & 0xF);
+    //}
+    //pub inline fn cPiece(self: moveInfo) e_piece {
+    //    return @enumFromInt((self.pieces >> 8) & 0xF);
+    //}
+    pub inline fn isCastle(self: moveInfo) bool {
+        return self.flag == .KINGCASTLE or self.flag == .QUEENCASTLE;
+    }
+
+    pub inline fn isPromotion(self: moveInfo) bool {
+        return (@intFromEnum(self.flag) >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
+    }
+
+    pub inline fn isCapture(self: moveInfo) bool {
+        return (@intFromEnum(self.flag) & @intFromEnum(e_moveFlags.CAPTURE) != 0);
+    }
+};
 pub const IMove = packed struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
-    //tried to breakdown the m_move, into flag: u8, from: u8, to: u8, performance went down in perft ~130141000 nps at the end from ~155481000.
     m_move: u16 = 0,
 
     pub inline fn setFlag(p_self: *IMove, flag: u8) void {
-        //reset the top 4 bits
         p_self.m_move &= (0xFFF);
-        //const _flag: u16 = @intCast(flag);
         p_self.m_move |= (@as(u16, flag) << 12);
     }
 

@@ -502,13 +502,20 @@ pub const boardState = struct {
     }
     pub inline fn makeMove(p_self: *boardState, move: IMove) void {
         if (p_self.whiteToMove()) {
-            p_self._makeMove(move, true);
+            p_self._makeMove(move, true, true);
         } else {
-            p_self._makeMove(move, false);
+            p_self._makeMove(move, false, true);
+        }
+    }
+    pub inline fn makeMovePerft(p_self: *boardState, move: IMove) void {
+        if (p_self.whiteToMove()) {
+            p_self._makeMove(move, true, false);
+        } else {
+            p_self._makeMove(move, false, false);
         }
     }
 
-    pub fn _makeMove(p_self: *boardState, move: IMove, comptime white: bool) void {
+    pub fn _makeMove(p_self: *boardState, move: IMove, comptime white: bool, comptime updatePSQT: bool) void {
         //const t = move.getType();
         //switch (t) {
         //    .STANDARD => {
@@ -525,13 +532,13 @@ pub const boardState = struct {
         //    },
         //}
         if (move.isCapture()) {
-            p_self.makeMoveCapture_cst(move, white);
+            p_self.makeMoveCapture_cst(move, white, updatePSQT);
         } else {
-            p_self.makeMoveQuiet_cst(move, white);
+            p_self.makeMoveQuiet_cst(move, white, updatePSQT);
         }
         p_self.b.nextTurn();
     }
-    pub fn generalMakeMove(p_self: *boardState, move: IMove, comptime white: bool, comptime t: typel.e_moveType) void {
+    pub fn generalMakeMove(p_self: *boardState, move: IMove, comptime white: bool, comptime t: typel.e_moveType, comptime updatePSQT: bool) void {
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
@@ -599,8 +606,10 @@ pub const boardState = struct {
             p_self.frame.halfMoveClock += 1;
         }
 
-        p_self.frame.key = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, isCapture, toPiece, &p_self.frame, prevCastle, prevEp);
-        p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
+        p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, isCapture, toPiece, &p_self.frame, prevCastle, prevEp);
+        if (comptime updatePSQT) {
+            p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, isCapture, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
+        }
 
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
 
@@ -611,7 +620,7 @@ pub const boardState = struct {
             chessl.onMoveStaged(p_self, !white);
         }
     }
-    pub fn makeMoveCapture_cst(p_self: *boardState, move: IMove, comptime white: bool) void {
+    pub fn makeMoveCapture_cst(p_self: *boardState, move: IMove, comptime white: bool, comptime updatePSQT: bool) void {
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
@@ -674,8 +683,10 @@ pub const boardState = struct {
         p_self.b.pieceBB[@intFromEnum(toPiece)] ^= toBB;
         p_self.b.pieceBB[@intFromEnum(victim)] &= p_self.b.c_occupiedBB[@intFromBool(!white)];
 
-        p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame, prevCastle, prevEp);
-        p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, move, isPromo, false, toPiece, p_self.getPhase(), &p_self.frame);
+        p_self.frame.key.code = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame, prevCastle, prevEp);
+        if (comptime updatePSQT) {
+            p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, isPromo, false, toPiece, p_self.getPhase(), &p_self.frame);
+        }
 
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
         if (comptime useDebug) {
@@ -685,7 +696,7 @@ pub const boardState = struct {
             chessl.onMoveStaged(p_self, !white);
         }
     }
-    pub fn makeMoveQuiet_cst(p_self: *boardState, move: IMove, comptime white: bool) void {
+    pub fn makeMoveQuiet_cst(p_self: *boardState, move: IMove, comptime white: bool, comptime updatePSQT: bool) void {
         // test to reduce the makeMove load
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
@@ -752,8 +763,10 @@ pub const boardState = struct {
         p_self.b.pieceArray[to] = toPiece;
         p_self.b.pieceBB[@intFromEnum(toPiece)] ^= toBB;
 
-        p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, isCastle, false, toPiece, &p_self.frame, prevCastle, prevEp);
-        p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, move, isPromo, isCastle, toPiece, p_self.getPhase(), &p_self.frame);
+        p_self.frame.key.code = chessl.updateKeyOnMove(white, move, isPromo, isCastle, false, toPiece, &p_self.frame, prevCastle, prevEp);
+        if (comptime updatePSQT) {
+            p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, isPromo, isCastle, toPiece, p_self.getPhase(), &p_self.frame);
+        }
 
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
 

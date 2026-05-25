@@ -40,9 +40,9 @@ pub fn freeAll(alloc: std.mem.Allocator, verbose: bool) void {
 
 fn initEngine(alloc: std.mem.Allocator) !enginel.engine {
     var engine: enginel.engine = try enginel.engine.init(alloc);
-    engine.executeBuffer("uci");
+    _ = engine.executeBuffer("uci");
     //engine.executeBuffer("debug on");
-    engine.executeBuffer("isready");
+    _ = engine.executeBuffer("isready");
     return engine;
 }
 fn waitOnEngine(eng: *enginel.engine) !void {
@@ -98,12 +98,9 @@ pub fn test_bug2(alloc: std.mem.Allocator) !void {
 pub fn test_bench(alloc: std.mem.Allocator) !void {
     initAll(alloc, false);
     var eng = try initEngine(alloc);
-    defer eng.executeBuffer("quit");
-    //eng.executeBuffer("debug on");
-    //eng.executeBuffer("setoption name useQuiescence value true");
-    //eng.executeBuffer("setoption name useHash value true");
-    eng.executeBuffer("setoption name searchType value zws");
-    eng.executeBuffer("benchmark");
+    defer _ = eng.executeBuffer("quit");
+    _ = eng.executeBuffer("setoption name searchType value zws");
+    _ = eng.executeBuffer("benchmark");
     try waitOnEngine(&eng);
 }
 
@@ -157,12 +154,12 @@ pub fn main(init: std.process.Init) anyerror!void {
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
     //try test_perft(GPA);
-    //try test_bench();
+    try test_bench(GPA);
     //try test_speed();
     //try heuristicl.main(GPA);
     //try chessl.main(GPA);
     //try test_bug2(GPA);
     //try bookl.main(GPA);
-    try test_test(GPA);
+    //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
 }

@@ -135,7 +135,7 @@ pub fn perftUciEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Arr
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
 
-        p_state.makeMove(move);
+        p_state.makeMovePerft(move);
 
         _ = perftUciDepth(p_state, p_info, @intCast(depth - 1), feats);
 
@@ -174,7 +174,7 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
     const f: boardl.boardFrame = .copy(p_state);
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-        p_state.makeMove(move);
+        p_state.makeMovePerft(move);
 
         count += perftUciDepth(p_state, p_info, depth - 1, feats);
 
@@ -214,7 +214,7 @@ pub fn perftWorkerJob(p_state: *boardl.boardState, depth: u8, p_info: *threadInf
     const f: boardl.boardFrame = .copy(p_state);
     for (0..p_startingMoves.items.len) |i| {
         const move = p_startingMoves.items[i];
-        _ = p_state.makeMove(move);
+        _ = p_state.makeMovePerft(move);
         p_info.searchStat.n_nodeExplored += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
         _ = p_state.undoMove();
         p_state.frame = f;
@@ -243,8 +243,7 @@ pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: b
     const f: boardl.boardFrame = .copy(p_state);
     for (0..fmoves.len) |i| {
         const move: IMove = fmoves.moves[i];
-
-        _ = p_state.makeMove(move);
+        _ = p_state.makeMovePerft(move);
         count += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
         _ = p_state.undoMove();
         p_state.frame = f;

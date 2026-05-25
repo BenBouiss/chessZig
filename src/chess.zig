@@ -505,48 +505,48 @@ pub const Board_stateContainer = struct {
     }
 };
 
-pub fn updateKeyOnMove(comptime white: bool, move: IMove, promotion: bool, castle: bool, comptime capture: bool, fromPiece: e_piece, info: *const boardl.boardFrame, prevCastle: u8, prevEp: u8) hashl.Key {
-    var key = info.key;
+pub fn updateKeyOnMove(comptime white: bool, move: IMove, promotion: bool, castle: bool, comptime capture: bool, fromPiece: e_piece, info: *const boardl.boardFrame, prevCastle: u8, prevEp: u8) u64 {
+    var code = info.key.code;
     const to = move.getTo();
     const from = move.getFrom();
     var _fromPiece = fromPiece;
 
     // make the piece at the dest appear
-    hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to]);
+    code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to].code;
     if (promotion) {
         _fromPiece = if (comptime white) .nWhitePawn else .nBlackPawn;
     }
     // removed the starting piece
-    hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from]);
+    code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from].code;
     if (comptime capture) {
         // take care of the victim
         if (move.isEnpassant()) {
             const victimSq: e_square = enPassantVictimSq(from, to);
             const p: e_piece = if (comptime white) .nBlackPawn else .nWhitePawn;
-            hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)]);
+            code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)].code;
         } else {
-            hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to]);
+            code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to].code;
         }
     } else {
         // check castling
         if (castle) {
             const r: e_piece = if (comptime white) .nWhiteRook else .nBlackRook;
             if (move.isQueenSideCastle()) {
-                hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 2]);
-                hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
+                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 2].code;
+                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1].code;
             } else {
-                hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1]);
-                hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 1]);
+                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1].code;
+                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 1].code;
             }
         }
     }
-    hashl.updateKey(&key, hashl.zobristKeys.castlingKeys[prevCastle]);
-    hashl.updateKey(&key, hashl.zobristKeys.enPassantKeys[prevEp]);
+    code ^= hashl.zobristKeys.castlingKeys[prevCastle].code;
+    code ^= hashl.zobristKeys.enPassantKeys[prevEp].code;
 
-    hashl.updateKey(&key, hashl.zobristKeys.castlingKeys[info.stat.castlingKey()]);
-    hashl.updateKey(&key, hashl.zobristKeys.enPassantKeys[info.enPassantIdx]);
-    hashl.updateKey(&key, hashl.zobristKeys.playKey);
-    return key;
+    code ^= hashl.zobristKeys.castlingKeys[info.stat.castlingKey()].code;
+    code ^= hashl.zobristKeys.enPassantKeys[info.enPassantIdx].code;
+    code ^= hashl.zobristKeys.playKey.code;
+    return code;
 }
 
 pub fn pieceArrayToBB(pieceArray: [N_SQUARES]e_piece) u64 {
