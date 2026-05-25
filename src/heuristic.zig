@@ -26,6 +26,7 @@ const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
 pub const scoreType: type = i32;
+pub const scoreVect: type = @Vector(2, scoreType);
 pub const weightType: type = i32;
 
 pub const texel_err = error{board_err};
@@ -36,21 +37,20 @@ pub fn evaluate(p_state: *const boardl.boardState, values: *const heuristicValue
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
-    var ret: scoreType = 0;
     const phase: scoreType = @intCast(p_state.getPhase());
     const _phase: scoreType = @divFloor((phase >> 8) + (totalPhase >> 1), totalPhase);
 
-    ret += evaluate_PSQT(p_state, values, _phase);
+    //ret += evaluate_PSQT(p_state, values, _phase);
 
-    ret += evaluate_mobility(&whiteMoveBB, &blackMoveBB, values, _phase);
-    ret += evaluate_king(p_state, values, _phase);
+    var ret = evaluate_mobility(&whiteMoveBB, &blackMoveBB, values);
+    ret += evaluate_king(p_state, values);
+    ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values);
+    ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values);
+    ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values);
+    ret += evaluate_pawnStructure(p_state, values);
+    ret += .{ p_state.frame.psqtEval, p_state.frame.psqtEval };
 
-    ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase);
-    ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
-    ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase);
-    ret += evaluate_pawnStructure(p_state, values, _phase);
-
-    return ret;
+    return computeTaperedV(ret, _phase);
 }
 
 pub inline fn c_evaluate(p_state: *const boardl.boardState, values: *const heuristicValues, white: bool) scoreType {
@@ -84,18 +84,19 @@ pub fn evaluate_debug(p_state: *const boardl.boardState, values: *const heuristi
     const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
 
     const ret: heuristicComponents = .{
-        .PSQT = evaluate_PSQT(p_state, values, _phase),
-        .Mobility = evaluate_mobility(&whiteMoveBB, &blackMoveBB, values, _phase),
-        .King = evaluate_king(p_state, values, _phase),
+        //.PSQT = evaluate_PSQT(p_state, values, _phase),
+        .PSQT = p_state.frame.psqtEval,
+        .Mobility = computeTaperedV(evaluate_mobility(&whiteMoveBB, &blackMoveBB, values), _phase),
+        .King = computeTaperedV(evaluate_king(p_state, values), _phase),
 
-        .Safety = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values, _phase),
-        .Structure = evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase),
-        .PawnStruct = evaluate_pawnStructure(p_state, values, _phase),
-        .Tempo = evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values, _phase),
+        .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB, values), _phase),
+        .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB, values), _phase),
+        .PawnStruct = computeTaperedV(evaluate_pawnStructure(p_state, values), _phase),
+        .Tempo = computeTaperedV(evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, values), _phase),
     };
     return ret;
 }
-pub fn computeTapered(score_mg: scoreType, score_eg: scoreType, _phase: scoreType) scoreType {
+pub inline fn computeTapered(score_mg: scoreType, score_eg: scoreType, _phase: scoreType) scoreType {
     //i16 vers
     //const __phase: i32 = @intCast(_phase);
     //const mg: i32 = @as(i32, @intCast(score_mg)) * (256 - __phase);
@@ -103,6 +104,9 @@ pub fn computeTapered(score_mg: scoreType, score_eg: scoreType, _phase: scoreTyp
     //return @intCast((mg + eg) >> 8);
 
     return ((score_mg * (256 - _phase)) + score_eg * _phase) >> 8;
+}
+pub inline fn computeTaperedV(s: scoreVect, _phase: scoreType) scoreType {
+    return ((s[0] * (256 - _phase)) + s[1] * _phase) >> 8;
 }
 
 pub fn evaluate_PSQT(p_state: *const boardl.boardState, values: *const heuristicValues, _phase: scoreType) scoreType {
@@ -182,7 +186,7 @@ pub fn evaluate_PSQT(p_state: *const boardl.boardState, values: *const heuristic
     return score_count + computeTapered(score_mg, score_eg, _phase);
 }
 
-pub fn evaluate_pawnStructure(p_state: *const boardl.boardState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_pawnStructure(p_state: *const boardl.boardState, values: *const heuristicValues) scoreVect {
     const wp = p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)];
     const bp = p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)];
     // in an effort to have the weights all positive I swapped the diff, (nBlackIsolated - nWhiteIsolated) * (w>0) means that white is advantaged (s>0) if (nBlackIsolated > nWhiteIsolated) and black is advantaged(s<0) if (nBlackIsolated < nWhiteIsolated)
@@ -190,80 +194,81 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState, values: *const 
 
     const nWhiteIsolated: i8 = @intCast(chess.popcount(chess.isolatedPawns(wp)));
     const nBlackIsolated: i8 = @intCast(chess.popcount(chess.isolatedPawns(bp)));
-    const isolatedScore = computeTapered(values.IsolatedPawnValue[MG], values.IsolatedPawnValue[EG], _phase) * @as(scoreType, @intCast(nBlackIsolated - nWhiteIsolated));
+    const isoS: scoreType = @intCast(nBlackIsolated - nWhiteIsolated);
 
     const nWhiteDoubled: i8 = @intCast(chess.popcount(chess.stackedPawns(wp)));
     const nBlackDoubled: i8 = @intCast(chess.popcount(chess.stackedPawns(bp)));
-    const doubledPawnScore = computeTapered(values.StackedPawnValue[MG], values.StackedPawnValue[EG], _phase) * @as(scoreType, @intCast(nBlackDoubled - nWhiteDoubled));
+    const doS: scoreType = @intCast(nBlackDoubled - nWhiteDoubled);
 
     const nWhitePassed: i8 = @intCast(chess.popcount(chess.passedPawns(wp, bp)));
     const nBlackPassed: i8 = @intCast(chess.popcount(chess.passedPawns(bp, wp)));
-    const passedPawnScore = computeTapered(values.PassedPawnValue[MG], values.PassedPawnValue[EG], _phase) * @as(scoreType, @intCast(nWhitePassed - nBlackPassed));
-    return doubledPawnScore + isolatedScore + passedPawnScore;
+    const paS: scoreType = @intCast(nWhitePassed - nBlackPassed);
+    return .{ (isoS * values.IsolatedPawnValue[MG]) + (doS * values.StackedPawnValue[MG]) + (paS * values.PassedPawnValue[MG]), (isoS * values.IsolatedPawnValue[EG]) + (doS * values.StackedPawnValue[EG]) + (paS * values.PassedPawnValue[EG]) };
 }
-pub fn evaluate_mobility(p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_mobility(p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues) scoreVect {
     // going to use "raw" mobility only taking board coverage
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
-    const moveAmountScore = (computeTapered(values.MobilityValue[MG], values.MobilityValue[EG], _phase)) * @as(scoreType, @intCast(moveW - moveB));
+    const v = @as(scoreType, @intCast(moveW - moveB));
+    const moveAmountScore: scoreVect = .{ values.MobilityValue[MG] * v, values.MobilityValue[EG] * v };
 
     const kingMoveW = p_whiteMoveBB.kingMoves & (~p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
     const kingMoveB = p_blackMoveBB.kingMoves & (~p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
-    const kingMoveScore = (computeTapered(values.KingMobilityValue[MG], values.KingMobilityValue[EG], _phase)) * @as(scoreType, @intCast(chess.ipopcount(kingMoveW) - chess.ipopcount(kingMoveB)));
-
+    const v2 = @as(scoreType, @intCast(chess.ipopcount(kingMoveW) - chess.ipopcount(kingMoveB)));
+    const kingMoveScore: scoreVect = .{ values.KingMobilityValue[MG] * v2, values.KingMobilityValue[EG] * v2 };
     return moveAmountScore + kingMoveScore;
-
-    // these are insanely expensive
-    //const moveW = moveGenl.generateMoveCountLegalMoves(p_state, true);
-    //const moveB = moveGenl.generateMoveCountLegalMoves(p_state, false);
-    //return simpleMobilityScore * @as(scoreType, @floatFromInt(moveW - moveB));
 }
-pub fn evaluate_king(p_state: *const boardl.boardState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_king(p_state: *const boardl.boardState, values: *const heuristicValues) scoreVect {
     const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
     const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
     const distance: scoreType = @intCast(wKing.computeBenDistance(bKing));
     const bonus = (squarel.maxBenDistance - distance);
-    return computeTapered(bonus * values.KingProximityValue[MG], bonus * values.KingProximityValue[EG], _phase);
+    return .{ bonus * values.KingProximityValue[MG], bonus * values.KingProximityValue[EG] };
 }
-pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues) scoreVect {
     // counting negative for white as the best safety is not attackers => 0 heuristic
-    var retSaf: scoreType = 0;
     const kingWSafety = chess.safetyArea(p_state.b.wKingSq);
     const kingBSafety = chess.safetyArea(p_state.b.bKingSq);
-    const bKnightAtt: scoreType = @intCast(chess.popcount(kingWSafety & p_blackMoveBB.knightMoves));
-    const bBishopAtt: scoreType = @intCast(chess.popcount(kingWSafety & p_blackMoveBB.bishopMoves));
-    const bRookAtt: scoreType = @intCast(chess.popcount(kingWSafety & p_blackMoveBB.rookMoves));
-    const bQueenAtt: scoreType = @intCast(chess.popcount(kingWSafety & p_blackMoveBB.queenMoves));
 
-    const wKnightAtt: scoreType = @intCast(chess.popcount(kingBSafety & p_whiteMoveBB.knightMoves));
-    const wBishopAtt: scoreType = @intCast(chess.popcount(kingBSafety & p_whiteMoveBB.bishopMoves));
-    const wRookAtt: scoreType = @intCast(chess.popcount(kingBSafety & p_whiteMoveBB.rookMoves));
-    const wQueenAtt: scoreType = @intCast(chess.popcount(kingBSafety & p_whiteMoveBB.queenMoves));
+    const wKnight: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.knightMoves));
+    const bKnight: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.knightMoves));
+    const Knight: scoreType = wKnight - bKnight;
 
-    retSaf += @intCast(computeTapered(values.SafetyKnightValue[MG], values.SafetyKnightValue[EG], _phase) * (wKnightAtt - bKnightAtt) + computeTapered(values.SafetyBishopValue[MG], values.SafetyBishopValue[EG], _phase) * (wBishopAtt - bBishopAtt) + computeTapered(values.SafetyRookValue[MG], values.SafetyRookValue[EG], _phase) * (wRookAtt - bRookAtt) + computeTapered(values.SafetyQueenValue[MG], values.SafetyQueenValue[EG], _phase) * (wQueenAtt - bQueenAtt));
+    const wBishop: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.bishopMoves));
+    const bBishop: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.bishopMoves));
+    const Bishop: scoreType = wBishop - bBishop;
+
+    const wRook: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.rookMoves));
+    const bRook: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.rookMoves));
+    const Rook: scoreType = wRook - bRook;
+
+    const wQueen: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.queenMoves));
+    const bQueen: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.queenMoves));
+    const Queen: scoreType = wQueen - bQueen;
 
     // white is advantaged from a high safety_arr index, more =wPieceAtt are present in the black king vicinity thus it should be counted as positive
-    retSaf += @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnightAtt + wBishopAtt + wRookAtt + wQueenAtt))]);
-    retSaf -= @intCast(SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnightAtt + bBishopAtt + bRookAtt + bQueenAtt))]);
-    return retSaf;
+    const saf: scoreType = SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnight + wBishop + wRook + wQueen))] - SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnight + bBishop + bRook + bQueen))];
+    const v: scoreVect = .{ saf + (values.SafetyKnightValue[MG] * Knight) + (values.SafetyBishopValue[MG] * Bishop) + (values.SafetyRookValue[MG] * Rook) + (values.SafetyQueenValue[MG] * Queen), saf + (values.SafetyKnightValue[EG] * Knight) + (values.SafetyBishopValue[EG] * Bishop) + (values.SafetyRookValue[EG] * Rook) + values.SafetyQueenValue[EG] * Queen };
+    return v;
 }
-pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues) scoreVect {
     // structure protection,
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
     const w_pieceProtect = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.b.wKingSq));
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.b.bKingSq));
-    return (@as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()))) * computeTapered(values.StructureProtectionValue[MG], values.StructureProtectionValue[EG], _phase);
+    const s = @as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()));
+    return .{ values.StructureProtectionValue[MG] * s, values.StructureProtectionValue[EG] * s };
 }
-pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues, _phase: scoreType) scoreType {
+pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, values: *const heuristicValues) scoreVect {
     const wMoves: u64 = p_whiteMoveBB.collapse();
     const wThreats: u64 = wMoves & p_state.b.c_occupiedBB[@intFromBool(false)];
     const bMoves: u64 = p_blackMoveBB.collapse();
     const bThreats: u64 = bMoves & p_state.b.c_occupiedBB[@intFromBool(true)];
     const deltaThreat: scoreType = @as(scoreType, (@intCast(chess.popcount(wThreats)))) - @as(scoreType, (@intCast(chess.popcount(bThreats))));
 
-    var ret = computeTapered(values.pieceThreatScore[MG], values.pieceThreatScore[EG], _phase) * deltaThreat;
+    var ret: scoreVect = .{ values.pieceThreatScore[MG] * deltaThreat, values.pieceThreatScore[EG] * deltaThreat };
     if (p_state.isChecked()) {
-        ret += computeTapered(values.tempoChecksScore[MG], values.tempoChecksScore[EG], _phase);
+        ret += .{ values.tempoChecksScore[MG], values.tempoChecksScore[EG] };
     }
     return ret;
 }
@@ -292,6 +297,43 @@ pub fn e_pieceToHeuristic(piece: e_piece, values: *const heuristicValues) scoreT
             return values.QueenValue;
         },
     }
+}
+pub fn updatePSQTOnMove(comptime white: bool, move: IMove, isPromo: bool, isCastle: bool, toPiece: e_piece, phase: usize, info: *const boardl.boardFrame) scoreType {
+    var fromPiece = toPiece;
+    var sV: @Vector(3, scoreType) = .{ 0, 0, 0 };
+    const from = move.getFrom();
+    const to = move.getTo();
+    sV += globalHeuristic.getPieceInfos(fromPiece, @enumFromInt(to));
+    if (isPromo) {
+        fromPiece = if (comptime white) .nWhitePawn else .nBlackPawn;
+    }
+    sV -= globalHeuristic.getPieceInfos(fromPiece, @enumFromInt(from));
+
+    if (info.victim == .nEmptySquare) {
+        if (isCastle) {
+            const toBis: u8 = if (comptime white) to else (to ^ 56);
+            if (move.isQueenSideCastle()) {
+                const prev: @Vector(3, scoreType) = globalHeuristic.getPieceInfos_cst(.ROOK, toBis - 2);
+                const next: @Vector(3, scoreType) = globalHeuristic.getPieceInfos_cst(.ROOK, toBis + 1);
+                sV = sV + next - prev;
+            } else {
+                const prev: @Vector(3, scoreType) = globalHeuristic.getPieceInfos_cst(.ROOK, toBis + 1);
+                const next: @Vector(3, scoreType) = globalHeuristic.getPieceInfos_cst(.ROOK, toBis - 1);
+                sV = sV + next - prev;
+            }
+        }
+    } else {
+        // is capture
+        const victimSq: typel.e_square = if (move.isEnpassant()) chess.enPassantVictimSq(from, to) else (@enumFromInt(to));
+        const victimScs: @Vector(3, scoreType) = globalHeuristic.getPieceInfos(info.victim, victimSq);
+        sV += victimScs;
+    }
+
+    const ret = sV[0] + computeTapered(sV[1], sV[2], @intCast(phase));
+    if (comptime white) {
+        return ret;
+    }
+    return -ret;
 }
 
 pub fn materialImbalance(p_state: *const boardl.boardState, values: *const heuristicValues) scoreType {
@@ -505,7 +547,75 @@ pub const heuristicValues = struct {
     Queen_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.queenScoreArr, weightl.queenScoreArr },
     King_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.kingScoreArr, weightl.kingScoreArr_EG },
 
+    pub inline fn getPieceCountValues(self: *const heuristicValues) [chess.N_PIECES]scoreType {
+        return .{ self.PawnValue, self.BishopValue, self.KnightValue, self.RookValue, self.QueenValue, 0 };
+    }
     // other more complex values may be inserted below
+    pub fn getPieceInfos(self: *const heuristicValues, piece: e_piece, sq: typel.e_square) [3]typel.scoreType {
+        switch (piece) {
+            .nEmptySquare, .nWhite, .nBlack => {
+                return .{ 0, 0, 0 };
+            },
+            .nWhitePawn => {
+                return self.getPieceInfos_cst(.PAWN, @intFromEnum(sq));
+            },
+            .nBlackPawn => {
+                return self.getPieceInfos_cst(.PAWN, @intFromEnum(sq) ^ 56);
+            },
+            .nWhiteBishop => {
+                return self.getPieceInfos_cst(.BISHOP, @intFromEnum(sq));
+            },
+            .nBlackBishop => {
+                return self.getPieceInfos_cst(.BISHOP, @intFromEnum(sq) ^ 56);
+            },
+            .nWhiteKnight => {
+                return self.getPieceInfos_cst(.KNIGHT, @intFromEnum(sq));
+            },
+            .nBlackKnight => {
+                return self.getPieceInfos_cst(.KNIGHT, @intFromEnum(sq) ^ 56);
+            },
+            .nWhiteRook => {
+                return self.getPieceInfos_cst(.ROOK, @intFromEnum(sq));
+            },
+            .nBlackRook => {
+                return self.getPieceInfos_cst(.ROOK, @intFromEnum(sq) ^ 56);
+            },
+            .nWhiteQueen => {
+                return self.getPieceInfos_cst(.QUEEN, @intFromEnum(sq));
+            },
+            .nBlackQueen => {
+                return self.getPieceInfos_cst(.QUEEN, @intFromEnum(sq) ^ 56);
+            },
+            .nWhiteKing => {
+                return self.getPieceInfos_cst(.KING, @intFromEnum(sq));
+            },
+            .nBlackKing => {
+                return self.getPieceInfos_cst(.KING, @intFromEnum(sq) ^ 56);
+            },
+        }
+    }
+    pub inline fn getPieceInfos_cst(self: *const heuristicValues, comptime piece: typel.e_pieceType, sq: u8) [3]typel.scoreType {
+        switch (piece) {
+            .PAWN => {
+                return .{ self.PawnValue, self.Pawn_PSQT[MG][sq], self.Pawn_PSQT[EG][sq] };
+            },
+            .BISHOP => {
+                return .{ self.BishopValue, self.Bishop_PSQT[MG][sq], self.Bishop_PSQT[EG][sq] };
+            },
+            .KNIGHT => {
+                return .{ self.KnightValue, self.Knight_PSQT[MG][sq], self.Knight_PSQT[EG][sq] };
+            },
+            .ROOK => {
+                return .{ self.RookValue, self.Rook_PSQT[MG][sq], self.Rook_PSQT[EG][sq] };
+            },
+            .QUEEN => {
+                return .{ self.QueenValue, self.Queen_PSQT[MG][sq], self.Queen_PSQT[EG][sq] };
+            },
+            .KING => {
+                return .{ 0, self.King_PSQT[MG][sq], self.King_PSQT[EG][sq] };
+            },
+        }
+    }
 };
 
 // source: https://www.chessprogramming.org/King_Safety

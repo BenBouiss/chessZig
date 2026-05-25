@@ -373,6 +373,7 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
         onMoveStaged(&board, board.whiteToMove());
     }
     board.frame.key = hashl.fullComputeZobristKeys(&board);
+    board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, &heuristicl.globalHeuristic, @intCast(board.getPhase()));
     return board;
 }
 
@@ -520,7 +521,7 @@ pub fn updateKeyOnMove(comptime white: bool, move: IMove, promotion: bool, castl
     if (comptime capture) {
         // take care of the victim
         if (move.isEnpassant()) {
-            const victimSq: e_square = getSqFromCoord(getSqIdxRank(from), getSqIdxFile(to));
+            const victimSq: e_square = enPassantVictimSq(from, to);
             const p: e_piece = if (comptime white) .nBlackPawn else .nWhitePawn;
             hashl.updateKey(&key, hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)]);
         } else {
@@ -918,6 +919,9 @@ pub inline fn getSqIdxFile(sq: u8) u8 {
 
 pub inline fn getSqFromCoord(rank: u8, file: u8) e_square {
     return @enumFromInt((rank << 3) + file);
+}
+pub inline fn enPassantVictimSq(from: u8, to: u8) e_square {
+    return getSqFromCoord(getSqIdxRank(from), getSqIdxFile(to));
 }
 
 pub inline fn getSqDiag(sq: e_square) i8 {

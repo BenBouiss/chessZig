@@ -160,6 +160,7 @@ pub const boardFrame = struct {
     enPassantIdx: u8 = 0,
     halfMoveClock: u8 = 0,
     stat: boardStatusl.status = .{},
+    psqtEval: heuristicl.scoreType = 0,
     pub inline fn copy(state: *const boardState) boardFrame {
         return state.frame;
     }
@@ -403,7 +404,7 @@ pub const boardState = struct {
         p_self.b.pieceCount[@intFromEnum(victim)] += 1;
 
         if (move.isEnpassant()) {
-            const victimSq: e_square = chessl.getSqFromCoord(chessl.getSqIdxRank(fromSq), chessl.getSqIdxFile(toSq));
+            const victimSq: e_square = chessl.enPassantVictimSq(fromSq, toSq);
             const victimBB: u64 = chessl.sqToBitboard(victimSq);
             const bisBB = victimBB | toBB;
             p_self.b.pieceArray[toSq] = .nEmptySquare;
@@ -545,7 +546,7 @@ pub const boardState = struct {
         var toPiece = p_self.b.getPiece(from);
         var isPawn: bool = false;
         if (comptime t == .EP) {
-            const victimSq: e_square = chessl.getSqFromCoord(chessl.getSqIdxRank(from), chessl.getSqIdxFile(to));
+            const victimSq: e_square = chessl.enPassantVictimSq(from, to);
             const victim: e_piece = if (comptime white) .nBlackPawn else .nWhitePawn;
             p_self.b._removePiece(victim, @intFromEnum(victimSq), !white);
             p_self.frame.victim = victim;
@@ -598,7 +599,9 @@ pub const boardState = struct {
             p_self.frame.halfMoveClock += 1;
         }
 
-        p_self.frame.key = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame, prevCastle, prevEp);
+        p_self.frame.key = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, isCapture, toPiece, &p_self.frame, prevCastle, prevEp);
+        p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
+
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
 
         if (comptime useDebug) {
@@ -641,7 +644,7 @@ pub const boardState = struct {
         if (chessl.isPawnPiece(toPiece)) {
             isPawn = true;
             if (move.isEnpassant()) {
-                const epSq: e_square = chessl.getSqFromCoord(chessl.getSqIdxRank(from), chessl.getSqIdxFile(to));
+                const epSq: e_square = chessl.enPassantVictimSq(from, to);
                 p_self.b.pieceArray[@intFromEnum(epSq)] = e_piece.nEmptySquare;
                 p_self.b.c_occupiedBB[@intFromBool(!white)] ^= chessl.sqToBitboard(epSq);
             } else {
@@ -672,6 +675,7 @@ pub const boardState = struct {
         p_self.b.pieceBB[@intFromEnum(victim)] &= p_self.b.c_occupiedBB[@intFromBool(!white)];
 
         p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame, prevCastle, prevEp);
+        p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, move, isPromo, false, toPiece, p_self.getPhase(), &p_self.frame);
 
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
         if (comptime useDebug) {
@@ -749,6 +753,8 @@ pub const boardState = struct {
         p_self.b.pieceBB[@intFromEnum(toPiece)] ^= toBB;
 
         p_self.frame.key = chessl.updateKeyOnMove(white, move, isPromo, isCastle, false, toPiece, &p_self.frame, prevCastle, prevEp);
+        p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, move, isPromo, isCastle, toPiece, p_self.getPhase(), &p_self.frame);
+
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
 
         if (comptime useDebug) {
@@ -948,7 +954,7 @@ pub const boardState = struct {
             const last_pin = chessl.isPiecePinned(p_self.b.occupiedBB(), to, p_kingSq, diagPieceBB, linePieceBB);
             var _to = to;
             if (move.isEnpassant()) {
-                _to = chessl.getSqFromCoord(chessl.getSqRank(from), chessl.getSqFile(to));
+                _to = chessl.enPassantVictimSq(@intFromEnum(from), @intFromEnum(to));
             }
 
             return ((last_pin == p_checks.squares[0].getBB()) or (p_checks.squares[0].sq == _to));
