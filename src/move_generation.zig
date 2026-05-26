@@ -737,65 +737,33 @@ pub fn cst_moveGenBB_all(p_board: *const boardState, comptime white: bool, p_out
 
 pub const qbb = struct {
     bb: @Vector(4, u64),
-    pub fn init(bb: u64) qbb {
-        return .{ .bb = [_]u64{ bb, bb, bb, bb } };
+    pub inline fn init(bb: u64) qbb {
+        return .{ .bb = [4]u64{ bb, bb, bb, bb } };
     }
-    pub fn lShift(self: qbb, other: qbb) qbb {
-        return .{ .bb = [_]u64{
-            self.bb[0] << @intCast(other.bb[0]),
-            self.bb[1] << @intCast(other.bb[1]),
-            self.bb[2] << @intCast(other.bb[2]),
-            self.bb[3] << @intCast(other.bb[3]),
-        } };
+    pub inline fn lShift(self: qbb, other: qbb) qbb {
+        return .{ .bb = self.bb << other.bb };
     }
-    pub fn lShift_eq(self: *qbb, other: *qbb) void {
-        self.bb[0] <<= @intCast(other.bb[0]);
-        self.bb[1] <<= @intCast(other.bb[1]);
-        self.bb[2] <<= @intCast(other.bb[2]);
-        self.bb[3] <<= @intCast(other.bb[3]);
+    pub inline fn lShift_eq(self: *qbb, other: *qbb) void {
+        self.bb = self.bb << other.bb;
     }
-    pub fn rShift(self: qbb, other: qbb) qbb {
-        return .{ .bb = [_]u64{
-            self.bb[0] >> @intCast(other.bb[0]),
-            self.bb[1] >> @intCast(other.bb[1]),
-            self.bb[2] >> @intCast(other.bb[2]),
-            self.bb[3] >> @intCast(other.bb[3]),
-        } };
+    pub inline fn rShift(self: qbb, other: qbb) qbb {
+        return .{ .bb = self.bb >> other.bb };
     }
     pub fn rShift_eq(self: *qbb, other: *qbb) void {
-        self.bb[0] >>= @intCast(other.bb[0]);
-        self.bb[1] >>= @intCast(other.bb[1]);
-        self.bb[2] >>= @intCast(other.bb[2]);
-        self.bb[3] >>= @intCast(other.bb[3]);
+        self.bb >>= other.bb;
     }
 
     pub fn bbAnd(self: qbb, other: qbb) qbb {
-        return .{ .bb = [_]u64{
-            self.bb[0] & other.bb[0],
-            self.bb[1] & other.bb[1],
-            self.bb[2] & other.bb[2],
-            self.bb[3] & other.bb[3],
-        } };
+        return .{ .bb = self.bb & other.bb };
     }
     pub fn bbAnd_eq(self: *qbb, other: *qbb) void {
-        self.bb[0] &= other.bb[0];
-        self.bb[1] &= other.bb[1];
-        self.bb[2] &= other.bb[2];
-        self.bb[3] &= other.bb[3];
+        self.bb = self.bb & other.bb;
     }
     pub fn bbOr(self: qbb, other: qbb) qbb {
-        return .{ .bb = [_]u64{
-            self.bb[0] | other.bb[0],
-            self.bb[1] | other.bb[1],
-            self.bb[2] | other.bb[2],
-            self.bb[3] | other.bb[3],
-        } };
+        return .{ .bb = self.bb | other.bb };
     }
     pub fn bbOr_eq(self: *qbb, other: *qbb) void {
-        self.bb[0] |= other.bb[0];
-        self.bb[1] |= other.bb[1];
-        self.bb[2] |= other.bb[2];
-        self.bb[3] |= other.bb[3];
+        self.bb |= other.bb;
     }
     pub fn collapse(self: qbb) u64 {
         return self.bb[0] | self.bb[1] | self.bb[2] | self.bb[3];
@@ -810,24 +778,23 @@ pub fn east_nort_noWe_noEa_Attacks(qsliders: qbb, free: u64) qbb {
     qfree.bbAnd_eq(&qmask);
     var _qsliders = qsliders;
     var qflood = qsliders;
-    _qsliders = (_qsliders.lShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb << qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.lShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb << qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.lShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb << qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.lShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb << qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.lShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb << qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.rShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
-    return (qflood.lShift(qshift)).bbAnd(qmask);
+    qflood.bb |= ((_qsliders.bb << qshift.bb) & qfree.bb);
+    return .{ .bb = (qflood.bb << qshift.bb) & qmask.bb };
 }
 pub fn west_sout_soEa_soWe_Attacks(qsliders: qbb, free: u64) qbb {
     var qmask: qbb = .{ .bb = .{ chess.notHFile, chess.UNIVERSE, chess.notAFile, chess.notHFile } };
@@ -836,25 +803,23 @@ pub fn west_sout_soEa_soWe_Attacks(qsliders: qbb, free: u64) qbb {
     qfree.bbAnd_eq(&qmask);
     var _qsliders = qsliders;
     var qflood = qsliders;
-    _qsliders = (_qsliders.rShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb >> qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.rShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb >> qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.rShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb >> qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.rShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb >> qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.rShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
+    _qsliders.bb = ((_qsliders.bb >> qshift.bb) & qfree.bb);
+    qflood.bb |= _qsliders.bb;
 
-    _qsliders = (_qsliders.rShift(qshift)).bbAnd(qfree);
-    qflood.bbOr_eq(&_qsliders);
-
-    return (qflood.rShift(qshift)).bbAnd(qmask);
+    qflood.bb |= ((_qsliders.bb >> qshift.bb) & qfree.bb);
+    return .{ .bb = (qflood.bb >> qshift.bb) & qmask.bb };
 }
 pub fn avx2DumbFill(p_state: *const boardState, comptime white: bool) qbb {
     if (comptime white) {
@@ -1043,21 +1008,28 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
     const white: bool = p_state.whiteToMove();
     const from = move.getFrom();
     const fromBB = chess.xToBitboard(from);
-    const to = move.getTo();
     const otherKing: u8 = @intFromEnum(p_state.getKingSq(!white));
-    if ((p_state.frame.pinnedBB & fromBB) != 0) {
-        if ((chess.inBetweenX(from, to) & (chess.inBetweenX(from, otherKing) | fromBB)) == 0) {
-            return true;
-        }
-    }
     var piece = p_state.getPiece(from);
+    if ((p_state.frame.pinnedBB & fromBB) != 0) {
+        //const to = move.getTo();
+        //if ((chess.inBetweenX(from, to) & (chess.inBetweenX(from, otherKing) | fromBB)) == 0) {
+        //    return true;
+        //}
+        // a pawn or king can move along a pin (given by same piece color ie: white queen behind white king) without delivering check however any other piece will induce a check
+        return !chess.isPawnPiece(piece) and !chess.isKingPiece(piece);
+    }
     const toSq = move.getTo();
     if (move.isPromotion()) {
         piece = chess.flagPromotionToPiece(move.getFlag(), white);
     }
     // TODO: get castling checks in here
     if (chess.isKingPiece(piece)) {
-        return false;
+        if (move.isCastle()) {
+            const castleSq: e_square = if (move.isQueenSideCastle()) (@enumFromInt(toSq + 1)) else (@enumFromInt(toSq - 1));
+            return (chess.getRookAttacks(p_state.b.occupiedBB() ^ fromBB, castleSq) & chess.xToBitboard(otherKing)) != 0;
+        } else {
+            return false;
+        }
     }
     const att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), p_state.b.occupiedBB() ^ fromBB) catch {
         chess.sanityCheckBoardState(p_state);

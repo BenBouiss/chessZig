@@ -149,6 +149,9 @@ pub inline fn pieceToColor(piece: e_piece) e_color {
     }
     return .BLACK;
 }
+pub const moveStore = struct {
+    lastMove: IMove = .{},
+};
 
 pub const boardFrame = struct {
     pinnedBB: u64 = 0,

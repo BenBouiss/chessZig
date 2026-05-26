@@ -1119,7 +1119,8 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
     directChecks |= knightAttacks(sqToBitboard(king_E)) & n;
 
     if (comptime useAVX2) {
-        @panic(":)");
+        //@panic(":)");
+        p_board.frame.pinnedBB = moveGenl.getPinned_avx2(p_board, white);
     } else {
         var pinned: u64 = 0;
         const rBlockers = (occ & cachedRookAtt) ^ occ;
@@ -1450,7 +1451,7 @@ pub fn test_move_heur() !void {
 pub fn main(alloc: std.mem.Allocator) !void {
     _ = alloc;
     //mainl.initAll(alloc, true);
-    //try test_avx();
+    try test_avx();
     //try test_move_heur();
     return;
 }

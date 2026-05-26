@@ -157,10 +157,15 @@ pub const searchFrame = struct {
 };
 
 pub const MAX_PLY = 24;
+// used to garanty getFrameOffset(0, 4) returns a default value
+pub const negativeOffset: u16 = 4;
 //index by ply
 pub const searchStack = struct {
-    e: [MAX_PLY + configl.MAX_QUIESC_DEPTH]searchFrame = @splat(.{}),
+    e: [MAX_PLY + configl.MAX_QUIESC_DEPTH + negativeOffset]searchFrame = @splat(.{}),
     pub inline fn getFrame(self: *searchStack, ply: u16) *searchFrame {
-        return &self.e[ply];
+        return &self.e[ply + negativeOffset];
+    }
+    pub inline fn getPrevFrame(self: *searchStack, ply: u16, offset: u16) *searchFrame {
+        return &self.e[negativeOffset - offset + ply];
     }
 };

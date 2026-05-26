@@ -68,10 +68,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var improving: bool = false;
     if (ischeck) {
         //
-    } else if (ply >= 2 and ss.getFrame(ply - 2).staticEval.t != .NONE) {
-        improving = currS.staticEval.s > ss.getFrame(ply - 2).staticEval.s;
-    } else if (ply >= 4 and ss.getFrame(ply - 4).staticEval.t != .NONE) {
-        improving = currS.staticEval.s > ss.getFrame(ply - 4).staticEval.s;
+    } else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) {
+        improving = currS.staticEval.s > ss.getPrevFrame(ply, 2).staticEval.s;
+    } else if (ss.getPrevFrame(ply, 4).staticEval.t != .NONE) {
+        improving = currS.staticEval.s > ss.getPrevFrame(ply, 4).staticEval.s;
     } else {
         improving = true;
     }
