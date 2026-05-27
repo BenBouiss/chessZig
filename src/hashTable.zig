@@ -26,7 +26,7 @@ pub inline fn keyToUpperKey(key: u64) subKeyType {
 }
 
 pub const perftEntry = packed struct {
-    moveAmount: u64 = 0,
+    moveAmount: u48 = 0,
     key: subKeyType = 0,
     exploredDepth: u8 = 0,
 };
@@ -81,7 +81,7 @@ pub const Hash_entry = struct {
     val: entryComponents = undefined,
 
     pub inline fn moveA(self: *const Hash_entry) u64 {
-        return self.val.perft.moveAmount;
+        return @intCast(self.val.perft.moveAmount);
     }
     pub inline fn eval(self: *const Hash_entry) scoreType {
         return self.val.search.evaluation;
@@ -105,7 +105,7 @@ pub const Hash_entry = struct {
 };
 
 pub inline fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    return .{ .val = .{ .perft = .{ .moveAmount = moveAmount, .exploredDepth = depth, .key = keyToUpperKey(key.code) } } };
+    return .{ .val = .{ .perft = .{ .moveAmount = @intCast(moveAmount), .exploredDepth = depth, .key = keyToUpperKey(key.code) } } };
 }
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
     return .{ .val = .{ .search = .{ .evaluation = eval, .key = keyToUpperKey(key.code), .val = makeVal(.ALL, depth, hashTable.stat.insertion) } } };

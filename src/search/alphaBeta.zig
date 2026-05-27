@@ -46,7 +46,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
 pub const searchType = enum { NonPV, PV };
 
 pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, comptime t: searchType, ss: *searchStack) scoreType {
-    if (p_features.useHash) {
+    if (p_features.useHash and comptime t == .NonPV) {
         const entry = hashl.getEntryFromMatch(p_state.frame.key, 0);
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;

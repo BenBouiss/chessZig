@@ -32,7 +32,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var hashMove: IMove = .{};
     var hashFlag: hashl.nodeType = .UPPER;
     const skipQuietMoves: bool = false;
-    if (p_features.useHash and depth > 2) {
+    if (p_features.useHash and depth > 2 and comptime t == .NonPV) {
         const entry = hashl.getEntryFromMatch(p_state.frame.key, @intCast(_depth));
         if (entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
