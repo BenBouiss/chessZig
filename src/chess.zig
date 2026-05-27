@@ -923,6 +923,19 @@ pub inline fn getSqFromCoord(rank: u8, file: u8) e_square {
 pub inline fn enPassantVictimSq(from: u8, to: u8) e_square {
     return getSqFromCoord(getSqIdxRank(from), getSqIdxFile(to));
 }
+pub inline fn maskOutPawnQuietMove(comptime white: bool, empty: u64) u64 {
+    if (comptime white) {
+        return empty >> 8;
+    }
+    return empty << 8;
+}
+pub inline fn maskOutPawnDoublePush(comptime white: bool, empty: u64) u64 {
+    const ret = maskOutPawnQuietMove(white, empty);
+    if (comptime white) {
+        return (ret >> 8) & whitePawnDoubleRank;
+    }
+    return (ret << 8) & blackPawnDoubleRank;
+}
 
 pub inline fn getSqDiag(sq: e_square) i8 {
     const _sq: i8 = @intCast(@intFromEnum(sq));

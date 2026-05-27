@@ -1258,11 +1258,11 @@ pub fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];
     killerMoves[ply][0] = move;
 }
-pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, prevLine: *const movel.line, hashMove: IMove) scoreType {
+pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove) scoreType {
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
-    if (move.equal(prevLine.moves[ply])) {
+    if (move.equal(prevLineMove)) {
         // previous best move at that ply
         return configl.ORDERING_LINE_VALUE;
     }
@@ -1311,13 +1311,13 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, prevLine: *const movel.line, hashMove: IMove, depth: u16) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, depth: u16, prevLineMove: IMove) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
 
     for (0..p_moves.len) |i| {
         ret.indexes[i] = @intCast(i);
-        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, prevLine, hashMove);
+        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, hashMove, prevLineMove);
     }
     ret.len = p_moves.len;
 

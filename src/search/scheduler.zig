@@ -258,7 +258,7 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
     p_info.working = true;
     defer p_info.working = false;
-    var depth: u16 = 1;
+    var depth: u16 = 0;
     if (features.useStaticSearch) {
         depth = maxDepth;
     }
@@ -268,38 +268,47 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
         std.debug.print("[DEBUG] _startSearch: starting from depth {d} max depth {d} remaining time {d} ms\n", .{ depth, maxDepth, sched.timeM.remainingTimeMs });
     }
 
-    _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line, &ss);
+    //_ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &ss, &line);
+    //var decision = &p_info.currentBest;
+    //var score = decision.scoring;
     var decision = &p_info.currentBest;
+    var score = decision.scoring;
+
     if (features.reportProgress) {
         sendPartial(sched, depth, decision, p_info);
     }
 
-    while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, decision, &features)) {
+    while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
         if (sched.isDebugMode()) {
             std.debug.print("[DEBUG] _startSearch: starting line ", .{});
             line.print();
         }
-        _ = (alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &line, &ss));
-        line.copyFromLine(&p_info.currentBest.line);
+        _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &ss);
+
+        if (depth != 1) {
+            //line.copyFromLine(&p_info.currentBest.line);
+            ss.setPrevLine(&p_info.currentBest.line);
+        }
         decision = &p_info.currentBest;
+        score = decision.scoring;
         if (features.reportProgress) {
             sendPartial(sched, depth, decision, p_info);
         }
     }
     if (sched.isDebugMode()) {
-        std.debug.print("debug exit status alive: {} overtime thinking: {}\n", .{ p_info.alive, canExtendSearch(&sched.timeM, depth, maxDepth, decision, &features) });
+        std.debug.print("debug exit status alive: {} overtime thinking: {}\n", .{ p_info.alive, canExtendSearch(&sched.timeM, depth, maxDepth, score, &features) });
     }
     if (sched.p_engine.options.trackMetrics) {
         sched.p_engine.metric.addPlies(depth);
     }
 }
 
-pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, decision: *const moveDecisionExt, p_features: *const searchFeatures) bool {
+pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, score: scoreType, p_features: *const searchFeatures) bool {
     if (p_features.fixedDepth and depth == maxDepth or (depth >= configl.SCHEDULER_MAX_ENDGAME_DEPTH)) {
         return false;
     }
-    if (@abs(decision.scoring) >= weightl.simpleCheckMateScore) {
+    if (@abs(score) >= weightl.simpleCheckMateScore) {
         return false;
     }
     if (timer.isOvertimeSearching()) {

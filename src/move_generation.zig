@@ -1037,3 +1037,95 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
     };
     return (att & chess.xToBitboard(otherKing)) != 0;
 }
+//pub const moveGene = struct {
+//    _moves: moveContainer = .{},
+//    idx: u8 = 0,
+//
+//    pub fn next(self: *moveGene) ?movel.IMove {
+//        if (self.idx == self._moves.len) {
+//            return null;
+//        }
+//        self.idx += 1;
+//        return self._moves[self.idx];
+//    }
+//    pub inline fn generateMove(self: *moveGene, comptime t: typel.e_moveGenFlag, p_state: *const boardState) void {
+//        //
+//
+//    }
+//    pub inline fn generateAll(self: *moveGene, p_state: *const boardState) void {
+//        //
+//    }
+//};
+//pub fn generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, p_state: *const boardState) void {
+//    if (comptime t == .EVASION) {
+//        const doubleCheck = (p_state.frame.checkersBB & (p_state.frame.checkersBB - 1) != 0);
+//        if (doubleCheck) {
+//            return generatePieceMove(out, t, .KING, p_state);
+//        }
+//    }
+//    generatePieceMove(out, t, .PAWN, p_state);
+//
+//    if (comptime t != .PROMO) {
+//        // evasion means checked encountered
+//        generatePieceMove(out, t, .BISHOP, p_state);
+//        generatePieceMove(out, t, .KNIGHT, p_state);
+//        generatePieceMove(out, t, .ROOK, p_state);
+//        generatePieceMove(out, t, .QUEEN, p_state);
+//        generatePieceMove(out, t, .KING, p_state);
+//    }
+//}
+//pub fn generatePieceMove(out: *moveContainer, comptime t: typel, comptime white: bool, comptime p: typel.e_pieceType, p_state: *const boardState) void {
+//    const emptyOrEnemy = if (comptime t == .EVASION) (p_state.frame.checkersBB) else (~p_state.b.c_occupiedBB[@intFromEnum(white)]);
+//    if (comptime p == .PAWN) {
+//        return generatePawnt(white, t, p_state.frame.enPassantIdx);
+//    }
+//    if (comptime p == .BISHOP or p == .ROOK or p == .QUEEN) {
+//        //
+//    }
+//    if (comptime p == .KNIGHT) {
+//        //
+//    }
+//    if (comptime p == .KING) {
+//        const toBB = chess.getKingAttacks(if (comptime white) p_state.b.wKingSq else p_state.b.bKingSq);
+//    }
+//}
+//pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: typel.e_pieceType, p_state: *const boardState, isChecked: bool, kingInfo: squareInfo, empty: u64) void {
+//    const p = if (comptime white) (p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn)]) else (p_state.b.pieceBB[@intFromEnum(e_piece.nBlackPawn)]);
+//    const validLoc: u64 = if (isChecked) (chess.UNIVERSE) else (p_state.frame.checkersBB);
+//
+//    if (comptime t == .QUIET or t == .ALL) {
+//        const validPawn = p & ~(p_state.frame.pinnedBB & kingInfo.getDiagonalsBB());
+//        var bb: u64 = validPawn & chess.maskOutPawnQuietMove(white, empty);
+//        if (comptime t == .PROMOTION) {
+//            bb &= if (comptime white) chess.whitePawnPromoRank else chess.blackPawnPromoRank;
+//        }
+//        while (bb) {
+//            const sq = chess.bitscan(bb);
+//            bb &= bb - 1;
+//            if (comptime t == .PROMOTION) {
+//                push_promotion(sq, sq + if (comptime white) 8 else -8, out);
+//            } else {
+//                movel.build_move_in(sq, sq + if (comptime white) 8 else -8, @enumFromInt(e_moveFlags.QUIETMOVE), out);
+//            }
+//        }
+//        bb = validPawn & chess.maskOutPawnDoublePush(white, empty);
+//        while (bb) {
+//            const sq = chess.bitscan(bb);
+//            bb &= bb - 1;
+//            movel.build_move_in(sq, sq + if (comptime white) 16 else -16, @enumFromInt(e_moveFlags.QUIETMOVE));
+//        }
+//    }
+//    if (comptime t == .CAPTURE or t == .ALL) {
+//        var bb = p & ~(p_state.frame.pinnedBB & kingInfo.getHorizontalBB());
+//        if (comptime t == .PROMOTION) {
+//            bb &= if (comptime white) chess.whitePawnPromoRank else chess.blackPawnPromoRank;
+//        }
+//        while (bb) {
+//            const sq = chess.bitscan(bb);
+//            bb &= bb - 1;
+//        }
+//        if (p_state.frame.enPassantIdx != 0) {
+//            bb = p & ~(p_state.frame.pinnedBB) & chess.getPawnAttacks(@enumFromInt(p_state.frame.enPassantIdx));
+//        }
+//    }
+//}

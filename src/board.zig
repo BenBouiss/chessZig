@@ -522,16 +522,16 @@ pub const boardState = struct {
         //const t = move.getType();
         //switch (t) {
         //    .STANDARD => {
-        //        p_self.generalMakeMove(move, white, .STANDARD);
+        //        p_self.generalMakeMove(move, white, .STANDARD, updatePSQT);
         //    },
         //    .CASTLE => {
-        //        p_self.generalMakeMove(move, white, .CASTLE);
+        //        p_self.generalMakeMove(move, white, .CASTLE, updatePSQT);
         //    },
         //    .PROMOTION => {
-        //        p_self.generalMakeMove(move, white, .PROMOTION);
+        //        p_self.generalMakeMove(move, white, .PROMOTION, updatePSQT);
         //    },
         //    .EP => {
-        //        p_self.generalMakeMove(move, white, .EP);
+        //        p_self.generalMakeMove(move, white, .EP, updatePSQT);
         //    },
         //}
         if (move.isCapture()) {
@@ -609,9 +609,14 @@ pub const boardState = struct {
             p_self.frame.halfMoveClock += 1;
         }
 
-        p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, isCapture, toPiece, &p_self.frame, prevCastle, prevEp);
-        if (comptime updatePSQT) {
-            p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, isCapture, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
+        if (isCapture) {
+            p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, true, toPiece, &p_self.frame, prevCastle, prevEp);
+            if (comptime updatePSQT) {
+                p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
+            } else {
+                p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
+            }
+            p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame, prevCastle, prevEp);
         }
 
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
@@ -723,8 +728,6 @@ pub const boardState = struct {
         p_self.b.pieceBB[@intFromEnum(toPiece)] ^= fromBB;
         p_self.b.c_occupiedBB[@intFromBool(white)] ^= (fromBB | toBB);
 
-        p_self.frame.halfMoveClock += 1;
-
         var isPawn: bool = false;
         if (chessl.isPawnPiece(toPiece)) {
             isPawn = true;
@@ -739,28 +742,31 @@ pub const boardState = struct {
                 // middle between from and to
                 p_self.frame.enPassantIdx = if (comptime white) (from + 8) else (from - 8);
             }
-        } else if (chessl.isKingPiece(toPiece)) {
-            if (comptime white) {
-                p_self.b.wKingSq = @enumFromInt(to);
-            } else {
-                p_self.b.bKingSq = @enumFromInt(to);
-            }
-            if (move.isCastle()) {
-                isCastle = true;
-                const isKingC = move.isKingSideCastle();
-                const r: e_piece = (if (comptime white) .nWhiteRook else .nBlackRook);
-                const rStart: e_square = if (isKingC) (if (comptime white) (.h1) else (.h8)) else (if (comptime white) (.a1) else (.a8));
-                const rEnd: e_square = if (isKingC) (if (comptime white) (.f1) else (.f8)) else (if (comptime white) (.d1) else (.d8));
-                const mask: u64 = if (isKingC) (if (comptime white) (boardStatusl.wCastleKRookBit) else (boardStatusl.bCastleKRookBit)) else (if (comptime white) (boardStatusl.wCastleQRookBit) else (boardStatusl.bCastleQRookBit));
+        } else {
+            p_self.frame.halfMoveClock += 1;
+            if (chessl.isKingPiece(toPiece)) {
+                if (comptime white) {
+                    p_self.b.wKingSq = @enumFromInt(to);
+                } else {
+                    p_self.b.bKingSq = @enumFromInt(to);
+                }
+                if (move.isCastle()) {
+                    isCastle = true;
+                    const isKingC = move.isKingSideCastle();
+                    const r: e_piece = (if (comptime white) .nWhiteRook else .nBlackRook);
+                    const rStart: e_square = if (isKingC) (if (comptime white) (.h1) else (.h8)) else (if (comptime white) (.a1) else (.a8));
+                    const rEnd: e_square = if (isKingC) (if (comptime white) (.f1) else (.f8)) else (if (comptime white) (.d1) else (.d8));
+                    const mask: u64 = if (isKingC) (if (comptime white) (boardStatusl.wCastleKRookBit) else (boardStatusl.bCastleKRookBit)) else (if (comptime white) (boardStatusl.wCastleQRookBit) else (boardStatusl.bCastleQRookBit));
 
-                p_self.b.pieceArray[@intFromEnum(rStart)] = .nEmptySquare;
-                p_self.b.pieceArray[@intFromEnum(rEnd)] = r;
-                p_self.b.pieceBB[@intFromEnum(r)] ^= mask;
-                p_self.b.c_occupiedBB[@intFromBool(white)] ^= mask;
+                    p_self.b.pieceArray[@intFromEnum(rStart)] = .nEmptySquare;
+                    p_self.b.pieceArray[@intFromEnum(rEnd)] = r;
+                    p_self.b.pieceBB[@intFromEnum(r)] ^= mask;
+                    p_self.b.c_occupiedBB[@intFromBool(white)] ^= mask;
+                }
+                p_self.frame.stat.onKingMove(white);
+            } else if (chessl.isRookPiece(toPiece)) {
+                p_self.frame.stat.onRookMove(fromBB, white);
             }
-            p_self.frame.stat.onKingMove(white);
-        } else if (chessl.isRookPiece(toPiece)) {
-            p_self.frame.stat.onRookMove(fromBB, white);
         }
 
         p_self.b.pieceArray[to] = toPiece;

@@ -2,6 +2,7 @@ pub const e_color = enum(u1) { BLACK = 0, WHITE = 1 };
 
 pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite, nBlack };
 pub const e_pieceType = enum(u8) { PAWN, BISHOP, KNIGHT, ROOK, QUEEN, KING };
+pub const e_moveGenFlag = enum(u8) { CAPTURE, QUIET, PROMO, EVASION };
 
 pub const e_moveType = enum { STANDARD, EP, PROMOTION, CASTLE };
 pub const e_scoreType = enum { NONE, MATE, STD, DRAW };
