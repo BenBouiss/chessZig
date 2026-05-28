@@ -262,6 +262,9 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
     if (features.useStaticSearch) {
         depth = maxDepth;
     }
+    if (features.useHash) {
+        hashl.hashTable.nextGeneration();
+    }
     var line: movel.line = .{};
     var ss: alphaBetal.searchStack = .{};
     if (sched.isDebugMode()) {
@@ -273,10 +276,6 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
     //var score = decision.scoring;
     var decision = &p_info.currentBest;
     var score = decision.scoring;
-
-    if (features.reportProgress) {
-        sendPartial(sched, depth, decision, p_info);
-    }
 
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;

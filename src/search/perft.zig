@@ -14,15 +14,11 @@ const boardl = @import("../board.zig");
 const threadingl = @import("threading.zig");
 const alphaBetal = @import("alphaBeta.zig");
 
-const build_options = @import("build_options");
-
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const engine = enginel.engine;
 const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
-
-const useHash = build_options.useHash;
 
 const assert = std.debug.assert;
 
@@ -160,13 +156,21 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
         p_info.searchStat.n_nodeExplored += fmoves.len;
         return fmoves.len;
     }
+    var writer: hashl.hashWriter = .{};
     if (feats.useHash) {
-        const entry = hashl.getEntryFromPerft(p_state.frame.key, depth);
-        if (entry) |_entry| {
-            p_info.searchStat.n_hashRetrieve += @intCast(_entry.moveA());
-            p_info.searchStat.n_nodeExplored += _entry.moveA();
-            return _entry.moveA();
+        const res = hashl.hashTable.probePerft(p_state.frame.key.code, depth);
+        writer = res.writer;
+        if (res.entry) |entry| {
+            p_info.searchStat.n_hashRetrieve += @intCast(entry.moveA());
+            p_info.searchStat.n_nodeExplored += entry.moveA();
+            return entry.moveA();
         }
+        //const entry = hashl.getEntryFromPerft(p_state.frame.key, depth);
+        //if (entry) |_entry| {
+        //    p_info.searchStat.n_hashRetrieve += @intCast(_entry.moveA());
+        //    p_info.searchStat.n_nodeExplored += _entry.moveA();
+        //    return _entry.moveA();
+        //}
     }
 
     var count: u64 = 0;
@@ -183,7 +187,8 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
     }
     if (feats.useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
-        _ = hashl.hashTable.storeEntry(&entry, p_state.frame.key.code);
+        writer.write(entry);
+        //_ = hashl.hashTable.storeEntry(entry, p_state.frame.key.code);
     }
 
     return count;
@@ -232,13 +237,7 @@ pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: b
     if (depth == 1 and batched) {
         return fmoves.len;
     }
-    if (comptime useHash) {
-        const entry = hashl.getEntryFromPerft(p_state.frame.key, depth);
-        if (entry) |_entry| {
-            p_info.searchStat.n_hashRetrieve += @intCast(_entry.moveA());
-            return _entry.moveA();
-        }
-    }
+
     var count: u64 = 0;
     const f: boardl.boardFrame = .copy(p_state);
     for (0..fmoves.len) |i| {
@@ -247,10 +246,6 @@ pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: b
         count += explorationNDepthPerft(p_state, depth - 1, batched, p_info);
         _ = p_state.undoMove();
         p_state.frame = f;
-    }
-    if (comptime useHash) {
-        const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
-        _ = hashl.hashTable.storeEntry(&entry, p_state.frame.key.code);
     }
     return count;
 }

@@ -1,13 +1,13 @@
 [engine1]
-path="engines/bin/engine_28_05_26_2";
-name="32Bytes entry hash";
-"setoption name useHash value true";
+path="engines/bin/engine_28_05_26";
+name="no hash";
+"setoption name useHash value false";
 "setoption name reportProgress value false";
 "setoption name useRFP value true";
 
 [engine2]
-path="engines/bin/engine_28_05_26_3";
-name="16Bytes entry hash";
+path="engines/bin/engine_28_05_26";
+name="hash";
 "setoption name useHash value true";
 "setoption name reportProgress value false";
 "setoption name useRFP value true";
@@ -23,6 +23,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=true;
+//sprtmode=true;
 //maxSPRTMatch=100;
 

@@ -60,7 +60,7 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
         const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, pv, t, ss);
         if (p_features.useHash) {
             const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
-            _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
+            _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code);
         }
         return score;
     }
@@ -71,7 +71,7 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
 
     if (p_features.useHash) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
-        _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
+        _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code);
     }
     return score;
 }

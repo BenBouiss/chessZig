@@ -228,7 +228,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             }
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move);
-                _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
+                _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code);
             }
 
             p_info.searchStat.n_cutoffs += 1;
@@ -245,7 +245,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     if (p_features.useHash) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove);
-        _ = hashl.hashTable.storeEntry(&s_entry, p_state.frame.key.code);
+        _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code);
     }
 
     return _alpha;
