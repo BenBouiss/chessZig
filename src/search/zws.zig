@@ -111,8 +111,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
-    if (p_features.useLMR and _depth > 3 and !ischeck) {
-        heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
+    if (p_features.useLMR and _depth >= 3 and !ischeck) {
+        heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
         useLMR = true;
     }
     //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
@@ -147,7 +147,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         gen.fetchNext(p_state);
         order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
         if (useLMR) {
-            heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
+            heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
         }
     }
     var i_reset: bool = false;
@@ -157,7 +157,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
             if (useLMR) {
-                heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
+                heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
             }
             i_reset = true;
         } else if (i_reset) {

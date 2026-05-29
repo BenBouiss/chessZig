@@ -1277,7 +1277,8 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
         if (comptime mva) {
             return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
         } else {
-            return (SEE(p_state, move) * configl.ORDERING_SEE_MULTI);
+            //return (SEE(p_state, move) * configl.ORDERING_SEE_MULTI);
+            return SEE(p_state, move);
         }
     } else {
         //
@@ -1328,12 +1329,12 @@ pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const
     return ret;
 }
 //pub const moveReductionAmount = 4;
-pub const moveReductionAmount = 6;
-pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer) void {
+pub const moveReductionAmount = 4;
+pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool) void {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     for (0..p_order.len) |i| {
-        if (p_order.scores[i] >= (3 * configl.MAX_HIST_HEURISTIC_VALUE / 4) or i < moveReductionAmount or depth < 2) {
+        if (p_order.scores[i] >= (configl.LMR_SCORE_THRESHOLD) or i < moveReductionAmount) {
             p_order.depths[i] = depth - 1;
             continue;
         }
@@ -1342,7 +1343,8 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
         const move = fmoves.moves[p_order.indexes[i]];
         const to = move.getTo();
         const isCapture = move.isCapture();
-        if (isCapture) {
+        // means see of move is good
+        if (isCapture and p_order.scores[i] > 0) {
             p_order.depths[i] = depth - 1;
             continue;
         }
@@ -1351,7 +1353,11 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
             continue;
         }
 
-        p_order.depths[i] = depth - 1 - @as(u16, @ceil(@as(f16, @floatFromInt(depth)) / 3.0));
+        const d: u16 = @as(u16, @intFromFloat(if (improving) (@as(f16, @floatFromInt(depth)) / 3.0) else (@as(f16, @floatFromInt(depth)) / 2.0)));
+        //_ = improving;
+        //const d = (@as(f16, @floatFromInt(depth)) / 3.0);
+        //const _depth = depth - 1 - @as(u16, @ceil(d));
+        p_order.depths[i] = depth - std.math.clamp(d, 0, depth) - 1;
     }
 
     //std.debug.print("[DEBUG] computeLateMoveReduc: LMR new depths: {any}", .{p_order.depths[0..p_order.len]});
@@ -1380,6 +1386,7 @@ pub const moveOrdering = struct {
 pub const moveGenerator = struct {
     moves: moveContainer = undefined,
     bbState: moveBBState = undefined,
+    bbStateGenerated: bool = false,
     extra: moveGenl.generationModifiers = .NONE,
     idx: usize = 0,
 
@@ -1390,24 +1397,28 @@ pub const moveGenerator = struct {
         ret.extra = .NONE;
         return ret;
     }
-    pub fn getMoveState(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
-        p_self.bbState = moveGenl.moveGenBB(p_state);
-    }
-    pub fn capture(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
+    pub fn generateCapture(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
+        if (!p_self.bbStateGenerated) {
+            p_self.bbState = moveGenl.moveGenBB(p_state);
+            p_self.bbStateGenerated = true;
+        }
         moveGenl.moveGenBBToMoveContainer(p_state, &p_self.bbState, &p_self.moves, .CAPTURES);
     }
-    pub fn quiet(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
+    pub fn generateQuiet(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
+        if (!p_self.bbStateGenerated) {
+            p_self.bbState = moveGenl.moveGenBB(p_state);
+            p_self.bbStateGenerated = true;
+        }
         moveGenl.moveGenBBToMoveContainer(p_state, &p_self.bbState, &p_self.moves, .QUIETMOVE);
     }
     pub fn fetchNext(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
         p_self.idx = 0;
         p_self.moves.len = 0;
         if (p_self.extra == .NONE) {
-            p_self.getMoveState(p_state);
-            p_self.capture(p_state);
+            p_self.generateCapture(p_state);
             p_self.extra = .CAPTURES;
         } else if (p_self.extra == .CAPTURES) {
-            p_self.quiet(p_state);
+            p_self.generateQuiet(p_state);
             p_self.extra = .QUIETMOVE;
         } else {
             std.debug.print("[PANIC] fetchNext: found invalid extra {}\n", .{p_self.extra});
