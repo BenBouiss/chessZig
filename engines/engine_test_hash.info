@@ -1,15 +1,15 @@
 [engine1]
-path="engines/bin/engine_29_05_26";
-name="no hash";
-"setoption name useHash value false";
-"setoption name reportProgress value false";
-
-[engine2]
-path="engines/bin/engine_29_05_26";
-name="hash";
+path="engines/bin/engine_29_05_26_prev_tt";
+name="prev + same nbr of entry 262144 -> 524288";
 "setoption name useHash value true";
 "setoption name reportProgress value false";
-"setoption name hashs value 16";
+"setoption name hashs value 17";
+
+[engine2]
+path="engines/bin/engine_29_05_26_next_tt";
+name="next";
+"setoption name useHash value true";
+"setoption name reportProgress value false";
 
 [match]
 nMatch=100;
@@ -22,6 +22,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=true;
+//sprtmode=true;
 //maxSPRTMatch=100;
 
