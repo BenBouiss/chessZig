@@ -29,7 +29,7 @@ test "entry retrievale" {
         try std.testing.expect(entry2.?.valid());
 
         const bucket = hashl.hashTable.getBucketFromFullHashIndex(@intCast(i));
-        try std.testing.expectEqual(bucket.len, 2);
+        try std.testing.expectEqual(bucket.len(), 2);
     }
 
     std.log.info("[TEST]: entry storing passed\n", .{});
@@ -54,12 +54,12 @@ test "entry overwrite" {
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
-    try std.testing.expectEqual(1, bucket.len);
+    try std.testing.expectEqual(1, bucket.len());
 
     const entry = hashl.buildEntryFromMatchResult(.{ .code = code + m }, 200, 0);
     try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code + m, .KEEP_DEEPER));
 
-    try std.testing.expectEqual(2, bucket.len);
+    try std.testing.expectEqual(2, bucket.len());
 
     std.log.info("[TEST]: entry overwrite passed\n", .{});
 }
@@ -78,7 +78,7 @@ test "entry replacement" {
         std.debug.assert(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
-    try std.testing.expectEqual(1, _bucket.len);
+    try std.testing.expectEqual(1, _bucket.len());
 
     std.log.info("[TEST]: entry replacement passed\n", .{});
 }
