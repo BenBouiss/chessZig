@@ -18,11 +18,11 @@ playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
-timeFormat=(5000, 0);
+timeFormat=(1000, 100);
 logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-//sprtmode=true;
+sprtmode=true;
 //maxSPRTMatch=100;
 

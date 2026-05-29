@@ -11,6 +11,7 @@ const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
 const alphaBetal = @import("alphaBeta.zig");
 const boardl = @import("../board.zig");
+const historyl = @import("../history.zig");
 
 const IMove = movel.IMove;
 const scoreType = heuristicl.scoreType;
@@ -106,7 +107,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             hashMoveIsQuiet = true;
         }
     }
-    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
     if (p_features.useLMR and _depth > 3 and !ischeck) {
         heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
@@ -131,7 +132,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         }
         if (p_features.useRazoring) {
             const eval = heuristicl.c_materialImbalance(p_state, &heuristicl.globalHeuristic, white);
-            if (_depth == 3 and (eval + 600) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
+            if (_depth == 3 and (eval + margin) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
                 _depth = 2;
             }
         }
@@ -142,7 +143,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
-        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove);
+        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
         if (useLMR) {
             heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
         }
@@ -151,7 +152,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     while (gen.pickNext(&order)) |move| : (i += 1) {
         if (!skipQuietMoves and i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
-            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove);
+            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
             if (useLMR) {
                 heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves);
@@ -208,22 +209,26 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 pv.onBestMove(move, ply);
             }
             if (!(gen.extra == .CAPTURES)) {
-                heuristicl.updateHistoryHeurist(white, move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(_depth));
+                historyl.updateHistoryHeurist(white, move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(_depth));
             }
         }
         if (_alpha >= beta) {
-            // save here the killer moves
-            if (!(gen.extra == .CAPTURES)) {
-                heuristicl.onKillerMove(move, ply);
-            }
-
             const bonus = heuristicl.computeHistoryBonus(_depth);
-            heuristicl.updateHistoryHeurist(white, move.getFrom(), move.getTo(), bonus);
+            // save here the killer moves
+            const to = move.getTo();
+            const from = move.getFrom();
+            if (!move.isCapture()) {
+                historyl.onKillerMove(move, ply);
+                historyl.updateHistoryHeurist(white, from, to, bonus);
+                //historyl.counterMoves[from][to] = move;
+            }
             for (0..gen.moves.len) |j| {
                 const idx = order.indexes[j];
                 const _move = gen.moves.moves[idx];
-                if (!_move.isCapture() and j != i) {
-                    heuristicl.updateHistoryHeurist(white, _move.getFrom(), _move.getTo(), -bonus);
+                if (j != i) {
+                    if (!_move.isCapture()) {
+                        historyl.updateHistoryHeurist(white, _move.getFrom(), _move.getTo(), -bonus);
+                    }
                 }
             }
             if (p_features.useHash) {

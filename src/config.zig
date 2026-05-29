@@ -40,6 +40,7 @@ pub const ORDERING_SEE_MULTI = 10;
 
 pub const KILLER_0_HEURISTIC_VALUE = 900;
 pub const KILLER_1_HEURISTIC_VALUE = 800;
+//pub const COUNTERMOVE_HEURISTIC_VALUE = 750;
 pub const MAX_HIST_HEURISTIC_VALUE = 700;
 
 pub const DEFAULT_USEQUIESC = true;
@@ -49,7 +50,7 @@ pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
 pub const MAX_DEPTH: u16 = 6;
 pub const MAXIMUM_SEARCH_DEPTH: u16 = 64;
-pub const MAX_QUIESC_DEPTH: u16 = 8;
+pub const MAX_QUIESC_DEPTH: u16 = 16;
 
 pub const _DEFAULT_LIMIT_ELO = "false";
 pub const DEFAULT_LIMIT_ELO = false;
@@ -66,9 +67,16 @@ pub const _DEFAULT_LATE_MOVE_REDUCTION = "true";
 
 pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
+// 5 - 6 based on current avg ply computed of 6.8 for 5+0 timeformat
+//pub const OLD_THRESHOLD: u8 = 5;
+// >> 4 thus every multiple of 16 gets stored
+pub const OLD_THRESHOLD: u8 = 2;
 
 pub const DEFAULT_USE_FUTILITY = true;
 pub const _DEFAULT_USE_FUTILITY = "true";
+
+pub const DEFAULT_USE_PROBCUT = false;
+pub const _DEFAULT_USE_PROBCUT = "false";
 
 pub const DEFAULT_USE_RAZORING = false;
 pub const _DEFAULT_USE_RAZORING = "false";

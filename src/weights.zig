@@ -21,6 +21,7 @@ pub const simplePassedPawnScore: scoreType = 2;
 // ============ structure ============
 pub const simpleMobilityScore: scoreType = 5;
 pub const simpleKingMobilityScore: scoreType = 10;
+pub const simpleWeakCheckMateScore: scoreType = 1000;
 pub const simpleStructureProtectionScore: scoreType = 1;
 
 // ============ tempo ============

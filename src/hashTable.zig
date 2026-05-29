@@ -53,9 +53,6 @@ const VALID_SHIFT = 10;
 const AGE_SHIFT = 11;
 const AGE_MASK = 0xF800;
 
-pub inline fn makeVal(t: nodeType, depth: u8, inserts: u64) u16 {
-    return @as(u16, @intCast(@intFromEnum(t))) | (@as(u16, @intCast(depth)) << DEPTH_SHIFT) | (@as(u16, 1) << VALID_SHIFT) | (@as(u16, @intCast((inserts >> 3) & AGE_MASK)) << AGE_SHIFT);
-}
 pub const searchEntry = packed struct {
     evaluation: scoreType = 0,
     //val: u16 = 0,
@@ -102,11 +99,11 @@ pub inline fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Ha
     return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast(hashTable.gen >> 8), .val = .{ .perft = .{ .moveAmount = @intCast(moveAmount) } } };
 }
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
-    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast(hashTable.gen >> 8), .val = .{ .search = .{ .evaluation = eval, .bound = .ALL } } };
+    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast((hashTable.gen >> 4)), .val = .{ .search = .{ .evaluation = eval, .bound = .ALL } } };
 }
 
 pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove) Hash_entry {
-    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast(hashTable.gen >> 8), .val = .{ .search = .{ .evaluation = eval, .bound = nodeT, .bestMove = bestMove } } };
+    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast((hashTable.gen >> 4)), .val = .{ .search = .{ .evaluation = eval, .bound = nodeT, .bestMove = bestMove } } };
 }
 pub const probeResult = struct {
     writer: hashWriter = .{},
@@ -154,7 +151,7 @@ pub const Hash_bucket = struct {
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             const currDepth = entry._depth;
-            if (!entry.valid() or (entry.age() + configl.SCHEDULER_MAX_ENDGAME_DEPTH) < n_entry.age()) {
+            if (!entry.valid() or (entry.age() + configl.OLD_THRESHOLD) < n_entry.age()) {
                 p_self.entries[i] = n_entry;
                 p_self.len = @min(p_self.len + 1, p_self.entries.len);
                 return true;

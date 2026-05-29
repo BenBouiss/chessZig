@@ -39,23 +39,12 @@ pub fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
 }
 
 pub const moveInfo = struct {
-    //// <pieces>: 0th bit, 4 bit from piece, 4 bit to piece, 4 bit capture piece, 4 bit left
-    //pieces: u16 = 0,
     fromP: e_piece = .nEmptySquare,
     toP: e_piece = .nEmptySquare,
     to: u8 = 0,
     from: u8 = 0,
     flag: e_moveFlags = .QUIETMOVE,
 
-    //pub inline fn fromPiece(self: moveInfo) e_piece {
-    //    return @enumFromInt(self.pieces & 0xF);
-    //}
-    //pub inline fn toPiece(self: moveInfo) e_piece {
-    //    return @enumFromInt((self.pieces >> 4) & 0xF);
-    //}
-    //pub inline fn cPiece(self: moveInfo) e_piece {
-    //    return @enumFromInt((self.pieces >> 8) & 0xF);
-    //}
     pub inline fn isCastle(self: moveInfo) bool {
         return self.flag == .KINGCASTLE or self.flag == .QUEENCASTLE;
     }
@@ -63,7 +52,6 @@ pub const moveInfo = struct {
     pub inline fn isPromotion(self: moveInfo) bool {
         return (@intFromEnum(self.flag) >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
     }
-
     pub inline fn isCapture(self: moveInfo) bool {
         return (@intFromEnum(self.flag) & @intFromEnum(e_moveFlags.CAPTURE) != 0);
     }

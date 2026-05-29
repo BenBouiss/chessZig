@@ -7,6 +7,7 @@ const movel = @import("move.zig");
 const heuristicl = @import("heuristic.zig");
 const hashl = @import("hashTable.zig");
 const typel = @import("type.zig");
+const squarel = @import("square.zig");
 
 const e_piece = typel.e_piece;
 const e_color = typel.e_color;
@@ -950,7 +951,7 @@ pub const boardState = struct {
         return true;
     }
 
-    pub fn isLegalFast(p_self: *const boardState, all_attack: u64, move: IMove, p_kingSq: *const chessl.squareInfo, p_checks: *const chessl.squarel.checkContainer, diagPieceBB: u64, linePieceBB: u64) bool {
+    pub fn isLegalFast(p_self: *const boardState, all_attack: u64, move: IMove, p_kingSq: *const squarel.squareInfo, p_checks: *const squarel.checkContainer, diagPieceBB: u64, linePieceBB: u64) bool {
         const kingBB = chessl.sqToBitboard(p_kingSq.sq);
         const isAttacked: bool = (kingBB & all_attack) != 0;
         const to: e_square = @enumFromInt(move.getTo());
@@ -981,7 +982,7 @@ pub const boardState = struct {
 
             return ((last_pin == p_checks.squares[0].getBB()) or (p_checks.squares[0].sq == _to));
         }
-        const toKing = chessl.squareInfo.init(to);
+        const toKing = squarel.squareInfo.init(to);
         const pinInfo = (chessl.isPiecePinned(p_self.b.occupiedBB(), from, &toKing, diagPieceBB, linePieceBB));
         // either no pinning piece is found or the pinned piece can be captured
         const isNotPinned = (pinInfo == chessl.EMPTY) or ((pinInfo ^ toKing.getBB()) == chessl.EMPTY);

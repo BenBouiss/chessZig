@@ -12,6 +12,7 @@ const schedulerl = @import("search/scheduler.zig");
 const threadingl = @import("search/threading.zig");
 const benchmarkl = @import("search/benchmark.zig");
 const perftl = @import("search/perft.zig");
+const historyl = @import("history.zig");
 
 const filel = @import("file.zig");
 const timel = @import("time.zig");
@@ -24,7 +25,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USERAZORING, USERFP, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
@@ -214,6 +215,7 @@ pub const engineOptions = struct {
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     useRFP: bool = configl.DEFAULT_USE_RFP,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
+    useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
 
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     limitElo: bool = configl.DEFAULT_LIMIT_ELO,
@@ -329,9 +331,12 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "useQuiescence", .optionType = .USEQUIESCENCE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEQUIESC } } });
 
         try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
+
         try p_self.addOption(.{ .name = "useLMR ", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
 
         try p_self.addOption(.{ .name = "useFutility", .optionType = .USEFUTILITY, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_FUTILITY } } });
+
+        try p_self.addOption(.{ .name = "useProbCut", .optionType = .USEPROBCUT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_PROBCUT } } });
 
         try p_self.addOption(.{ .name = "useRazoring", .optionType = .USERAZORING, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RAZORING } } });
         try p_self.addOption(.{ .name = "useRFP", .optionType = .USERFP, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RFP } } });
@@ -738,6 +743,12 @@ pub const engine = struct {
                     return false;
                 };
             },
+            .USEPROBCUT => {
+                p_self.options.useProbCut = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                    return false;
+                };
+            },
+
             .USERAZORING => {
                 p_self.options.useRazoring = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
@@ -872,7 +883,7 @@ pub const engine = struct {
     }
     pub fn refreshInternals(p_self: *engine) void {
         _ = p_self.updateElo(p_self.options.engineElo);
-        heuristicl._initMoveOrdering();
+        historyl._initMoveOrdering();
         _ = p_self.updateHash(p_self.options.hashTableSize) catch {};
     }
     fn updateHeuristicWeights(p_self: *engine, path: []const u8) bool {
