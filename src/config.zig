@@ -18,7 +18,7 @@ pub const MAX_THREAD: u32 = 16;
 pub const MAX_HASHSIZE = 1000; // in MB => 1 GB
 
 pub const DEFAULT_THREAD = 1;
-pub const DEFAULT_HASHTABLE_SIZE = 25; // in MB
+pub const DEFAULT_HASHTABLE_SIZE = 16; // in MB
 
 pub const DEFAULT_TRACKMETRICS = true;
 pub const _DEFAULT_TRACKMETRICS = "true";
@@ -26,8 +26,8 @@ pub const _DEFAULT_TRACKMETRICS = "true";
 pub const DEFAULT_REPORTPROGRESS = true;
 pub const _DEFAULT_REPORTPROGRESS = "true";
 
-pub const DEFAULT_USEHASHTABLE = false;
-pub const _DEFAULT_USEHASHTABLE = "false";
+pub const DEFAULT_USEHASHTABLE = true;
+pub const _DEFAULT_USEHASHTABLE = "true";
 
 pub const DEFAULT_USE_NULLPRUNE = true;
 pub const _DEFAULT_USE_NULLPRUNE = "true";
@@ -116,8 +116,6 @@ pub const INFO_TICKRATE_NS = INFO_TICKRATE * (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 500_000;
 pub const THREADPOOL_TICKRATE_NS = 100_000;
 pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
-
-pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";
 
 // Tuner settings
 //pub const N_POSITIONS: usize = 800000;

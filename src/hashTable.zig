@@ -19,7 +19,7 @@ pub const Key = struct {
 // will try to implement the chess programming version where way more stuff is stored
 const entryComponents = packed union { search: searchEntry, perft: perftEntry };
 
-pub const subKeyType = u32;
+pub const subKeyType = u48;
 pub const KEY_SHIFT = 64 - @bitSizeOf(subKeyType);
 pub inline fn keyToUpperKey(key: u64) subKeyType {
     return @intCast(key >> KEY_SHIFT);
@@ -99,12 +99,17 @@ pub inline fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Ha
     return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast(hashTable.gen >> 8), .val = .{ .perft = .{ .moveAmount = @intCast(moveAmount) } } };
 }
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
-    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast((hashTable.gen >> 4)), .val = .{ .search = .{ .evaluation = eval, .bound = .ALL } } };
+    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @truncate(hashTable.gen >> 4), .val = .{ .search = .{ .evaluation = eval, .bound = .ALL } } };
 }
 
 pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove) Hash_entry {
-    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @intCast((hashTable.gen >> 4)), .val = .{ .search = .{ .evaluation = eval, .bound = nodeT, .bestMove = bestMove } } };
+    return .{ ._valid = true, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @truncate(hashTable.gen >> 4), .val = .{ .search = .{ .evaluation = eval, .bound = nodeT, .bestMove = bestMove } } };
 }
+
+pub const getResult = struct {
+    nextIdx: u8 = 0,
+    entry: ?Hash_entry = .{},
+};
 pub const probeResult = struct {
     writer: hashWriter = .{},
     entry: ?Hash_entry = .{},
@@ -113,8 +118,19 @@ pub const hashWriter = struct {
     bucket: *Hash_bucket = undefined,
     idx: u8 = 0,
 
+    pub inline fn init(key: u64) hashWriter {
+        return .{ .bucket = hashTable.getBucketFromFullHashIndex(key) };
+    }
+    pub inline fn writeShort(self: *hashWriter, entry: Hash_entry) void {
+        self.bucket.entries[self.idx] = entry;
+        hashTable.stat.insertion += 1;
+    }
+
     pub inline fn write(self: *hashWriter, entry: Hash_entry) void {
-        _ = self.bucket.addEntry(entry, configl.DEFAULT_TT_STRAT);
+        const stat = self.bucket.addEntry(entry, configl.DEFAULT_TT_STRAT);
+        if (stat) {
+            hashTable.stat.insertion += 1;
+        }
     }
 };
 pub const Hash_bucket = struct {
@@ -218,6 +234,25 @@ pub const Hash_bucket = struct {
         }
         return null;
     }
+    pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, depth: u8) getResult {
+        const _hash = keyToUpperKey(hash);
+        var next: u8 = 0;
+        var nextA: u8 = 255;
+        for (0..configl.ITEM_PER_BUCKET) |i| {
+            const entry = p_self.entries[i];
+            // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
+            if ((entry.key == _hash) and (entry._depth >= depth)) {
+                hashTable.stat.hit += 1;
+                return .{ .entry = entry, .nextIdx = next };
+            }
+            if (entry._age < nextA) {
+                nextA = entry._age;
+                next = @intCast(i);
+            }
+        }
+        hashTable.stat.miss += 1;
+        return .{ .entry = null, .nextIdx = next };
+    }
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?Hash_entry {
         const _hash = keyToUpperKey(hash);
         for (0..configl.ITEM_PER_BUCKET) |i| {
@@ -263,6 +298,7 @@ pub const Hash_table = struct {
         ret.size = chess.xToBitboard(ret.closestBit);
         ret.mask = ret.size - 1;
         ret.stat.insertion = 0;
+        ret.gen = 0;
 
         ret.entries = (try alloc.alloc(Hash_bucket, ret.size));
 
@@ -313,7 +349,7 @@ pub const Hash_table = struct {
             }
         }
     }
-    pub fn storeEntry_cst(p_self: *Hash_table, p_entry: *const Hash_entry, key: u64, comptime strategy: TT_strat) bool {
+    pub fn storeEntry_cst(p_self: *Hash_table, p_entry: Hash_entry, key: u64, comptime strategy: TT_strat) bool {
         var p_bucket = p_self.getBucketFromFullHashIndex(key);
         const stat = p_bucket.addEntry(p_entry, strategy);
         if (stat) {
@@ -327,7 +363,8 @@ pub const Hash_table = struct {
     }
     pub fn probeMatch(p_self: *const Hash_table, key: u64, depth: u8) probeResult {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
-        return .{ .writer = .{ .bucket = p_bucket, .idx = 0 }, .entry = p_bucket.getEntryMatch(key, depth) };
+        const res = p_bucket.getEntryMatchNext(key, depth);
+        return .{ .writer = .{ .bucket = p_bucket, .idx = res.nextIdx }, .entry = res.entry };
     }
     pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64) bool {
         var p_bucket = p_self.getBucketFromFullHashIndex(key);

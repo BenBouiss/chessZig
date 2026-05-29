@@ -111,6 +111,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
     gen.fetchNext(p_state);
     const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, .{}, depth, currS.prevLineMove, true);
+
     var i: usize = 0;
     while (gen.pickNext(&order)) |move| : (i += 1) {
         var _delta = BIG_DELTA;
