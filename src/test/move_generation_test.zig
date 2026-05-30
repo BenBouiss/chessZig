@@ -119,6 +119,43 @@ test "draw detection" {
     std.log.info("[TEST]: Draw detection case passed\n", .{});
 }
 
+pub const benchmarkEntries = [_][]const u8{
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 ",
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ",
+    "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1",
+    "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9",
+};
+
+test "pseudo legal move generator" {
+    for (0..benchmarkEntries.len) |i| {
+        const state = try chessl.getBoardFromFen(benchmarkEntries[i]);
+        var gen: moveGenl.moveGene = .{};
+        const count = gen.getMoveCounts(&state);
+        const fmoves = moveGenl.generateLegalMoves(&state);
+        _ = count.compare(moveGenl.genTypeCountFromState(&state)) catch |e| {
+            switch (e) {
+                moveGenl.genError.quietMoveErr => {
+                    gen.generateMove(.QUIET, &state);
+                    gen._moves.printDifference(fmoves);
+                },
+                moveGenl.genError.captureMoveErr => {
+                    gen.generateMove(.CAPTURE, &state);
+                    gen._moves.printDifference(fmoves);
+                },
+                moveGenl.genError.evasionMoveErr => {
+                    gen.generateMove(.EVASION, &state);
+                    gen._moves.printDifference(fmoves);
+                },
+                moveGenl.genError.promoMoveErr => {
+                    gen.generateMove(.PROMO, &state);
+                    gen._moves.printDifference(fmoves);
+                },
+                moveGenl.genError.allMoveErr => {},
+            }
+        };
+    }
+}
+
 pub fn main() void {
     std.log.info("[TEST]: Running the move generation checks\n", .{});
 }

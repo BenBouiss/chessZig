@@ -932,9 +932,9 @@ pub inline fn maskOutPawnQuietMove(comptime white: bool, empty: u64) u64 {
 pub inline fn maskOutPawnDoublePush(comptime white: bool, empty: u64) u64 {
     const ret = maskOutPawnQuietMove(white, empty);
     if (comptime white) {
-        return (ret >> 8) & whitePawnDoubleRank;
+        return (ret >> 8) & ret & whitePawnDoubleRank;
     }
-    return (ret << 8) & blackPawnDoubleRank;
+    return (ret << 8) & ret & blackPawnDoubleRank;
 }
 
 pub inline fn getSqDiag(sq: e_square) i8 {
@@ -1460,11 +1460,30 @@ pub fn test_move_heur() !void {
         std.debug.print("{s} : i:{d} idx:{d} score:{d} depth:{d}\n", .{ move.getStr(), i, idx, score, depth });
     }
 }
+pub fn testPseudoLegal() !void {
+    var state = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+    var gen: moveGenl.moveGene = .{};
+    gen.generateAll(&state);
+    gen._moves.print();
+
+    gen.generateMove(.CAPTURE, &state);
+    gen._moves.print();
+
+    gen.generateMove(.PROMO, &state);
+    gen._moves.print();
+
+    gen.generateMove(.QUIET, &state);
+    gen._moves.print();
+
+    gen.generateMove(.EVASION, &state);
+    gen._moves.print();
+}
 
 pub fn main(alloc: std.mem.Allocator) !void {
     _ = alloc;
     //mainl.initAll(alloc, true);
-    try test_avx();
+    //try test_avx();
+    try testPseudoLegal();
     //try test_move_heur();
     return;
 }

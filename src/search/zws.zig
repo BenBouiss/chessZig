@@ -154,6 +154,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     var i_reset: bool = false;
     while (gen.pickNext(&order)) |move| : (i += 1) {
+        if (gen.extra == .CAPTURES) {
+            const cPiece = p_state.getPiece(move.getTo());
+            if (chess.isKingPiece(cPiece)) {
+                continue;
+            }
+        }
         if (!skipQuietMoves and i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
             order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);

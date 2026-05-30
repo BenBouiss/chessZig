@@ -153,12 +153,12 @@ pub fn main(init: std.process.Init) anyerror!void {
     const GPA = init.gpa;
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
-    try test_bench(GPA);
+    //try test_bench(GPA);
     //try test_perft(GPA);
 
     //try test_speed();
     //try heuristicl.main(GPA);
-    //try chessl.main(GPA);
+    try chessl.main(GPA);
     //try test_bug2(GPA);
     //try bookl.main(GPA);
     //try test_test(GPA);

@@ -1266,6 +1266,9 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
 
     if (move.isCapture()) {
         const cPiece: e_piece = if (move.isEnpassant()) (e_piece.nWhitePawn) else (p_state.getPiece(to));
+        if (chess.isKingPiece(cPiece)) {
+            return configl.ORDERING_LINE_VALUE + 2;
+        }
         //return (SEE(p_state, move) * configl.ORDERING_SEE_MULTI) + historyl.captureHistory[@intFromEnum(fpiece)][@intFromEnum(cPiece)][to];
         if (comptime mva) {
             return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
