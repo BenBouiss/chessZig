@@ -18,10 +18,7 @@ const scoreType = heuristicl.scoreType;
 const searchStack = alphaBetal.searchStack;
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, pv: *movel.pvContainer, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, comptime t: alphaBetal.searchType, ss: *searchStack) scoreType {
-    if (comptime t == .PV) {
-        pv.setLen(ply);
-    }
+pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, comptime t: alphaBetal.searchType, ss: *searchStack) scoreType {
     var _alpha = alpha;
     var _depth = depth;
     const white: bool = p_state.whiteToMove();
@@ -60,8 +57,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
 
     if (_depth == 0 or !p_info.alive) {
-        return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, pv, t, ss);
+        return alphaBetal.handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, t, ss);
     }
+    if (comptime t == .PV) {
+        var pv: movel.pvContainer = .{};
+        ss.getFrame(ply + 1).pv = &pv;
+    }
+
     const f: boardl.boardFrame = .copy(p_state);
     var currS = ss.getFrame(ply);
     const static_eval = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, white);
@@ -84,10 +86,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const isEndGame = p_state.isEndGame();
     if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
-        const R: u16 = if (improving) (2 + 1) else 4;
+        const R: u16 = if (improving) 3 else 4;
         if (_depth > R and !ischeck and !isEndGame) {
             p_state.makeNullMove();
-            const score = -searchLoop(p_state, p_info, p_features, pv, _depth - R, ply + R, -beta, 1 - beta, .NonPV, ss);
+            const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -beta, 1 - beta, .NonPV, ss);
             p_state.undoNullMove();
             p_state.frame = f;
             if (score >= beta) {
@@ -128,8 +130,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         //https://www.chessprogramming.org/Razoring limited razoring
         const margin: scoreType = if (improving) 300 else 100;
         if (p_features.useRFP and _depth == 2) {
-            if (currS.staticEval.getScore() >= (beta + margin)) {
-                return (currS.staticEval.getScore() + beta) >> 1;
+            if (static_eval >= (beta + margin)) {
+                return (static_eval + beta) >> 1;
             }
         }
         if (p_features.useRazoring) {
@@ -177,20 +179,20 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
         var score: scoreType = 0;
         if (i == 0) {
-            score = -searchLoop(p_state, p_info, p_features, pv, _depth - 1, ply + 1, -beta, -_alpha, t, ss);
+            score = -searchLoop(p_state, p_info, p_features, _depth - 1, ply + 1, -beta, -_alpha, t, ss);
         } else {
             if (useLMR and (order.depths[i] < (_depth - 1))) {
-                score = -searchLoop(p_state, p_info, p_features, pv, order.depths[i], ply + 1, -_alpha - 1, -_alpha, .NonPV, ss);
+                score = -searchLoop(p_state, p_info, p_features, order.depths[i], ply + 1, -_alpha - 1, -_alpha, .NonPV, ss);
             } else {
                 score = _alpha + 1;
             }
             if (score > _alpha) {
-                score = -searchLoop(p_state, p_info, p_features, pv, _depth - 1, ply + 1, -_alpha - 1, -_alpha, .NonPV, ss);
+                score = -searchLoop(p_state, p_info, p_features, _depth - 1, ply + 1, -_alpha - 1, -_alpha, .NonPV, ss);
             }
 
             //https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html
             if (score > _alpha and comptime t == .PV) {
-                score = -searchLoop(p_state, p_info, p_features, pv, _depth - 1, ply + 1, -beta, -_alpha, .PV, ss);
+                score = -searchLoop(p_state, p_info, p_features, _depth - 1, ply + 1, -beta, -_alpha, .PV, ss);
             }
         }
 
@@ -201,14 +203,14 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             finalScore = score;
             bestMove = move;
             if (ply == 0) {
-                pv.onBestMove(move, ply);
+                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
         }
         if (finalScore > _alpha) {
             _alpha = finalScore;
             hashFlag = .ALL;
             if (comptime t == .PV) {
-                pv.onBestMove(move, ply);
+                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
             if (!(gen.extra == .CAPTURES)) {
                 historyl.updateHistoryHeurist(white, move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(_depth));

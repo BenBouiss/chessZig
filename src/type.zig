@@ -14,3 +14,8 @@ pub const e_square = enum(u8) { a1 = 0, b1, c1, d1, e1, f1, g1, h1, a2, b2, c2, 
 pub const bitboard: type = u64;
 pub const scoreType: type = i32;
 pub const weightType: type = i32;
+
+pub const MAX_PLY: u8 = 255;
+
+pub const totalPhase: scoreType = 24;
+pub const phases_arr = [_]usize{ 0, 1, 1, 2, 4, 0 };

@@ -303,7 +303,7 @@ pub const Hash_table = struct {
         var total_size: u64 = @intCast(MBsize * 1024 * 1024);
         total_size = @divFloor(total_size, @sizeOf(Hash_entry) * configl.ITEM_PER_BUCKET);
 
-        ret.closestBit = chess.l_getMsbIdx(total_size);
+        ret.closestBit = chess.l_getMsbIdx(total_size) - 1;
         ret.size = chess.xToBitboard(ret.closestBit);
         ret.mask = ret.size - 1;
         ret.stat.insertion = 0;
@@ -323,7 +323,7 @@ pub const Hash_table = struct {
         ret.initialized = true;
 
         if (verbose) {
-            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Size of one bucket {d}\n", .{ ret.size, ret.closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, @sizeOf(Hash_bucket) });
+            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Total allocated size {d} bytes for {d} entries\n", .{ ret.size, ret.closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, ret.size * configl.ITEM_PER_BUCKET * @sizeOf(Hash_entry), ret.size * configl.ITEM_PER_BUCKET });
             ret.getBucket(0).printSize();
         }
         return ret;

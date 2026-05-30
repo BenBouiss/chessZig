@@ -39,7 +39,7 @@ pub fn evaluate(p_state: *const boardl.boardState, values: *const heuristicValue
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
     const phase: scoreType = @intCast(p_state.getPhase());
-    const _phase: scoreType = @divFloor((phase >> 8) + (totalPhase >> 1), totalPhase);
+    const _phase: scoreType = @divFloor((phase >> 8) + (typel.totalPhase >> 1), typel.totalPhase);
 
     //ret += evaluate_PSQT(p_state, values, _phase);
 
@@ -82,7 +82,7 @@ pub fn evaluate_debug(p_state: *const boardl.boardState, values: *const heuristi
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
     const phase: scoreType = @intCast(p_state.getPhase());
-    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+    const _phase: scoreType = @divFloor(phase * 256 + (typel.totalPhase >> 1), typel.totalPhase);
 
     const ret: heuristicComponents = .{
         //.PSQT = evaluate_PSQT(p_state, values, _phase),
@@ -654,13 +654,6 @@ pub var globalHeuristic: heuristicValues = .{
     .KingMobilityValue = .{ 0, 60 },
 };
 
-const pawnPhase: usize = 0;
-pub const bishopPhase: usize = 1;
-pub const knightPhase: usize = 1;
-pub const rookPhase: usize = 2;
-pub const queenPhase: usize = 4;
-pub const totalPhase: scoreType = @intCast(knightPhase * 4 + bishopPhase * 4 + rookPhase * 4 + queenPhase * 2);
-pub const phases_arr = [_]usize{ pawnPhase, bishopPhase, knightPhase, rookPhase, queenPhase, 0 };
 // value between 0 and 1
 
 pub const MG: usize = 0;
@@ -1277,7 +1270,6 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
         if (comptime mva) {
             return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
         } else {
-            //return (SEE(p_state, move) * configl.ORDERING_SEE_MULTI);
             return SEE(p_state, move);
         }
     } else {
@@ -1328,7 +1320,6 @@ pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const
     }
     return ret;
 }
-//pub const moveReductionAmount = 4;
 pub const moveReductionAmount = 4;
 pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool) void {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
@@ -1553,7 +1544,7 @@ pub fn lowestAttackDefPiece(p_state: *const boardl.boardState, attDef: u64, whit
 }
 
 pub fn dummyScaling(s: scoreType, phase: scoreType) scoreType {
-    const _phase: scoreType = @divFloor(phase * 256 + (totalPhase >> 1), totalPhase);
+    const _phase: scoreType = @divFloor(phase * 256 + (typel.totalPhase >> 1), typel.totalPhase);
     return @divFloor((s * (256 - _phase)) + s * _phase, 256);
 }
 pub fn test_scaling() !void {

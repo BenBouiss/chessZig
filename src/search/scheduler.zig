@@ -27,7 +27,6 @@ pub const searchReport = struct {
 
 pub const searchFeatures = struct {
     useHash: bool = configl.DEFAULT_USEHASHTABLE,
-    useQuiescence: bool = configl.DEFAULT_USEQUIESC,
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
     fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
@@ -41,7 +40,6 @@ pub const searchFeatures = struct {
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
     ret.useHash = p_engine.options.useHashTable;
-    ret.useQuiescence = p_engine.options.useQuiescence;
     ret.useNullPrune = p_engine.options.useNullPrune;
     ret.useLMR = p_engine.options.useLMR;
     ret.useStaticSearch = p_engine.options.useStaticSearch;
@@ -267,15 +265,11 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
     if (features.useHash) {
         hashl.hashTable.nextGeneration();
     }
-    var line: movel.line = .{};
     var ss: alphaBetal.searchStack = .{};
     if (sched.isDebugMode()) {
         std.debug.print("[DEBUG] _startSearch: starting from depth {d} max depth {d} remaining time {d} ms\n", .{ depth, maxDepth, sched.timeM.remainingTimeMs });
     }
 
-    //_ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &ss, &line);
-    //var decision = &p_info.currentBest;
-    //var score = decision.scoring;
     var decision = &p_info.currentBest;
     var score = decision.scoring;
 
@@ -283,13 +277,17 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
         depth += 1;
         if (sched.isDebugMode()) {
             std.debug.print("[DEBUG] _startSearch: starting line ", .{});
-            line.print();
+            ss.printPV();
         }
         _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &ss);
 
         if (depth != 1) {
-            //line.copyFromLine(&p_info.currentBest.line);
             ss.setPrevLine(&p_info.currentBest.line);
+        }
+
+        if (sched.isDebugMode()) {
+            std.debug.print("[DEBUG] _startSearch: after search line ", .{});
+            ss.printPV();
         }
         decision = &p_info.currentBest;
         score = decision.scoring;

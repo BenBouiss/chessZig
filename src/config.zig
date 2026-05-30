@@ -36,7 +36,6 @@ pub const ORDERING_LINE_VALUE = 99999;
 
 //https://www.chessprogramming.org/Move_Ordering
 pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
-pub const ORDERING_SEE_MULTI = 10;
 
 pub const KILLER_0_HEURISTIC_VALUE = 900;
 pub const KILLER_1_HEURISTIC_VALUE = 800;
@@ -45,13 +44,9 @@ pub const MAX_HIST_HEURISTIC_VALUE = 700;
 pub const LMR_SCORE_THRESHOLD = 350; // 1 / 2
 //pub const LMR_SCORE_THRESHOLD = 425; // 3 / 4
 
-pub const DEFAULT_USEQUIESC = true;
-pub const _DEFAULT_USEQUIESC = "true";
-
 pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
 pub const MAX_DEPTH: u16 = 6;
-pub const MAXIMUM_SEARCH_DEPTH: u16 = 64;
 pub const MAX_QUIESC_DEPTH: u16 = 16;
 
 pub const _DEFAULT_LIMIT_ELO = "false";

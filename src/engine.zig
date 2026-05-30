@@ -25,7 +25,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEQUIESCENCE, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
@@ -209,7 +209,6 @@ pub const engineMetrics = struct {
 pub const engineOptions = struct {
     nThreads: spinVarType = configl.DEFAULT_THREAD,
     useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
-    useQuiescence: bool = configl.DEFAULT_USEQUIESC,
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
@@ -327,8 +326,6 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "hashS", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
         try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEHASHTABLE } } });
-
-        try p_self.addOption(.{ .name = "useQuiescence", .optionType = .USEQUIESCENCE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEQUIESC } } });
 
         try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
 
@@ -721,12 +718,6 @@ pub const engine = struct {
                 return true;
             },
 
-            .USEQUIESCENCE => {
-                p_self.options.useQuiescence = getCheckValFromSetOptionCmd(tokens, entry) catch {
-                    return false;
-                };
-                return true;
-            },
             .USENULLPRUNE => {
                 p_self.options.useNullPrune = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;

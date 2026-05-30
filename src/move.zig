@@ -523,7 +523,7 @@ pub const moveBBState = struct {
 };
 
 pub const line = struct {
-    moves: [configl.MAXIMUM_SEARCH_DEPTH]IMove = undefined,
+    moves: [typel.MAX_PLY]IMove = undefined,
     len: usize = 0,
     pub fn format(self: *const line, writer: *std.Io.Writer) !void {
         for (0..self.len) |i| {
@@ -537,9 +537,9 @@ pub const line = struct {
         std.debug.print("\n", .{});
     }
     pub fn setLineFromPV(self: *line, pv: *pvContainer) void {
-        self.len = pv.pv_len[0];
+        self.len = pv.len;
         for (0..self.len) |i| {
-            self.moves[i] = pv.pv_arr[i][i];
+            self.moves[i] = pv.moves[i];
         }
     }
     pub fn copyFromLine(self: *line, other: *line) void {
@@ -550,21 +550,26 @@ pub const line = struct {
     }
 };
 pub const pvContainer = struct {
-    pv_arr: [configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove),
+    moves: [typel.MAX_PLY]IMove = undefined,
+    len: u8 = 0,
 
-    pv_len: [configl.MAXIMUM_SEARCH_DEPTH]usize = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH]usize),
-
-    pub inline fn setLen(p_self: *pvContainer, ply: u16) void {
-        p_self.pv_len[ply] = ply;
-    }
-
-    pub fn onBestMove(p_self: *pvContainer, move: IMove, ply: u16) void {
-        // sets the main line (ie: the main diagonal) with the best move found
-        p_self.pv_arr[ply][ply] = move;
-
-        for (ply + 1..p_self.pv_len[ply + 1]) |next_p| {
-            p_self.pv_arr[ply][next_p] = p_self.pv_arr[ply + 1][next_p];
+    pub fn print(self: *const pvContainer) void {
+        for (0..self.len) |i| {
+            std.debug.print("{s} ", .{self.moves[i].getStr()});
         }
-        p_self.pv_len[ply] = p_self.pv_len[ply + 1];
+        std.debug.print("\n", .{});
+    }
+    pub fn onBestMove(self: *pvContainer, move: IMove, other: ?*const pvContainer) void {
+        if (other) |child| {
+            self.len = child.len;
+            @memcpy(self.moves[1 .. self.len + 1], child.moves[0..self.len]);
+            //for (0..child.len) |i| {
+            //    self.moves[1 + i] = child.moves[i];
+            //}
+        } else {
+            self.len = 0;
+        }
+        self.moves[0] = move;
+        self.len += 1;
     }
 };

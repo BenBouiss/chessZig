@@ -5,6 +5,7 @@ const weightl = @import("../weights.zig");
 const hashl = @import("../hashTable.zig");
 const configl = @import("../config.zig");
 const boardl = @import("../board.zig");
+const typel = @import("../type.zig");
 
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
@@ -29,10 +30,12 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
 
     _ = p_startingMoves;
     var pv: pvContainer = .{};
+    ss.getFrame(0).pv = &pv;
 
-    const score = zwsl.searchLoop(p_state, p_info, p_features, &pv, depth, 0, alpha, beta, .PV, ss);
+    const score = zwsl.searchLoop(p_state, p_info, p_features, depth, 0, alpha, beta, .PV, ss);
 
-    const move = pv.pv_arr[0][0];
+    const move = pv.moves[0];
+
     p_info.currentBest.move = move;
     p_info.currentBest.scoring = score;
     p_info.currentBest.line.setLineFromPV(&pv);
@@ -45,7 +48,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, pv: *pvContainer, comptime t: searchType, ss: *searchStack) scoreType {
+pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
     if (p_features.useHash and comptime t == .NonPV) {
         const entry = hashl.getEntryFromMatch(p_state.frame.key, 0);
         if (entry) |_entry| {
@@ -54,21 +57,9 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
         }
     }
     p_info.searchStat.n_nodeExplored += 1;
-    if (p_features.useQuiescence) {
-        const ischeck = p_state.isChecked();
-        // perform quiesc
-        const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, pv, t, ss);
-        if (p_features.useHash) {
-            const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
-            _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code);
-        }
-        return score;
-    }
-
-    var currS = ss.getFrame(ply);
-    const score = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, p_state.whiteToMove());
-    currS.staticEval = .{ .s = score, .t = .STD };
-
+    const ischeck = p_state.isChecked();
+    // perform quiesc
+    const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, ss);
     if (p_features.useHash) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
         _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code);
@@ -76,11 +67,9 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
     return score;
 }
 
-pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, pv: *pvContainer, comptime t: searchType, ss: *searchStack) scoreType {
+pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, comptime t: searchType, ss: *searchStack) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
-    if (comptime t == .PV) {
-        pv.setLen(ply);
-    }
+
     var _alpha = alpha;
 
     var currS = ss.getFrame(ply);
@@ -91,20 +80,23 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         p_info.searchStat.n_nodeExplored += 1;
         return static_eval;
     }
+
+    if (comptime t == .PV) {
+        var pv: movel.pvContainer = .{};
+        ss.getFrame(ply + 1).pv = &pv;
+    }
     var best_value = static_eval;
     // stand pat https://www.chessprogramming.org/Quiescence_Search#StandPat
     if (best_value >= beta) {
         p_info.searchStat.n_cutoffs += 1;
         return best_value;
     }
+
     //https://www.chessprogramming.org/Delta_Pruning
     const BIG_DELTA = weightl.simpleQueenScore;
     const f: boardl.boardFrame = .copy(p_state);
 
     if (best_value > _alpha) {
-        if (comptime t == .PV) {
-            pv.onBestMove(p_state.getLastMove(), ply - 1);
-        }
         _alpha = best_value;
     }
 
@@ -120,7 +112,8 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         }
         // delta pruning
         if (static_eval < (_alpha - _delta)) {
-            return _alpha;
+            continue;
+            //return _alpha;
         }
 
         // if move nor capture nor checking
@@ -129,7 +122,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 
         p_state.makeMove(move);
 
-        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1, wasChecked, pv, t, ss);
+        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1, wasChecked, t, ss);
 
         _ = p_state.undoMove();
         p_state.frame = f;
@@ -144,7 +137,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         if (score > _alpha) {
             _alpha = score;
             if (comptime t == .PV) {
-                pv.onBestMove(move, ply);
+                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
         }
     }
@@ -154,16 +147,15 @@ pub const searchFrame = struct {
     staticEval: heuristicl.score = .{},
     ply: u16 = 0,
     valid: bool = false,
-    // TODO: place the currentLine moves + prevLine moves inside of these structs in the stack
     prevLineMove: IMove = .{},
+    pv: ?*movel.pvContainer = null,
 };
 
-pub const MAX_PLY = 24;
 // used to garanty getFrameOffset(0, 4) returns a default value
 pub const negativeOffset: u16 = 4;
 //index by ply
 pub const searchStack = struct {
-    e: [MAX_PLY + configl.MAX_QUIESC_DEPTH + negativeOffset]searchFrame = @splat(.{}),
+    e: [typel.MAX_PLY + configl.MAX_QUIESC_DEPTH + negativeOffset]searchFrame = @splat(.{}),
     pub inline fn getFrame(self: *searchStack, ply: u16) *searchFrame {
         return &self.e[ply + negativeOffset];
     }
@@ -174,5 +166,14 @@ pub const searchStack = struct {
         for (0..line.len) |i| {
             self.e[i + negativeOffset].prevLineMove = line.moves[i];
         }
+    }
+    pub fn printPV(self: *const searchStack) void {
+        for (negativeOffset..self.e.len) |i| {
+            if (!self.e[i].prevLineMove.isValid()) {
+                break;
+            }
+            std.debug.print("{s} ", .{self.e[i].prevLineMove.getStr()});
+        }
+        std.debug.print("\n", .{});
     }
 };

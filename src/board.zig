@@ -341,10 +341,10 @@ pub const boardState = struct {
         p_self.b.pieceArray[@intFromEnum(square)] = piece;
         if (@intFromEnum(piece) < chessl.N_PIECES_TYPES) {
             p_self.b.c_occupiedBB[@intFromEnum(e_color.WHITE)] |= one_mask;
-            p_self.frame.phase += heuristicl.phases_arr[@intFromEnum(piece)];
+            p_self.frame.phase += typel.phases_arr[@intFromEnum(piece)];
         } else {
             p_self.b.c_occupiedBB[@intFromEnum(e_color.BLACK)] |= one_mask;
-            p_self.frame.phase += heuristicl.phases_arr[@intFromEnum(piece) - chessl.N_PIECES_TYPES];
+            p_self.frame.phase += typel.phases_arr[@intFromEnum(piece) - chessl.N_PIECES_TYPES];
         }
         if (piece == .nWhiteKing) {
             p_self.b.wKingSq = square;
@@ -653,7 +653,7 @@ pub const boardState = struct {
             p_self.frame.stat.onRookMove(toBB, !white);
         }
 
-        p_self.frame.phase -= if (comptime white) (heuristicl.phases_arr[@intFromEnum(victim) - chessl.N_PIECES_TYPES]) else heuristicl.phases_arr[@intFromEnum(victim)];
+        p_self.frame.phase -= if (comptime white) (typel.phases_arr[@intFromEnum(victim) - chessl.N_PIECES_TYPES]) else typel.phases_arr[@intFromEnum(victim)];
         p_self.b.pieceCount[@intFromEnum(victim)] -= 1;
 
         p_self.b.pieceArray[from] = .nEmptySquare;
@@ -672,7 +672,7 @@ pub const boardState = struct {
                     p_self.b.pieceCount[@intFromEnum(toPiece)] -= 1;
                     toPiece = chessl.flagPromotionToPiece(move.getFlag(), white);
                     p_self.b.pieceCount[@intFromEnum(toPiece)] += 1;
-                    p_self.frame.phase += if (comptime white) (heuristicl.phases_arr[@intFromEnum(toPiece)]) else heuristicl.phases_arr[@intFromEnum(toPiece) - chessl.N_PIECES_TYPES];
+                    p_self.frame.phase += if (comptime white) (typel.phases_arr[@intFromEnum(toPiece)]) else typel.phases_arr[@intFromEnum(toPiece) - chessl.N_PIECES_TYPES];
                 }
             }
         } else {
@@ -738,7 +738,7 @@ pub const boardState = struct {
                 p_self.b.pieceCount[@intFromEnum(toPiece)] -= 1;
                 toPiece = chessl.flagPromotionToPiece(move.getFlag(), white);
                 p_self.b.pieceCount[@intFromEnum(toPiece)] += 1;
-                p_self.frame.phase += if (comptime white) (heuristicl.phases_arr[@intFromEnum(toPiece)]) else heuristicl.phases_arr[@intFromEnum(toPiece) - chessl.N_PIECES_TYPES];
+                p_self.frame.phase += if (comptime white) (typel.phases_arr[@intFromEnum(toPiece)]) else typel.phases_arr[@intFromEnum(toPiece) - chessl.N_PIECES_TYPES];
             } else if (move.isDoublePush()) {
                 // middle between from and to
                 p_self.frame.enPassantIdx = if (comptime white) (from + 8) else (from - 8);
@@ -802,7 +802,7 @@ pub const boardState = struct {
         return self.getPiece(move.getTo());
     }
     pub inline fn getPhase(self: *const boardState) usize {
-        var ret: heuristicl.scoreType = @intCast(heuristicl.totalPhase);
+        var ret: heuristicl.scoreType = @intCast(typel.totalPhase);
         ret -= @intCast(self.frame.phase);
         return @intCast(@max(0, ret));
         //return @intCast(@max(0, heuristicl.computePhase(self)));
