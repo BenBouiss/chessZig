@@ -181,7 +181,7 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
     }
     if (feats.useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
-        writer.write(entry);
+        writer.write(entry, .perft);
         //_ = hashl.hashTable.storeEntry(entry, p_state.frame.key.code);
     }
 

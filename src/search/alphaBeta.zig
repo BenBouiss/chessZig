@@ -56,7 +56,7 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
     const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, ss);
     if (p_features.useHash) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
-        _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code);
+        _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code, .search);
     }
     return score;
 }
@@ -175,7 +175,7 @@ pub const searchStack = struct {
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
 pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, comptime t: searchType, ss: *searchStack) scoreType {
     var _alpha = alpha;
-    var _depth = depth;
+    const _depth = depth;
     const white: bool = p_state.whiteToMove();
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
@@ -187,7 +187,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const skipQuietMoves: bool = false;
     var writer: hashl.hashWriter = .init(p_state.frame.key.code);
     if (p_features.useHash and depth > 2 and comptime t == .NonPV) {
-        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(depth));
+        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(depth), p_state);
         writer = res.writer;
         if (res.entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
@@ -286,14 +286,23 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     if (!isCheck and comptime t == .NonPV) {
         //https://www.chessprogramming.org/Razoring limited razoring
         const margin: scoreType = if (improving) 300 else 100;
+
+        //if (p_features.useRazoring and _depth == 3 and (static_eval + margin) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
+        //    _depth = 2;
+        //}
+        // this version from the cpw cpp code using the qsearch method
+        if (p_features.useRazoring and depth <= 3) {
+            const threshold = _alpha - 300 - (depth - 1) * 60;
+            if (static_eval < threshold) {
+                const q = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, .NonPV, ss);
+                if (q < threshold) {
+                    return alpha;
+                }
+            }
+        }
         if (p_features.useRFP and _depth == 2) {
             if (static_eval >= (beta + margin)) {
                 return (static_eval + beta) >> 1;
-            }
-        }
-        if (p_features.useRazoring) {
-            if (_depth == 3 and (static_eval + margin) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
-                _depth = 2;
             }
         }
     }
@@ -367,6 +376,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if (tot == 0 or finalScore < score) {
             finalScore = score;
             bestMove = move;
+            if (ply == 0) {
+                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
+            }
         }
         if (finalScore > _alpha) {
             _alpha = finalScore;

@@ -989,6 +989,36 @@ pub const boardState = struct {
         const isToSecure = ((all_attack & toKing.getBB()) == 0);
         return (isNotPinned and isToSecure);
     }
+    pub fn isMovePseudoLegal(self: *const boardState, move: IMove) bool {
+        // mainly used to verify if a hash move is possible in the current board config good to check for key collision
+        if (!move.isValid()) {
+            return false;
+        }
+        const from = move.getFrom();
+        const to = move.getTo();
+        const fromBB = chessl.xToBitboard(from);
+        const toBB = chessl.xToBitboard(to);
+        const white = self.whiteToMove();
+        if (fromBB & self.b.c_occupiedBB[@intFromBool(white)] == 0) {
+            return false;
+        }
+        if (move.isCapture()) {
+            if (move.isEnpassant()) {
+                if (self.frame.enPassantIdx == 0) {
+                    return false;
+                }
+            } else {
+                if (toBB & self.b.c_occupiedBB[@intFromBool(!white)] == 0) {
+                    return false;
+                }
+            }
+        } else {
+            if (move.isCastle()) {
+                return self.frame.stat._canCastle(white);
+            }
+        }
+        return true;
+    }
 
     pub inline fn isFiftyMoveRepetition(self: *const boardState) bool {
         return self.frame.halfMoveClock >= 50;

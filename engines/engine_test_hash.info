@@ -1,13 +1,12 @@
 [engine1]
-path="engines/bin/engine_29_05_26_prev_tt";
-name="prev + same nbr of entry 262144 -> 524288";
+path="engines/bin/engine_31_05_26";
+name="16 bytes entry";
 "setoption name useHash value true";
 "setoption name reportProgress value false";
-"setoption name hashs value 17";
 
 [engine2]
-path="engines/bin/engine_29_05_26_next_tt";
-name="next";
+path="engines/bin/engine_31_05_26_ext";
+name="9 bytes entry";
 "setoption name useHash value true";
 "setoption name reportProgress value false";
 

@@ -69,7 +69,13 @@ pub const status = struct {
         self.val &= (~BCastlingQMask);
         self.val |= @as(u8, @intFromBool(b_castling)) << 3;
     }
-
+    pub inline fn _canCastle(self: status, whiteMove: bool) bool {
+        if (whiteMove) {
+            return self.canCastle(true);
+        } else {
+            return self.canCastle(false);
+        }
+    }
     pub inline fn canCastle(self: status, comptime whiteMove: bool) bool {
         if (comptime whiteMove) {
             return self.WCastlingK() | self.WCastlingQ();

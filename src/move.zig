@@ -51,7 +51,7 @@ pub const moveInfo = struct {
         return (@intFromEnum(self.flag) & @intFromEnum(e_moveFlags.CAPTURE) != 0);
     }
 };
-pub const IMove = packed struct {
+pub const IMove = extern struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
     m_move: u16 = 0,
 

@@ -12,24 +12,25 @@ test "entry retrievale" {
 
     mainl.initAll(arena, false);
     hashl._initOrReallocHashTable(arena, 25, false);
+    const m: u64 = (chessl.ONE << hashl.KEY_SHIFT);
     for (0..100) |i| {
         const code1: u64 = @intCast(i);
         const entry = hashl.buildEntryFromMatchResult(.{ .code = code1 }, 1, @intCast(i * i));
-        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code1, .KEEP_DEEPER));
+        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code1, .KEEP_DEEPER, .search));
 
-        const code2 = @as(u64, @intCast(i)) + hashl.hashTable.size;
+        const code2 = @as(u64, @intCast(i)) + m;
         const entry2 = hashl.buildEntryFromMatchResult(.{ .code = code2 }, 2, @intCast(i * i * i));
-        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry2, code2, .KEEP_DEEPER));
+        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry2, code2, .KEEP_DEEPER, .search));
     }
     for (0..100) |i| {
         const entry = hashl.getEntryFromMatch(.{ .code = @intCast(i) }, 1);
-        try std.testing.expect(entry.?.valid());
+        try std.testing.expect(entry.?.valid(.search));
 
-        const entry2 = hashl.getEntryFromMatch(.{ .code = @as(u64, @intCast(i)) + hashl.hashTable.size }, 1);
-        try std.testing.expect(entry2.?.valid());
+        const entry2 = hashl.getEntryFromMatch(.{ .code = @as(u64, @intCast(i)) + m }, 1);
+        try std.testing.expect(entry2.?.valid(.search));
 
         const bucket = hashl.hashTable.getBucketFromFullHashIndex(@intCast(i));
-        try std.testing.expectEqual(bucket.len(), 2);
+        try std.testing.expectEqual(bucket.t_len(.search), 2);
     }
 
     std.log.info("[TEST]: entry storing passed\n", .{});
@@ -44,22 +45,22 @@ test "entry overwrite" {
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
 
-    const m: u64 = @intCast(hashl.hashTable.size);
+    const m: u64 = @intCast((chessl.ONE << hashl.KEY_SHIFT));
     const code: u64 = 4;
     //const depths = [_]u8{ 1, 4 };
 
     for (0..100) |i| {
         const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, @intCast(i), @intCast(i));
-        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
+        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER, .search));
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
-    try std.testing.expectEqual(1, bucket.len());
+    try std.testing.expectEqual(1, bucket.t_len(.search));
 
     const entry = hashl.buildEntryFromMatchResult(.{ .code = code + m }, 200, 0);
-    try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code + m, .KEEP_DEEPER));
+    try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code + m, .KEEP_DEEPER, .search));
 
-    try std.testing.expectEqual(2, bucket.len());
+    try std.testing.expectEqual(2, bucket.t_len(.search));
 
     std.log.info("[TEST]: entry overwrite passed\n", .{});
 }
@@ -75,10 +76,10 @@ test "entry replacement" {
     const code: u64 = 42;
     for (0..d.len) |i| {
         const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, d[i], 1);
-        std.debug.assert(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
+        std.debug.assert(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER, .search));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
-    try std.testing.expectEqual(1, _bucket.len());
+    try std.testing.expectEqual(1, _bucket.t_len(.search));
 
     std.log.info("[TEST]: entry replacement passed\n", .{});
 }
