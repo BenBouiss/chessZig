@@ -223,10 +223,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var currS = ss.getFrame(ply);
     const static_eval = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, white);
     currS.staticEval = .{ .s = static_eval, .t = .STD };
-    const ischeck = p_state.isChecked();
+
+    const isCheck = p_state.isChecked();
 
     var improving: bool = false;
-    if (ischeck) {
+    if (isCheck) {
         //
     } else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) {
         improving = currS.staticEval.s > ss.getPrevFrame(ply, 2).staticEval.s;
@@ -242,7 +243,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
         const R: u16 = if (improving) 3 else 4;
-        if (_depth > R and !ischeck and !isEndGame) {
+        if (_depth > R and !isCheck and !isEndGame) {
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -beta, 1 - beta, .NonPV, ss);
             p_state.undoNullMove();
@@ -268,20 +269,21 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
-    if (p_features.useLMR and _depth >= 3 and !ischeck) {
+    if (p_features.useLMR and _depth >= 3 and !isCheck) {
         heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
         useLMR = true;
     }
     //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
     var canFutility: bool = false;
     var futilityScore: scoreType = 0;
-    if (p_features.useFutility and !ischeck and @abs(alpha) < weightl.simpleCheckMateScore and _depth == 1 and comptime t == .NonPV) {
+    if (p_features.useFutility and !isCheck and @abs(alpha) < weightl.simpleCheckMateScore and _depth == 1 and comptime t == .NonPV) {
         const margin: scoreType = if (improving) heuristicl.futilityMargin else 100;
-        futilityScore = heuristicl.c_materialImbalance(p_state, &heuristicl.globalHeuristic, white) + margin;
+        //futilityScore = heuristicl.c_materialImbalance(p_state, &heuristicl.globalHeuristic, white) + margin;
+        futilityScore = static_eval + margin;
         canFutility = true;
     }
 
-    if (!ischeck and comptime t == .NonPV) {
+    if (!isCheck and comptime t == .NonPV) {
         //https://www.chessprogramming.org/Razoring limited razoring
         const margin: scoreType = if (improving) 300 else 100;
         if (p_features.useRFP and _depth == 2) {
@@ -290,8 +292,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             }
         }
         if (p_features.useRazoring) {
-            const eval = heuristicl.c_materialImbalance(p_state, &heuristicl.globalHeuristic, white);
-            if (_depth == 3 and (eval + margin) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
+            if (_depth == 3 and (static_eval + margin) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
                 _depth = 2;
             }
         }
@@ -330,6 +331,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 continue;
             }
         }
+        const to = move.getTo();
+        const from = move.getFrom();
+
         if (canFutility) {
             if (!moveGenl.moveDeliverCheck(p_state, move) and (futilityScore + heuristicl.mat_gain(p_state, move)) < _alpha and tot > 4 and !move.isPromotion()) {
                 continue;
@@ -363,9 +367,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if (tot == 0 or finalScore < score) {
             finalScore = score;
             bestMove = move;
-            if (ply == 0) {
-                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
-            }
         }
         if (finalScore > _alpha) {
             _alpha = finalScore;
@@ -374,14 +375,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
             if (!(gen.extra == .CAPTURES)) {
-                historyl.updateHistoryHeurist(white, move.getFrom(), move.getTo(), heuristicl.computeHistoryBonus(_depth));
+                historyl.updateHistoryHeurist(white, from, to, heuristicl.computeHistoryBonus(_depth));
             }
         }
         if (_alpha >= beta) {
             const bonus = heuristicl.computeHistoryBonus(_depth);
             // save here the killer moves
-            const to = move.getTo();
-            const from = move.getFrom();
             if (!move.isCapture()) {
                 historyl.onKillerMove(move, ply);
                 historyl.updateHistoryHeurist(white, from, to, bonus);
@@ -407,7 +406,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         tot += 1;
     }
     if (tot == 0) {
-        if (p_state.isChecked()) {
+        if (isCheck) {
             _alpha = -(weightl.simpleCheckMateScore + @as(scoreType, @intCast(_depth)));
         } else {
             _alpha = weightl.simpleStalemateScore;
