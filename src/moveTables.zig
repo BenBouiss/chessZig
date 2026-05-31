@@ -1,11 +1,9 @@
 const chess = @import("chess.zig");
-const magicl = @import("magic.zig");
 const moveGenl = @import("move_generation.zig");
 const squarel = @import("square.zig");
 
 const std = @import("std");
 
-const e_color = chess.e_color;
 const e_direction = chess.e_direction;
 const squareInfo = squarel.squareInfo;
 const e_square = squarel.e_square;
@@ -17,15 +15,9 @@ pub const cachedKingTable: kingTable = kingTable.init();
 pub var arrRectangular: [64][64]u64 = undefined;
 
 pub fn _initTables(verbose: bool) void {
-    if (verbose) {
-        std.debug.print("[PRE] Starting the table move build\n", .{});
-    }
+    _ = verbose;
     initInbetween(&arrRectangular);
     initSafetyArea(&safetyArea);
-
-    if (verbose) {
-        std.debug.print("[PRE] Finished\n", .{});
-    }
 }
 // https://www.chessprogramming.org/King_Safety will be defined
 // as

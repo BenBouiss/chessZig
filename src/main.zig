@@ -6,16 +6,6 @@ const hashl = @import("hashTable.zig");
 const enginel = @import("engine.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
-const evalEngl = @import("evaluateEngine.zig");
-const bookl = @import("book.zig");
-const stringl = @import("string.zig");
-const filel = @import("file.zig");
-const perftl = @import("search/perft.zig");
-const heuristicl = @import("heuristic.zig");
-const timel = @import("time.zig");
-
-const build_options = @import("build_options");
-const useDebug = build_options.useDebug;
 
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -27,15 +17,9 @@ pub fn initAll(alloc: std.mem.Allocator, verbose: bool) void {
     //hashl._initZobrist(alloc, 42);
 
     moveTablel._initTables(verbose);
-    if (comptime useDebug) {
-        std.debug.print("[PRE] Building using the useDebug flag\n", .{});
-    }
 }
 pub fn freeAll(alloc: std.mem.Allocator, verbose: bool) void {
     hashl._freeHash(alloc, verbose);
-    if (comptime useDebug) {
-        std.debug.print("[FREE] freeing hashl stuff\n", .{});
-    }
 }
 
 fn initEngine(alloc: std.mem.Allocator) !enginel.engine {
@@ -157,10 +141,8 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try test_perft(GPA);
 
     //try test_speed();
-    //try heuristicl.main(GPA);
     try chessl.main(GPA);
     //try test_bug2(GPA);
-    //try bookl.main(GPA);
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
 }

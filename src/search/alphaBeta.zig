@@ -6,7 +6,6 @@ const hashl = @import("../hashTable.zig");
 const configl = @import("../config.zig");
 const boardl = @import("../board.zig");
 const typel = @import("../type.zig");
-const chessl = @import("../chess.zig");
 const moveGenl = @import("../move_generation.zig");
 const historyl = @import("../history.zig");
 
@@ -17,13 +16,6 @@ const IMove = movel.IMove;
 const pvContainer = movel.pvContainer;
 const scoreType = heuristicl.scoreType;
 const threadInfo = threadingl.threadInfo;
-
-pub fn getScoreMaskFromTurn(white: bool) scoreType {
-    if (white) {
-        return 1;
-    }
-    return -1;
-}
 
 pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack) i8 {
     p_info.working = true;

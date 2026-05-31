@@ -2,21 +2,16 @@ const std = @import("std");
 const build_options = @import("build_options");
 
 const chess = @import("chess.zig");
-const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const stringl = @import("string.zig");
-const configl = @import("config.zig");
 const typel = @import("type.zig");
 
 const utilsl = @import("utils.zig");
 
 const e_piece = chess.e_piece;
-const e_square = squarel.e_square;
 const string = stringl.string;
 const Key = hashl.Key;
-
-const useDebug = build_options.useDebug;
 
 pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
 
@@ -264,11 +259,6 @@ pub const matchMoveContainer = struct {
         return;
     }
     pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key, pawnMove: bool) bool {
-        if (comptime useDebug) {
-            if (p_self.len == MAX_MATCH_LENGTH) {
-                @panic("list is full");
-            }
-        }
         if (move.isCapture() or pawnMove) {
             p_self.lastIrreversibleMoveIndex = p_self.len;
             p_self.irreversible[p_self.len] = true;
@@ -302,13 +292,6 @@ pub const matchMoveContainer = struct {
     }
 
     pub fn popMove(p_self: *matchMoveContainer) IMove {
-        if (comptime useDebug) {
-            if (p_self.len == 0) {
-                @panic("list is empty");
-                //p_self.len = 0;
-                //return .{};
-            }
-        }
         p_self.len -= 1;
         if (p_self.len == 0) {
             p_self.lastIrreversibleMoveIndex = 0;
@@ -326,11 +309,6 @@ pub const matchMoveContainer = struct {
         _ = p_self.popMove();
     }
     pub inline fn getLastMove(self: matchMoveContainer) IMove {
-        if (comptime useDebug) {
-            if (self.len == 0) {
-                @panic("list is empty");
-            }
-        }
         return self.moves[self.len - 1];
     }
     pub fn getLineFillString(self: matchMoveContainer, lineStr: *string) void {

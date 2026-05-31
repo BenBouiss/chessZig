@@ -1,7 +1,5 @@
-const enginel = @import("../engine.zig");
 const movel = @import("../move.zig");
 const chessl = @import("../chess.zig");
-const heuristicl = @import("../heuristic.zig");
 const schedulerl = @import("scheduler.zig");
 const configl = @import("../config.zig");
 const mainl = @import("../main.zig");
@@ -11,9 +9,7 @@ const boardl = @import("../board.zig");
 
 const std = @import("std");
 
-const engine = enginel.engine;
 const IMove = movel.IMove;
-const scoreType = heuristicl.scoreType;
 const debug_err = chessl.debug_err;
 const moveDecisionExt = schedulerl.moveDecisionExt;
 

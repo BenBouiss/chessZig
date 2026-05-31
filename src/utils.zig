@@ -5,25 +5,7 @@ const debug_err = error{ERR_INPUT};
 pub const strTokens = enum(u8) { standardToken, ignoreCase };
 
 pub fn clear() void {
-    //std.debug.print("Clearing screen \n", .{});
     std.debug.print("\x1B[2J\x1B[H", .{});
-}
-
-pub fn absolute(x: i8) i8 {
-    return std.math.sign(x) * x;
-}
-
-pub fn max(x: i8, y: i8) i8 {
-    if (x < y) {
-        return y;
-    }
-    return x;
-}
-pub fn min(comptime T: type, x: T, y: T) T {
-    if (x < y) {
-        return x;
-    }
-    return y;
 }
 
 pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.ArrayList(T), size: usize) !std.ArrayList(std.ArrayList(T)) {
@@ -222,6 +204,7 @@ pub fn splitGenerator(comptime T: type) type {
 //        }
 //    };
 //}
+
 pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !std.ArrayList([]const T) {
     var ret = try std.ArrayList([]const T).initCapacity(alloc, 4);
     if (a.len == 0) {

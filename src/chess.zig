@@ -6,7 +6,6 @@ const build_options = @import("build_options");
 pub const fastBitscan = build_options.fastBitscan;
 const useMagic = build_options.useMagic;
 const useStaged = build_options.useStaged;
-const useDebug = build_options.useDebug;
 const useAVX2 = build_options.useAVX2;
 
 const typel = @import("type.zig");
@@ -22,14 +21,11 @@ const tablel = @import("moveTables.zig");
 const magicl = @import("magic.zig");
 const hashl = @import("hashTable.zig");
 const boardl = @import("board.zig");
-const board_statusl = @import("board_status.zig");
 const stringl = @import("string.zig");
-const schedulerl = @import("search/scheduler.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
 const matchMoveContainer = movel.matchMoveContainer;
-const status = board_statusl.status;
 
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
@@ -40,7 +36,6 @@ pub const N_SQUARES: u8 = 64;
 pub const MAX_POSSIBLE_MOVE: u8 = 218;
 pub const N_PIECES = 12;
 pub const N_PIECES_TYPES = 6;
-pub const INVALID_ENPASSANT_FILE: u8 = 8;
 
 pub const EMPTY: u64 = 0;
 pub const ONE: u64 = 1;
@@ -387,14 +382,7 @@ pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !boardl.boardState {
 }
 pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: bool) !void {
     const moves = getEmptyMoveListFromStr(uciStr);
-    if (debug) {
-        std.debug.print("[DEBUG] applyUciMoves: Moves found in str: ", .{});
-        for (0..moves.len) |i| {
-            const move = moves.moves[i];
-            std.debug.print("{s} ", .{move.getStr()});
-        }
-        std.debug.print("\n", .{});
-    }
+
     for (0..moves.len) |i| {
         var move = moves.moves[i];
         fillMoveFromState(p_board, &move);
@@ -988,22 +976,9 @@ pub inline fn stackedPawns(pawn: u64) u64 {
 
 pub inline fn _AllAttackPawnMask(bb_piece: u64, white: bool) u64 {
     if (white) {
-        return _AllAttackPawnMask_cst(bb_piece, true);
+        return getPawnAttacksFromBB(bb_piece, true);
     }
-    return _AllAttackPawnMask_cst(bb_piece, false);
-}
-
-pub inline fn _AllAttackPawnMask_cst(bb_piece: u64, comptime white: bool) u64 {
-    var ret: u64 = EMPTY;
-    if (comptime white) {
-        ret |= (bb_piece << 7) & notHFile;
-        ret |= (bb_piece << 9) & notAFile;
-        return ret;
-    } else {
-        ret |= (bb_piece >> 7) & notAFile;
-        ret |= (bb_piece >> 9) & notHFile;
-        return ret;
-    }
+    return getPawnAttacksFromBB(bb_piece, false);
 }
 
 pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
@@ -1045,11 +1020,11 @@ pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bo
     var ret: u64 = EMPTY;
     var color_offset: u8 = 0;
     if (white) {
-        ret |= _AllAttackPawnMask_cst(p_board.getPieceBB(.nWhitePawn), true);
+        ret |= getPawnAttacksFromBB(p_board.getPieceBB(.nWhitePawn), true);
         ret |= getKingAttacks(p_board.b.wKingSq);
     } else {
         color_offset = 6;
-        ret |= _AllAttackPawnMask_cst(p_board.getPieceBB(.nBlackPawn), false);
+        ret |= getPawnAttacksFromBB(p_board.getPieceBB(.nBlackPawn), false);
         ret |= getKingAttacks(p_board.b.bKingSq);
     }
     ret |= knightAttacks(p_board.b.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteKnight)]);
@@ -1198,7 +1173,7 @@ pub fn fillMoveFromState(p_state: *boardl.boardState, move: *IMove) void {
     if (isKingPiece(f_piece)) {
         var diff: i8 = @intCast(fromIdx);
         diff -= @intCast(toIdx);
-        if (utils.absolute(diff) == 2) {
+        if (@abs(diff) == 2) {
             if (fromIdx > toIdx) {
                 flag |= @intFromEnum(e_moveFlags.QUEENCASTLE);
             } else {
@@ -1208,7 +1183,7 @@ pub fn fillMoveFromState(p_state: *boardl.boardState, move: *IMove) void {
     } else if (isPawnPiece(f_piece)) {
         var diff: i8 = @intCast(fromIdx);
         diff -= @intCast(toIdx);
-        if (utils.absolute(diff) == 16) {
+        if (@abs(diff) == 16) {
             flag |= @intFromEnum(e_moveFlags.DOUBLEPAWN);
         }
         if ((getSqIdxFile(fromIdx) != getSqIdxFile(toIdx)) and (c_piece == .nEmptySquare)) {
@@ -1443,47 +1418,9 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string
     return ret;
 }
 
-pub fn test_move_heur() !void {
-    var tmp: boardl.boardState = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
-    print_boardstate(&tmp);
-    const moves = moveGenl.generateLegalMoves(&tmp);
-    const pv: movel.line = .{};
-    const feat: schedulerl.searchFeatures = .{};
-    var order = heuristicl.eval_move_sorting_mask(&tmp, &moves, 0, &pv, &feat, undefined);
-
-    heuristicl.computeLateMoveReduc(&tmp, &order, 4, &moves);
-    for (0..moves.len) |i| {
-        const idx = order.indexes[i];
-        const move = moves.moves[idx];
-        const score = order.scores[i];
-        const depth = order.depths[i];
-        std.debug.print("{s} : i:{d} idx:{d} score:{d} depth:{d}\n", .{ move.getStr(), i, idx, score, depth });
-    }
-}
-pub fn testPseudoLegal() !void {
-    var state = try getBoardFromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
-    var gen: moveGenl.moveGene = .{};
-    gen.generateAll(&state);
-    gen._moves.print();
-
-    gen.generateMove(.CAPTURE, &state);
-    gen._moves.print();
-
-    gen.generateMove(.PROMO, &state);
-    gen._moves.print();
-
-    gen.generateMove(.QUIET, &state);
-    gen._moves.print();
-
-    gen.generateMove(.EVASION, &state);
-    gen._moves.print();
-}
-
 pub fn main(alloc: std.mem.Allocator) !void {
     _ = alloc;
     //mainl.initAll(alloc, true);
     //try test_avx();
-    try testPseudoLegal();
-    //try test_move_heur();
     return;
 }

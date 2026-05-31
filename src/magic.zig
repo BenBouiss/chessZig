@@ -4,11 +4,8 @@ const useMagic = build_options.useMagic;
 
 const chess = @import("chess.zig");
 const squarel = @import("square.zig");
-const mainl = @import("main.zig");
 
 const std = @import("std");
-
-const e_piece = chess.e_piece;
 
 // TODO Implement fancy bitboard https://www.chessprogramming.org/Magic_Bitboards
 // related(?) link: http://pradu.us/old/Nov27_2008/Buzz/
@@ -19,8 +16,6 @@ pub const BISHOP_FIXED_BIT: usize = 9;
 
 pub const ROOK_MOVE_SIZE: usize = 4096;
 pub const ROOK_FIXED_BIT: usize = 12;
-
-pub const N_SQUARES: usize = 64;
 
 var rngIntGenerator = std.Random.DefaultPrng.init(42);
 const randInt = rngIntGenerator.random();
@@ -44,32 +39,20 @@ pub const p_magicTable: *magicRecord = &magicTable;
 
 pub const magicRecord = struct {
     isInitialized: bool = false,
-    rookMagic: [N_SQUARES]magic_entry = std.mem.zeroes([N_SQUARES]magic_entry),
-    bishopMagic: [N_SQUARES]magic_entry = std.mem.zeroes([N_SQUARES]magic_entry),
-    rookMoves: [N_SQUARES][ROOK_MOVE_SIZE]u64,
-    bishopMoves: [N_SQUARES][BISHOP_MOVE_SIZE]u64,
+    rookMagic: [chess.N_SQUARES]magic_entry = std.mem.zeroes([chess.N_SQUARES]magic_entry),
+    bishopMagic: [chess.N_SQUARES]magic_entry = std.mem.zeroes([chess.N_SQUARES]magic_entry),
+    rookMoves: [chess.N_SQUARES][ROOK_MOVE_SIZE]u64,
+    bishopMoves: [chess.N_SQUARES][BISHOP_MOVE_SIZE]u64,
     pub fn init() magicRecord {
         return .{ .isInitialized = true, .rookMoves = undefined, .bishopMoves = undefined };
     }
 };
 pub fn _initMagic(p_magic: *magicRecord, verbose: bool) void {
-    if (comptime useMagic) {
-        if (verbose) {
-            std.debug.print("Building using magic move gen!\n", .{});
-        }
-    }
-    //const _start = std.time.milliTimestamp();
-
-    if (verbose) {
-        std.debug.print("[PRE] Starting the search for magic keys \n", .{});
-    }
     p_magic.* = magicRecord.init();
 
     initRookBishopMagicCached(p_magic);
     initRookBishopMoves(p_magic);
-
     if (verbose) {
-        //std.debug.print("[PRE] Finished (elasped time : {d} ms) \n", .{((std.time.milliTimestamp() - _start))});
         std.debug.print("[PRE] Finished magic\n", .{});
     }
     return;
@@ -411,10 +394,6 @@ pub fn rook_find_magic(sq: squarel.e_square) !magic_entry {
     std.debug.print("FAILED\n", .{});
     return magic_err.noMagicFound;
 }
-
-const RBits = [64]i8{ 12, 11, 11, 11, 11, 11, 11, 12, 11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 12, 11, 11, 11, 11, 11, 11, 12 };
-
-const BBits = [64]i8{ 6, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 5, 5, 5, 5, 7, 9, 9, 7, 5, 5, 5, 5, 7, 9, 9, 7, 5, 5, 5, 5, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 6 };
 
 pub fn main() void {
     std.debug.print("const uint64 RMagic[64] = \n", .{});

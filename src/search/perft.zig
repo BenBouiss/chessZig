@@ -2,9 +2,6 @@ const std = @import("std");
 const mainl = @import("../main.zig");
 const movel = @import("../move.zig");
 const moveGenl = @import("../move_generation.zig");
-const squarel = @import("../square.zig");
-const heuristicl = @import("../heuristic.zig");
-const utilsl = @import("../utils.zig");
 const hashl = @import("../hashTable.zig");
 const enginel = @import("../engine.zig");
 const configl = @import("../config.zig");
@@ -15,12 +12,9 @@ const threadingl = @import("threading.zig");
 const alphaBetal = @import("alphaBeta.zig");
 
 const IMove = movel.IMove;
-const moveContainer = movel.moveContainer;
 const engine = enginel.engine;
 const threadPackageArray = threadingl.threadPackageArray;
 const threadInfo = threadingl.threadInfo;
-
-const assert = std.debug.assert;
 
 pub fn dispatchUciPerftCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) bool {
     const dispatchThread = std.Thread.spawn(.{}, dispatchUciPerftThreads, .{ p_engine, config }) catch {
@@ -203,7 +197,7 @@ pub fn perftThreadStart(p_state: *boardl.boardState, alloc: std.mem.Allocator, d
     if (_nThread == 0) {
         _nThread = try std.Thread.getCpuCount();
     }
-    _nThread = utilsl.min(usize, moves.len, _nThread);
+    _nThread = @min(moves.len, _nThread);
     var pack = threadingl.getThreadPackArray(alloc, p_state, &moves, @intCast(_nThread)) catch {
         @panic("Cant init thread pack array");
     };
@@ -233,7 +227,7 @@ pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: b
         return 1;
     }
 
-    const fmoves: moveContainer = moveGenl.generateLegalMoves(p_state);
+    const fmoves: movel.moveContainer = moveGenl.generateLegalMoves(p_state);
     if (depth == 1 and batched) {
         return fmoves.len;
     }

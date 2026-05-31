@@ -1,15 +1,7 @@
 const std = @import("std");
 
 const enginel = @import("../engine.zig");
-const movel = @import("../move.zig");
-const chessl = @import("../chess.zig");
-const moveGenl = @import("../move_generation.zig");
-const alphaBetal = @import("alphaBeta.zig");
 const schedulerl = @import("scheduler.zig");
-const threadingl = @import("threading.zig");
-const utilsl = @import("../utils.zig");
-const configl = @import("../config.zig");
-const timel = @import("../time.zig");
 
 const engine = enginel.engine;
 
