@@ -89,17 +89,13 @@ pub fn stringToLERF(sq: *const [2]u8) e_square {
 pub fn flagPromotionToPiece(flag: u8, white: bool) e_piece {
     const color_offset = getColorPieceOffset(white);
     if ((flag == @intFromEnum(e_moveFlags.KNIGHTPROMO)) or (flag == @intFromEnum(e_moveFlags.KNIGHTPROMOCAPTURE))) {
-        const piece: u8 = @intFromEnum(e_piece.nWhiteKnight) + color_offset;
-        return @enumFromInt(piece);
+        return @enumFromInt(@intFromEnum(e_piece.nWhiteKnight) + color_offset);
     } else if ((flag == @intFromEnum(e_moveFlags.BISHOPPROMO)) or (flag == @intFromEnum(e_moveFlags.BISHOPPROMOCAPTURE))) {
-        const piece: u8 = @intFromEnum(e_piece.nWhiteBishop) + color_offset;
-        return @enumFromInt(piece);
+        return @enumFromInt(@intFromEnum(e_piece.nWhiteBishop) + color_offset);
     } else if ((flag == @intFromEnum(e_moveFlags.ROOKPROMO)) or (flag == @intFromEnum(e_moveFlags.ROOKPROMOCAPTURE))) {
-        const piece: u8 = @intFromEnum(e_piece.nWhiteRook) + color_offset;
-        return @enumFromInt(piece);
+        return @enumFromInt(@intFromEnum(e_piece.nWhiteRook) + color_offset);
     } else if ((flag == @intFromEnum(e_moveFlags.QUEENPROMO)) or (flag == @intFromEnum(e_moveFlags.QUEENPROMOCAPTURE))) {
-        const piece: u8 = @intFromEnum(e_piece.nWhiteQueen) + color_offset;
-        return @enumFromInt(piece);
+        return @enumFromInt(@intFromEnum(e_piece.nWhiteQueen) + color_offset);
     }
     return e_piece.nEmptySquare;
 }
@@ -649,7 +645,6 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.b.turnCount, p_board_state.moveHistory.len, moves.len });
-    moves.print();
     printBoardValidity(p_board_state);
     if (p_board_state.b.turnCount > 0) {
         std.debug.print("Previous move: {s}\n", .{p_board_state.frame.lastMove.getStr()});

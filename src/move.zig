@@ -541,9 +541,6 @@ pub const pvContainer = struct {
         if (other) |child| {
             self.len = child.len;
             @memcpy(self.moves[1 .. self.len + 1], child.moves[0..self.len]);
-            //for (0..child.len) |i| {
-            //    self.moves[1 + i] = child.moves[i];
-            //}
         } else {
             self.len = 0;
         }

@@ -546,10 +546,8 @@ pub fn fullComputeZobristKeys(p_board: *const boardl.boardState) Key {
             retKey.code ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i].code;
         }
     }
-
     retKey.code ^= zobristKeys.castlingKeys[p_board.frame.stat.castlingKey()].code;
     retKey.code ^= zobristKeys.enPassantKeys[p_board.frame.enPassantIdx].code;
-
     return retKey;
 }
 

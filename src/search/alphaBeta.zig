@@ -44,8 +44,8 @@ pub const searchType = enum { NonPV, PV };
 
 pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
     if (p_features.useHash and comptime t == .NonPV) {
-        const entry = hashl.getEntryFromMatch(p_state.frame.key, 0);
-        if (entry) |_entry| {
+        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, 0, p_state);
+        if (res.entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             return _entry.eval();
         }
@@ -55,7 +55,7 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alp
     // perform quiesc
     const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, ss);
     if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryFromMatchResult(p_state.frame.key, 0, score);
+        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, 0, score, .ALL, p_state.getLastMove());
         _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code, .search);
     }
     return score;
@@ -186,7 +186,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var hashFlag: hashl.nodeType = .UPPER;
     const skipQuietMoves: bool = false;
     var writer: hashl.hashWriter = .init(p_state.frame.key.code);
-    if (p_features.useHash and depth > 2 and comptime t == .NonPV) {
+    var hashEval: scoreType = 0;
+    if (p_features.useHash and depth > 2) {
         const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(depth), p_state);
         writer = res.writer;
         if (res.entry) |_entry| {
@@ -194,16 +195,16 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
             if (comptime t == .NonPV) {
                 const tmp = _entry.val.search.nodeT();
-                const eval = _entry.eval();
+                hashEval = _entry.eval();
                 if (tmp == .ALL) {
-                    return eval;
+                    return hashEval;
                 } else if (tmp == .LOWER) {
-                    if (eval >= beta) {
-                        return eval;
+                    if (hashEval >= beta) {
+                        return hashEval;
                     }
                 } else if (tmp == .UPPER) {
-                    if (eval >= _alpha) {
-                        return eval;
+                    if (hashEval >= _alpha) {
+                        return hashEval;
                     }
                 }
             }
@@ -221,7 +222,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     const f: boardl.boardFrame = .copy(p_state);
     var currS = ss.getFrame(ply);
-    const static_eval = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, white);
+    const static_eval = if (hashMove.isValid()) (hashEval) else (heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, white));
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     const isCheck = p_state.isChecked();
@@ -274,34 +275,37 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         useLMR = true;
     }
     //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
+    // https://github.com/nescitus/cpw-engine/
     var canFutility: bool = false;
-    var futilityScore: scoreType = 0;
-    if (p_features.useFutility and !isCheck and @abs(alpha) < weightl.simpleCheckMateScore and _depth == 1 and comptime t == .NonPV) {
-        const margin: scoreType = if (improving) heuristicl.futilityMargin else 100;
-        //futilityScore = heuristicl.c_materialImbalance(p_state, &heuristicl.globalHeuristic, white) + margin;
-        futilityScore = static_eval + margin;
+    //var futilityScore: scoreType = 0;
+    //if (p_features.useFutility and !isCheck and @abs(alpha) < weightl.simpleCheckMateScore and _depth == 1 and comptime t == .NonPV) {
+    //    const margin: scoreType = if (improving) heuristicl.futilityMargin else 100;
+    //    futilityScore = static_eval + margin;
+    //    canFutility = true;
+    //}
+    if (p_features.useFutility and !isCheck and @abs(alpha) < weightl.simpleCheckMateScore and _depth <= 3 and (static_eval + heuristicl.futilityMargin[_depth]) <= _alpha and comptime t == .NonPV) {
         canFutility = true;
     }
 
-    if (!isCheck and comptime t == .NonPV) {
+    if (!isCheck and !hashMove.isValid() and comptime t == .NonPV) {
         //https://www.chessprogramming.org/Razoring limited razoring
-        const margin: scoreType = if (improving) 300 else 100;
 
         //if (p_features.useRazoring and _depth == 3 and (static_eval + margin) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
         //    _depth = 2;
         //}
         // this version from the cpw cpp code using the qsearch method
-        if (p_features.useRazoring and depth <= 3) {
+        if (p_features.useRazoring and depth <= 3 and depth != 1) {
             const threshold = _alpha - 300 - (depth - 1) * 60;
             if (static_eval < threshold) {
                 const q = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, .NonPV, ss);
                 if (q < threshold) {
-                    return alpha;
+                    return _alpha;
                 }
             }
         }
-        if (p_features.useRFP and _depth == 2) {
-            if (static_eval >= (beta + margin)) {
+        //const margin: scoreType = if (improving) 300 else 100;
+        if (p_features.useRFP and _depth < 3) {
+            if (static_eval >= (beta + depth * 150)) {
                 return (static_eval + beta) >> 1;
             }
         }
@@ -343,13 +347,17 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         const to = move.getTo();
         const from = move.getFrom();
 
-        if (canFutility) {
-            if (!moveGenl.moveDeliverCheck(p_state, move) and (futilityScore + heuristicl.mat_gain(p_state, move)) < _alpha and tot > 4 and !move.isPromotion()) {
+        if (canFutility and gen.extra != .CAPTURES) {
+            //if (!moveGenl.moveDeliverCheck(p_state, move) and (futilityScore + heuristicl.mat_gain(p_state, move)) < _alpha and tot > 4 and !move.isPromotion()) {
+            //    continue;
+            //}
+            if (!moveGenl.moveDeliverCheck(p_state, move) and tot > 4 and !move.isPromotion()) {
                 continue;
             }
         }
 
         _ = p_state.makeMove(move);
+        //@prefetch(hashl.hashTable.getBucketFromFullHashIndex(p_state.frame.key.code), .{});
 
         var score: scoreType = 0;
         if (i == 0) {

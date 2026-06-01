@@ -1243,9 +1243,9 @@ pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !
 }
 //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
 // test for first futility implem
-//pub const futilityMargin: [4]scoreType = .{ 0, 100, 150, 300 };
+pub const futilityMargin: [4]scoreType = .{ 0, 200, 300, 500 };
 pub const probCutMoveCount: [6]scoreType = .{ 8, 10, 14, 20, 20, 40 };
-pub const futilityMargin: scoreType = 400;
+//pub const futilityMargin: scoreType = 400;
 pub const dFutilityMargin: scoreType = 300;
 
 // move heuristic "sections"

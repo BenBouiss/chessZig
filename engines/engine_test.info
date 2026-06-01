@@ -1,16 +1,13 @@
 [engine1]
-path="engines/bin/engine_31_05_26_ext";
+path="engines/bin/engine_01_06_26";
 name="std";
 "setoption name reportProgress value false";
-"setoption name userazoring value false";
-"setoption name useRFP value false";
 
 [engine2]
-path="engines/bin/engine_31_05_26_ext";
-name="razoring qsearch + rfp";
+path="engines/bin/engine_01_06_26";
+name="razoring";
 "setoption name reportProgress value false";
 "setoption name userazoring value true";
-"setoption name useRFP value true";
 
 
 [match]

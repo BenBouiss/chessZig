@@ -47,7 +47,6 @@ test "entry overwrite" {
 
     const m: u64 = @intCast((chessl.ONE << hashl.KEY_SHIFT));
     const code: u64 = 4;
-    //const depths = [_]u8{ 1, 4 };
 
     for (0..100) |i| {
         const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, @intCast(i), @intCast(i));

@@ -79,13 +79,15 @@ pub fn test_bug2(alloc: std.mem.Allocator) !void {
     try waitOnEngine(&eng);
 }
 
-pub fn test_bench(alloc: std.mem.Allocator) !void {
+pub fn test_bench(alloc: std.mem.Allocator, repets: usize) !void {
     initAll(alloc, false);
     var eng = try initEngine(alloc);
     defer _ = eng.executeBuffer("quit");
     _ = eng.executeBuffer("setoption name searchType value zws");
-    _ = eng.executeBuffer("benchmark");
-    try waitOnEngine(&eng);
+    for (0..repets) |_| {
+        _ = eng.executeBuffer("benchmark");
+        try waitOnEngine(&eng);
+    }
 }
 
 pub const globalCtx = struct {
@@ -137,11 +139,11 @@ pub fn main(init: std.process.Init) anyerror!void {
     const GPA = init.gpa;
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
-    //try test_bench(GPA);
+    try test_bench(GPA, 10);
     //try test_perft(GPA);
 
     //try test_speed();
-    try chessl.main(GPA);
+    //try chessl.main(GPA);
     //try test_bug2(GPA);
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
