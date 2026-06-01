@@ -43,22 +43,11 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
 pub const searchType = enum { NonPV, PV };
 
 pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
-    if (p_features.useHash and comptime t == .NonPV) {
-        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, 0, p_state);
-        if (res.entry) |_entry| {
-            p_info.searchStat.n_hashRetrieve += 1;
-            return _entry.eval();
-        }
-    }
+    _ = p_features;
     p_info.searchStat.n_nodeExplored += 1;
     const ischeck = p_state.isChecked();
     // perform quiesc
-    const score = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, ss);
-    if (p_features.useHash) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, 0, score, .ALL, p_state.getLastMove());
-        _ = hashl.hashTable.storeEntry(s_entry, p_state.frame.key.code, .search);
-    }
-    return score;
+    return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, ss);
 }
 
 pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, comptime t: searchType, ss: *searchStack) scoreType {
@@ -107,7 +96,6 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         // delta pruning
         if (static_eval < (_alpha - _delta)) {
             continue;
-            //return _alpha;
         }
 
         // if move nor capture nor checking
@@ -432,7 +420,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             _alpha = weightl.simpleStalemateScore;
         }
     }
-    if (p_features.useHash) {
+    if (p_features.useHash and comptime t == .PV) {
+        // .PV set to not store position that could be obtained after a possible nullmove. TODO: just filter out nullmove
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove);
         writer.writeShort(s_entry);
     }

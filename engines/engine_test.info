@@ -4,10 +4,9 @@ name="std";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_01_06_26";
-name="razoring";
+path="engines/bin/engine_01_06_26_1";
+name="better TT replacement";
 "setoption name reportProgress value false";
-"setoption name userazoring value true";
 
 
 [match]
@@ -21,6 +20,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=true;
+//sprtmode=true;
 //maxSPRTMatch=100;
 

@@ -17,8 +17,9 @@ pub const Key = struct {
 
 // note: the gain in space is not visible in the debug build
 // will try to implement the chess programming version where way more stuff is stored
-const entryComponents = union { search: searchEntry, perft: perftEntry };
-pub const TT_t = enum { perft, search };
+pub const TT_t = enum { search, perft };
+
+const entryComponents = union(TT_t) { search: searchEntry, perft: perftEntry };
 
 pub const subKeyType = u16;
 pub const KEY_SHIFT = 64 - @bitSizeOf(subKeyType);
@@ -192,7 +193,14 @@ pub const Hash_bucket = struct {
     pub fn len(self: Hash_bucket) u8 {
         var ret: u8 = 0;
         for (0..configl.ITEM_PER_BUCKET) |i| {
-            ret += @intFromBool(self.entries[i].valid(.perft));
+            switch (self.entries[i].val) {
+                .search => |*s| {
+                    ret += @intFromBool(s.valid());
+                },
+                .perft => |*p| {
+                    ret += @intFromBool(p.valid());
+                },
+            }
         }
         return ret;
     }
@@ -301,7 +309,7 @@ pub const Hash_bucket = struct {
                     return .{ .entry = entry, .nextIdx = next };
                 }
             }
-            if (entry.age(.search) < nextA) {
+            if (entry.age(.search) < nextA or !entry.valid(.search)) {
                 nextA = entry.age(.search);
                 next = @intCast(i);
             }
