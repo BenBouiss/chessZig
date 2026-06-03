@@ -42,14 +42,12 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, p_features: *const schedulerl.searchFeatures, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
-    _ = p_features;
+pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
     p_info.searchStat.n_nodeExplored += 1;
     const ischeck = p_state.isChecked();
     // perform quiesc
     return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, ss);
 }
-
 pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, comptime t: searchType, ss: *searchStack) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
 
@@ -125,6 +123,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     }
     return best_value;
 }
+
 pub const searchFrame = struct {
     staticEval: heuristicl.score = .{},
     ply: u16 = 0,
@@ -201,7 +200,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
 
     if (_depth == 0 or !p_info.alive) {
-        return handleTerminalState(p_state, p_info, alpha, beta, p_features, ply, t, ss);
+        return handleTerminalState(p_state, p_info, alpha, beta, ply, t, ss);
     }
     if (comptime t == .PV) {
         var pv: movel.pvContainer = .{};
@@ -273,9 +272,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 }
             }
         }
-        //const margin: scoreType = if (improving) 300 else 100;
-        if (p_features.useRFP and _depth < 3) {
-            if (static_eval >= (beta + depth * 150)) {
+        if (p_features.useRFP and _depth <= 3) {
+            const margin: scoreType = if (improving) 0 else -25;
+            if (static_eval >= (beta + depth * 75 + margin)) {
                 return (static_eval + beta) >> 1;
             }
         }

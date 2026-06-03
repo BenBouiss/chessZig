@@ -351,23 +351,15 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
 }
 
 pub fn materialImbalance(p_state: *const boardl.boardState) scoreType {
-    return (p_state.getPieceCount(e_piece.nWhitePawn) - p_state.getPieceCount(e_piece.nBlackPawn)) * weightl.global_PawnValue +
-        (p_state.getPieceCount(e_piece.nWhiteBishop) - p_state.getPieceCount(e_piece.nBlackBishop)) * weightl.global_BishopValue +
-        (p_state.getPieceCount(e_piece.nWhiteKnight) - p_state.getPieceCount(e_piece.nBlackKnight)) * weightl.global_KnightValue +
-        (p_state.getPieceCount(e_piece.nWhiteRook) - p_state.getPieceCount(e_piece.nBlackRook)) * weightl.global_RookValue +
-        (p_state.getPieceCount(e_piece.nWhiteQueen) - p_state.getPieceCount(e_piece.nBlackQueen)) * weightl.global_QueenValue;
+    const wPiece: @Vector(5, scoreType) = .{p_state.b.pieceCount[0..5]};
+    const bPiece: @Vector(5, scoreType) = .{p_state.b.pieceCount[6..11]};
+    const scores = (wPiece - bPiece) * .{ weightl.global_PawnValue, weightl.simpleBishopScore, weightl.global_KnightValue, weightl.global_RookValue, weightl.global_QueenValue };
+    return scores[0] + scores[1] + scores[2] + scores[3] + scores[4];
 }
 pub inline fn c_materialImbalance(p_state: *const boardl.boardState, white: bool) scoreType {
     const ret = materialImbalance(p_state);
     if (white) return ret;
     return -ret;
-}
-pub fn sideCountScore(p_state: *const boardl.boardState, white: bool) scoreType {
-    var offset: usize = 0;
-    if (!white) {
-        offset = chess.N_PIECES_TYPES;
-    }
-    return p_state.b.pieceCount[offset] * weightl.global_PawnValue + p_state.b.pieceCount[offset + 1] * weightl.global_BishopValue + p_state.b.pieceCount[offset + 2] * weightl.global_KnightValue + p_state.b.pieceCount[offset + 3] * weightl.global_RookValue + p_state.b.pieceCount[offset + 4] * weightl.global_QueenValue;
 }
 
 pub fn getMaskFromBB(bb: u64) [chess.N_SQUARES]scoreType {
