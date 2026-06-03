@@ -6,6 +6,7 @@ const hashl = @import("hashTable.zig");
 const enginel = @import("engine.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
+const intrinsics = @import("intrinsics/intrinsics.zig");
 
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -139,7 +140,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     const GPA = init.gpa;
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
-    try test_bench(GPA, 10);
+    //try test_bench(GPA, 10);
     //try test_perft(GPA);
 
     //try test_speed();
@@ -147,4 +148,5 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try test_bug2(GPA);
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
+    try intrinsics.main();
 }

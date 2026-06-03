@@ -175,8 +175,8 @@ pub const Hash_bucket = struct {
         std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryComponents)});
         std.debug.print("[DEBUG] printSize: is of perft entry is {d} bytes\n", .{@sizeOf(perftEntry)});
         std.debug.print("[DEBUG] printSize: is of search entry is {d} bytes\n", .{@sizeOf(searchEntry)});
+        std.debug.print("[DEBUG] printSize: size of global heuristic is {d} bytes\n", .{@sizeOf(heuristicl.heuristicValues)});
 
-        //std.debug.print("[DEBUG] printSize: hash bucket extern  {d} bytes\n", .{@sizeOf(ext_Hash_bucket)});
         _ = p_self;
     }
     pub fn t_len(self: Hash_bucket, comptime t: TT_t) u8 {

@@ -56,7 +56,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     var _alpha = alpha;
 
     var currS = ss.getFrame(ply);
-    const static_eval = heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, p_state.whiteToMove());
+    const static_eval = heuristicl.c_evaluate(p_state, p_state.whiteToMove());
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     if (depth == 0 or !p_info.alive) {
@@ -210,7 +210,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     const f: boardl.boardFrame = .copy(p_state);
     var currS = ss.getFrame(ply);
-    const static_eval = if (hashMove.isValid()) (hashEval) else (heuristicl.c_evaluate(p_state, &heuristicl.globalHeuristic, white));
+    const static_eval = if (hashMove.isValid()) (hashEval) else (heuristicl.c_evaluate(p_state, white));
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     const isCheck = p_state.isChecked();
@@ -244,24 +244,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         }
     }
 
-    // staged
-    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
-    gen.fetchNext(p_state);
-    // captures are now in
-    var useLMR = false;
-    var hashMoveIsQuiet: bool = false;
-    if (hashMove.isValid()) {
-        if (hashMove.isQuietMove()) {
-            gen.moves.append(hashMove);
-            hashMoveIsQuiet = true;
-        }
-    }
-    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
-
-    if (p_features.useLMR and _depth >= 3 and !isCheck) {
-        heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
-        useLMR = true;
-    }
     //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
     // https://github.com/nescitus/cpw-engine/
     var canFutility: bool = false;
@@ -302,13 +284,29 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var i: usize = 0;
     var tot: usize = 0;
 
-    if (gen.moves.len == 0) {
-        gen.fetchNext(p_state);
-        order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
-        if (useLMR) {
-            heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
+    // staged
+    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
+    gen.fetchNext(p_state);
+
+    // captures are now in
+    var useLMR = false;
+    var hashMoveIsQuiet: bool = false;
+    if (hashMove.isValid()) {
+        if (hashMove.isQuietMove()) {
+            gen.moves.append(hashMove);
+            hashMoveIsQuiet = true;
         }
     }
+    if (gen.moves.len == 0) {
+        gen.fetchNext(p_state);
+    }
+    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
+
+    if (p_features.useLMR and _depth >= 3 and !isCheck) {
+        heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
+        useLMR = true;
+    }
+
     var i_reset: bool = false;
     while (gen.pickNext(&order)) |move| : (i += 1) {
         //if (gen.extra == .CAPTURES) {

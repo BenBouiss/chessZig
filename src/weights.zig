@@ -62,3 +62,37 @@ pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20
 
 //https://www.chessprogramming.org/Futility_Pruning
 // ============ futility prunning ============
+
+// global things here
+pub var global_PawnValue: scoreType = simplePawnScore;
+pub var global_BishopValue: scoreType = simpleBishopScore;
+pub var global_KnightValue: scoreType = simpleKnightScore;
+pub var global_RookValue: scoreType = simpleRookScore;
+pub var global_QueenValue: scoreType = simpleQueenScore;
+
+pub var global_MobilityValue: [2]scoreType = .{ 0, 11 };
+pub var global_KingMobilityValue: [2]scoreType = .{ 0, 60 };
+pub var global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
+
+pub var global_tempoChecksScore: [2]scoreType = .{ 90, 90 };
+pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore, simplePieceThreatScore };
+
+pub var global_IsolatedPawnValue: [2]scoreType = .{ 2, 1 };
+pub var global_StackedPawnValue: [2]scoreType = .{ 0, 7 };
+pub var global_PassedPawnValue: [2]scoreType = .{ 68, 98 };
+
+pub var global_SafetyBishopValue: [2]scoreType = .{ 42, 82 };
+pub var global_SafetyKnightValue: [2]scoreType = .{ 21, 100 };
+pub var global_SafetyRookValue: [2]scoreType = .{ 0, 7 };
+pub var global_SafetyQueenValue: [2]scoreType = .{ 23, 29 };
+
+pub var global_StructureProtectionValue: [2]scoreType = .{ 31, 65 };
+
+pub var global_KingProximityValue: [2]scoreType = .{ 1, 11 };
+
+pub var global_Pawn_PSQT: [2][64]scoreType = .{ pawnScoreArr, pawnScoreArr };
+pub var global_Bishop_PSQT: [2][64]scoreType = .{ bishopScoreArr, bishopScoreArr };
+pub var global_Knight_PSQT: [2][64]scoreType = .{ knightScoreArr, knightScoreArr };
+pub var global_Rook_PSQT: [2][64]scoreType = .{ rookScoreArr, rookScoreArr };
+pub var global_Queen_PSQT: [2][64]scoreType = .{ queenScoreArr, queenScoreArr };
+pub var global_King_PSQT: [2][64]scoreType = .{ kingScoreArr, kingScoreArr_EG };

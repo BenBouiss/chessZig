@@ -1,16 +1,17 @@
 [engine1]
-path="engines/bin/engine_01_06_26";
+path="engines/bin/engine_03_06_26";
 name="std";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_01_06_26_1";
-name="better TT replacement";
-"setoption name reportProgress value false";
+//path="engines/bin/engine_01_06_26_1";
+path="../tools/petrel/build/petrel";
+name="petrel";
+//"setoption name reportProgress value false";
 
 
 [match]
-nMatch=100;
+nMatch=32;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

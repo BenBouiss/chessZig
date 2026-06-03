@@ -18,7 +18,7 @@ const e_moveFlags = typel.e_moveFlags;
 const squareInfo = squarel.squareInfo;
 const boardState = boardl.boardState;
 
-pub const generationModifiers = enum { NONE, QUIETMOVE, CAPTURES, ALL };
+pub const generationModifiers = enum { STD, NONE, QUIETMOVE, CAPTURES, ALL };
 
 // move ordering section?
 pub fn generateLegalMoves_capture(p_board: *const boardState) moveContainer {
@@ -680,19 +680,19 @@ pub inline fn moveGenQueenBB(p_board: *const boardState, comptime white: bool, e
 pub inline fn moveGenBB(p_board: *const boardState) moveBBState {
     var ret: moveBBState = .{};
     if (p_board.whiteToMove()) {
-        cst_moveGenBB(p_board, true, &ret);
+        cst_moveGenBB(p_board, true, &ret, .STD);
         return ret;
     }
-    cst_moveGenBB(p_board, false, &ret);
+    cst_moveGenBB(p_board, false, &ret, .STD);
     return ret;
 }
 pub inline fn _cst_moveGenBB(p_board: *const boardState, comptime white: bool) moveBBState {
     var ret: moveBBState = .{};
-    cst_moveGenBB(p_board, white, &ret);
+    cst_moveGenBB(p_board, white, &ret, .STD);
     return ret;
 }
-pub fn cst_moveGenBB(p_board: *const boardState, comptime white: bool, p_out: *moveBBState) void {
-    const EmptyOrEnemy = ~p_board.b.c_occupiedBB[@intFromBool(white)];
+pub fn cst_moveGenBB(p_board: *const boardState, comptime white: bool, p_out: *moveBBState, comptime extra: generationModifiers) void {
+    const EmptyOrEnemy = if (comptime extra == .ALL) (chess.UNIVERSE) else ~p_board.b.c_occupiedBB[@intFromBool(white)];
     moveGenPawnBB(p_board, white, EmptyOrEnemy, p_out);
     moveGenKnightBB(p_board, white, EmptyOrEnemy, p_out);
     moveGenBishopBB(p_board, white, EmptyOrEnemy, p_out);
@@ -702,17 +702,8 @@ pub fn cst_moveGenBB(p_board: *const boardState, comptime white: bool, p_out: *m
 }
 pub inline fn _cst_moveGenBB_all(p_board: *const boardState, comptime white: bool) moveBBState {
     var ret: moveBBState = .{};
-    cst_moveGenBB_all(p_board, white, &ret);
+    cst_moveGenBB(p_board, white, &ret, .ALL);
     return ret;
-}
-pub fn cst_moveGenBB_all(p_board: *const boardState, comptime white: bool, p_out: *moveBBState) void {
-    const EmptyOrEnemy = chess.UNIVERSE;
-    moveGenPawnBB(p_board, white, EmptyOrEnemy, p_out);
-    moveGenKnightBB(p_board, white, EmptyOrEnemy, p_out);
-    moveGenBishopBB(p_board, white, EmptyOrEnemy, p_out);
-    moveGenRookBB(p_board, white, EmptyOrEnemy, p_out);
-    moveGenQueenBB(p_board, white, EmptyOrEnemy, p_out);
-    moveGenKingBB(p_board, white, EmptyOrEnemy, p_out);
 }
 
 pub const qbb = struct {

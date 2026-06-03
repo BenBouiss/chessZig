@@ -87,6 +87,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             // List of modules available for import in source files part of the
             // root module.
+            .link_libc = true,
             .imports = &.{
                 // Here "Chess" is the name you will use in your source code to
                 // import this module (e.g. `@import("Chess")`). The name is
@@ -103,6 +104,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
             .imports = &.{
                 .{ .name = "gui_l", .module = mod },
             },
@@ -114,11 +116,14 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/evaluateEngine.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
             .imports = &.{
                 .{ .name = "evaluate_l", .module = mod },
             },
         }),
     });
+
+    //std.debug.print("{s}\n", .{engine.rootModuleTarget().dynamic_linker.buffer});
     engine.root_module.addOptions("build_options", build_options);
     chess.root_module.addOptions("build_options", build_options);
     evaluate.root_module.addOptions("build_options", build_options);

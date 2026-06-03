@@ -967,7 +967,7 @@ fn timeTickUserFacingInterface(p_self: *guiState) !void {
     defer (p_self.alloc.free(times));
     std.debug.print("{s} mem of buffer {d} {d}\n", .{ times, p_self.engineInventory.items.items[0].f_reader.interface.buffer.len, p_self.engineInventory.items.items[1].f_reader.interface.buffer.len });
 
-    const eval = heuristicl.evaluate_debug(&p_self.match.chessState, &heuristicl.globalHeuristic);
+    const eval = heuristicl.evaluate_debug(&p_self.match.chessState);
     std.debug.print("Current evaluation: \n", .{});
     eval.print();
 }

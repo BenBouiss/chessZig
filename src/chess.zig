@@ -16,7 +16,7 @@ const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
-const intrinsicsl = @import("intrinsics.zig");
+const intrinsicsl = @import("intrinsics/intrinsics.zig");
 const tablel = @import("moveTables.zig");
 const magicl = @import("magic.zig");
 const hashl = @import("hashTable.zig");
@@ -364,7 +364,7 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
         onMoveStaged(&board, board.whiteToMove());
     }
     board.frame.key = hashl.fullComputeZobristKeys(&board);
-    board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, &heuristicl.globalHeuristic, @intCast(board.getPhase()));
+    board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, @intCast(board.getPhase()));
     return board;
 }
 
@@ -653,7 +653,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
     std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.frame.halfMoveClock, p_board_state.moveHistory.getRepetitions(), p_board_state.moveHistory.lastIrreversibleMoveIndex });
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
 
-    const eval = heuristicl.evaluate_debug(p_board_state, &heuristicl.globalHeuristic);
+    const eval = heuristicl.evaluate_debug(p_board_state);
     std.debug.print("Current evaluation: phase {d} \n", .{p_board_state.getPhase()});
     eval.print();
 
@@ -1102,8 +1102,7 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
     directChecks |= knightAttacks(sqToBitboard(king_E)) & n;
 
     if (comptime useAVX2) {
-        //@panic(":)");
-        p_board.frame.pinnedBB = moveGenl.getPinned_avx2(p_board, white);
+        p_board.frame.pinnedBB = moveGenl.getPinned_avx2(p_board, !white);
     } else {
         var pinned: u64 = 0;
         const rBlockers = (occ & cachedRookAtt) ^ occ;
@@ -1416,6 +1415,6 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string
 pub fn main(alloc: std.mem.Allocator) !void {
     _ = alloc;
     //mainl.initAll(alloc, true);
-    //try test_avx();
+    try test_avx();
     return;
 }
