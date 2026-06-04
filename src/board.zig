@@ -261,6 +261,10 @@ pub const boardState = struct {
             }
             board_offset += 1;
         }
+        if (emptyNumber != 0) {
+            ret[miscOffset] = '0' + emptyNumber;
+            miscOffset += 1;
+        }
         //const endPiece = N_SQUARES - (1 + miscOffset);
         const endPiece = miscOffset;
         ret[endPiece] = ' ';
@@ -871,7 +875,6 @@ pub const boardState = struct {
         return self.b.pieceBB[@intFromEnum(piece)];
     }
     pub inline fn getTotalPieceCount(self: *const boardState, white: bool) i8 {
-        // putting inline in front of this causes the razoring in zws to segfault even if the razoring is not used ???
         if (white) {
             return self.getPieceCount(.nWhitePawn) + self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
         }
@@ -1034,101 +1037,4 @@ pub fn isEndGame(self: board) bool {
     const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
     const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
     return (nWhiteP < 3) and (nBlackP < 3);
-}
-
-pub fn get_fen(b: board) [chessl.MAX_FEN_LENGTH]u8 {
-    var ret = std.mem.zeroes([chessl.MAX_FEN_LENGTH]u8);
-    var miscOffset: u8 = 0;
-    var emptyNumber: u8 = 0;
-    var board_offset = chessl.N_SQUARES - 8;
-    for (0..chessl.N_SQUARES) |i| {
-        if (i % chessl.ROW_SIZE == 0 and i != 0) {
-            if (emptyNumber != 0) {
-                ret[miscOffset] = '0' + emptyNumber;
-                emptyNumber = 0;
-                miscOffset += 1;
-            }
-            ret[miscOffset] = '/';
-            miscOffset += 1;
-            board_offset -= 16;
-        }
-        const piece = b.getPiece(board_offset);
-        if (piece != .nEmptySquare) {
-            if (emptyNumber != 0) {
-                ret[miscOffset] = '0' + emptyNumber;
-                emptyNumber = 0;
-                miscOffset += 1;
-            }
-            const pieceStr = chessl.getStrFromPiece(piece);
-            ret[miscOffset] = pieceStr;
-            miscOffset += 1;
-        } else {
-            emptyNumber += 1;
-        }
-        board_offset += 1;
-    }
-    //const endPiece = N_SQUARES - (1 + miscOffset);
-    const endPiece = miscOffset;
-    ret[endPiece] = ' ';
-    if (b.toMove() == .WHITE) {
-        ret[endPiece + 1] = 'w';
-    } else {
-        ret[endPiece + 1] = 'b';
-    }
-    ret[endPiece + 2] = ' ';
-    var castleOffset: u8 = 0;
-    if (b.info.stat.canKingsideCastle(true)) {
-        ret[endPiece + 3 + castleOffset] = 'H';
-        castleOffset += 1;
-    }
-    if (b.info.stat.canQueensideCastle(true)) {
-        ret[endPiece + 3 + castleOffset] = 'A';
-        castleOffset += 1;
-    }
-    if (b.info.stat.canKingsideCastle(false)) {
-        ret[endPiece + 3 + castleOffset] = 'h';
-        castleOffset += 1;
-    }
-    if (b.info.stat.canQueensideCastle(false)) {
-        ret[endPiece + 3 + castleOffset] = 'a';
-        castleOffset += 1;
-    }
-    var endCastlOffset: u8 = endPiece + 3 + castleOffset;
-    var endEnPassantOffset: u8 = 0;
-    if (castleOffset == 0) {
-        ret[endCastlOffset] = '-';
-        endCastlOffset += 1;
-    }
-    ret[endCastlOffset] = ' ';
-
-    if (b.info.enPassantIdx == 0) {
-        ret[endCastlOffset + 1] = '-';
-        endEnPassantOffset = endCastlOffset + 1;
-    } else {
-        const sqStr = chessl.strFromLERF(@enumFromInt(b.info.enPassantIdx));
-        ret[endCastlOffset + 1] = sqStr[0];
-        ret[endCastlOffset + 2] = sqStr[1];
-        endEnPassantOffset = endCastlOffset + 2;
-    }
-    ret[endEnPassantOffset + 1] = ' ';
-    var buffer: [20]u8 = undefined;
-    const halfMove = std.fmt.bufPrint(&buffer, "{}", .{b.info.halfMoveClock}) catch {
-        return ret;
-    };
-    var offset: u8 = 0;
-    for (halfMove) |letter| {
-        ret[endEnPassantOffset + 2 + offset] = letter;
-        offset += 1;
-    }
-    const endHalfMoveOffset: u8 = offset + endEnPassantOffset + 2;
-    ret[endHalfMoveOffset] = ' ';
-    offset = 0;
-    const fullMoveClock = std.fmt.bufPrint(&buffer, "{}", .{b.turnCount}) catch {
-        return ret;
-    };
-    for (fullMoveClock) |letter| {
-        ret[endHalfMoveOffset + 1 + offset] = letter;
-        offset += 1;
-    }
-    return ret;
 }

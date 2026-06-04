@@ -169,7 +169,7 @@ pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const boardState, p_moveBB
                     _ = movel.build_move_in(from, _to, @intFromEnum(e_moveFlags.QUIETMOVE), p_out);
                 }
             }
-            pinnedPiece = p_moveBB.doubleMoves & pinHV;
+            pinnedPiece = p_moveBB.doubleMoves & pinHV & kingSqInfo.getFileBB();
             while (pinnedPiece != chess.EMPTY) {
                 const to: u8 = chess.bitscan(pinnedPiece);
                 pinnedPiece &= pinnedPiece - 1;
