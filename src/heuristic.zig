@@ -1436,6 +1436,15 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
     //std.debug.print("[DEBUG] computeLateMoveReduc: LMR new depths: {any}", .{p_order.depths[0..p_order.len]});
     return;
 }
+pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
+    const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
+    const safetyArea = chess.safetyArea(otherKingSq);
+    const to = move.getTo();
+    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move)) {
+        return false;
+    }
+    return SEE(p_state, move) < 0;
+}
 pub const score = struct {
     s: scoreType = 0,
     t: typel.e_scoreType = .NONE,

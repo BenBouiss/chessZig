@@ -27,21 +27,6 @@ build script:
 ...
 
 
-Tasklist:
-- [?] Remove the p_state.pieceBB[14] into 14 independant values with the correct names 
-    - Still on the fence on this one
-- [x] Convert evaluation to use centiPawn represention(use larger int instead of lower floats?) 
-- [ ] Heuristic to add to evaluation
-    - [x] King safety (use the one present in the texel coeffs see .zig file)
-    - Add complexity
-
-- [ ] Search optimization 
-    - [ ] Late move reduction
-        - in the move ordering search the "best" moves to deeper depth than the lower owns
-        - heuristics for the depth decays dependant of the state of the game
-    - [ ] Futility pruning ?
-    - [x] History ordering debug
-
 Sources: 
 - https://www.chessprogramming.org/
 - https://www.codeproject.com/articles/Worlds-Fastest-Bitboard-Chess-Movegenerator#comments-section
@@ -102,9 +87,7 @@ UCI setoption options:
 - UCI_Elo: [spin] engine's elo(not real elo only used to linear interp between depth 1(elo = 1000) and depth 6(elo = 3000))
 - fixedDepth: [check] fixes the depth during a normal go cmd to the depth prescribed by the engine's elo
 - clearHash: [button] clears the hashTable's entries
-- useTexel: [check] enable the texel evaluation method
 - heuristicWeightsPath: [string] path to the file containing the weights to be used
-- useQuiescence: [check] enables or disables the quiescence search at quiescent terminal nodes
 - useNullPruning: [check] enables or disables the null move pruning optimisation method
 - useLMR : [check] enables or disables the late move reduction optimisation method
 - useFutility: [check] enables or disables the futility optimisation method

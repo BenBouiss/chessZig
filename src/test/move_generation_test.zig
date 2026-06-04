@@ -26,6 +26,19 @@ test "en passant checking" {
 
     std.log.info("[TEST]: En passant checking passed\n", .{});
 }
+test "misc move amount check" {
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    mainl.initAll(arena, false);
+    var tmp = try chessl.getBoardFromFen("8/5pk1/7p/7P/4r1PK/8/5P2/4b3 w - - 1 1");
+    const allMoves = moveGenl.generateLegalMoves(&tmp);
+    const badMove = movel.build_move(@intFromEnum(typel.e_square.f2), @intFromEnum(typel.e_square.f4), @intFromEnum(typel.e_moveFlags.DOUBLEPAWN));
+    try std.testing.expect(!badMove.isIn(allMoves));
+    try std.testing.expectEqual(2, allMoves.len);
+
+    std.log.info("[TEST]: En passant checking passed\n", .{});
+}
 test "en passant pinned" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
@@ -35,8 +48,6 @@ test "en passant pinned" {
     const allMoves = moveGenl.generateLegalMoves(&tmp);
     const badMove = movel.build_move(@intFromEnum(typel.e_square.g4), @intFromEnum(typel.e_square.f3), @intFromEnum(typel.e_moveFlags.ENPASSANT));
     try std.testing.expect(!badMove.isIn(allMoves));
-    //std.debug.print("{s} {}\n", .{ badMove.getStr(), badMove.isIn(allMoves) });
-    //allMoves.print();
 
     std.log.info("[TEST]: En passant checking passed\n", .{});
 }

@@ -1,17 +1,17 @@
 [engine1]
-path="engines/bin/engine_03_06_26";
+path="engines/bin/engine_04_06_26_1";
 name="std";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_03_06_26_1";
-name="std + rfp + custom";
+path="engines/bin/engine_04_06_26_2";
+name="'see' pruning + check check";
 "setoption name reportProgress value false";
-"setoption name userfp value true";
+//"setoption name userazoring value true";
 
 
 [match]
-nMatch=32;
+nMatch=50;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

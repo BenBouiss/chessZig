@@ -42,19 +42,21 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.Array
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
+pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, p_features: *const schedulerl.searchFeatures, alpha: scoreType, beta: scoreType, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
     p_info.searchStat.n_nodeExplored += 1;
     const ischeck = p_state.isChecked();
+    var currS = ss.getFrame(ply);
+    currS.staticEval.t = .NONE;
     // perform quiesc
-    return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, ss);
+    return quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, false, ss);
 }
-pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, comptime t: searchType, ss: *searchStack) scoreType {
+pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, comptime t: searchType, usePrevEval: bool, ss: *searchStack) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
 
     var _alpha = alpha;
 
     var currS = ss.getFrame(ply);
-    const static_eval = heuristicl.c_evaluate(p_state, p_state.whiteToMove());
+    const static_eval = if (usePrevEval) currS.staticEval.s else heuristicl.c_evaluate(p_state, p_state.whiteToMove());
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     if (depth == 0 or !p_info.alive) {
@@ -95,6 +97,9 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         if (static_eval < (_alpha - _delta)) {
             continue;
         }
+        if (p_features.useSeePrune and heuristicl.losingCapture(p_state, move)) {
+            continue;
+        }
 
         // if move nor capture nor checking
         // problem here where a checking sequence ie
@@ -102,7 +107,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 
         p_state.makeMove(move);
 
-        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1, wasChecked, t, ss);
+        const score = -quiescenceSearch(p_state, p_info, p_features, depth - 1, -beta, -_alpha, ply + 1, wasChecked, t, false, ss);
 
         _ = p_state.undoMove();
         p_state.frame = f;
@@ -200,7 +205,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
 
     if (_depth == 0 or !p_info.alive) {
-        return handleTerminalState(p_state, p_info, alpha, beta, ply, t, ss);
+        return handleTerminalState(p_state, p_info, p_features, alpha, beta, ply, t, ss);
     }
     if (comptime t == .PV) {
         var pv: movel.pvContainer = .{};
@@ -259,23 +264,27 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     if (!isCheck and !hashMove.isValid() and comptime t == .NonPV) {
         //https://www.chessprogramming.org/Razoring limited razoring
 
-        //if (p_features.useRazoring and _depth == 3 and (static_eval + margin) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
+        //const threshold = _alpha - 300 - (depth - 1) * 60;
+        //const threshold: scoreType = if (improving) 300 else 100;
+        //if (p_features.useRazoring and _depth == 3 and (static_eval + threshold) <= _alpha and p_state.getBigPieceCount(!white) > 3) {
         //    _depth = 2;
         //}
         // this version from the cpw cpp code using the qsearch method
-        if (p_features.useRazoring and depth <= 3 and depth != 1) {
-            const threshold = _alpha - 300 - (depth - 1) * 60;
-            if (static_eval < threshold) {
-                const q = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, .NonPV, ss);
-                if (q < threshold) {
-                    return _alpha;
-                }
-            }
-        }
+
         if (p_features.useRFP and _depth <= 3) {
             const margin: scoreType = if (improving) 0 else -25;
             if (static_eval >= (beta + depth * 75 + margin)) {
                 return (static_eval + beta) >> 1;
+            }
+        }
+        if (p_features.useRazoring) {
+            const base: scoreType = if (improving) 0 else 150;
+            const threshold = _alpha - (depth * depth * 150) - base;
+            if (static_eval < threshold and @abs(_alpha) < weightl.simpleCheckMateScore) {
+                const val = quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, .NonPV, true, ss);
+                if (val < _alpha) {
+                    return _alpha;
+                }
             }
         }
     }
@@ -308,12 +317,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     var i_reset: bool = false;
     while (gen.pickNext(&order)) |move| : (i += 1) {
-        //if (gen.extra == .CAPTURES) {
-        //    const cPiece = p_state.getPiece(move.getTo());
-        //    if (chess.isKingPiece(cPiece)) {
-        //        continue;
-        //    }
-        //}
         if (!skipQuietMoves and i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
             order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);

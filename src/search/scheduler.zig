@@ -36,6 +36,7 @@ pub const searchFeatures = struct {
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
     useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
+    useSeePrune: bool = configl.DEFAULT_USE_SEEPRUNE,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};

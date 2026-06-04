@@ -130,12 +130,10 @@ pub inline fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Ha
 }
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
     return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @truncate(eval), .{}, depth, @intCast(hashTable.gen >> 4), .ALL) } };
-    //return .{ .val = .{ .search = .{ .evaluation = @truncate(eval), .val = @as(u8, @intFromEnum(nodeType.ALL)), ._depth = depth, .key = keyToUpperKey(key.code), ._age = @truncate(hashTable.gen >> 4) } } };
 }
 
 pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove) Hash_entry {
     return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @truncate(eval), bestMove, depth, @intCast(hashTable.gen >> 4), nodeT) } };
-    //return .{ .val = .{ .search = .{ .evaluation = @truncate(eval), .val = @as(u8, @intFromEnum(nodeT)), .bestMove = bestMove, ._depth = depth, .key = keyToUpperKey(key.code), ._age = @truncate(hashTable.gen >> 4) } } };
 }
 
 pub const getResult = struct {
@@ -154,6 +152,10 @@ pub const hashWriter = struct {
         return .{ .bucket = hashTable.getBucketFromFullHashIndex(key) };
     }
     pub inline fn writeShort(self: *hashWriter, entry: Hash_entry) void {
+        const prev = self.bucket.entries[self.idx];
+        if (prev.val.search.key == entry.val.search.key and prev.depth(.search) > entry.depth(.search)) {
+            return;
+        }
         self.bucket.entries[self.idx] = entry;
         hashTable.stat.insertion += 1;
     }
