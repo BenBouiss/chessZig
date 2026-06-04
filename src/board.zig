@@ -1011,7 +1011,8 @@ pub const boardState = struct {
                     return false;
                 }
             } else {
-                if (toBB & self.b.c_occupiedBB[@intFromBool(!white)] == 0) {
+                if (toBB & self.b.c_occupiedBB[@intFromBool(!white)] == 0 or toBB & self.b.c_occupiedBB[@intFromBool(white)] != 0) {
+                    // catches case where trying to capture own piece
                     return false;
                 }
             }

@@ -551,8 +551,10 @@ pub fn sanityCheckBoardState(p_board_state: *const boardl.boardState) void {
     const n_white_p = p_board_state.getPieceCount(e_piece.nWhitePawn) + p_board_state.getPieceCount(e_piece.nWhiteBishop) + p_board_state.getPieceCount(e_piece.nWhiteKnight) + p_board_state.getPieceCount(e_piece.nWhiteRook) + p_board_state.getPieceCount(e_piece.nWhiteQueen) + p_board_state.getPieceCount(e_piece.nWhiteKing);
     const n_white_g = p_board_state.getSidePieceCount(.WHITE);
     const white_king = p_board_state.getKingBB(true);
+
     if (n_white_g != n_white_p) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: Number of white pieces inconsistent from occupiedBB({d}) to pieceBB({d})\n", .{ n_white_g, n_white_p });
+        std.debug.print("piece count {any}\n", .{p_board_state.b.pieceCount});
         panic = true;
     }
     if (white_king == 0) {
@@ -568,6 +570,7 @@ pub fn sanityCheckBoardState(p_board_state: *const boardl.boardState) void {
 
     if (n_black_g != n_black_p) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: Number of black pieces inconsistent from occupiedBB({d}) to pieceBB({d})\n", .{ n_black_g, n_black_p });
+        std.debug.print("piece count {any}\n", .{p_board_state.b.pieceCount});
         panic = true;
     }
     if (black_king == 0) {

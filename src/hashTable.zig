@@ -230,7 +230,6 @@ pub const Hash_bucket = struct {
             const currDepth = entry.depth(t);
             if (!entry.valid(t) or (entry.age(t) + configl.OLD_THRESHOLD) < n_entry.age(t)) {
                 p_self.entries[i] = n_entry;
-                //p_self.len = @min(p_self.len + 1, p_self.entries.len);
                 return true;
             }
             if (entry.key(t) == n_entry.key(t)) {
@@ -305,10 +304,13 @@ pub const Hash_bucket = struct {
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
-            if ((entry.key(.search) == _hash) and (entry.depth(.search) >= depth)) {
-                if (p_state.isMovePseudoLegal(entry.val.search.bestMove)) {
+            if ((entry.key(.search) == _hash) and p_state.isMovePseudoLegal(entry.val.search.bestMove)) {
+                if (entry.depth(.search) >= depth) {
                     hashTable.stat.hit += 1;
                     return .{ .entry = entry, .nextIdx = next };
+                } else {
+                    hashTable.stat.miss += 1;
+                    return .{ .entry = null, .nextIdx = @intCast(i) };
                 }
             }
             if (entry.age(.search) < nextA or !entry.valid(.search)) {

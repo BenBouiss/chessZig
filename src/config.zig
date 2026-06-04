@@ -73,8 +73,6 @@ pub const OLD_THRESHOLD: u8 = 2;
 pub const DEFAULT_USE_FUTILITY = true;
 pub const _DEFAULT_USE_FUTILITY = "true";
 
-pub const DEFAULT_USE_SEEPRUNE = true;
-
 pub const DEFAULT_USE_PROBCUT = false;
 pub const _DEFAULT_USE_PROBCUT = "false";
 

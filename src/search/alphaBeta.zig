@@ -47,6 +47,7 @@ pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, p_f
     const ischeck = p_state.isChecked();
     var currS = ss.getFrame(ply);
     currS.staticEval.t = .NONE;
+
     // perform quiesc
     return quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, t, false, ss);
 }
@@ -97,7 +98,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
         if (static_eval < (_alpha - _delta)) {
             continue;
         }
-        if (p_features.useSeePrune and heuristicl.losingCapture(p_state, move)) {
+        if (heuristicl.losingCapture(p_state, move)) {
             continue;
         }
 
@@ -179,15 +180,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const skipQuietMoves: bool = false;
     var writer: hashl.hashWriter = .init(p_state.frame.key.code);
     var hashEval: scoreType = 0;
-    if (p_features.useHash and depth > 2) {
+    if (p_features.useHash) {
         const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(depth), p_state);
         writer = res.writer;
         if (res.entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
+            hashEval = _entry.eval();
             if (comptime t == .NonPV) {
                 const tmp = _entry.val.search.nodeT();
-                hashEval = _entry.eval();
                 if (tmp == .ALL) {
                     return hashEval;
                 } else if (tmp == .LOWER) {
@@ -298,13 +299,14 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     // captures are now in
     var useLMR = false;
-    var hashMoveIsQuiet: bool = false;
-    if (hashMove.isValid()) {
-        if (hashMove.isQuietMove()) {
-            gen.moves.append(hashMove);
-            hashMoveIsQuiet = true;
-        }
-    }
+    //removed this part of the code where a move seems vali d but actually cannot be performed (problem on my part ) but cannot use this feature as the resulting problem is nasty to debug
+    //var hashMoveIsQuiet: bool = false;
+    //if (hashMove.isValid()) {
+    //    if (hashMove.isQuietMove()) {
+    //        gen.moves.append(hashMove);
+    //        hashMoveIsQuiet = true;
+    //    }
+    //}
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
     }
@@ -328,9 +330,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         } else if (i_reset) {
             i = 0;
             i_reset = false;
-            if (hashMoveIsQuiet) {
-                continue;
-            }
         }
         const to = move.getTo();
         const from = move.getFrom();
@@ -345,7 +344,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         }
 
         _ = p_state.makeMove(move);
-        //@prefetch(hashl.hashTable.getBucketFromFullHashIndex(p_state.frame.key.code), .{});
 
         var score: scoreType = 0;
         if (i == 0) {
