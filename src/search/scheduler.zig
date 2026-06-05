@@ -36,6 +36,7 @@ pub const searchFeatures = struct {
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
     useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
+    useIIR: bool = configl.DEFAULT_USE_IIR,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
@@ -46,6 +47,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.fixedDepth = p_engine.options.fixedDepth;
     ret.useRazoring = p_engine.options.useRazoring;
     ret.useRFP = p_engine.options.useRFP;
+    ret.useIIR = p_engine.options.useIIR;
     ret.reportProgress = p_engine.options.reportProgress;
     ret.useFutility = p_engine.options.useFutility;
     ret.useProbCut = p_engine.options.useProbCut;

@@ -168,7 +168,7 @@ pub const searchStack = struct {
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
 pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, comptime t: searchType, ss: *searchStack) scoreType {
     var _alpha = alpha;
-    const _depth = depth;
+    var _depth = depth;
     const white: bool = p_state.whiteToMove();
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
@@ -176,26 +176,27 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var finalScore: scoreType = 0;
     var bestMove: IMove = .{};
     var hashMove: IMove = .{};
+    var hashType: hashl.nodeType = .ALL;
     var hashFlag: hashl.nodeType = .UPPER;
     const skipQuietMoves: bool = false;
     var writer: hashl.hashWriter = .init(p_state.frame.key.code);
     var hashEval: scoreType = 0;
     if (p_features.useHash) {
-        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(depth), p_state);
+        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(_depth), p_state);
         writer = res.writer;
         if (res.entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
             //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
             hashEval = _entry.eval();
             if (comptime t == .NonPV) {
-                const tmp = _entry.val.search.nodeT();
-                if (tmp == .ALL) {
+                hashType = _entry.val.search.nodeT();
+                if (hashType == .ALL) {
                     return hashEval;
-                } else if (tmp == .LOWER) {
+                } else if (hashType == .LOWER) {
                     if (hashEval >= beta) {
                         return hashEval;
                     }
-                } else if (tmp == .UPPER) {
+                } else if (hashType == .UPPER) {
                     if (hashEval >= _alpha) {
                         return hashEval;
                     }
@@ -274,13 +275,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
         if (p_features.useRFP and _depth <= 3) {
             const margin: scoreType = if (improving) 0 else -25;
-            if (static_eval >= (beta + depth * 75 + margin)) {
+            if (static_eval >= (beta + _depth * 75 + margin)) {
                 return (static_eval + beta) >> 1;
             }
         }
         if (p_features.useRazoring) {
             const base: scoreType = if (improving) 0 else 150;
-            const threshold = _alpha - (depth * depth * 150) - base;
+            const threshold = _alpha - (_depth * _depth * 150) - base;
             if (static_eval < threshold and @abs(_alpha) < weightl.simpleCheckMateScore) {
                 const val = quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, .NonPV, true, ss);
                 if (val < _alpha) {
@@ -299,16 +300,14 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     // captures are now in
     var useLMR = false;
-    //removed this part of the code where a move seems vali d but actually cannot be performed (problem on my part ) but cannot use this feature as the resulting problem is nasty to debug
-    //var hashMoveIsQuiet: bool = false;
-    //if (hashMove.isValid()) {
-    //    if (hashMove.isQuietMove()) {
-    //        gen.moves.append(hashMove);
-    //        hashMoveIsQuiet = true;
-    //    }
-    //}
+
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
+    }
+    // https://www.chessprogramming.org/Internal_Iterative_Reductions
+    const prevSS = ss.getPrevFrame(ply, 1);
+    if (p_features.useIIR and _depth > 5 and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
+        _depth -= 1;
     }
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 

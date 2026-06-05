@@ -82,6 +82,9 @@ pub const _DEFAULT_USE_RAZORING = "false";
 pub const DEFAULT_USE_RFP = true;
 pub const _DEFAULT_USE_RFP = "true";
 
+pub const DEFAULT_USE_IIR = false;
+pub const _DEFAULT_USE_IIR = "false";
+
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
 

@@ -1020,6 +1020,9 @@ pub const boardState = struct {
             if (move.isCastle()) {
                 return self.frame.stat._canCastle(white);
             }
+            if (toBB & self.b.occupiedBB() != 0) {
+                return false;
+            }
         }
         return true;
     }
