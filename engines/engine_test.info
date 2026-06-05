@@ -1,11 +1,12 @@
 [engine1]
 path="engines/bin/engine_05_06_26";
-name="std";
+name="IIR";
 "setoption name reportProgress value false";
+"setoption name useIIR value true";
 
 [engine2]
-path="engines/bin/engine_05_06_26";
-name="IIR";
+path="engines/bin/engine_05_06_26_1";
+name="IIR + _depth >= 5";
 "setoption name reportProgress value false";
 "setoption name useIIR value true";
 
@@ -22,5 +23,5 @@ saveLogs=false;
 printToScreen=false;
 
 sprtmode=true;
-maxSPRTMatch=1000;
+maxSPRTMatch=500;
 

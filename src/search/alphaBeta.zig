@@ -306,7 +306,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
     const prevSS = ss.getPrevFrame(ply, 1);
-    if (p_features.useIIR and _depth > 5 and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
+    if (p_features.useIIR and _depth >= 5 and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
         _depth -= 1;
     }
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
