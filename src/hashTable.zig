@@ -68,12 +68,15 @@ pub const searchEntry = struct {
     _depth: u8 = 0,
     _age: u8 = 0,
     val: u8 = 0,
-    pub fn init(key: subKeyType, eval: i16, bestMove: movel.IMove, depth: u8, age: u8, node: nodeType) searchEntry {
-        const val: u8 = @as(u8, @intFromEnum(node)) | 0x8;
+    pub fn init(key: subKeyType, eval: i16, bestMove: movel.IMove, depth: u8, age: u8, node: nodeType, whiteToMove: bool) searchEntry {
+        const val: u8 = @as(u8, @intFromEnum(node)) | 0x8 | (@as(u8, @intFromBool(whiteToMove)) << 2);
         return .{ .key = key, .evaluation = eval, .bestMove = bestMove, ._depth = depth, ._age = age, .val = val };
     }
     pub inline fn nodeT(self: searchEntry) nodeType {
         return @enumFromInt(self.val & 0x3);
+    }
+    pub inline fn white(self: searchEntry) bool {
+        return (self.val & 0x4) != 0;
     }
     pub inline fn valid(self: searchEntry) bool {
         return (self.val & 0x8) != 0;
@@ -128,12 +131,12 @@ pub const Hash_entry = struct {
 pub inline fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
     return .{ .val = .{ .perft = .init(keyToUpperKey(key.code), @truncate(moveAmount), depth, @intCast(hashTable.gen >> 4)) } };
 }
-pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType) Hash_entry {
-    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @truncate(eval), .{}, depth, @intCast(hashTable.gen >> 4), .ALL) } };
+pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType, whiteToMove: bool) Hash_entry {
+    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 4), .ALL, whiteToMove) } };
 }
 
-pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove) Hash_entry {
-    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @truncate(eval), bestMove, depth, @intCast(hashTable.gen >> 4), nodeT) } };
+pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove, whiteToMove: bool) Hash_entry {
+    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), bestMove, depth, @intCast(hashTable.gen >> 4), nodeT, whiteToMove) } };
 }
 
 pub const getResult = struct {
@@ -301,19 +304,24 @@ pub const Hash_bucket = struct {
         const _hash = keyToUpperKey(hash);
         var next: u8 = 0;
         var nextA: u8 = 255;
+        const white = p_state.whiteToMove();
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
-            if ((entry.key(.search) == _hash) and p_state.isMovePseudoLegal(entry.val.search.bestMove)) {
+            if ((entry.key(.search) == _hash) and white == entry.val.search.white() and p_state.isMovePseudoLegal(entry.val.search.bestMove)) {
                 if (entry.depth(.search) >= depth) {
                     hashTable.stat.hit += 1;
-                    return .{ .entry = entry, .nextIdx = next };
+                    return .{ .entry = entry, .nextIdx = @intCast(i) };
                 } else {
                     hashTable.stat.miss += 1;
                     return .{ .entry = null, .nextIdx = @intCast(i) };
                 }
             }
-            if (entry.age(.search) < nextA or !entry.valid(.search)) {
+            if (!entry.valid(.search)) {
+                hashTable.stat.miss += 1;
+                return .{ .entry = null, .nextIdx = @intCast(i) };
+            }
+            if (entry.age(.search) < nextA) {
                 nextA = entry.age(.search);
                 next = @intCast(i);
             }

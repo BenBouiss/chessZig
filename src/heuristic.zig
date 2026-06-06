@@ -347,7 +347,7 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
     if (comptime white) {
         return ret;
     }
-    return -ret;
+    return -(ret);
 }
 
 pub fn materialImbalance(p_state: *const boardl.boardState) scoreType {
@@ -1404,6 +1404,10 @@ pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const
 }
 pub const moveReductionAmount = 4;
 pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool) void {
+    // - if move ordering score >= 0.5 * max_history_heurist no reduction
+    // - if capture and score > 0 no reduction score > 0 is the result of the see thus good captures
+    // - if move goes in the vicinity of the other king, is a promotion or delivers check, no reduction
+    // else we reduce by int(depth / 2)  + 1 if not improving
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     for (0..p_order.len) |i| {
@@ -1426,14 +1430,13 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
             continue;
         }
 
+        //var d: u16 = 1 + @as(u16, @intFromFloat((@as(f16, @floatFromInt(depth)) / 3.0)));
+        //if (!improving) d += 1;
         const d: u16 = @as(u16, @intFromFloat(if (improving) (@as(f16, @floatFromInt(depth)) / 3.0) else (@as(f16, @floatFromInt(depth)) / 2.0)));
-        //_ = improving;
-        //const d = (@as(f16, @floatFromInt(depth)) / 3.0);
-        //const _depth = depth - 1 - @as(u16, @ceil(d));
-        p_order.depths[i] = depth - std.math.clamp(d, 0, depth) - 1;
+        //p_order.depths[i] = depth - std.math.clamp(d, 0, depth) - 1;
+        p_order.depths[i] = depth - std.math.clamp(d, 0, depth - 1) - 1;
     }
 
-    //std.debug.print("[DEBUG] computeLateMoveReduc: LMR new depths: {any}", .{p_order.depths[0..p_order.len]});
     return;
 }
 pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {

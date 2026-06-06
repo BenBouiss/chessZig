@@ -1,18 +1,18 @@
 [engine1]
-path="engines/bin/engine_05_06_26";
-name="IIR";
+path="engines/bin/engine_06_06_26";
+name="std";
 "setoption name reportProgress value false";
 "setoption name useIIR value true";
 
 [engine2]
-path="engines/bin/engine_05_06_26_1";
-name="IIR + _depth >= 5";
+path="engines/bin/engine_06_06_26_1";
+name="std + prev lmr";
 "setoption name reportProgress value false";
 "setoption name useIIR value true";
 
 
 [match]
-nMatch=50;
+nMatch=100;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
@@ -22,6 +22,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=true;
-maxSPRTMatch=500;
+//sprtmode=true;
+maxSPRTMatch=1000;
 

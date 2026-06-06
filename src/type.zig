@@ -17,5 +17,7 @@ pub const weightType: type = i32;
 
 pub const MAX_PLY: u8 = 255;
 
+pub const PSQT_DECAY: scoreType = 10;
+
 pub const totalPhase: scoreType = 24;
 pub const phases_arr = [_]usize{ 0, 1, 1, 2, 4, 0 };
