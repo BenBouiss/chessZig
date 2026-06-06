@@ -1436,7 +1436,6 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
         //p_order.depths[i] = depth - std.math.clamp(d, 0, depth) - 1;
         p_order.depths[i] = depth - std.math.clamp(d, 0, depth - 1) - 1;
     }
-
     return;
 }
 pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {

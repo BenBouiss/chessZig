@@ -13,13 +13,14 @@ test "entry retrievale" {
     mainl.initAll(arena, false);
     hashl._initOrReallocHashTable(arena, 25, false);
     const m: u64 = (chessl.ONE << hashl.KEY_SHIFT);
+    const white: bool = true;
     for (0..100) |i| {
         const code1: u64 = @intCast(i);
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code1 }, 1, @intCast(i * i));
+        const entry = hashl.buildEntryFromMatchResult(.{ .code = code1 }, 1, @intCast(2 * i), white);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code1, .KEEP_DEEPER, .search));
 
         const code2 = @as(u64, @intCast(i)) + m;
-        const entry2 = hashl.buildEntryFromMatchResult(.{ .code = code2 }, 2, @intCast(i * i * i));
+        const entry2 = hashl.buildEntryFromMatchResult(.{ .code = code2 }, 2, @intCast(3 * i), white);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry2, code2, .KEEP_DEEPER, .search));
     }
     for (0..100) |i| {
@@ -47,16 +48,17 @@ test "entry overwrite" {
 
     const m: u64 = @intCast((chessl.ONE << hashl.KEY_SHIFT));
     const code: u64 = 4;
+    const white: bool = true;
 
     for (0..100) |i| {
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, @intCast(i), @intCast(i));
+        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, @intCast(i), @intCast(i), white);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER, .search));
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
     try std.testing.expectEqual(1, bucket.t_len(.search));
 
-    const entry = hashl.buildEntryFromMatchResult(.{ .code = code + m }, 200, 0);
+    const entry = hashl.buildEntryFromMatchResult(.{ .code = code + m }, 200, 0, white);
     try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code + m, .KEEP_DEEPER, .search));
 
     try std.testing.expectEqual(2, bucket.t_len(.search));
@@ -73,8 +75,9 @@ test "entry replacement" {
     defer hashl.hashTable.free(arena, false);
     const d = [_]u8{ 16, 4 };
     const code: u64 = 42;
+    const white: bool = true;
     for (0..d.len) |i| {
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, d[i], 1);
+        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, d[i], 1, white);
         std.debug.assert(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER, .search));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);

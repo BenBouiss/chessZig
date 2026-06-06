@@ -115,9 +115,15 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
 
         if (i == 0 or score > best_value) {
             best_value = score;
+            if (comptime t == .PV) {
+                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
+            }
         }
         if (score >= beta) {
             p_info.searchStat.n_cutoffs += 1;
+            if (comptime t == .PV) {
+                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
+            }
             return score;
         }
         if (score > _alpha) {
@@ -142,7 +148,7 @@ pub const searchFrame = struct {
 pub const negativeOffset: u16 = 4;
 //index by ply
 pub const searchStack = struct {
-    e: [typel.MAX_PLY + configl.MAX_QUIESC_DEPTH + negativeOffset]searchFrame = @splat(.{}),
+    e: [typel.MAX_PLY + configl.MAX_QUIESC_DEPTH + negativeOffset + 1]searchFrame = @splat(.{}),
     pub inline fn getFrame(self: *searchStack, ply: u16) *searchFrame {
         return &self.e[ply + negativeOffset];
     }
@@ -374,9 +380,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if (tot == 0 or finalScore < score) {
             finalScore = score;
             bestMove = move;
-            if (ply == 0) {
+            //if (ply == 0) {
+            if (comptime t == .PV) {
                 currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
+            //}
         }
         if (finalScore > _alpha) {
             _alpha = finalScore;
@@ -410,6 +418,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             if (p_features.useHash) {
                 const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move, white);
                 writer.writeShort(s_entry);
+            }
+            if (comptime t == .PV) {
+                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
             p_info.searchStat.n_cutoffs += 1;
             return _alpha;
