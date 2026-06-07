@@ -807,8 +807,8 @@ pub const boardState = struct {
     }
     pub inline fn getPhase(self: *const boardState) usize {
         var ret: heuristicl.scoreType = @intCast(typel.totalPhase);
-        ret -= @intCast(self.frame.phase);
-        return @intCast(@max(0, ret));
+        ret = @intCast(@max(0, ret - @as(heuristicl.scoreType, @intCast(self.frame.phase))));
+        return @intCast(@divFloor((ret << 8) + (typel.totalPhase >> 1), typel.totalPhase));
         //return @intCast(@max(0, heuristicl.computePhase(self)));
     }
     pub fn isEndGame(self: *const boardState) bool {

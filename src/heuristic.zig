@@ -11,7 +11,6 @@ const squarel = @import("square.zig");
 const mainl = @import("main.zig");
 const movel = @import("move.zig");
 const typel = @import("type.zig");
-const schedulerl = @import("search/scheduler.zig");
 const alphaBetal = @import("search/alphaBeta.zig");
 const threadingl = @import("search/threading.zig");
 const historyl = @import("history.zig");
@@ -20,7 +19,6 @@ const std = @import("std");
 
 const e_piece = chess.e_piece;
 const e_turn = statusl.e_turn;
-const e_moveFlags = movel.e_moveFlags;
 
 const string = stringl.string;
 const IMove = movel.IMove;
@@ -28,7 +26,6 @@ const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
 pub const scoreType: type = i32;
 pub const scoreVect: type = @Vector(2, scoreType);
-pub const weightType: type = i32;
 
 pub const texel_err = error{board_err};
 
@@ -750,16 +747,16 @@ pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
         return false;
     }
 
-    const color_mask = alphaBetal.getScoreMaskFromTurn(p_board.whiteToMove());
+    const color_mask: scoreType = if (p_board.whiteToMove()) 1 else -1;
     const stat = color_mask * evaluate(p_board);
     var info: threadingl.threadInfo = .{ .alive = true, .working = true };
 
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;
 
-    var pv: movel.pvContainer = .{};
-    var line: movel.line = .{};
-    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, p_board.isChecked(), &pv, &line, .NonPV);
+    var ss: alphaBetal.searchStack = .{};
+    //std.debug.print("searching fen {s}\n", .{p_board.get_fen()});
+    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, undefined, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, p_board.isChecked(), .NonPV, false, &ss);
     if (stat != quiesc) {
         return false;
     }
@@ -773,13 +770,7 @@ pub const texelEntry = struct {
     // turn of the extracted fen
     turn: bool = true,
 
-    //
     eval: i32 = 0,
-
-    //optional afterwards
-    //complexity: i32,
-    //safety: [chess.NUMBER_PLAYER]i32,
-
     // 0.0 black win, 0.5 draw, 1.0 white win
     result: f32 = -1,
     //
@@ -811,7 +802,7 @@ pub const texelEntry = struct {
     pub fn set_fen(p_self: *texelEntry, alloc: std.mem.Allocator, fen: []const u8, result: f32) !void {
         p_self.tuples = .{};
         p_self.result = result;
-        var board = chess.getBoardFromFen(alloc, fen) catch {
+        var board = chess.getBoardFromFen(fen) catch {
             std.debug.print("[ERROR] set_fen: error while using the fen: '{s}'\n", .{fen});
             @panic("");
         };
@@ -829,7 +820,6 @@ pub const texelEntry = struct {
             return texel_err.board_err;
         }
         try getCoeffsFromBoard(&board, &p_self.tuples);
-        return;
     }
     pub fn print(p_self: *texelEntry) void {
         //
@@ -838,16 +828,6 @@ pub const texelEntry = struct {
         //std.debug.print("Res: {d}, seval: {d}\n", .{ p_self.result, p_self.seval });
         std.debug.print("Coefficients array: ", .{});
         p_self.tuples.print();
-    }
-    pub fn get_eval(p_self: *texelEntry, weights: *coeffTuple) scoreType {
-        // simple eval here
-        //const _phase: scoreType = @floatFromInt(p_self.phase);
-
-        var deltaC = p_self.tuples.get_delta();
-        const E_mg = weights.val[MG].dotProduct(&deltaC);
-        const E_eg = weights.val[EG].dotProduct(&deltaC);
-
-        return p_self.pFactors[MG] * E_mg + (p_self.pFactors[EG] * E_eg);
     }
 };
 
@@ -1189,9 +1169,6 @@ pub const coeffVector = struct {
             std.debug.print("(w: {d}, b: {d})\n", .{ tuple.wcoeff, tuple.bcoeff });
         }
     }
-    pub fn get_delta(p_self: *coeffVector) NVector {
-        return p_self.items[@intFromEnum(e_turn.WHITE)].substractVect(&p_self.items[@intFromEnum(e_turn.BLACK)]);
-    }
 };
 
 pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string, nSkips: usize) ![]texelEntry {
@@ -1214,7 +1191,6 @@ pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string, nSkips: usize)
         entries[i].set_fen(alloc, s._slice(), foutcome) catch {
             continue;
         };
-        //entries[i].print();
     }
     defer stringl.freeArrayList_string(alloc, &tokens);
     return entries;
@@ -1224,11 +1200,10 @@ pub const csvHeader = struct {
     n_params: usize,
     pub fn format(self: csvHeader, writer: *std.Io.Writer) !void {
         for (0..self.n_params) |i| {
-            //try writer.print("Coeff_{d}_w,Coeff_{d}_b,", .{ i, i });
             try writer.print("Delta_{d},", .{i});
         }
 
-        try writer.print("Phase,Outcome", .{});
+        try writer.print("Phase, Outcome", .{});
     }
 };
 pub const csvBody = struct {
@@ -1236,7 +1211,6 @@ pub const csvBody = struct {
     pub fn format(self: csvBody, writer: *std.Io.Writer) !void {
         const tuple = self.entry.tuples;
         for (0..tuple.len) |i| {
-            //try writer.print("{d},{d},", .{ tuple.items[@intFromEnum(e_turn.WHITE)].val[i], tuple.items[@intFromEnum(e_turn.BLACK)].val[i] });
             try writer.print("{d},", .{tuple.items[@intFromEnum(e_turn.WHITE)].val[i] - tuple.items[@intFromEnum(e_turn.BLACK)].val[i]});
         }
 
@@ -1264,9 +1238,6 @@ pub fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []texelEntry, pa
     const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
     defer file.close(mainl.getGlobalIo());
 
-    //std.Io.File.Writer.seekTo()
-    //try file.seek(0);
-
     const print_freq: usize = 10000;
     for (0..entries.len) |i| {
         if (i % print_freq == 0) {
@@ -1290,15 +1261,6 @@ pub fn printEntriesInfo(entries: []const texelEntry) void {
         validBuffer[@intFromBool(entries[i].valid)] += 1;
     }
     std.debug.print("[DEBUG] printEntriesInfo: Breakdown of entries found 0: {d}, 0.5: {d}, 1: {d}\n valid: {d} non valid: {d}\n\n", .{ buffer[0], buffer[1], buffer[2], validBuffer[1], validBuffer[0] });
-}
-
-pub fn test_entries(entries: []const texelEntry, weights: *coeffTuple) !void {
-    for (0..entries.len) |i| {
-        var ent = entries[i];
-        // MSE by default
-        const eval = ent.get_eval(weights);
-        std.debug.print("[DEBUG] test_entries: eval with random weights: {d}\n", .{eval});
-    }
 }
 
 pub fn test_save(alloc: std.mem.Allocator, dataPath: string, savePath: string) !void {
@@ -1371,10 +1333,6 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
         }
     }
     return 0;
-}
-fn mulScoreType(e1: scoreType, e2: scoreType) i32 {
-    const ret: i32 = @intCast(e1);
-    return @as(i32, @intCast(e2)) * ret;
 }
 
 //https://www.chessprogramming.org/History_Heuristic#Update
@@ -1636,47 +1594,16 @@ pub fn lowestAttackDefPiece(p_state: *const boardl.boardState, attDef: u64, whit
     return ret;
 }
 
-pub fn dummyScaling(s: scoreType, phase: scoreType) scoreType {
-    const _phase: scoreType = @divFloor(phase * 256 + (typel.totalPhase >> 1), typel.totalPhase);
-    return @divFloor((s * (256 - _phase)) + s * _phase, 256);
-}
-pub fn test_scaling() !void {
-    const scoreTest = [_]scoreType{ 0, 100, -100, -500, 500, 1000 };
-    for (scoreTest) |s| {
-        for (0..32) |phase| {
-            std.debug.print("{d} ", .{dummyScaling(s, @intCast(phase))});
-        }
-        std.debug.print("\n", .{});
-    }
-}
-pub fn test_SEE(alloc: std.mem.Allocator) !void {
-    const fen = "1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - - 0 1";
-    var move = movel.build_move(@intFromEnum(squarel.e_square.f1), @intFromEnum(squarel.e_square.e5), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteRook);
-    //const fen = "1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - - 0 1";
-    //var move = movel.build_move(@intFromEnum(squarel.e_square.d3), @intFromEnum(squarel.e_square.e5), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteKnight);
-
-    var state = try chess.getBoardFromFen(alloc, fen);
-
-    //const fen = "k7/8/3r4/8/2r1b3/5B2/4R3/K7 w - - 0 1";
-    //var move = movel.build_move(@intFromEnum(squarel.e_square.f3), @intFromEnum(squarel.e_square.e4), @intFromEnum(e_moveFlags.CAPTURE), .nWhiteBishop);
-    //move.setCapture(state.getPiece(move.getTo()));
-    move.setCapture(state.getPiece(move.getTo()));
-    chess.print_boardstate(&state);
-
-    std.debug.print("[DEBUG] test_SEE: score for move: {s} SEE = {d}\n", .{ move.getStr(), SEE(&state, move) });
-}
 pub fn main(alloc: std.mem.Allocator) !void {
     //try sanityCheck();
     //try test_main();
     mainl.initAll(alloc, false);
     var path: string = try string.initFromSlice(alloc, "opening/E12.33-1M-D12-Resolved.book");
-    var savePath: string = try string.initFromSlice(alloc, "logs/test_weights_int_filter_quiesc+endFen_red_prox.csv");
+    var savePath: string = try string.initFromSlice(alloc, "out/logs/tmp.csv");
 
     defer path.free(alloc);
     defer savePath.free(alloc);
 
-    //try test_scaling();
-    //try test_SEE(alloc);
     try test_save(alloc, path, savePath);
     //try mainTexel(alloc, path);
 }

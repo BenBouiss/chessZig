@@ -6,6 +6,8 @@ const hashl = @import("hashTable.zig");
 const enginel = @import("engine.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
+const nnuel = @import("nnue.zig");
+const heuristicl = @import("heuristic.zig");
 const intrinsics = @import("intrinsics/intrinsics.zig");
 
 const schedulerl = @import("search/scheduler.zig");
@@ -148,5 +150,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try test_bug2(GPA);
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
-    try intrinsics.main();
+    //try intrinsics.main();
+    //try heuristicl.main(GPA);
+    try nnuel.main(GPA);
 }

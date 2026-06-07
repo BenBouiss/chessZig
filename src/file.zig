@@ -46,7 +46,8 @@ pub fn getTokensFromFileAlloc(alloc: std.mem.Allocator, path: []const u8, sep: u
     var buffer: []u8 = try alloc.alloc(u8, file_size);
     defer alloc.free(buffer);
     //_ = try file.read(buffer[0..buffer.len]);
-    _ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
+    //_ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
+    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer[0..buffer.len], 0);
     const _sep: []const u8 = &[_]u8{sep};
     var flines = std.mem.tokenizeAny(u8, buffer, _sep);
     var count: u64 = 0;
@@ -119,7 +120,9 @@ pub fn getFileLineSize(alloc: std.mem.Allocator, path: []const u8) anyerror!u64 
     defer file.close(mainl.getGlobalIo());
     var buffer: []u8 = try alloc.alloc(u8, @intCast(file_size));
     defer alloc.free(buffer);
-    _ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
+    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer[0..buffer.len], 0);
+    //std.debug.print("{s}\n", .{buffer[0..25]});
+
     const _sep: []const u8 = &[_]u8{'\n'};
     var flines = std.mem.tokenizeAny(u8, buffer, _sep);
     var count: u64 = 0;
