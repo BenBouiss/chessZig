@@ -874,8 +874,6 @@ pub const engine = struct {
         p_self.status.initializedInternals = true;
         magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
 
-        moveTablel._initTables(p_self.status.debugMode);
-        //hashTablel._initZobrist(p_self.alloc, configl.SEED);
         hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
 
         _ = p_self.updateElo(p_self.options.engineElo);

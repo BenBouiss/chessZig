@@ -35,7 +35,7 @@ const magic_entry = struct {
 };
 
 pub var magicTable: magicRecord = undefined;
-pub const p_magicTable: *magicRecord = &magicTable;
+//pub const magicTable: magicRecord = initCst();
 
 pub const magicRecord = struct {
     isInitialized: bool = false,
@@ -47,6 +47,13 @@ pub const magicRecord = struct {
         return .{ .isInitialized = true, .rookMoves = undefined, .bishopMoves = undefined };
     }
 };
+pub fn initCst() magicRecord {
+    var ret = magicRecord.init();
+
+    initRookBishopMagicCached(&ret);
+    initRookBishopMoves(&ret);
+    return ret;
+}
 pub fn _initMagic(p_magic: *magicRecord, verbose: bool) void {
     p_magic.* = magicRecord.init();
 
@@ -113,15 +120,15 @@ pub fn bishopMagicIndex(entry: magic_entry, blockers: u64) u64 {
 }
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
-    const magic = p_magicTable.rookMagic[@intFromEnum(sq)];
+    const magic = magicTable.rookMagic[@intFromEnum(sq)];
     const _blockers = blockers & magic.mask;
     const hash = _blockers *% magic.magic;
     const magic_index = (hash >> (64 - ROOK_FIXED_BIT));
-    return p_magicTable.rookMoves[@intFromEnum(sq)][magic_index];
+    return magicTable.rookMoves[@intFromEnum(sq)][magic_index];
 }
 
 pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
-    const magic = p_magicTable.bishopMagic[@intFromEnum(sq)];
+    const magic = magicTable.bishopMagic[@intFromEnum(sq)];
     // precomputed then indexing removes the memcpy(of the entire table) of indexing then computing then indexing a second time leading to better perf
     // prev: p_magicTable.bishopMoves[@intFromEnum(sq)][(hash >> @intCast(64 - BISHOP_FIXED_BIT))]; or something similar
     // from: Compiler explorer
@@ -129,7 +136,7 @@ pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
     const _blockers = blockers & magic.mask;
     const hash = _blockers *% magic.magic;
     const magic_index = (hash >> @intCast(64 - BISHOP_FIXED_BIT));
-    return p_magicTable.bishopMoves[@intFromEnum(sq)][magic_index];
+    return magicTable.bishopMoves[@intFromEnum(sq)][magic_index];
 }
 
 pub fn randomU64() u64 {

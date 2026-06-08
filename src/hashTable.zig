@@ -180,7 +180,6 @@ pub const Hash_bucket = struct {
         std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryComponents)});
         std.debug.print("[DEBUG] printSize: is of perft entry is {d} bytes\n", .{@sizeOf(perftEntry)});
         std.debug.print("[DEBUG] printSize: is of search entry is {d} bytes\n", .{@sizeOf(searchEntry)});
-        std.debug.print("[DEBUG] printSize: size of global heuristic is {d} bytes\n", .{@sizeOf(heuristicl.heuristicValues)});
 
         _ = p_self;
     }

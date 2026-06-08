@@ -9,17 +9,14 @@ const chessl = @import("chess.zig");
 const nnuel = @import("nnue.zig");
 const heuristicl = @import("heuristic.zig");
 const intrinsics = @import("intrinsics/intrinsics.zig");
+const squarel = @import("square.zig");
 
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
 
 pub fn initAll(alloc: std.mem.Allocator, verbose: bool) void {
     magicl._initMagic(&magicl.magicTable, verbose);
-
     _ = alloc;
-    //hashl._initZobrist(alloc, 42);
-
-    moveTablel._initTables(verbose);
 }
 pub fn freeAll(alloc: std.mem.Allocator, verbose: bool) void {
     hashl._freeHash(alloc, verbose);
@@ -136,12 +133,21 @@ pub fn test_test(alloc: std.mem.Allocator) !void {
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
     _ = _bucket;
 }
+pub fn safetyTest() void {
+    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.e4));
+    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.a1));
+    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.a4));
+    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.a8));
+    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.e8));
+}
 
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
+    safetyTest();
+
     //try test_bench(GPA, 10);
     //try test_perft(GPA);
 
@@ -152,5 +158,5 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try benchl.main(GLOBAL_ALLOC);
     //try intrinsics.main();
     //try heuristicl.main(GPA);
-    try nnuel.main(GPA);
+    //try nnuel.main(GPA);
 }

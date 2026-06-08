@@ -10,6 +10,7 @@ const useAVX2 = build_options.useAVX2;
 
 const typel = @import("type.zig");
 pub const e_piece = typel.e_piece;
+pub const e_pieceType = typel.e_pieceType;
 
 const utils = @import("utils.zig");
 const movel = @import("move.zig");
@@ -99,6 +100,19 @@ pub fn flagPromotionToPiece(flag: u8, white: bool) e_piece {
     }
     return e_piece.nEmptySquare;
 }
+pub fn flagPromotionToPieceType(flag: u8) typel.e_pieceType {
+    if ((flag == @intFromEnum(e_moveFlags.KNIGHTPROMO)) or (flag == @intFromEnum(e_moveFlags.KNIGHTPROMOCAPTURE))) {
+        return .KNIGHT;
+    } else if ((flag == @intFromEnum(e_moveFlags.BISHOPPROMO)) or (flag == @intFromEnum(e_moveFlags.BISHOPPROMOCAPTURE))) {
+        return .BISHOP;
+    } else if ((flag == @intFromEnum(e_moveFlags.ROOKPROMO)) or (flag == @intFromEnum(e_moveFlags.ROOKPROMOCAPTURE))) {
+        return .ROOK;
+    } else if ((flag == @intFromEnum(e_moveFlags.QUEENPROMO)) or (flag == @intFromEnum(e_moveFlags.QUEENPROMOCAPTURE))) {
+        return .QUEEN;
+    }
+    // TODO: check
+    return .PAWN;
+}
 pub fn letterPromoToFlag(letter: u8) e_moveFlags {
     if (letter == 'b' or letter == 'B') {
         return .BISHOPPROMO;
@@ -159,7 +173,7 @@ pub inline fn bitscan(bb: u64) u8 {
 }
 pub fn bitscanK(b: u64) u8 {
     var lsb: u64 = (((b - 1)) ^ b) & b;
-    var count: i8 = -1;
+    var count: u8 = 0;
     while (lsb != 0) {
         count += 1;
         lsb = lsb >> 1;
@@ -742,68 +756,36 @@ pub inline fn rankMaskFromRankN(rank: u8) u64 {
     return firstRank << @intCast(8 * rank);
 }
 
-pub fn getAttackRay(occupied: u64, comptime dir: e_direction, square: e_square) u64 {
-    const attacks = tablel.cachedTables.rayAttacks[@intFromEnum(square)][@intFromEnum(dir)];
-    const blocking: u64 = occupied & attacks;
-    if (blocking == 0) {
-        return attacks;
-    }
-    var sq: u8 = undefined;
-    switch (dir) {
-        e_direction.NORTH, e_direction.NORTHEAST, e_direction.NORTHWEST, e_direction.EAST => {
-            sq = bitscan(blocking);
-        },
-
-        e_direction.SOUTH, e_direction.SOUTHEAST, e_direction.SOUTHWEST, e_direction.WEST => {
-            sq = r_bitscan(blocking);
-        },
-    }
-
-    return attacks ^ tablel.cachedTables.rayAttacks[sq][@intFromEnum(dir)];
-}
-
-pub inline fn diagonalAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.NORTHEAST, sq) | getAttackRay(bb, e_direction.SOUTHWEST, sq);
-}
-
-pub inline fn antiDiagAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.NORTHWEST, sq) | getAttackRay(bb, e_direction.SOUTHEAST, sq);
-}
-
-pub inline fn fileAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.NORTH, sq) | getAttackRay(bb, e_direction.SOUTH, sq);
-}
-
-pub inline fn rankAttacks(bb: u64, sq: e_square) u64 {
-    return getAttackRay(bb, e_direction.EAST, sq) | getAttackRay(bb, e_direction.WEST, sq);
-}
 pub inline fn getRookAttacks(occBB: u64, sq: e_square) u64 {
     if (comptime useMagic) {
         return magicl.getRookMoves(sq, occBB);
     } else {
-        var ret = fileAttacks(occBB, sq);
-        ret |= rankAttacks(occBB, sq);
-        return ret;
+        return getRookAttacksRay(occBB, sq);
     }
+}
+pub inline fn getRookAttacksRay(occBB: u64, sq: e_square) u64 {
+    const sqBB = sqToBitboard(sq);
+    const free = ~occBB;
+    return moveGenl.eastOne(moveGenl.eastOccl(sqBB, free)) | moveGenl.westOne(moveGenl.westOccl(sqBB, free)) | moveGenl.northOne(moveGenl.northOccl(sqBB, free)) | moveGenl.southOne(moveGenl.southOccl(sqBB, free));
+}
+
+pub inline fn getBishopAttacksRay(occBB: u64, sq: e_square) u64 {
+    const sqBB = sqToBitboard(sq);
+    const free = ~occBB;
+    return moveGenl.northWestOne(moveGenl.northWestOccl(sqBB, free)) | moveGenl.northEastOne(moveGenl.northEastOccl(sqBB, free)) | moveGenl.southEastOne(moveGenl.southEastOccl(sqBB, free)) | moveGenl.southWestOne(moveGenl.southWestOccl(sqBB, free));
 }
 pub inline fn getBishopAttacks(occBB: u64, sq: e_square) u64 {
     if (comptime useMagic) {
         return magicl.getBishopMoves(sq, occBB);
     } else {
-        var ret = antiDiagAttacks(occBB, sq);
-        ret |= diagonalAttacks(occBB, sq);
-        return ret;
+        return getBishopAttacksRay(occBB, sq);
     }
 }
 pub inline fn getQueenAttacks(occBB: u64, sq: e_square) u64 {
     if (comptime useMagic) {
         return magicl.getRookMoves(sq, occBB) | magicl.getBishopMoves(sq, occBB);
     } else {
-        var ret = fileAttacks(occBB, sq);
-        ret |= rankAttacks(occBB, sq);
-        ret |= antiDiagAttacks(occBB, sq);
-        ret |= diagonalAttacks(occBB, sq);
-        return ret;
+        return getBishopAttacksRay(occBB, sq) | getRookAttacksRay(occBB, sq);
     }
 }
 
@@ -820,7 +802,7 @@ pub inline fn getPawnAttacksFromBB(bb: u64, comptime white: bool) u64 {
 }
 
 pub inline fn getKingAttacks(sq: e_square) u64 {
-    return tablel.cachedKingTable.KingAttack[@intFromEnum(sq)];
+    return tablel.cachedKingTable[@intFromEnum(sq)];
 }
 pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
     switch (piece) {
@@ -851,29 +833,15 @@ pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
         },
     }
 }
-pub fn e_pieceTo_e_pieceType(piece: e_piece) typel.e_pieceType {
-    switch (piece) {
-        .nEmptySquare, .nWhite, .nBlack => {
-            @panic("Incorrect piece found");
-        },
-        .nWhiteKing, .nBlackKing => {
-            return .KING;
-        },
-        .nWhitePawn, .nBlackPawn => {
-            return .PAWN;
-        },
-        .nWhiteBishop, .nBlackBishop => {
-            return .BISHOP;
-        },
-        .nWhiteKnight, .nBlackKnight => {
-            return .KNIGHT;
-        },
-        .nWhiteRook, .nBlackRook => {
-            return .ROOK;
-        },
-        .nWhiteQueen, .nBlackQueen => {
-            return .QUEEN;
-        },
+pub inline fn e_pieceTo_e_pieceType(piece: e_piece) e_pieceType {
+    const _p = @intFromEnum(piece);
+    return @enumFromInt(_p % N_PIECES_TYPES);
+}
+pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_pieceType {
+    if (comptime white) {
+        return @enumFromInt(@intFromEnum(piece));
+    } else {
+        return @enumFromInt(@intFromEnum(piece) - N_PIECES_TYPES);
     }
 }
 
@@ -1017,6 +985,7 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
 pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bool) u64 {
     var ret: u64 = EMPTY;
     var color_offset: u8 = 0;
+    const mask: u64 = p_board.b.c_occupiedBB[@intFromBool(white)];
     if (white) {
         ret |= getPawnAttacksFromBB(p_board.getPieceBB(.nWhitePawn), true);
         ret |= getKingAttacks(p_board.b.wKingSq);
@@ -1025,11 +994,9 @@ pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bo
         ret |= getPawnAttacksFromBB(p_board.getPieceBB(.nBlackPawn), false);
         ret |= getKingAttacks(p_board.b.bKingSq);
     }
-    ret |= knightAttacks(p_board.b.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteKnight)]);
-    ret |= _AllAttackBishopMask(p_board.b.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteBishop)], occBB);
-    ret |= _AllAttackRookMask(p_board.b.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteRook)], occBB);
-    ret |= _AllAttackQueenMask(p_board.b.pieceBB[color_offset + @intFromEnum(e_piece.nWhiteQueen)], occBB);
-
+    ret |= knightAttacks(p_board.b.pieceBB[@intFromEnum(e_pieceType.KNIGHT)] & mask);
+    ret |= _AllAttackBishopMask((p_board.b.pieceBB[@intFromEnum(e_pieceType.BISHOP)] | p_board.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]) & mask, occBB);
+    ret |= _AllAttackRookMask((p_board.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] | p_board.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]) & mask, occBB);
     return ret;
 }
 
@@ -1059,7 +1026,7 @@ pub fn cst_getAllAttackerFromSq(p_board: *const boardl.boardState, comptime whit
         ret |= getKingAttacks(sq) & (p_board.getPieceBB(.nBlackKing));
     } else {
         ret |= knightAttacks(bb) & p_board.getPieceBB(.nWhiteKnight);
-        ret |= _AllAttackBishopMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
+        ret |= (_AllAttackBishopMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen)));
         ret |= _AllAttackRookMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
         ret |= _AllAttackPawnMask(bb, white) & (p_board.getPieceBB(.nWhitePawn));
         ret |= getKingAttacks(sq) & (p_board.getPieceBB(.nWhiteKing));
@@ -1085,11 +1052,20 @@ pub inline fn onMoveStaged(p_board: *boardl.boardState, white: bool) void {
 }
 
 pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
-    const rq: u64 = if (comptime white) (p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen)) else (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
-    const bq: u64 = if (comptime white) (p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen)) else (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
-    const n: u64 = if (comptime white) p_board.getPieceBB(.nBlackKnight) else p_board.getPieceBB(.nWhiteKnight);
-    const p: u64 = if (comptime white) p_board.getPieceBB(.nBlackPawn) else p_board.getPieceBB(.nWhitePawn);
+    const rq = p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[@intFromBool(!white)];
+    const bq = p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[@intFromBool(!white)];
+    const n = p_board.getPieceBB_t(.KNIGHT) & p_board.b.c_occupiedBB[@intFromBool(!white)];
+    const p = p_board.getPieceBB_t(.PAWN) & p_board.b.c_occupiedBB[@intFromBool(!white)];
     const king_E = if (comptime white) p_board.b.wKingSq else p_board.b.bKingSq;
+    //std.debug.print("getCheckers_cst: rq, bq, n, p, N, P, king_E {} \n", .{king_E});
+    //print_bitboard(rq);
+    //print_bitboard(bq);
+    //print_bitboard(n);
+    //print_bitboard(p);
+
+    //print_bitboard(p_board.getPieceBB_t(.KNIGHT));
+    //print_bitboard(p_board.getPieceBB_t(.PAWN));
+
     const occ = p_board.b.occupiedBB();
 
     const cachedBishAtt = getBishopAttacks(occ, king_E);
@@ -1103,6 +1079,7 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
     }
     directChecks |= getPawnAttacks(king_E, white) & p;
     directChecks |= knightAttacks(sqToBitboard(king_E)) & n;
+    p_board.frame.checkersBB = directChecks;
 
     if (comptime useAVX2) {
         p_board.frame.pinnedBB = moveGenl.getPinned_avx2(p_board, !white);
@@ -1125,9 +1102,6 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
         }
         p_board.frame.pinnedBB = pinned;
     }
-
-    p_board.frame.checkersBB = directChecks;
-    return;
 }
 
 pub fn isPiecePinned(occBB: u64, sq: e_square, p_kingSq: *const squareInfo, diagPieceBB: u64, linePieceBB: u64) u64 {
@@ -1209,9 +1183,9 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nBlackKing));
 
-        const piece_idx: u8 = @intFromEnum(e_piece.nBlackPawn);
-        ret |= (destBB << 8) & (p_board.b.pieceBB[piece_idx]);
-        ret |= (((destBB << 8) & (~p_board.b.occupiedBB())) << 8) & ((p_board.b.pieceBB[piece_idx] & blackPawnDoubleRank));
+        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[@intFromBool(false)];
+        ret |= (destBB << 8) & (pBB);
+        ret |= (((destBB << 8) & (~p_board.b.occupiedBB())) << 8) & ((pBB & blackPawnDoubleRank));
     } else {
         ret |= knightAttacks(destBB) & p_board.getPieceBB(.nWhiteKnight);
         ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
@@ -1222,9 +1196,9 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nWhiteKing));
 
-        const piece_idx: u8 = @intFromEnum(e_piece.nWhitePawn);
-        ret |= (destBB >> 8) & (p_board.b.pieceBB[piece_idx]);
-        ret |= (((destBB >> 8) & (~p_board.b.occupiedBB())) >> 8) & ((p_board.b.pieceBB[piece_idx] & whitePawnDoubleRank));
+        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[@intFromBool(true)];
+        ret |= (destBB >> 8) & pBB;
+        ret |= (((destBB >> 8) & (~p_board.b.occupiedBB())) >> 8) & ((pBB & whitePawnDoubleRank));
     }
     return ret;
 }
@@ -1277,7 +1251,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
         return debug_err.valueErr;
     }
 
-    var potentialFromBB = p_state.b.occupiedBB();
+    var potentialFromBB = p_state.b.c_occupiedBB[@intFromBool(white)];
     var color_offset: u8 = 0;
     if (!white) {
         color_offset = 6;
@@ -1287,7 +1261,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
         const letter = moveStr._slice()[letterIdx];
         if (algebraicIsLetterPiece(letter)) {
             const piece = getPieceFromStr(letter);
-            potentialFromBB &= (p_state.b.pieceBB[@intFromEnum(piece) + color_offset]);
+            potentialFromBB &= (p_state.b.pieceBB[@intFromEnum(e_pieceTo_e_pieceType(piece))]);
         } else if (algebraicIsLetterFile(letter)) {
             const fileNbr: u8 = letter - 'a';
             potentialFromBB &= fileMaskFromFileN(fileNbr);
@@ -1316,8 +1290,8 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
 
     if (popcount(potentialFromBB) != 1) {
         // possibly only a pawn move
-        if (potentialFromBB & (p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]) != 0) {
-            potentialFromBB &= (p_state.b.pieceBB[@intFromEnum(e_piece.nWhitePawn) + color_offset]);
+        if (potentialFromBB & (p_state.b.pieceBB[@intFromEnum(e_pieceType.PAWN)]) != 0) {
+            potentialFromBB &= (p_state.b.pieceBB[@intFromEnum(e_pieceType.PAWN)]);
         }
 
         if (popcount(potentialFromBB) != 1) {

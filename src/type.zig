@@ -1,7 +1,8 @@
 pub const e_color = enum(u1) { BLACK = 0, WHITE = 1 };
 
 pub const e_piece = enum(u8) { nWhitePawn = 0, nWhiteBishop = 1, nWhiteKnight = 2, nWhiteRook = 3, nWhiteQueen = 4, nWhiteKing = 5, nBlackPawn = 6, nBlackBishop = 7, nBlackKnight = 8, nBlackRook = 9, nBlackQueen = 10, nBlackKing = 11, nEmptySquare = 12, nWhite, nBlack };
-pub const e_pieceType = enum(u8) { PAWN, BISHOP, KNIGHT, ROOK, QUEEN, KING };
+
+pub const e_pieceType = enum(u8) { PAWN = 0, BISHOP = 1, KNIGHT = 2, ROOK = 3, QUEEN = 4, KING = 5 };
 pub const e_moveGenFlag = enum(u8) { CAPTURE, QUIET, PROMO, EVASION, ALL };
 
 pub const e_moveType = enum { STANDARD, EP, PROMOTION, CASTLE };

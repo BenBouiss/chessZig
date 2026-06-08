@@ -11,7 +11,6 @@ const moveGenl = @import("../move_generation.zig");
 const std = @import("std");
 
 test "in between" {
-    moveTablel._initTables(false);
     try std.testing.expectEqual(chessl.inBetween(.a1, .a8), 0x1010101010100);
     try std.testing.expectEqual(chessl.inBetween(.f1, .f8), 0x20202020202000);
     try std.testing.expectEqual(chessl.inBetween(.h4, .a4), 0x7e000000);
@@ -123,12 +122,11 @@ test "stacked pawns" {
 }
 
 test "safety area" {
-    moveTablel._initTables(false);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.e4), 0x927c7cee7c7c92);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a1), 0x907070e);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a4), 0x907070e070709);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a8), 0xe07070900000000);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.e8), 0xee7c7c9200000000);
+    try std.testing.expectEqual(0x7c7c6c7c7c00, chessl.safetyArea(squarel.e_square.e4));
+    try std.testing.expectEqual(0x70706, chessl.safetyArea(squarel.e_square.a1));
+    try std.testing.expectEqual(0x70706070700, chessl.safetyArea(squarel.e_square.a4));
+    try std.testing.expectEqual(0x607070000000000, chessl.safetyArea(squarel.e_square.a8));
+    try std.testing.expectEqual(0x6c7c7c0000000000, chessl.safetyArea(squarel.e_square.e8));
 
     std.log.info("[TEST]: safety area passed\n", .{});
 }
