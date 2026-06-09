@@ -1,12 +1,12 @@
 [engine1]
-path="engines/bin/engine_07_06_26";
-name="std";
+path="engines/bin/engine_09_06_26";
+name="std + restrict checkmate";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 
 [engine2]
-path="engines/bin/engine_08_06_26";
-name="std 2";
+path="engines/bin/engine_09_06_26_1";
+name="std + restrict checkmate + << 2";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 

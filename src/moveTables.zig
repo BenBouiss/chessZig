@@ -27,19 +27,16 @@ pub fn kingAttacks(sq: i8) u64 {
 
     ret |= (pos >> 8);
     ret |= (pos << 8);
-
     if (pos & chess.notAFile != 0) {
         ret |= (pos >> 1);
         ret |= (pos << 7);
         ret |= (pos >> 9);
     }
-
     if (pos & chess.notHFile != 0) {
         ret |= (pos << 1);
         ret |= (pos << 9);
         ret |= (pos >> 7);
     }
-
     return ret;
 }
 

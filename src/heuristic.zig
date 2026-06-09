@@ -41,7 +41,7 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
     //ret += evaluate_PSQT(p_state, values, _phase);
 
-    var ret = evaluate_mobility(&whiteMoveBB, &blackMoveBB);
+    var ret = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_king(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
@@ -85,7 +85,7 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     const ret: heuristicComponents = .{
         //.PSQT = evaluate_PSQT(p_state, values, _phase),
         .PSQT = p_state.frame.psqtEval,
-        .Mobility = computeTaperedV(evaluate_mobility(&whiteMoveBB, &blackMoveBB), _phase),
+        .Mobility = computeTaperedV(evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB), _phase),
         .King = computeTaperedV(evaluate_king(p_state), _phase),
 
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), _phase),
@@ -204,24 +204,28 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
     const paS: scoreType = @intCast(nWhitePassed - nBlackPassed);
     return .{ (isoS * weightl.global_IsolatedPawnValue[MG]) + (doS * weightl.global_StackedPawnValue[MG]) + (paS * weightl.global_PassedPawnValue[MG]), (isoS * weightl.global_IsolatedPawnValue[EG]) + (doS * weightl.global_StackedPawnValue[EG]) + (paS * weightl.global_PassedPawnValue[EG]) };
 }
-pub fn evaluate_mobility(p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
+pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // going to use "raw" mobility only taking board coverage
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
     const v = @as(scoreType, @intCast(moveW - moveB));
     const moveAmountScore: scoreVect = .{ weightl.global_MobilityValue[MG] * v, weightl.global_MobilityValue[EG] * v };
+    const wkingBB = chess.sqToBitboard(p_state.b.wKingSq);
+    const bkingBB = chess.sqToBitboard(p_state.b.bKingSq);
 
-    const kingMoveW = p_whiteMoveBB.kingMoves & (~p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
-    const kingMoveB = p_blackMoveBB.kingMoves & (~p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
+    const bAttacks = (p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
+    const wAttacks = (p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
+    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks);
+    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks);
     const nw: scoreType = @intCast(chess.ipopcount(kingMoveW));
     const nb: scoreType = @intCast(chess.ipopcount(kingMoveB));
-    const v2 = (nw - nb);
+    const v2 = (nw - nb) << 2;
     var kingMoveScore: scoreVect = .{ weightl.global_KingMobilityValue[MG] * v2, weightl.global_KingMobilityValue[EG] * v2 };
 
-    if (nw == 0) {
+    if (nw == 0 and (wkingBB & bAttacks) != 0) {
         kingMoveScore -= .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
     }
-    if (nb == 0) {
+    if (nb == 0 and (bkingBB & wAttacks) != 0) {
         kingMoveScore += .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
     }
     return moveAmountScore + kingMoveScore;

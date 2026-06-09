@@ -837,6 +837,7 @@ pub inline fn e_pieceTo_e_pieceType(piece: e_piece) e_pieceType {
     const _p = @intFromEnum(piece);
     return @enumFromInt(_p % N_PIECES_TYPES);
 }
+
 pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_pieceType {
     if (comptime white) {
         return @enumFromInt(@intFromEnum(piece));
@@ -863,14 +864,12 @@ pub inline fn getSqRank(sq: e_square) u8 {
 pub inline fn getSqIdxRank(sq: u8) u8 {
     return (sq) >> 3;
 }
-
 pub inline fn getSqFile(sq: e_square) u8 {
     return @intFromEnum(sq) & 7;
 }
 pub inline fn getSqIdxFile(sq: u8) u8 {
     return (sq) & 7;
 }
-
 pub inline fn getSqFromCoord(rank: u8, file: u8) e_square {
     return @enumFromInt((rank << 3) + file);
 }
