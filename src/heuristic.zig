@@ -36,12 +36,9 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
-    const phase: scoreType = @intCast(p_state.getPhase());
-    const _phase: scoreType = @divFloor((phase >> 8) + (typel.totalPhase >> 1), typel.totalPhase);
+    const phase: scoreType = p_state.getPhase();
 
-    //ret += evaluate_PSQT(p_state, values, _phase);
-
-    var ret = evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB);
+    var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB);
     ret += evaluate_king(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
@@ -49,7 +46,7 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     ret += evaluate_pawnStructure(p_state);
     ret += .{ p_state.frame.psqtEval, p_state.frame.psqtEval };
 
-    return computeTaperedV(ret, _phase);
+    return computeTaperedV(ret, phase);
 }
 
 pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreType {
@@ -79,33 +76,27 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
-    const phase: scoreType = @intCast(p_state.getPhase());
-    const _phase: scoreType = @divFloor(phase * 256 + (typel.totalPhase >> 1), typel.totalPhase);
+    const phase: scoreType = p_state.getPhase();
+    //const phase: scoreType = @divFloor((p_state.getPhase() >> 8) + (typel.totalPhase >> 1), typel.totalPhase);
 
     const ret: heuristicComponents = .{
         //.PSQT = evaluate_PSQT(p_state, values, _phase),
         .PSQT = p_state.frame.psqtEval,
-        .Mobility = computeTaperedV(evaluate_mobility(p_state, &whiteMoveBB, &blackMoveBB), _phase),
-        .King = computeTaperedV(evaluate_king(p_state), _phase),
+        .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
+        .King = computeTaperedV(evaluate_king(p_state), phase),
 
-        .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), _phase),
-        .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), _phase),
-        .PawnStruct = computeTaperedV(evaluate_pawnStructure(p_state), _phase),
-        .Tempo = computeTaperedV(evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB), _phase),
+        .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
+        .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
+        .PawnStruct = computeTaperedV(evaluate_pawnStructure(p_state), phase),
+        .Tempo = computeTaperedV(evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
     };
     return ret;
 }
-pub inline fn computeTapered(score_mg: scoreType, score_eg: scoreType, _phase: scoreType) scoreType {
-    //i16 vers
-    //const __phase: i32 = @intCast(_phase);
-    //const mg: i32 = @as(i32, @intCast(score_mg)) * (256 - __phase);
-    //const eg: i32 = score_eg * _phase;
-    //return @intCast((mg + eg) >> 8);
-
-    return ((score_mg * (256 - _phase)) + score_eg * _phase) >> 8;
+pub inline fn computeTapered(score_mg: scoreType, score_eg: scoreType, phase: scoreType) scoreType {
+    return @divFloor((score_mg * (256 - phase)) + score_eg * phase, 256);
 }
-pub inline fn computeTaperedV(s: scoreVect, _phase: scoreType) scoreType {
-    return ((s[0] * (256 - _phase)) + s[1] * _phase) >> 8;
+pub inline fn computeTaperedV(s: scoreVect, phase: scoreType) scoreType {
+    return @divFloor((s[0] * (256 - phase)) + s[1] * phase, 256);
 }
 
 pub fn evaluate_PSQT(p_state: *const boardl.boardState, _phase: scoreType) scoreType {
@@ -215,11 +206,11 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
 
     const bAttacks = (p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
     const wAttacks = (p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
-    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks);
-    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks);
+    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks) & ~p_state.b.c_occupiedBB[@intFromBool(true)];
+    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.c_occupiedBB[@intFromBool(false)];
     const nw: scoreType = @intCast(chess.ipopcount(kingMoveW));
     const nb: scoreType = @intCast(chess.ipopcount(kingMoveB));
-    const v2 = (nw - nb) << 2;
+    const v2 = (nw - nb) << 3;
     var kingMoveScore: scoreVect = .{ weightl.global_KingMobilityValue[MG] * v2, weightl.global_KingMobilityValue[EG] * v2 };
 
     if (nw == 0 and (wkingBB & bAttacks) != 0) {
@@ -228,6 +219,10 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     if (nb == 0 and (bkingBB & wAttacks) != 0) {
         kingMoveScore += .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
     }
+    //std.debug.print("evaluate mobility nw {d} nb{d} king score {any}\n", .{ nw, nb, kingMoveScore });
+    //chess.print_bitboard(kingMoveB);
+    //chess.print_bitboard(wAttacks);
+    //p_whiteMoveBB.print();
     return moveAmountScore + kingMoveScore;
 }
 pub fn evaluate_king(p_state: *const boardl.boardState) scoreVect {
@@ -314,7 +309,7 @@ pub fn e_pieceToHeuristic(piece: e_piece) scoreType {
         },
     }
 }
-pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IMove, isPromo: bool, isCastle: bool, toPiece: e_piece, phase: usize, info: *const boardl.boardFrame) scoreType {
+pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IMove, isPromo: bool, isCastle: bool, toPiece: e_piece, phase: scoreType, info: *const boardl.boardFrame) scoreType {
     var fromPiece = toPiece;
     var sV: @Vector(3, scoreType) = .{ 0, 0, 0 };
     const from = move.getFrom();
@@ -345,11 +340,11 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
         sV += victimScs;
     }
 
-    const ret = sV[0] + computeTapered(sV[1], sV[2], @intCast(phase));
+    const ret = sV[0] + computeTapered(sV[1], sV[2], phase);
     if (comptime white) {
         return ret;
     }
-    return -(ret);
+    return -ret;
 }
 
 pub fn materialImbalance(p_state: *const boardl.boardState) scoreType {
@@ -812,7 +807,7 @@ pub const texelEntry = struct {
             @panic("");
         };
         defer board.free(alloc);
-        const phase: scoreType = @intCast(board.getPhase());
+        const phase: scoreType = (board.getPhase());
 
         p_self.phase = @divFloor((256 * (24 - phase)), 24);
 

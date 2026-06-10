@@ -306,11 +306,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     gen.fetchNext(p_state);
     // captures are now in
     var useLMR = false;
-    var hashMoveIsQuiet: bool = false;
-    if (hashMove.isValid() and !hashMove.isCapture()) {
-        gen.moves.append(hashMove);
-        hashMoveIsQuiet = true;
-    }
+    //var hashMoveIsQuiet: bool = false;
+    //if (hashMove.isValid() and !hashMove.isCapture()) {
+    //    gen.moves.append(hashMove);
+    //    hashMoveIsQuiet = true;
+    //}
     if (gen.moves.len == 0) {
         gen.fetchNext(p_state);
     }
@@ -340,9 +340,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         } else if (i_reset) {
             i = 0;
             i_reset = false;
-            if (hashMoveIsQuiet) {
-                continue;
-            }
         }
         const to = move.getTo();
         const from = move.getFrom();

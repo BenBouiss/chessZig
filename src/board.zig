@@ -684,8 +684,8 @@ pub const boardState = struct {
                     p_self.b.pieceCount[@intFromEnum(toPiece)] -= 1;
                     toPiece = chessl.flagPromotionToPiece(move.getFlag(), white);
                     _toPiece = chessl.e_pieceTo_e_pieceTypeCst(toPiece, white);
-                    p_self.b.pieceCount[@intFromEnum(toPiece)] += 1;
                     p_self.frame.phase += typel.phases_arr[@intFromEnum(_toPiece)];
+                    p_self.b.pieceCount[@intFromEnum(toPiece)] += 1;
                     p_self.b.pieceBB[@intFromEnum(_toPiece)] ^= toBB;
                     p_self.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] ^= toBB;
                 }
@@ -756,8 +756,8 @@ pub const boardState = struct {
                 p_self.b.pieceCount[@intFromEnum(toPiece)] -= 1;
                 toPiece = chessl.flagPromotionToPiece(move.getFlag(), white);
                 _toPiece = chessl.e_pieceTo_e_pieceTypeCst(toPiece, white);
-                p_self.b.pieceCount[@intFromEnum(toPiece)] += 1;
                 p_self.frame.phase += typel.phases_arr[@intFromEnum(_toPiece)];
+                p_self.b.pieceCount[@intFromEnum(toPiece)] += 1;
                 p_self.b.pieceBB[@intFromEnum(_toPiece)] ^= toBB;
                 p_self.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] ^= toBB;
             } else if (move.isDoublePush()) {
@@ -819,16 +819,16 @@ pub const boardState = struct {
         }
         return self.getPiece(move.getTo());
     }
-    pub inline fn getPhase(self: *const boardState) usize {
+    pub inline fn getPhase(self: *const boardState) heuristicl.scoreType {
         var ret: heuristicl.scoreType = @intCast(typel.totalPhase);
         ret = @intCast(@max(0, ret - @as(heuristicl.scoreType, @intCast(self.frame.phase))));
-        return @intCast(@divFloor((ret << 8) + (typel.totalPhase >> 1), typel.totalPhase));
-        //return @intCast(@max(0, heuristicl.computePhase(self)));
+        return @divFloor((ret << 8) + (typel.totalPhase >> 1), typel.totalPhase);
+        // ((24 - p) * 256) + (24 / 2)) / 24
     }
     pub fn isEndGame(self: *const boardState) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
         const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
-        return (nWhiteP < 3) and (nBlackP < 3);
+        return (nWhiteP < 2) and (nBlackP < 2);
     }
 
     pub inline fn getKingBB(self: boardState, white: bool) u64 {

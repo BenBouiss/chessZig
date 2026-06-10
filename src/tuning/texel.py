@@ -73,15 +73,23 @@ def fetchNextXY(
     return torch_x, torch_y
 
 
+K = 10
+
+
+def sigm(x):
+    return 1 / (1 + torch.pow(10, -K * x / 400))
+
+
 class texelNet(nn.Module):
     def __init__(self, n_weights: int):
         super(texelNet, self).__init__()
 
-        self.sigm = nn.Sigmoid()
+        self.sigm = sigm
         self.W_mg = nn.Linear(n_weights, 1, bias=False)
         self.W_eg = nn.Linear(n_weights, 1, bias=False)
 
         self.float()
+        # self.int()
 
     def forward(self, x):
         # return self.sigm(self.W_mg(x[:, :-2]) * x[:, -2] + self.W_eg(x[:, :-2]) * x[:, -1])
@@ -120,7 +128,8 @@ def training_loop(
     batch_size: int = 0,
 ):
     criterion = nn.MSELoss()
-    setInitWeight(opt, model)
+    if opt.initWeights is not None:
+        setInitWeight(opt, model)
     freezeM = opt.makeFreezeMask()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -230,7 +239,7 @@ class trainingOptions:
                 "Weights must contain both MG and EG section"
             )
         self.lrScheduler = lrScheduler
-        if self.tuneCfg.freezingRequired:
+        if self.tuneCfg.freezingRequired():
             assert self.initWeights is not None, (
                 "Some freezing required(one tune param was set to False) but no initial weights given"
             )
@@ -303,7 +312,7 @@ class trainingOptions:
 def printTensorWeight(w, normalize: bool = False) -> None:
     norm = 100 if normalize else 1
     for idx in range(cst.PSQT_Pawn_idx):
-        print(f"{cst.strWeightNames[idx]} = {w[idx]}")
+        print(f"{cst.strWeightNames[idx]} = {w[idx] * norm}")
 
     print("pawnArr: ")
     print2dTensor(w[cst.PSQT_Pawn_idx : cst.PSQT_Bishop_idx], normalize)

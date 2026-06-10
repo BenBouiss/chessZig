@@ -378,7 +378,7 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
         onMoveStaged(&board, board.whiteToMove());
     }
     board.frame.key = hashl.fullComputeZobristKeys(&board);
-    board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, @intCast(board.getPhase()));
+    board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, board.getPhase());
     return board;
 }
 
@@ -671,7 +671,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
 
     const eval = heuristicl.evaluate_debug(p_board_state);
-    std.debug.print("Current evaluation: phase {d} \n", .{p_board_state.getPhase()});
+    std.debug.print("Current evaluation: phase {d} piece phase {d}\n", .{ p_board_state.getPhase(), p_board_state.frame.phase });
     eval.print();
 
     sanityCheckBoardState(p_board_state);
