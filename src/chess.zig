@@ -939,6 +939,10 @@ pub inline fn stackedPawns(pawn: u64) u64 {
     const tripleFiles = (upPawns & downPawns);
     return upPawns | downPawns | tripleFiles;
 }
+pub inline fn openFileRooks(rooks: u64, pawns: u64, white: bool) u64 {
+    const obstruct = if (white) (moveGenl.southOne(moveGenl.southOccl(pawns, UNIVERSE))) else (moveGenl.northOne(moveGenl.northOccl(pawns, UNIVERSE)));
+    return rooks & (~obstruct);
+}
 
 pub inline fn _AllAttackPawnMask(bb_piece: u64, white: bool) u64 {
     if (white) {

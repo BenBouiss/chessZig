@@ -35,13 +35,14 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(true)]);
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
+    const white = p_state.whiteToMove();
 
     const phase: scoreType = p_state.getPhase();
 
-    var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB);
+    var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB, white);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
-    ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB);
+    ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, white);
     ret += evaluate_pawnStructure(p_state);
     ret += .{ p_state.frame.psqtEval, p_state.frame.psqtEval };
     ret += evaluate_king(p_state, (ret[0] + ret[1]) > 0);
@@ -77,18 +78,19 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromBool(false)]);
 
     const phase: scoreType = p_state.getPhase();
+    const white = p_state.whiteToMove();
     //const phase: scoreType = @divFloor((p_state.getPhase() >> 8) + (typel.totalPhase >> 1), typel.totalPhase);
 
     const ret: heuristicComponents = .{
         //.PSQT = evaluate_PSQT(p_state, values, _phase),
         .PSQT = p_state.frame.psqtEval,
-        .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
+        .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB, white), phase),
         .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0), phase),
 
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
         .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .PawnStruct = computeTaperedV(evaluate_pawnStructure(p_state), phase),
-        .Tempo = computeTaperedV(evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
+        .Tempo = computeTaperedV(evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, white), phase),
     };
     return ret;
 }
@@ -195,7 +197,8 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
     const paS: scoreType = @intCast(nWhitePassed - nBlackPassed);
     return .{ (isoS * weightl.global_IsolatedPawnValue[MG]) + (doS * weightl.global_StackedPawnValue[MG]) + (paS * weightl.global_PassedPawnValue[MG]), (isoS * weightl.global_IsolatedPawnValue[EG]) + (doS * weightl.global_StackedPawnValue[EG]) + (paS * weightl.global_PassedPawnValue[EG]) };
 }
-pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
+pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
+    _ = white;
     // going to use "raw" mobility only taking board coverage
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
@@ -219,11 +222,11 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     if (nb == 0 and (bkingBB & wAttacks) != 0) {
         kingMoveScore += .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
     }
-    //std.debug.print("evaluate mobility nw {d} nb{d} king score {any}\n", .{ nw, nb, kingMoveScore });
-    //chess.print_bitboard(kingMoveB);
-    //chess.print_bitboard(wAttacks);
-    //p_whiteMoveBB.print();
-    return moveAmountScore + kingMoveScore;
+    const nOpenRookW: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.c_occupiedBB[@intFromBool(true)], p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[@intFromBool(true)], true)));
+    const nOpenRookB: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.c_occupiedBB[@intFromBool(false)], p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[@intFromBool(false)], false)));
+    const deltaOpenRook = nOpenRookW - nOpenRookB;
+    const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookValue[MG] * deltaOpenRook, weightl.global_OpenFileRookValue[EG] * deltaOpenRook };
+    return moveAmountScore + kingMoveScore + pieceMobility;
 }
 pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scoreVect {
     //const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
@@ -274,7 +277,7 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
     const s2 = @as(scoreType, @intCast(chess.popcount(w_pieceCenterProt))) - @as(scoreType, @intCast(chess.popcount(b_pieceCenterProt)));
     return .{ weightl.global_StructureProtectionValue[MG] * s + weightl.global_centerProtectionValue[MG] * s2, weightl.global_StructureProtectionValue[EG] * s + weightl.global_centerProtectionValue[EG] * s2 };
 }
-pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
+pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
     const wMoves: u64 = p_whiteMoveBB.collapse();
     const wThreats: u64 = wMoves & p_state.b.c_occupiedBB[@intFromBool(false)];
     const bMoves: u64 = p_blackMoveBB.collapse();
@@ -283,7 +286,7 @@ pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const m
 
     var ret: scoreVect = .{ weightl.global_pieceThreatScore[MG] * deltaThreat, weightl.global_pieceThreatScore[EG] * deltaThreat };
     if (p_state.isChecked()) {
-        if (p_state.whiteToMove()) {
+        if (white) {
             ret -= .{ weightl.global_tempoChecksScore[MG], weightl.global_tempoChecksScore[EG] };
         } else {
             ret += .{ weightl.global_tempoChecksScore[MG], weightl.global_tempoChecksScore[EG] };

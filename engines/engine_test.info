@@ -5,8 +5,8 @@ name="curr";
 "setoption name userazoring value false";
 
 [engine2]
-path="engines/bin/engine_11_06_26_3";
-name="curr + new TT writer + fix";
+path="engines/bin/engine_11_06_26";
+name="curr + open file (10, 0)";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 

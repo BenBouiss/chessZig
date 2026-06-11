@@ -127,6 +127,7 @@ pub var global_QueenValue: scoreType = simpleQueenScore;
 // mobility
 pub var global_MobilityValue: [2]scoreType = .{ 1, 1 };
 pub var global_KingMobilityValue: [2]scoreType = .{ 2, 2 };
+pub var global_OpenFileRookValue: [2]scoreType = .{ 10, 0 };
 
 // structure
 pub var global_StructureProtectionValue: [2]scoreType = .{ 24, 31 };
