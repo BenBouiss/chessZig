@@ -38,17 +38,71 @@ pub const simpleSafetyQueenScore: scoreType = 80;
 // ============ king ============
 pub const simpleKingProximity: scoreType = 5;
 
-pub const pawnScoreArr = [chessl.N_SQUARES]scoreType{ 0, 0, 0, 0, 0, 0, 0, 0, -31, 8, -7, -37, -36, -14, 3, -31, -22, 9, 5, -11, -10, -2, 3, -19, -26, 3, 10, 9, 6, 1, 0, -23, -17, 16, -2, 15, 14, 0, 15, -13, 7, 28, 21, 44, 40, 31, 44, 7, 78, 83, 86, 73, 102, 82, 85, 90, 0, 0, 0, 0, 0, 0, 0, 0 };
+pub const pawnScoreArr = [chessl.N_SQUARES]scoreType{
+    0,   0,  0,  0,   0,   0,   0,  0,
+    -31, 8,  -7, -37, -36, -14, 3,  -31,
+    -22, 9,  5,  -11, -10, -2,  3,  -19,
+    -26, 3,  10, 9,   6,   1,   0,  -23,
+    -17, 16, -2, 15,  14,  0,   15, -13,
+    7,   28, 21, 44,  40,  31,  44, 7,
+    78,  83, 86, 73,  102, 82,  85, 90,
+    0,   0,  0,  0,   0,   0,   0,  0,
+};
 
-pub const knightScoreArr = [chessl.N_SQUARES]scoreType{ -5, 1, -11, -9, -10, -11, -7, -7, 14, 15, 8, 4, 5, 4, 15, 12, 10, 18, 18, 11, 6, 18, 15, 11, 9, 7, 12, 17, 12, 12, 0, 5, 18, 12, 15, 25, 19, 18, 11, 7, -6, 29, -24, 30, 39, -7, 21, -10, -8, 15, 26, -31, -29, 23, 1, -16, -44, -58, -61, -56, -17, -80, -27, -37 };
+pub const knightScoreArr = [chessl.N_SQUARES]scoreType{
+    -5,  1,   -11, -9,  -10, -11, -7,  -7,
+    14,  15,  8,   4,   5,   4,   15,  12,
+    10,  18,  18,  11,  6,   18,  15,  11,
+    9,   7,   12,  17,  12,  12,  0,   5,
+    18,  12,  15,  25,  19,  18,  11,  7,
+    -6,  29,  -24, 30,  39,  -7,  21,  -10,
+    -8,  15,  26,  -31, -29, 23,  1,   -16,
+    -44, -58, -61, -56, -17, -80, -27, -37,
+};
 
-pub const bishopScoreArr = [chessl.N_SQUARES]scoreType{ -5, 1, -11, -9, -10, -11, -7, -7, 14, 15, 8, 4, 5, 4, 15, 12, 10, 18, 18, 11, 6, 18, 15, 11, 9, 7, 12, 17, 12, 12, 0, 5, 18, 12, 15, 25, 19, 18, 11, 7, -6, 29, -24, 30, 39, -7, 21, -10, -8, 15, 26, -31, -29, 23, 1, -16, -44, -58, -61, -56, -17, -80, -27, -37 };
+pub const bishopScoreArr = [chessl.N_SQUARES]scoreType{
+    -5,  1,   -11, -9,  -10, -11, -7,  -7,
+    14,  15,  8,   4,   5,   4,   15,  12,
+    10,  18,  18,  11,  6,   18,  15,  11,
+    9,   7,   12,  17,  12,  12,  0,   5,
+    18,  12,  15,  25,  19,  18,  11,  7,
+    -6,  29,  -24, 30,  39,  -7,  21,  -10,
+    -8,  15,  26,  -31, -29, 23,  1,   -16,
+    -44, -58, -61, -56, -17, -80, -27, -37,
+};
 
-pub const rookScoreArr = [chessl.N_SQUARES]scoreType{ -25, -20, -15, 4, -1, -15, -25, -26, -44, -31, -25, -21, -24, -35, -36, -44, -35, -23, -35, -20, -20, -29, -21, -38, -23, -29, -13, -17, -10, -24, -38, -25, 0, 4, 13, 10, 15, -3, -7, -5, 15, 29, 23, 27, 37, 22, 20, 12, 45, 24, 46, 55, 45, 51, 28, 50, 29, 24, 27, 3, 30, 27, 46, 41 };
+pub const rookScoreArr = [chessl.N_SQUARES]scoreType{
+    -25, -20, -15, 4,   -1,  -15, -25, -26,
+    -44, -31, -25, -21, -24, -35, -36, -44,
+    -35, -23, -35, -20, -20, -29, -21, -38,
+    -23, -29, -13, -17, -10, -24, -38, -25,
+    0,   4,   13,  10,  15,  -3,  -7,  -5,
+    15,  29,  23,  27,  37,  22,  20,  12,
+    45,  24,  46,  55,  45,  51,  28,  50,
+    29,  24,  27,  3,   30,  27,  46,  41,
+};
 
-pub const queenScoreArr = [chessl.N_SQUARES]scoreType{ -29, -22, -23, -9, -23, -27, -25, -31, -27, -13, 0, -14, -11, -11, -15, -28, -22, -4, -9, -8, -12, -8, -12, -20, -10, -11, -1, -3, 0, -7, -15, -16, 0, -12, 16, 12, 18, 15, -9, -4, -1, 32, 24, 44, 54, 47, 32, 1, 10, 24, 44, -7, 15, 56, 42, 18, 4, 0, -6, -78, 51, 18, 65, 19 };
+pub const queenScoreArr = [chessl.N_SQUARES]scoreType{
+    -29, -22, -23, -9,  -23, -27, -25, -31,
+    -27, -13, 0,   -14, -11, -11, -15, -28,
+    -22, -4,  -9,  -8,  -12, -8,  -12, -20,
+    -10, -11, -1,  -3,  0,   -7,  -15, -16,
+    0,   -12, 16,  12,  18,  15,  -9,  -4,
+    -1,  32,  24,  44,  54,  47,  32,  1,
+    10,  24,  44,  -7,  15,  56,  42,  18,
+    4,   0,   -6,  -78, 51,  18,  65,  19,
+};
 
-pub const kingScoreArr = [chessl.N_SQUARES]scoreType{ 17, 30, -3, -14, 6, -1, 40, 18, -4, 3, -14, -50, -57, -18, 13, 4, -47, -42, -43, -79, -64, -32, -28, -32, -55, -43, -52, -28, -51, -47, -8, -50, -55, 50, 11, -4, -19, 13, 0, -49, -62, 12, -57, 44, -67, 28, 37, -31, -32, 10, 55, 56, 56, 55, 10, 3, 4, 54, 47, -99, -99, 60, 83, -62 };
+pub const kingScoreArr = [chessl.N_SQUARES]scoreType{
+    17,  30,  -3,  -14, 6,   -1,  40,  18,
+    -4,  3,   -14, -50, -57, -18, 13,  4,
+    -47, -42, -43, -79, -64, -32, -28, -32,
+    -55, -43, -52, -28, -51, -47, -8,  -50,
+    -55, 50,  11,  -4,  -19, 13,  0,   -49,
+    -62, 12,  -57, 44,  -67, 28,  37,  -31,
+    -32, 10,  55,  56,  56,  55,  10,  3,
+    4,   54,  47,  -99, -99, 60,  83,  -62,
+};
 
 // source: https://www.chessprogramming.org/Simplified_Evaluation_Function
 pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0, 0, -10, -20, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -30, 0, 0, 0, 0, -30, -30, -50, -30, -30, -30, -30, -30, -30, -50 };
@@ -74,19 +128,19 @@ pub var global_MobilityValue: [2]scoreType = .{ 0, 0 };
 pub var global_KingMobilityValue: [2]scoreType = .{ 0, 0 };
 pub var global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
-pub var global_tempoChecksScore: [2]scoreType = .{ 90, 90 };
+pub var global_tempoChecksScore: [2]scoreType = .{ 24, 24 };
 pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore, simplePieceThreatScore };
 
 pub var global_IsolatedPawnValue: [2]scoreType = .{ 2, 2 };
 pub var global_StackedPawnValue: [2]scoreType = .{ 0, 0 };
-pub var global_PassedPawnValue: [2]scoreType = .{ 68, 68 };
+pub var global_PassedPawnValue: [2]scoreType = .{ 42, 42 };
 
-pub var global_SafetyBishopValue: [2]scoreType = .{ 42, 42 };
-pub var global_SafetyKnightValue: [2]scoreType = .{ 21, 21 };
-pub var global_SafetyRookValue: [2]scoreType = .{ 0, 0 };
-pub var global_SafetyQueenValue: [2]scoreType = .{ 23, 23 };
+pub var global_SafetyBishopValue: [2]scoreType = .{ 8, 8 };
+pub var global_SafetyKnightValue: [2]scoreType = .{ 4, 4 };
+pub var global_SafetyRookValue: [2]scoreType = .{ 16, 16 };
+pub var global_SafetyQueenValue: [2]scoreType = .{ 16, 16 };
 
-pub var global_StructureProtectionValue: [2]scoreType = .{ 31, 31 };
+pub var global_StructureProtectionValue: [2]scoreType = .{ 24, 31 };
 
 pub var global_KingProximityValue: [2]scoreType = .{ 1, 1 };
 
@@ -95,4 +149,26 @@ pub var global_Bishop_PSQT: [2][64]scoreType = .{ bishopScoreArr, bishopScoreArr
 pub var global_Knight_PSQT: [2][64]scoreType = .{ knightScoreArr, knightScoreArr };
 pub var global_Rook_PSQT: [2][64]scoreType = .{ rookScoreArr, rookScoreArr };
 pub var global_Queen_PSQT: [2][64]scoreType = .{ queenScoreArr, queenScoreArr };
-pub var global_King_PSQT: [2][64]scoreType = .{ kingScoreArr, kingScoreArr };
+pub var global_King_PSQT: [2][64]scoreType = .{ _kingScoreArrMG, _kingScoreArrEG };
+
+const _kingScoreArrMG = [chessl.N_SQUARES]scoreType{
+    30,  30,  30,  10,  12,  10,  30,  30,
+    10,  10,  10,  0,   0,   0,   10,  10,
+    0,   0,   0,   -10, -20, -10, 0,   0,
+    -20, -30, -50, -50, -50, -50, -30, -20,
+    -20, -40, -50, -50, -50, -50, -40, -20,
+    -20, -40, -50, -50, -50, -50, -40, -20,
+    -30, -40, -50, -50, -50, -50, -40, -30,
+    -40, -40, -50, -50, -50, -50, -40, -40,
+};
+
+const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
+    -40, -30, -30, -30, -30, -30, -30, -30,
+    -30, -22, -23, -29, -40, -28, -37, -30,
+    -30, -10, 4,   1,   4,   3,   -10, -30,
+    -30, -10, 8,   20,  20,  10,  -10, -30,
+    -30, -10, 8,   7,   9,   8,   -10, -30,
+    -30, -10, 14,  5,   9,   8,   -10, -30,
+    -30, -22, -11, -14, -6,  -8,  -17, -30,
+    -40, -30, -30, -30, -30, -30, -30, -30,
+};

@@ -131,29 +131,35 @@ pub const TUNE_PSQT: bool = true; // > 5 weights
 pub const N_TERMS: usize = 397 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
 
 // TEXEL indexes
+// counts
 pub const TEXEL_PAWN_COUNT_IDX: usize = 0;
 pub const TEXEL_BISHOP_COUNT_IDX: usize = 1;
 pub const TEXEL_KNIGHT_COUNT_IDX: usize = 2;
 pub const TEXEL_ROOK_COUNT_IDX: usize = 3;
 pub const TEXEL_QUEEN_COUNT_IDX: usize = 4;
 
+// mobility
 pub const TEXEL_MOVE_COUNT_IDX: usize = 5;
 pub const TEXEL_KINGMOVE_COUNT_IDX: usize = 6;
 
+//structure protection
 pub const TEXEL_PROTECTION_COUNT_IDX: usize = 7;
 
 pub const TEXEL_PAWN_ISOL_IDX: usize = 8;
 pub const TEXEL_PAWN_STACKED_IDX: usize = 9;
 pub const TEXEL_PAWN_PASSED_IDX: usize = 10;
 
+// tempo
 pub const TEXEL_TEMPO_CHECKS_IDX: usize = 11;
 
+// safety
 pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 12;
 pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 13;
 pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 14;
 pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 15;
 pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 16;
 
+// king proximity
 pub const TEXEL_KING_PROXIMITY_IDX: usize = 17;
 
 pub const TEXEL_PAWN_PSQT_IDX: usize = 18;

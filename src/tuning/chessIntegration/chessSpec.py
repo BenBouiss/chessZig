@@ -63,6 +63,9 @@ class heuristicEntry:
         assert len(weights) == 2
         self.weights = [weights[0].copy(), weights[1].copy()]
 
+    def copy(self) -> heuristicEntry:
+        return heuristicEntry(self.weights)
+
     def maskOut(
         self, indexes: list[int], defaultValue: float = cst.INVALID_VALUE
     ) -> heuristicEntry:

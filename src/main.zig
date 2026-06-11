@@ -133,20 +133,12 @@ pub fn test_test(alloc: std.mem.Allocator) !void {
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
     _ = _bucket;
 }
-pub fn safetyTest() void {
-    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.e4));
-    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.a1));
-    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.a4));
-    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.a8));
-    chessl.print_bitboard(chessl.safetyArea(squarel.e_square.e8));
-}
 
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
-    safetyTest();
 
     //try test_bench(GPA, 10);
     //try test_perft(GPA);
@@ -157,6 +149,6 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
     //try intrinsics.main();
-    //try heuristicl.main(GPA);
+    try heuristicl.main(GPA);
     //try nnuel.main(GPA);
 }

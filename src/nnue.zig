@@ -206,7 +206,6 @@ fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []nnueEntry, path: s
         const body: csvBody = .{ .entry = &entries[i] };
         const body_str = try std.fmt.allocPrint(alloc, "{f}\n", .{body});
         defer alloc.free(body_str);
-        //_ = file.writerStreaming(mainl.getGlobalIo(), body_str);
         _ = file.writePositionalAll(mainl.getGlobalIo(), body_str[0..body_str.len], file.length(mainl.getGlobalIo()) catch unreachable) catch unreachable;
     }
 }

@@ -57,7 +57,7 @@ def extractXYFromDF(
         deltaC = C_w.values - C_b.values
     else:
         deltaC = df[[f"Delta_{i}" for i in range(n_weights)]]
-    y: npt.NDArray[np.float16] = np.array(df["Outcome"].values)
+    y: npt.NDArray[np.float16] = np.array(df[" Outcome"].values)
     x = np.hstack((deltaC, rho_mg.values.reshape(-1, 1), rho_eg.values.reshape(-1, 1)))
     return (x, y)
 

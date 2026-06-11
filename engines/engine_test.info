@@ -1,18 +1,18 @@
 [engine1]
-path="engines/bin/engine_10_06_26";
-name="prev";
+path="engines/bin/engine_10_06_26_1";
+name="curr";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 
 [engine2]
-path="engines/bin/engine_10_06_26_1";
-name="new endgame detect < 2 + phase fix + EG = MG";
+path="engines/bin/engine_11_06_26";
+name="new king psqt";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 
 
 [match]
-nMatch=32;
+nMatch=16;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;
