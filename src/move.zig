@@ -540,7 +540,7 @@ pub const pvContainer = struct {
     pub fn onBestMove(self: *pvContainer, move: IMove, other: ?*const pvContainer) void {
         if (other) |child| {
             self.len = child.len;
-            @memcpy(self.moves[1 .. self.len + 1], child.moves[0..self.len]);
+            @memcpy(self.moves[1 .. child.len + 1], child.moves[0..child.len]);
         } else {
             self.len = 0;
         }

@@ -124,26 +124,34 @@ pub var global_KnightValue: scoreType = simpleKnightScore;
 pub var global_RookValue: scoreType = simpleRookScore;
 pub var global_QueenValue: scoreType = simpleQueenScore;
 
-pub var global_MobilityValue: [2]scoreType = .{ 0, 0 };
-pub var global_KingMobilityValue: [2]scoreType = .{ 0, 0 };
-pub var global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
+// mobility
+pub var global_MobilityValue: [2]scoreType = .{ 1, 1 };
+pub var global_KingMobilityValue: [2]scoreType = .{ 2, 2 };
 
+// structure
+pub var global_StructureProtectionValue: [2]scoreType = .{ 24, 31 };
+pub var global_centerProtectionValue: [2]scoreType = .{ 8, 12 };
+
+// pawn structure
+pub var global_IsolatedPawnValue: [2]scoreType = .{ 1, 1 };
+pub var global_StackedPawnValue: [2]scoreType = .{ 1, 1 };
+pub var global_PassedPawnValue: [2]scoreType = .{ 32, 42 };
+
+// tempo
 pub var global_tempoChecksScore: [2]scoreType = .{ 24, 24 };
 pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore, simplePieceThreatScore };
+pub var global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
-pub var global_IsolatedPawnValue: [2]scoreType = .{ 2, 2 };
-pub var global_StackedPawnValue: [2]scoreType = .{ 0, 0 };
-pub var global_PassedPawnValue: [2]scoreType = .{ 42, 42 };
-
+// safety
 pub var global_SafetyBishopValue: [2]scoreType = .{ 8, 8 };
 pub var global_SafetyKnightValue: [2]scoreType = .{ 4, 4 };
 pub var global_SafetyRookValue: [2]scoreType = .{ 16, 16 };
 pub var global_SafetyQueenValue: [2]scoreType = .{ 16, 16 };
 
-pub var global_StructureProtectionValue: [2]scoreType = .{ 24, 31 };
-
+// king
 pub var global_KingProximityValue: [2]scoreType = .{ 1, 1 };
 
+// PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = .{ pawnScoreArr, pawnScoreArr };
 pub var global_Bishop_PSQT: [2][64]scoreType = .{ bishopScoreArr, bishopScoreArr };
 pub var global_Knight_PSQT: [2][64]scoreType = .{ knightScoreArr, knightScoreArr };

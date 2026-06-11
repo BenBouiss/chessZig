@@ -1,22 +1,27 @@
-mobilityScore_MG = 41.0;
-mobilityScore_EG = 3.0;
-mobilityKingScore_MG = 34.0;
-mobilityKingScore_EG = 38.0;
-structureProtectionScore_MG = 35.0;
-structureProtectionScore_EG = 88.0;
-isolatedPawnScore_MG = 42.0;
-isolatedPawnScore_EG = 0.0;
-stackedPawnScore_MG = 71.0;
-stackedPawnScore_EG = 43.0;
-passedPawnScore_MG = 0.0;
-passedPawnScore_EG = 0.0;
-tempoChecksScore_MG = 5.0;
-tempoChecksScore_EG = 70.0;
-safetyKnight_MG = 9.0;
-safetyKnight_EG = 0.0;
-safetyBishop_MG = 0.0;
-safetyBishop_EG = 66.0;
-safetyRook_MG = 2.0;
-safetyRook_EG = 0.0;
-safetyQueen_MG = 28.0;
-safetyQueen_EG = 40.0;
+mobilityScore_MG = 4.0;
+mobilityScore_EG = 4.0;
+
+mobilityKingScore_MG = 2.0;
+mobilityKingScore_EG = 2.0;
+
+tempoChecksScore_MG = 24.0;
+tempoChecksScore_EG = 24.0;
+
+isolatedPawnScore_MG = 2.0;
+isolatedPawnScore_EG = 2.0;
+stackedPawnScore_MG = 2.0;
+stackedPawnScore_EG = 2.0;
+passedPawnScore_MG = 42.0;
+passedPawnScore_EG = 42.0;
+
+safetyBishop_MG = 8.0;
+safetyBishop_EG = 8.0;
+safetyKnight_MG = 4.0;
+safetyKnight_EG = 4.0;
+safetyRook_MG = 16.0;
+safetyRook_EG = 16.0;
+safetyQueen_MG = 16.0;
+safetyQueen_EG = 16.0;
+
+structureProtectionScore_MG = 24.0;
+structureProtectionScore_EG = 31.0;

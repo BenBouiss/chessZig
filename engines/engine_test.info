@@ -1,18 +1,18 @@
 [engine1]
-path="engines/bin/engine_10_06_26_1";
+path="engines/bin/engine_11_06_26_2";
 name="curr";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 
 [engine2]
-path="engines/bin/engine_11_06_26";
-name="new king psqt";
+path="engines/bin/engine_11_06_26_3";
+name="curr + new TT writer + fix";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 
 
 [match]
-nMatch=16;
+nMatch=50;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

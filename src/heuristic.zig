@@ -50,9 +50,9 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 }
 
 pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreType {
-    const ret = evaluate(p_state);
+    const ret = evaluate(p_state) - p_state.frame.halfMoveClock;
     if (white) return ret;
-    return -ret;
+    return (-ret) - p_state.frame.halfMoveClock;
 }
 
 pub const heuristicComponents = struct {
@@ -210,7 +210,7 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.c_occupiedBB[@intFromBool(false)];
     const nw: scoreType = @intCast(chess.ipopcount(kingMoveW));
     const nb: scoreType = @intCast(chess.ipopcount(kingMoveB));
-    const v2 = (nw - nb) << 3;
+    const v2 = (nw - nb);
     var kingMoveScore: scoreVect = .{ weightl.global_KingMobilityValue[MG] * v2, weightl.global_KingMobilityValue[EG] * v2 };
 
     if (nw == 0 and (wkingBB & bAttacks) != 0) {
@@ -268,7 +268,11 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
     const w_pieceProtect = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(true)] ^ chess.sqToBitboard(p_state.b.wKingSq));
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(false)] ^ chess.sqToBitboard(p_state.b.bKingSq));
     const s = @as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()));
-    return .{ weightl.global_StructureProtectionValue[MG] * s, weightl.global_StructureProtectionValue[EG] * s };
+
+    const w_pieceCenterProt = p_whiteMoveBB.andFn(typel.centerBB).collapse();
+    const b_pieceCenterProt = p_blackMoveBB.andFn(typel.centerBB).collapse();
+    const s2 = @as(scoreType, @intCast(chess.popcount(w_pieceCenterProt))) - @as(scoreType, @intCast(chess.popcount(b_pieceCenterProt)));
+    return .{ weightl.global_StructureProtectionValue[MG] * s + weightl.global_centerProtectionValue[MG] * s2, weightl.global_StructureProtectionValue[EG] * s + weightl.global_centerProtectionValue[EG] * s2 };
 }
 pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     const wMoves: u64 = p_whiteMoveBB.collapse();
@@ -481,6 +485,8 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
         dest = &weightl.global_PassedPawnValue;
     } else if (s.containsE("tempoChecksScore", .ignoreCase)) {
         dest = &weightl.global_tempoChecksScore;
+    } else if (s.containsE("pieceThreatScore", .ignoreCase)) {
+        dest = &weightl.global_pieceThreatScore;
     } else if (s.containsE("safetyKnight", .ignoreCase)) {
         dest = &weightl.global_SafetyKnightValue;
     } else if (s.containsE("safetyBishop", .ignoreCase)) {
@@ -491,6 +497,8 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
         dest = &weightl.global_SafetyQueenValue;
     } else if (s.containsE("structureProtection", .ignoreCase)) {
         dest = &weightl.global_StructureProtectionValue;
+    } else if (s.containsE("centerProtection", .ignoreCase)) {
+        dest = &weightl.global_centerProtectionValue;
     } else if (s.containsE("kingProximity", .ignoreCase)) {
         dest = &weightl.global_KingProximityValue;
     } else {
@@ -506,7 +514,6 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
         }
     } else if (s.containsE("_EG", .ignoreCase)) {
         dest.*[EG] = _val;
-
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: successfully set EG\n", .{});
         }

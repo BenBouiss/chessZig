@@ -5,7 +5,8 @@ paths:
   resultFolder: "out/heuristics/MH/res"
 
   tournamentBaselinePaths:
-    - engines/heuristics/weight_iter_26_popsize_16_baseline.winfo # can take a path to a .winfo file, atleast one baseline is required when in type "baseline" or "los"
+    #- engines/heuristics/weight_iter_26_popsize_16_baseline.winfo # can take a path to a .winfo file, atleast one baseline is required when in type "baseline" or "los"
+    - engines/heuristics/weight_test.winfo # can take a path to a .winfo file, atleast one baseline is required when in type "baseline" or "los"
 
   metaHeuristicExtraIndividuals:
     - # can take a path to a .winfo file

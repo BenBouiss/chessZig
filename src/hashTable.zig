@@ -4,6 +4,7 @@ const movel = @import("move.zig");
 const boardl = @import("board.zig");
 const configl = @import("config.zig");
 const heuristicl = @import("heuristic.zig");
+const typel = @import("type.zig");
 
 const build_options = @import("build_options");
 
@@ -129,19 +130,20 @@ pub const Hash_entry = struct {
 };
 
 pub inline fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    return .{ .val = .{ .perft = .init(keyToUpperKey(key.code), @truncate(moveAmount), depth, @intCast(hashTable.gen >> 4)) } };
+    return .{ .val = .{ .perft = .init(keyToUpperKey(key.code), @truncate(moveAmount), depth, @intCast(hashTable.gen >> 6)) } };
 }
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType, whiteToMove: bool) Hash_entry {
-    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 4), .ALL, whiteToMove) } };
+    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 6), .ALL, whiteToMove) } };
 }
 
 pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove, whiteToMove: bool) Hash_entry {
-    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), bestMove, depth, @intCast(hashTable.gen >> 4), nodeT, whiteToMove) } };
+    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), bestMove, depth, @intCast(hashTable.gen >> 6), nodeT, whiteToMove) } };
 }
 
 pub const getResult = struct {
     nextIdx: u8 = 0,
     entry: ?Hash_entry = null,
+    nextPerfectHit: bool = false,
 };
 pub const probeResult = struct {
     writer: hashWriter = .{},
@@ -150,14 +152,22 @@ pub const probeResult = struct {
 pub const hashWriter = struct {
     bucket: *Hash_bucket = undefined,
     idx: u8 = 0,
+    nextPerfectHit: bool = false,
 
     pub inline fn init(key: u64) hashWriter {
         return .{ .bucket = hashTable.getBucketFromFullHashIndex(key) };
     }
     pub inline fn writeShort(self: *hashWriter, entry: Hash_entry) void {
         const prev = self.bucket.entries[self.idx];
-        if (prev.val.search.key == entry.val.search.key and prev.depth(.search) > entry.depth(.search)) {
-            return;
+        if (self.nextPerfectHit) {
+            if (prev.depth(.search) > entry.depth(.search)) {
+                hashTable.stat.missInsertion += 1;
+                return;
+            }
+            if ((prev.depth(.search) == entry.depth(.search)) and (prev.nodeT() == .ALL)) {
+                hashTable.stat.missInsertion += 1;
+                return;
+            }
         }
         self.bucket.entries[self.idx] = entry;
         hashTable.stat.insertion += 1;
@@ -259,7 +269,7 @@ pub const Hash_bucket = struct {
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const _entry = p_self.entries[i];
             const _age = _entry.age(t);
-            if (!_entry.valid(t) or (_age + configl.SCHEDULER_MAX_ENDGAME_DEPTH) < n_entry.age(t)) {
+            if (!_entry.valid(t) or (_age + typel.MAX_PLY) < n_entry.age(t)) {
                 p_self.entries[i] = n_entry;
                 //p_self.len = @min(p_self.len + 1, p_self.entries.len);
                 return true;
@@ -310,23 +320,23 @@ pub const Hash_bucket = struct {
             if ((entry.key(.search) == _hash) and white == entry.val.search.white() and p_state.isMovePseudoLegal(entry.val.search.bestMove)) {
                 if (entry.depth(.search) >= depth) {
                     hashTable.stat.hit += 1;
-                    return .{ .entry = entry, .nextIdx = @intCast(i) };
+                    return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
                 } else {
                     hashTable.stat.miss += 1;
-                    return .{ .entry = null, .nextIdx = @intCast(i) };
+                    return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = true };
                 }
             }
             if (!entry.valid(.search)) {
                 hashTable.stat.miss += 1;
-                return .{ .entry = null, .nextIdx = @intCast(i) };
+                return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = false };
             }
-            if (entry.age(.search) < nextA) {
+            if (entry.age(.search) <= nextA) {
                 nextA = entry.age(.search);
                 next = @intCast(i);
             }
         }
         hashTable.stat.miss += 1;
-        return .{ .entry = null, .nextIdx = next };
+        return .{ .entry = null, .nextIdx = next, .nextPerfectHit = false };
     }
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?Hash_entry {
         const _hash = keyToUpperKey(hash);
@@ -346,6 +356,7 @@ pub const hashTableStat = struct {
     hit: u64 = 0,
     miss: u64 = 0,
     insertion: u64 = 0,
+    missInsertion: u64 = 0,
 };
 pub const Hash_table = struct {
     entries: []Hash_bucket,
@@ -355,7 +366,8 @@ pub const Hash_table = struct {
     initialized: bool = false,
     stat: hashTableStat = .{},
     mask: u64 = 0,
-    // from 0 - ~8k, the max size of a match, the age of an entry will be gen >> 8
+    // from 0 - ~8k, the max size of a match, the age of an entry will be gen >> 6
+    // u8 = 255 << 6 = 16320 enough for 1 game
     gen: u16 = 0,
 
     pub fn init(alloc: std.mem.Allocator, MBsize: u32, verbose: bool) !Hash_table {
@@ -369,7 +381,7 @@ pub const Hash_table = struct {
         ret.closestBit = chess.l_getMsbIdx(total_size) - 1;
         ret.size = chess.xToBitboard(ret.closestBit);
         ret.mask = ret.size - 1;
-        ret.stat.insertion = 0;
+        ret.stat = .{};
         ret.gen = 0;
 
         ret.entries = (try alloc.alloc(Hash_bucket, ret.size));
@@ -439,7 +451,7 @@ pub const Hash_table = struct {
     pub fn probeMatch(p_self: *Hash_table, key: u64, depth: u8, p_state: *const boardl.boardState) probeResult {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
         const res = p_bucket.getEntryMatchNext(key, depth, p_state);
-        return .{ .writer = .{ .bucket = p_bucket, .idx = res.nextIdx }, .entry = res.entry };
+        return .{ .writer = .{ .bucket = p_bucket, .idx = res.nextIdx, .nextPerfectHit = res.nextPerfectHit }, .entry = res.entry };
     }
     pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64, comptime t: TT_t) bool {
         var p_bucket = p_self.getBucketFromFullHashIndex(key);
@@ -586,5 +598,5 @@ pub fn printTTStats() void {
     const util = hashTable.getMostUtilized();
     std.log.info("TT: most entries in a bucket {d}", .{util});
 
-    std.log.info("TT: insertions {d} hit {d} miss {d}", .{ hashTable.stat.insertion, hashTable.stat.hit, hashTable.stat.miss });
+    std.log.info("TT: insertions {d} hit {d} miss {d} miss insertion {d}", .{ hashTable.stat.insertion, hashTable.stat.hit, hashTable.stat.miss, hashTable.stat.missInsertion });
 }

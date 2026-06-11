@@ -3,6 +3,7 @@ INVALID_VALUE: float = 99999.0
 # texel weight section
 total_idx = 0
 
+# counts
 countPawn_idx = total_idx
 total_idx += 1
 countKnight_idx = total_idx
@@ -14,15 +15,21 @@ total_idx += 1
 countQueen_idx = total_idx
 total_idx += 1
 
+# mobility
 mobility_idx = total_idx
 total_idx += 1
 
 kingMoveCountScore_idx = total_idx
 total_idx += 1
 
+# structure protection
 structureProtection_idx = total_idx
 total_idx += 1
 
+centerProtection_idx = total_idx
+total_idx += 1
+
+# pawn structure
 isolatedPawnScore_idx = total_idx
 total_idx += 1
 stackedPawnScore_idx = total_idx
@@ -30,10 +37,15 @@ total_idx += 1
 passedPawnScore_idx = total_idx
 total_idx += 1
 
+# tempo
 tempoChecksScore_idx = total_idx
 total_idx += 1
+pieceThreatScore_idx = total_idx
+total_idx += 1
+weakCheckmateScore_idx = total_idx
+total_idx += 1
 
-# not used
+# safety
 safetyPawn_idx = total_idx
 total_idx += 1
 safetyKnight_idx = total_idx
@@ -45,9 +57,11 @@ total_idx += 1
 safetyQueen_idx = total_idx
 total_idx += 1
 
+# king proximity
 kingProximityScore_idx = total_idx
 total_idx += 1
 
+# PSQT
 PSQT_Pawn_idx = total_idx
 total_idx += 64
 PSQT_Bishop_idx = total_idx
@@ -71,10 +85,13 @@ strWeightNames = [
     "mobilityScore",
     "mobilityKingScore",
     "structureProtectionScore",
+    "centerProtectionScore",
     "isolatedPawnScore",
     "stackedPawnScore",
     "passedPawnScore",
     "tempoChecksScore",
+    "pieceThreatScore",
+    "weakCheckmateScore",
     "safetyPawn",
     "safetyKnight",
     "safetyBishop",

@@ -57,6 +57,7 @@ pub const blackPawnDoubleRank: u64 = 0xFF000000000000;
 
 pub const whitePawnEnpassantRank: u64 = 0xFF0000000000;
 pub const blackPawnEnpassantRank: u64 = 0xFF0000;
+pub const centerBB: u64 = 0x183C3C180000;
 
 // 8 pieces per row + 7 '/' = 71
 // turn + 4 castling rights + enPassant sq + 3 spaces = 80

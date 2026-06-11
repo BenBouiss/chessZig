@@ -12,6 +12,7 @@ const weightl = @import("../weights.zig");
 const timel = @import("../time.zig");
 const mainl = @import("../main.zig");
 const boardl = @import("../board.zig");
+const typel = @import("../type.zig");
 
 const IMove = movel.IMove;
 const scoreType = heuristicl.scoreType;
@@ -306,7 +307,7 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
 }
 
 pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, score: scoreType, p_features: *const searchFeatures) bool {
-    if (p_features.fixedDepth and depth == maxDepth or (depth >= configl.SCHEDULER_MAX_ENDGAME_DEPTH)) {
+    if (p_features.fixedDepth and depth == maxDepth or (depth >= typel.MAX_PLY)) {
         return false;
     }
     if (@abs(score) >= weightl.simpleCheckMateScore) {

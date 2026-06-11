@@ -92,7 +92,6 @@ pub const MAX_ELO: u32 = 3000;
 // maximum allocated time in fraction of the remaining time
 pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
 pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
-pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
 
 // estimate of the time increase when increasing the depth by 1
 pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
@@ -144,27 +143,32 @@ pub const TEXEL_KINGMOVE_COUNT_IDX: usize = 6;
 
 //structure protection
 pub const TEXEL_PROTECTION_COUNT_IDX: usize = 7;
+pub const TEXEL_CENTER_PROTECTION_IDX: usize = 8;
 
-pub const TEXEL_PAWN_ISOL_IDX: usize = 8;
-pub const TEXEL_PAWN_STACKED_IDX: usize = 9;
-pub const TEXEL_PAWN_PASSED_IDX: usize = 10;
+// pawn structure
+pub const TEXEL_PAWN_ISOL_IDX: usize = 9;
+pub const TEXEL_PAWN_STACKED_IDX: usize = 10;
+pub const TEXEL_PAWN_PASSED_IDX: usize = 11;
 
 // tempo
-pub const TEXEL_TEMPO_CHECKS_IDX: usize = 11;
+pub const TEXEL_TEMPO_CHECKS_IDX: usize = 12;
+pub const TEXEL_PIECE_THREAT_IDX: usize = 13;
+pub const TEXEL_WEAK_CHECKMATE_IDX: usize = 14;
 
 // safety
-pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 12;
-pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 13;
-pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 14;
-pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 15;
-pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 16;
+pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 15;
+pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 16;
+pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 17;
+pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 18;
+pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 19;
 
 // king proximity
-pub const TEXEL_KING_PROXIMITY_IDX: usize = 17;
+pub const TEXEL_KING_PROXIMITY_IDX: usize = 20;
 
-pub const TEXEL_PAWN_PSQT_IDX: usize = 18;
-pub const TEXEL_BISHOP_PSQT_IDX: usize = 82;
-pub const TEXEL_KNIGHT_PSQT_IDX: usize = 146;
-pub const TEXEL_ROOK_PSQT_IDX: usize = 210;
-pub const TEXEL_QUEEN_PSQT_IDX: usize = 274;
-pub const TEXEL_KING_PSQT_IDX: usize = 338;
+// PSQT
+pub const TEXEL_PAWN_PSQT_IDX: usize = 21;
+pub const TEXEL_BISHOP_PSQT_IDX: usize = 85;
+pub const TEXEL_KNIGHT_PSQT_IDX: usize = 149;
+pub const TEXEL_ROOK_PSQT_IDX: usize = 213;
+pub const TEXEL_QUEEN_PSQT_IDX: usize = 277;
+pub const TEXEL_KING_PSQT_IDX: usize = 341;

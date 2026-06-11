@@ -24,6 +24,3 @@ if __name__ == "__main__":
     metaH = tourney.makeMHFromUserInput(info)
     # tourney.global_tui.useCurses = False
     tourney.launch_mh(metaH)
-
-    # print("ben")
-    # tmp.evaluate(tmp.getCurrentPositions())

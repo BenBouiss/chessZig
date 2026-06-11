@@ -416,30 +416,30 @@ prevIndexes = [
 ]
 currentIndexes = list(range(cst.mobility_idx, cst.safetyQueen_idx + 1))
 currentIndexes.remove(cst.safetyPawn_idx)
-defaultWeights: heuristicEntry = entryFromListDup(
-    arr=[5, 10, 1, 1, 1, 2, 25, 20, 20, 40, 80], indexes=currentIndexes
-)
+# defaultWeights: heuristicEntry = entryFromListDup(
+#    arr=[5, 10, 1, 1, 1, 2, 25, 20, 20, 40, 80], indexes=currentIndexes
+# )
 
 newIndexes = list(range(cst.mobility_idx, cst.kingProximityScore_idx + 1))
 newIndexes.remove(cst.safetyPawn_idx)
 # cst.INVALID_VALUE, #pawn safety is not used
 
-simpleBaselineWeights: heuristicEntry = entryFromListDup(
-    arr=[-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0],
-    indexes=prevIndexes,
-)
+# simpleBaselineWeights: heuristicEntry = entryFromListDup(
+#    arr=[-1.0, 2.0, -1.0, 20.0, 20.0, 40.0, 80.0, 1.0, 5.0],
+#    indexes=prevIndexes,
+# )
 
 
 # obtained after 14 iter and 8 popsize
-newWeight_0: heuristicEntry = entryFromListDup(
-    arr=[0.0, -3.0, 100.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0], indexes=prevIndexes
-)
-newWeight_0_bis: list[float] = [1.0, 3.0, 95.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]
-
-newWeight_1: heuristicEntry = entryFrom2dList(
-    arr=[
-        [10.0, 100.0, 9.0, 32.0, 38.0, 100.0, -2.0, 2.0, 42.0],
-        [-2.0, 100.0, 67.0, -2.0, 100.0, 32.0, 20.0, 100.0, -2.0],
-    ],
-    indexes=prevIndexes,
-)
+# newWeight_0: heuristicEntry = entryFromListDup(
+#    arr=[0.0, -3.0, 100.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0], indexes=prevIndexes
+# )
+# newWeight_0_bis: list[float] = [1.0, 3.0, 95.0, -3.0, 18.0, -0.0, 87.0, 20.0, 11.0]
+#
+# newWeight_1: heuristicEntry = entryFrom2dList(
+#    arr=[
+#        [10.0, 100.0, 9.0, 32.0, 38.0, 100.0, -2.0, 2.0, 42.0],
+#        [-2.0, 100.0, 67.0, -2.0, 100.0, 32.0, 20.0, 100.0, -2.0],
+#    ],
+#    indexes=prevIndexes,
+# )
