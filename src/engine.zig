@@ -25,7 +25,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USELMRHEURISTIC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
@@ -211,6 +211,7 @@ pub const engineOptions = struct {
     useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
     useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
+    useLMRHeuristic: bool = configl.DEFAULT_LMR_HEURISTIC,
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     useRFP: bool = configl.DEFAULT_USE_RFP,
     useIIR: bool = configl.DEFAULT_USE_IIR,
@@ -331,6 +332,7 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
 
         try p_self.addOption(.{ .name = "useLMR ", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
+        try p_self.addOption(.{ .name = "useLMRHeuristic ", .optionType = .USELMRHEURISTIC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LMR_HEURISTIC } } });
 
         try p_self.addOption(.{ .name = "useFutility", .optionType = .USEFUTILITY, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_FUTILITY } } });
 
@@ -728,6 +730,11 @@ pub const engine = struct {
             },
             .USELATEMOVEREDUC => {
                 p_self.options.useLMR = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                    return false;
+                };
+            },
+            .USELMRHEURISTIC => {
+                p_self.options.useLMRHeuristic = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
             },

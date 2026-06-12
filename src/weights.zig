@@ -1,7 +1,9 @@
 const heuristicl = @import("heuristic.zig");
 const chessl = @import("chess.zig");
+const typel = @import("type.zig");
 
-const scoreType = heuristicl.scoreType;
+const scoreType = typel.scoreType;
+const milliDepth = typel.milliDepth;
 const heuristicValues = heuristicl.heuristicValues;
 
 // values from https://www.chessprogramming.org/Evaluation for now
@@ -181,3 +183,16 @@ const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
     -30, -22, -11, -14, -6,  -8,  -17, -30,
     -40, -30, -30, -30, -30, -30, -30, -30,
 };
+//https://www.chessprogramming.org/Late_Move_Reductions
+// LMR positive (more reduction)
+pub const lmr_expectedCutOff: milliDepth = 400;
+pub const lmr_notImproving: milliDepth = 300;
+pub const lmr_hashMoveCapture: milliDepth = 100;
+pub const lmr_baseDeficit: milliDepth = 1024;
+
+// LMR negative (less reduction)
+pub const lmr_inCheck: milliDepth = -600;
+pub const lmr_givesCheck: milliDepth = -600;
+pub const lmr_killerMove: milliDepth = -250;
+pub const lmr_inPvMode: milliDepth = -200;
+pub const lmr_isPromotion: milliDepth = -150;

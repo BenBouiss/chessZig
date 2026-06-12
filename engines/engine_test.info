@@ -1,18 +1,19 @@
 [engine1]
-path="engines/bin/engine_11_06_26";
-name="curr";
+path="engines/bin/engine_12_06_26";
+name="std";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
+"setoption name useLMRHeuristic value false";
 
 [engine2]
-path="engines/bin/engine_11_06_26_2";
-name="curr + total threat count + big piece threat 48, 16";
+path="engines/bin/engine_12_06_26_1";
+name="default / 2";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
-
+"setoption name useLMRHeuristic value true";
 
 [match]
-nMatch=50;
+nMatch=32;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

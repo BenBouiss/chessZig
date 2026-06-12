@@ -3,13 +3,12 @@ const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const boardl = @import("board.zig");
 const configl = @import("config.zig");
-const heuristicl = @import("heuristic.zig");
 const typel = @import("type.zig");
 
 const build_options = @import("build_options");
 
 const e_piece = chess.e_piece;
-const scoreType = heuristicl.scoreType;
+const scoreType = typel.scoreType;
 const TT_strat = configl.TT_strat;
 
 pub const Key = struct {

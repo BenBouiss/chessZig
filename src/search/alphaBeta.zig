@@ -14,7 +14,7 @@ const schedulerl = @import("scheduler.zig");
 
 const IMove = movel.IMove;
 const pvContainer = movel.pvContainer;
-const scoreType = heuristicl.scoreType;
+const scoreType = typel.scoreType;
 const threadInfo = threadingl.threadInfo;
 
 pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack) i8 {
@@ -223,6 +223,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const f: boardl.boardFrame = .copy(p_state);
     var currS = ss.getFrame(ply);
     const static_eval = if (hashMove.isValid()) (hashEval) else (heuristicl.c_evaluate(p_state, white));
+    const hashMoveIsCapture = hashMove.isCapture();
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     const isCheck = p_state.isChecked();
@@ -323,7 +324,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
     if (p_features.useLMR and _depth >= 3 and !isCheck) {
-        heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
+        if (p_features.useLMRHeuristic) {
+            heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType);
+        } else {
+            heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
+        }
         useLMR = true;
     }
 
@@ -334,7 +339,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
             if (useLMR) {
-                heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
+                if (p_features.useLMRHeuristic) {
+                    heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType);
+                } else {
+                    heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
+                }
             }
             i_reset = true;
         } else if (i_reset) {

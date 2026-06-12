@@ -13,6 +13,7 @@ const e_piece = typel.e_piece;
 const e_pieceType = typel.e_pieceType;
 const e_color = typel.e_color;
 const e_square = typel.e_square;
+const scoreType = typel.scoreType;
 
 const IMove = movel.IMove;
 const bitboard = typel.bitboard;
@@ -163,7 +164,7 @@ pub const boardFrame = struct {
     enPassantIdx: u8 = 0,
     halfMoveClock: u8 = 0,
     stat: boardStatusl.status = .{},
-    psqtEval: heuristicl.scoreType = 0,
+    psqtEval: scoreType = 0,
     pub inline fn copy(state: *const boardState) boardFrame {
         return state.frame;
     }
@@ -819,9 +820,9 @@ pub const boardState = struct {
         }
         return self.getPiece(move.getTo());
     }
-    pub inline fn getPhase(self: *const boardState) heuristicl.scoreType {
-        var ret: heuristicl.scoreType = @intCast(typel.totalPhase);
-        ret = @intCast(@max(0, ret - @as(heuristicl.scoreType, @intCast(self.frame.phase))));
+    pub inline fn getPhase(self: *const boardState) scoreType {
+        var ret: scoreType = @intCast(typel.totalPhase);
+        ret = @intCast(@max(0, ret - @as(scoreType, @intCast(self.frame.phase))));
         return @divFloor((ret << 8) + (typel.totalPhase >> 1), typel.totalPhase);
         // ((24 - p) * 256) + (24 / 2)) / 24
     }

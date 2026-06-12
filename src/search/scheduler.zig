@@ -4,7 +4,6 @@ const enginel = @import("../engine.zig");
 const movel = @import("../move.zig");
 const alphaBetal = @import("alphaBeta.zig");
 const threadingl = @import("threading.zig");
-const heuristicl = @import("../heuristic.zig");
 const hashl = @import("../hashTable.zig");
 const utilsl = @import("../utils.zig");
 const configl = @import("../config.zig");
@@ -15,7 +14,7 @@ const boardl = @import("../board.zig");
 const typel = @import("../type.zig");
 
 const IMove = movel.IMove;
-const scoreType = heuristicl.scoreType;
+const scoreType = typel.scoreType;
 
 pub const searchStatus = enum { CONTINUE, INTERRUPTED, FINISHED };
 
@@ -32,6 +31,7 @@ pub const searchFeatures = struct {
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
     fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
+    useLMRHeuristic: bool = configl.DEFAULT_LMR_HEURISTIC,
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     useRFP: bool = configl.DEFAULT_USE_RFP,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
@@ -44,6 +44,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.useHash = p_engine.options.useHashTable;
     ret.useNullPrune = p_engine.options.useNullPrune;
     ret.useLMR = p_engine.options.useLMR;
+    ret.useLMRHeuristic = p_engine.options.useLMRHeuristic;
     ret.useStaticSearch = p_engine.options.useStaticSearch;
     ret.fixedDepth = p_engine.options.fixedDepth;
     ret.useRazoring = p_engine.options.useRazoring;

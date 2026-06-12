@@ -14,6 +14,7 @@ const typel = @import("type.zig");
 const alphaBetal = @import("search/alphaBeta.zig");
 const threadingl = @import("search/threading.zig");
 const historyl = @import("history.zig");
+const hashl = @import("hashTable.zig");
 
 const std = @import("std");
 
@@ -25,8 +26,9 @@ const string = stringl.string;
 const IMove = movel.IMove;
 const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
-pub const scoreType: type = i32;
+const scoreType: type = typel.scoreType;
 pub const scoreVect: type = @Vector(2, scoreType);
+const milliDepth: type = typel.milliDepth;
 
 pub const texel_err = error{board_err};
 
@@ -1366,6 +1368,17 @@ pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const
     }
     return ret;
 }
+
+pub inline fn depthToMilliDepth(d: i32) milliDepth {
+    return @intCast(d << 10);
+}
+pub inline fn milliDepthToDepth(md: milliDepth) i32 {
+    return @intCast(md >> 10);
+}
+pub inline fn lmrFDepth(md: milliDepth) milliDepth {
+    return @divFloor(md, 2); // base reduction of 1/3
+}
+
 pub const moveReductionAmount = 4;
 pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool) void {
     // - if move ordering score >= 0.5 * max_history_heurist no reduction
@@ -1399,6 +1412,45 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
         const d: u16 = @as(u16, @intFromFloat(if (improving) (@as(f16, @floatFromInt(depth)) / 3.0) else (@as(f16, @floatFromInt(depth)) / 2.0)));
         //p_order.depths[i] = depth - std.math.clamp(d, 0, depth) - 1;
         p_order.depths[i] = depth - std.math.clamp(d, 0, depth - 1) - 1;
+    }
+    return;
+}
+pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool, t: alphaBetal.searchType, hashMoveIsCapture: bool, hashFlag: hashl.nodeType) void {
+    var baseS: milliDepth = weightl.lmr_baseDeficit;
+    if (p_state.isChecked()) {
+        baseS += weightl.lmr_inCheck;
+    }
+    if (t == .PV) {
+        baseS += weightl.lmr_inPvMode;
+    }
+    if (!improving) {
+        baseS += weightl.lmr_notImproving;
+    }
+    if (hashMoveIsCapture) {
+        baseS += weightl.lmr_hashMoveCapture;
+    }
+    if (hashFlag == .LOWER) {
+        baseS += weightl.lmr_expectedCutOff;
+    }
+    const fDepth = lmrFDepth(depthToMilliDepth(depth));
+    for (0..p_order.len) |i| {
+        if (p_order.scores[i] >= (configl.LMR_SCORE_THRESHOLD) or i < moveReductionAmount) {
+            p_order.depths[i] = depth - 1;
+            continue;
+        }
+        var s: milliDepth = baseS;
+
+        const move = fmoves.moves[p_order.indexes[i]];
+
+        if (moveGenl.moveDeliverCheck(p_state, move)) {
+            s += weightl.lmr_givesCheck;
+        }
+
+        if (move.isPromotion()) {
+            s += weightl.lmr_isPromotion;
+        }
+
+        p_order.depths[i] = depth - 1 - @as(u16, (@intCast(@min((@max(s, 0) * fDepth) >> 20, depth - 1))));
     }
     return;
 }
