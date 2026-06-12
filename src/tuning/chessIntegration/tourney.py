@@ -11,6 +11,8 @@ import yaml
 import numpy as np
 import numpy.typing as npt
 
+from mh import LOS_FRAC_THRESH
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from algo import objective as obj
@@ -81,10 +83,10 @@ class tuiGUI:
         self.windows.append(guil.windowComponent(offset=[10, 0], size=[0, 0]))
 
         # MH best indiv
-        self.windows.append(guil.windowComponent(offset=[10, 50], size=[0, 0]))
+        self.windows.append(guil.windowComponent(offset=[10, 40], size=[0, 0]))
 
         # MH health markers
-        self.windows.append(guil.windowComponent(offset=[10, 96], size=[0, 0]))
+        self.windows.append(guil.windowComponent(offset=[10, 90], size=[0, 0]))
 
         # progress bar
         self.windows.append(guil.windowComponent(offset=[30, 0], size=[2, 64]))
@@ -228,6 +230,9 @@ class tuiGUI:
         txt.append(f"Tournament type: {tourney.type}")
         if tourney.type.useBaselines():
             txt.append(f"Number of baseline: {len(self.mh.objective.baseline)}")
+            txt.append(
+                f"LOS threshold: {self.mh.objective.tourney.opt.LOS_FRAC_THRESH}"
+            )
             if tourney.timeFormat is not None:
                 txt.append(
                     f"Time format: {tourney.timeFormat.time} ms + {tourney.timeFormat.inc} "
@@ -464,9 +469,10 @@ class guiUpdateCallback(template.callback):
 
 
 class callbackBaseline(template.callback):
-    def __init__(self):
+    def __init__(self, threshold: float):
         super().__init__()
-        self.LOS_FRAC_THRESH = 0.92
+        self.LOS_FRAC_THRESH = threshold
+        print(f"callbackBaseline threshold {self.LOS_FRAC_THRESH}")
 
     def on_iter_end(self):
         assert self.mh is not None
@@ -573,6 +579,7 @@ class tournamentUserInput:
     tourneyT: tournamentType = tournamentType.LOS
     baselineLimit: int = 4
     deleteTmp: bool = True
+    tournamentOptions: tournamentl.tournamentOpt = tournamentl.tournamentOpt()
 
     def __repr__(self) -> str:
         ret = "{"
@@ -597,6 +604,9 @@ class tournamentUserInput:
             elif _str == "tournamentType":
                 token = d.get(f"tournamentType", self.tourneyT.name)
                 self.tourneyT = tournamentl.strToTournamentType(token)
+            elif _str == "tournamentOptions":
+                if d.get("tournamentOptions"):
+                    self.tournamentOptions.fromDict(d["tournamentOptions"])
             else:
                 new_val = d.get(f"{_str}", self.__dict__[_str])
                 if new_val is not None and self.__dict__[_str] is not None:
@@ -690,7 +700,6 @@ def makeMHFromUserInput(userInp: userInput) -> templateSelectionAlgo:
         cbs=[],
         **varKwargs,
     )
-
     tourn = tournament(
         timeF=userInp.tournamentParams.timeF,
         templatePath=userInp.paths.infoTemplate,
@@ -700,6 +709,7 @@ def makeMHFromUserInput(userInp: userInput) -> templateSelectionAlgo:
         logDir=os.path.join(userInp.paths.tmpFolder, f"tmp_{int(time.time())}"),
         nThreads=userInp.tournamentParams.nThreads,
         type=userInp.tournamentParams.tourneyT,
+        opt=userInp.tournamentParams.tournamentOptions,
     )
 
     ret.setObjective(
@@ -756,7 +766,7 @@ def launch_mh(mh: templateSelectionAlgo) -> None:
     mh.addCallback(guiUpdateCallback())
     mh.addCallback(chessSpec.callbackHealthCheck())
     if mh.objective.tourney.type.useBaselines():
-        mh.addCallback(callbackBaseline())
+        mh.addCallback(callbackBaseline(mh.objective.tourney.opt.LOS_FRAC_THRESH))
 
     mh.optimize()
 

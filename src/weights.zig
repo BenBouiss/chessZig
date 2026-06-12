@@ -26,7 +26,7 @@ pub const simpleStructureProtectionScore: scoreType = 1;
 
 // ============ tempo ============
 pub const simpleTempoChecksScore: scoreType = 25;
-pub const simplePieceThreatScore: scoreType = 4;
+pub const simplePieceThreatScore: scoreType = 16;
 
 // source: https://www.chessprogramming.org/King_Safety
 // ============ safety ============
@@ -140,7 +140,7 @@ pub var global_PassedPawnValue: [2]scoreType = .{ 32, 42 };
 
 // tempo
 pub var global_tempoChecksScore: [2]scoreType = .{ 24, 24 };
-pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore, simplePieceThreatScore };
+pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore * 3, simplePieceThreatScore };
 pub var global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
 // safety

@@ -150,14 +150,6 @@ class windowCtx:
             win.offset[1],
             f"Current best (score: {round(bestIndiv.score, 3)}): ",
         )
-        # rectangle(
-        #    self.stdscr,
-        #    windowOffset[0],
-        #    windowOffset[1],
-        #    1 + len(indexes) + windowOffset[0],
-        #    windowOffset[1] + 40,
-        # )
-
         self.stdscr.refresh()
         for x, idx in enumerate(indexes):
             assert best_indiv.weights[0].elem[x].val is not None

@@ -588,6 +588,17 @@ class threadInfo:
     runningProc: subprocess.Popen | None = None
 
 
+@dataclass
+class tournamentOpt:
+    LOS_FRAC_THRESH = 0.92
+
+    def fromDict(self, d: dict) -> None:
+        self.LOS_FRAC_THRESH = d.get("LOS_THRESHOLD", 0.92)
+
+    def __repr__(self) -> str:
+        return f"LOS threshold : {self.LOS_FRAC_THRESH}"
+
+
 """
 Instead of keeping track of the population as a list of heuristicEntry for the mh, we keep track of it as a list of engineInfo's as it contains a engine path, engine "name" (useless), engine settings which can contain the setoption name heuristicsWeightPath. 
 For the purpose of possible SPRT, aim path at directory and extracts all .info found which all contains the engine's settings, a path and possible options.
@@ -607,6 +618,7 @@ class tournament(object):
         nThreads: int = 1,
         type: tournamentType = tournamentType.CLASSIC,
         pathPrepend: str = "",
+        opt: tournamentOpt = tournamentOpt(),
     ):
         self.running = False
         self.debugMode: bool = debugMode
@@ -632,6 +644,7 @@ class tournament(object):
         self.baseline: list[engineInfo] = []
         self.popsize: int = 0
         self.scoreBoard = scoreBoard()
+        self.opt = opt
 
         self.evalBin: str | None = evalBin
         if debugMode:

@@ -278,11 +278,10 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
     return .{ weightl.global_StructureProtectionValue[MG] * s + weightl.global_centerProtectionValue[MG] * s2, weightl.global_StructureProtectionValue[EG] * s + weightl.global_centerProtectionValue[EG] * s2 };
 }
 pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
-    const wMoves: u64 = p_whiteMoveBB.collapse();
-    const wThreats: u64 = wMoves & p_state.b.c_occupiedBB[@intFromBool(false)];
-    const bMoves: u64 = p_blackMoveBB.collapse();
-    const bThreats: u64 = bMoves & p_state.b.c_occupiedBB[@intFromBool(true)];
-    const deltaThreat: scoreType = @as(scoreType, (@intCast(chess.popcount(wThreats)))) - @as(scoreType, (@intCast(chess.popcount(bThreats))));
+    const nonPawns = ~p_state.getPieceBB_t(.PAWN);
+    const wThreats = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(false)] & nonPawns);
+    const bThreats = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromBool(true)] & nonPawns);
+    const deltaThreat: scoreType = @as(scoreType, (@intCast(wThreats.count()))) - @as(scoreType, (@intCast(bThreats.count())));
 
     var ret: scoreVect = .{ weightl.global_pieceThreatScore[MG] * deltaThreat, weightl.global_pieceThreatScore[EG] * deltaThreat };
     if (p_state.isChecked()) {
