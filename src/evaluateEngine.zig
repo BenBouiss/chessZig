@@ -9,7 +9,6 @@ const movel = @import("move.zig");
 const bookl = @import("book.zig");
 const filel = @import("file.zig");
 const heuristicl = @import("heuristic.zig");
-const mathl = @import("math.zig");
 const timel = @import("time.zig");
 const lockl = @import("lock.zig");
 const typel = @import("type.zig");
@@ -54,6 +53,11 @@ const matchResult = struct {
     lose: usize = 0,
     draw: usize = 0,
     flagged: usize = 0,
+    pub inline fn getScore(self: matchResult) f32 {
+        var ret: f32 = @floatFromInt(self.win);
+        ret += @as(f32, @floatFromInt(self.draw)) / 2.0;
+        return ret;
+    }
 };
 
 const matchResultsBench = struct {
@@ -64,11 +68,8 @@ const matchResultsBench = struct {
     avgTimePerTurn: i64 = 0,
     stdTimePerTurn: i64 = 0,
     nMatch: usize = 0,
-    finalFen: string = undefined,
-    pub fn getScore(self: matchResultsBench) scoreType {
-        var ret: scoreType = @intCast(self.res.win[0] + self.res.win[1]);
-        ret += @as(scoreType, @floatFromInt(self.res.draw[0] + self.res.draw[1])) / 2;
-        return ret;
+    pub inline fn getScore(self: matchResultsBench) f32 {
+        return self.combine().getScore();
     }
     pub fn combine(self: matchResultsBench) matchResult {
         return .{ .win = self.res[0].win + self.res[1].win, .draw = self.res[0].draw + self.res[1].draw, .lose = self.res[0].lose + self.res[1].lose, .flagged = self.res[0].flagged + self.res[1].flagged };
@@ -76,7 +77,7 @@ const matchResultsBench = struct {
 };
 const matchResultContainer = struct {
     items: [MAX_ENGINES]matchResultsBench = std.mem.zeroes([MAX_ENGINES]matchResultsBench),
-    fens: std.ArrayList(string) = undefined,
+    fens: std.ArrayList(string) = .empty,
     pub fn init(alloc: std.mem.Allocator) !matchResultContainer {
         return .{ .fens = try std.ArrayList(string).initCapacity(alloc, 4) };
     }
@@ -167,7 +168,6 @@ const matchResultContainer = struct {
 
         // save the setting part
         try settings.writeSummary(&file);
-
         //_ = try file.write("final positions: \n");
         try file.writeStreamingAll(mainl.getGlobalIo(), "final positions: \n");
         for (0..p_self.fens.items.len) |i| {
@@ -179,18 +179,12 @@ const matchResultContainer = struct {
     }
     pub fn printResults(p_self: *matchResultContainer, alloc: std.mem.Allocator) !void {
         var buffer: [configl.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
-        //var writer = std.fs.File.stdout().writer(&buffer);
         var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
         const interface = &writer.interface;
         for (0..p_self.items.len) |i| {
-            const res = p_self.items[i];
-
             // add the results from white and black for each engines
-            const nwins = res.res[0].win + res.res[1].win;
-            const nloses = res.res[0].lose + res.res[1].lose;
-            const ndraws = res.res[0].draw + res.res[1].draw;
-
-            const respmsg = try std.fmt.allocPrint(alloc, "{d} {d} {d} \n", .{ nwins, nloses, ndraws });
+            const res = p_self.items[i].combine();
+            const respmsg = try std.fmt.allocPrint(alloc, "{d} {d} {d} \n", .{ res.win, res.lose, res.draw });
             defer alloc.free(respmsg);
             try interface.writeAll(respmsg);
             try interface.flush();
@@ -242,7 +236,7 @@ const matchStatus = struct {
         const matchStr = try std.fmt.allocPrint(alloc, "wtime {d} btime {d} winc {d} binc {d}", .{ wP.time, bP.time, wP.time_inc, bP.time_inc });
         return matchStr;
     }
-    pub fn getGuiStr(self: *matchStatus, alloc: std.mem.Allocator) ![]const u8 {
+    pub fn getGuiStr(self: *const matchStatus, alloc: std.mem.Allocator) ![]const u8 {
         var wP = self.playerInv[@intFromEnum(e_color.WHITE)].time;
         var bP = self.playerInv[@intFromEnum(e_color.BLACK)].time;
         if (self.chessState.whiteToMove()) {
@@ -272,6 +266,7 @@ const matchStatus = struct {
 const engine_info = struct {
     alive: bool = false,
     ready: bool = false,
+    // contains the options sent by the engine at launch time
     options: std.ArrayList([]u8) = undefined,
     proc: std.process.Child = undefined,
     f_writer: std.Io.File.Writer,
@@ -380,28 +375,26 @@ const guiState = struct {
     logs: enginel.logging = .{},
     status: guiStatus = .{},
     alloc: std.mem.Allocator = undefined,
-    input: std.ArrayList(enginel.inputChannel) = undefined,
+    input: std.ArrayList(enginel.inputChannel) = .empty,
     match: matchStatus = .{},
     startSw: timel.stopWatch = .{},
     engineInventory: engine_Inventory,
+    outcomes: matchResultContainer = .{},
 
     pub fn init(alloc: std.mem.Allocator) !guiState {
         var ret: guiState = undefined;
-
         ret.status = .{};
         ret.match.status = .Continue;
-
         ret.alloc = alloc;
         ret.input = undefined;
+
         ret.engineInventory = try engine_Inventory.init(ret.alloc);
-
         ret.input = try std.ArrayList(enginel.inputChannel).initCapacity(ret.alloc, 2);
-
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(ret.alloc, 2);
         ret.logs = try enginel.logging.init(alloc, INITIAL_LOGSIZE);
+        ret.outcomes = try .init(alloc);
         ret.startSw = .{};
         ret.startSw.startTimeTick();
-
         return ret;
     }
     pub fn addEngine(p_self: *guiState, path: []const u8) !bool {
@@ -571,6 +564,7 @@ const guiState = struct {
         if (p_self.config.match.useOpeningBook) {
             p_self.config.match.openingDb.free(p_self.alloc);
         }
+        p_self.outcomes.free(p_self.alloc);
     }
     pub fn close(p_self: *guiState) void {
         if (p_self.status.closing) {
@@ -847,11 +841,6 @@ fn getGuiCmdType(cmd: []const u8) e_guiCmd {
 }
 
 fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u8) !void {
-    //if (p_self.status.debugMode) {
-    //    try p_self.respond("debug on", engineIndex);
-    //} else {
-    //    try p_self.respond("debug off", engineIndex);
-    //}
     for (options.items) |opt| {
         try p_self.respond(opt._slice(), engineIndex);
     }
@@ -871,7 +860,6 @@ fn mainGuiThread(p_self: *guiState) !void {
     for (0..p_self.config.nEngines) |i| {
         try sendOptions(p_self, p_self.config.engineOptions[i], @intCast(i));
     }
-    var record: matchResultContainer = try matchResultContainer.init(p_self.alloc);
 
     var matchCount: usize = 0;
     var _nMatch = p_self.config.match.nMatch;
@@ -879,7 +867,7 @@ fn mainGuiThread(p_self: *guiState) !void {
         _nMatch = _nMatch * 2;
     }
     var currState: boardl.boardState = undefined;
-    while (matchCount < _nMatch or (p_self.config.match.sprt.enabled and record.sprtTag(0, p_self.config.match.sprt) == .NULL and matchCount < p_self.config.match.sprt.maxMatch)) {
+    while (matchCount < _nMatch or (p_self.config.match.sprt.enabled and p_self.outcomes.sprtTag(0, p_self.config.match.sprt) == .NULL and matchCount < p_self.config.match.sprt.maxMatch)) {
         if (matchCount != 0 and p_self.config.match.playerSwitch) {
             const tmp = p_self.match.playerInv[0].engineUsed;
             p_self.match.playerInv[0].engineUsed = p_self.match.playerInv[1].engineUsed;
@@ -896,16 +884,15 @@ fn mainGuiThread(p_self: *guiState) !void {
         matchRoutine(p_self) catch {
             break;
         };
-        chessl.print_boardstate(&p_self.match.chessState);
         matchCount += 1;
-        try record.addOutCome(p_self.alloc, &p_self.match);
+        try p_self.outcomes.addOutCome(p_self.alloc, &p_self.match);
+        try endMatchTickUserFacingInterface(p_self);
     }
 
-    record.printResults(p_self.alloc) catch {};
-    record.saveLog(p_self.alloc, &p_self.match, p_self.config) catch |err| {
+    p_self.outcomes.printResults(p_self.alloc) catch {};
+    p_self.outcomes.saveLog(p_self.alloc, &p_self.match, p_self.config) catch |err| {
         std.debug.print("[CLOSE] error {} while saving the match stats\n", .{err});
     };
-    record.free(p_self.alloc);
     if (p_self.status.running) {
         p_self.close();
     }
@@ -942,7 +929,6 @@ fn matchRoutine(p_self: *guiState) !void {
 
         const stat = p_self.match.timeTick();
         if (!stat) {
-            // flagged
             const p = p_self.getCurrentPlayer();
             try p_self.sendEngineInterrupt(p.engineUsed);
             p_self.match.status = .Flagged;
@@ -960,16 +946,31 @@ fn matchRoutine(p_self: *guiState) !void {
         chessl.print_boardstate(&p_self.match.chessState);
     }
 }
-fn timeTickUserFacingInterface(p_self: *guiState) !void {
+
+fn timeTickUserFacingInterface(p_self: *const guiState) !void {
     utilsl.clear();
     chessl.print_board(&p_self.match.chessState);
     const times = try p_self.match.getGuiStr(p_self.alloc);
     defer (p_self.alloc.free(times));
-    std.debug.print("{s} mem of buffer {d} {d}\n", .{ times, p_self.engineInventory.items.items[0].f_reader.interface.buffer.len, p_self.engineInventory.items.items[1].f_reader.interface.buffer.len });
-
     const eval = heuristicl.evaluate_debug(&p_self.match.chessState);
     std.debug.print("Current evaluation: \n", .{});
     eval.print();
+}
+pub fn endMatchTickUserFacingInterface(p_self: *const guiState) !void {
+    utilsl.clear();
+    for (0..p_self.config.nEngines) |i| {
+        var side: u8 = 'w';
+        for (p_self.match.playerInv) |p| {
+            if (p.engineUsed == i) {
+                side = if (p.color == .BLACK) 'b' else 'w';
+            }
+        }
+        const name = p_self.config.engineNames[i];
+        const outcome = p_self.outcomes.items[i];
+        const _outcome = outcome.combine();
+        std.debug.print("({c}) {d} (w/l/d) {d}/{d}/{d} black({d}/{d}/{d}) white({d}/{d}/{d}) {s}\n", .{ side, outcome.getScore(), _outcome.win, _outcome.lose, _outcome.draw, outcome.res[0].win, outcome.res[0].lose, outcome.res[0].draw, outcome.res[1].win, outcome.res[1].lose, outcome.res[1].draw, name._slice() });
+    }
+    chessl.print_boardstate(&p_self.match.chessState);
 }
 
 fn onNextTurnTrigger(p_self: *guiState) !bool {
@@ -1062,12 +1063,12 @@ const configMatch = struct {
     useOpeningBook: bool = false,
     openingBookPath: string = undefined,
     openingBookPathProvided: bool = false,
-
     saveLogs: bool = true,
     logPath: string = undefined,
     logPathProvided: bool = false,
     infinite: bool = false,
     openingDb: bookl.openingDatabase = undefined,
+
     pub fn setOpeningBookPath(p_self: *configMatch, alloc: std.mem.Allocator, path: []const u8) anyerror!void {
         if (p_self.openingBookPathProvided) {
             p_self.openingBookPath.free(alloc);
