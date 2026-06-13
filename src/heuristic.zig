@@ -1415,11 +1415,12 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
     }
     return;
 }
-pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool, t: alphaBetal.searchType, hashMoveIsCapture: bool, hashFlag: hashl.nodeType) void {
+pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool, t: alphaBetal.searchType, hashMoveIsCapture: bool, hashFlag: hashl.nodeType, prevExplored: usize) void {
     var baseS: milliDepth = weightl.lmr_baseDeficit;
-    if (p_state.isChecked()) {
-        baseS += weightl.lmr_inCheck;
-    }
+    // we dont do lmr when checked
+    //if (p_state.isChecked()) {
+    //    baseS += weightl.lmr_inCheck;
+    //}
     if (t == .PV) {
         baseS += weightl.lmr_inPvMode;
     }
@@ -1434,7 +1435,7 @@ pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrd
     }
     const fDepth = lmrFDepth(depthToMilliDepth(depth));
     for (0..p_order.len) |i| {
-        if (p_order.scores[i] >= (configl.LMR_SCORE_THRESHOLD) or i < moveReductionAmount) {
+        if ((i + prevExplored) < moveReductionAmount) {
             p_order.depths[i] = depth - 1;
             continue;
         }
@@ -1448,6 +1449,9 @@ pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrd
 
         if (move.isPromotion()) {
             s += weightl.lmr_isPromotion;
+        }
+        if (p_order.scores[i] >= configl.LMR_SCORE_THRESHOLD) {
+            s += weightl.lmr_killerMove;
         }
 
         p_order.depths[i] = depth - 1 - @as(u16, (@intCast(@min((@max(s, 0) * fDepth) >> 20, depth - 1))));

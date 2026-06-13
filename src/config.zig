@@ -42,8 +42,8 @@ pub const KILLER_1_HEURISTIC_VALUE = 800;
 //pub const COUNTERMOVE_HEURISTIC_VALUE = 750;
 pub const MAX_HIST_HEURISTIC_VALUE = 700;
 
-pub const LMR_SCORE_THRESHOLD = 350; // 1 / 2
-//pub const LMR_SCORE_THRESHOLD = 425; // 3 / 4
+//pub const LMR_SCORE_THRESHOLD = 350; // 1 / 2
+pub const LMR_SCORE_THRESHOLD = MAX_HIST_HEURISTIC_VALUE + 1; // 3 / 4
 
 pub const DEFAULT_DEPTH: u16 = 4;
 pub const MIN_DEPTH: u16 = 1;
