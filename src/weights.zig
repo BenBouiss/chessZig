@@ -187,12 +187,22 @@ const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
 // LMR positive (more reduction)
 pub const lmr_expectedCutOff: milliDepth = 400;
 pub const lmr_notImproving: milliDepth = 300;
-pub const lmr_hashMoveCapture: milliDepth = 100;
+pub const lmr_hashMoveCapture: milliDepth = 50;
 pub const lmr_baseDeficit: milliDepth = 1024;
 
+pub const lmr_badCapture: milliDepth = 25;
+
+// old moves when using log(10, moves) from 0 -> 2.4
+// to integer: 0 -> 2 starting pruning at 10+ moves
+//
+// old moves when using log(3, moves) from 0 -> +5.5
+// to integer: 0 -> 5 starting pruning at 3+ moves
+pub const lmr_oldMulti: milliDepth = 100;
+
 // LMR negative (less reduction)
-pub const lmr_inCheck: milliDepth = -600;
+pub const lmr_inCheck: milliDepth = -600; // not used since no lmr in check
 pub const lmr_givesCheck: milliDepth = -600;
 pub const lmr_killerMove: milliDepth = -250;
+pub const lmr_threatening: milliDepth = -200;
 pub const lmr_inPvMode: milliDepth = -200;
 pub const lmr_isPromotion: milliDepth = -150;

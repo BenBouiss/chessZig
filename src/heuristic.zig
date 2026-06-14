@@ -55,7 +55,7 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreType {
     const ret = evaluate(p_state) - p_state.frame.halfMoveClock;
     if (white) return ret;
-    return (-ret) - p_state.frame.halfMoveClock;
+    return (-ret) + p_state.frame.halfMoveClock;
 }
 
 pub const heuristicComponents = struct {
@@ -1315,6 +1315,7 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
 
     if (move.isCapture()) {
         const cPiece: e_piece = if (move.isEnpassant()) (e_piece.nWhitePawn) else (p_state.getPiece(to));
+        // done for pseudo legal move stuff
         if (chess.isKingPiece(cPiece)) {
             return configl.ORDERING_LINE_VALUE + 2;
         }
@@ -1380,6 +1381,7 @@ pub inline fn lmrFDepth(md: milliDepth) milliDepth {
 }
 
 pub const moveReductionAmount = 4;
+// hashmove + line move + 2 killer moves (?)
 pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool) void {
     // - if move ordering score >= 0.5 * max_history_heurist no reduction
     // - if capture and score > 0 no reduction score > 0 is the result of the see thus good captures
@@ -1415,12 +1417,16 @@ pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrd
     }
     return;
 }
-pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool, t: alphaBetal.searchType, hashMoveIsCapture: bool, hashFlag: hashl.nodeType, prevExplored: usize) void {
+pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool, t: alphaBetal.searchType, hashMoveIsCapture: bool, hashFlag: hashl.nodeType, prevExplored: usize, capturePhase: bool) void {
     var baseS: milliDepth = weightl.lmr_baseDeficit;
     // we dont do lmr when checked
     //if (p_state.isChecked()) {
     //    baseS += weightl.lmr_inCheck;
     //}
+    _ = capturePhase;
+    //const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
+    //const safetyArea = chess.safetyArea(otherKingSq);
+
     if (t == .PV) {
         baseS += weightl.lmr_inPvMode;
     }
@@ -1434,12 +1440,17 @@ pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrd
         baseS += weightl.lmr_expectedCutOff;
     }
     const fDepth = lmrFDepth(depthToMilliDepth(depth));
+    _ = prevExplored;
     for (0..p_order.len) |i| {
-        if ((i + prevExplored) < moveReductionAmount) {
+        //if (i == 0 or (i + prevExplored) < moveReductionAmount) {
+        if (i < moveReductionAmount) {
             p_order.depths[i] = depth - 1;
             continue;
         }
         var s: milliDepth = baseS;
+        //const log: milliDepth = @intCast(std.math.log(usize, 10, i + prevExplored));
+        //const ln: milliDepth = @intCast(std.math.log(usize, 3, i + prevExplored));
+        //s += weightl.lmr_oldMulti * log;
 
         const move = fmoves.moves[p_order.indexes[i]];
 
@@ -1450,9 +1461,19 @@ pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrd
         if (move.isPromotion()) {
             s += weightl.lmr_isPromotion;
         }
-        if (p_order.scores[i] >= configl.LMR_SCORE_THRESHOLD) {
+        const moveScore = p_order.scores[i];
+        //const to = move.getTo();
+        //const isThreat = (to & safetyArea) != 0;
+        if (moveScore >= configl.LMR_SCORE_THRESHOLD) {
             s += weightl.lmr_killerMove;
         }
+        //else if (capturePhase and moveScore < 0 and !(isThreat)) {
+        //    s += weightl.lmr_badCapture;
+        //}
+
+        //if (isThreat) {
+        //    s += weightl.lmr_threatening;
+        //}
 
         p_order.depths[i] = depth - 1 - @as(u16, (@intCast(@min((@max(s, 0) * fDepth) >> 20, depth - 1))));
     }

@@ -325,7 +325,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     if (p_features.useLMR and _depth >= 3 and !isCheck) {
         if (p_features.useLMRHeuristic) {
-            heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType, 0);
+            heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType, 0, gen.extra == .CAPTURES);
         } else {
             heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
         }
@@ -340,7 +340,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
             if (useLMR) {
                 if (p_features.useLMRHeuristic) {
-                    heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType, tot);
+                    heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType, tot, false);
                 } else {
                     heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
                 }

@@ -63,8 +63,8 @@ pub const DEFAULT_STATIC_SEARCH = false;
 pub const DEFAULT_LATE_MOVE_REDUCTION = true;
 pub const _DEFAULT_LATE_MOVE_REDUCTION = "true";
 
-pub const DEFAULT_LMR_HEURISTIC = false;
-pub const _DEFAULT_LMR_HEURISTIC = "false";
+pub const DEFAULT_LMR_HEURISTIC = true;
+pub const _DEFAULT_LMR_HEURISTIC = "true";
 
 pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;

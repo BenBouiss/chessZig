@@ -1,21 +1,21 @@
 [engine1]
-path="engines/bin/engine_09_06_26";
-name="zhess";
+path="engines/bin/engine_14_06_26_ref";
+name="std 1";
 "setoption name reportProgress value false";
 
 [engine2]
-path="../tools/Deepov-0.4/Deepov";
-name="Deepov";
-//"setoption name hash value 100";
+path="engines/bin/engine_14_06_26_ref";
+name="std 2";
+"setoption name reportProgress value false";
 
 [match]
-nMatch=32;
-playerSwitch=true;
+nMatch=128;
+playerSwitch=false;
 debugMode=false;
 useOpeningBook=true;
 openingBookPath="opening/8moves_v3.pgn";
 timeFormat=(5000, 0);
 logsLocation="out/logs/evaluate";
 saveLogs=false;
-printToScreen=true;
+printToScreen=false;
 

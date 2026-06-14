@@ -659,7 +659,6 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
     std.debug.print("Zobrist key: 0x{x}\n", .{p_board_state.frame.key.code});
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
-    std.debug.print("Castling right: {d}\n", .{p_board_state.frame.stat.castlingKey()});
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.b.turnCount, p_board_state.moveHistory.len, moves.len });
@@ -668,13 +667,11 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
         std.debug.print("Previous move: {s}\n", .{p_board_state.frame.lastMove.getStr()});
     }
 
-    std.debug.print("Repetition status: Half clock counter: {d}, repetitions counter: {d}, irreversible move index: {d}\n", .{ p_board_state.frame.halfMoveClock, p_board_state.moveHistory.getRepetitions(), p_board_state.moveHistory.lastIrreversibleMoveIndex });
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
 
     const eval = heuristicl.evaluate_debug(p_board_state);
     std.debug.print("Current evaluation: phase {d} piece phase {d}\n", .{ p_board_state.getPhase(), p_board_state.frame.phase });
     eval.print();
-
     sanityCheckBoardState(p_board_state);
 }
 
