@@ -621,10 +621,13 @@ pub const boardState = struct {
             p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, true, toPiece, &p_self.frame, prevCastle, prevEp);
             if (comptime updatePSQT) {
                 p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
-            } else {
+            }
+
+            p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame, prevCastle, prevEp);
+        } else {
+            if (comptime updatePSQT) {
                 p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
             }
-            p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame, prevCastle, prevEp);
         }
 
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
@@ -829,7 +832,7 @@ pub const boardState = struct {
     pub fn isEndGame(self: *const boardState) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
         const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
-        return (nWhiteP < 2) and (nBlackP < 2);
+        return (nWhiteP < 3) and (nBlackP < 3);
     }
 
     pub inline fn getKingBB(self: boardState, white: bool) u64 {

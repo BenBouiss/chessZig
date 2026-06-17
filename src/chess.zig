@@ -23,6 +23,7 @@ const magicl = @import("magic.zig");
 const hashl = @import("hashTable.zig");
 const boardl = @import("board.zig");
 const stringl = @import("string.zig");
+const weightl = @import("weights.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
@@ -30,6 +31,7 @@ const matchMoveContainer = movel.matchMoveContainer;
 
 const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
+const scoreType = typel.scoreType;
 
 pub const NUMBER_PLAYER: u8 = 2;
 pub const ROW_SIZE: u8 = 8;
@@ -136,6 +138,15 @@ pub inline fn sqToBitboard(sq: e_square) u64 {
 
 pub inline fn xToBitboard(x: u8) u64 {
     return ONE << @intCast(x);
+}
+pub inline fn mate_in(depth: u16) scoreType {
+    return weightl.simpleCheckMateScore - @as(scoreType, @intCast(depth));
+}
+pub inline fn mated_in(depth: u16) scoreType {
+    return -(mate_in(depth));
+}
+pub inline fn isMate(score: scoreType) bool {
+    return @abs(score) > weightl.simpleCheckMateThreshold;
 }
 
 /// https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#Rotating
@@ -908,7 +919,7 @@ pub inline fn genShift(bb: u64, shift: i8) u64 {
     return bb << @intCast(shift);
 }
 
-pub inline fn passedPawns(pawn: u64, opp: u64) u64 {
+pub fn passedPawns(pawn: u64, opp: u64) u64 {
     // passed pawn: pawn without a neighboring enemy pawn
     // fill the ranks from top to bottom with a fill algo
     // then ~(shift left | shift right) & pawn
@@ -919,7 +930,7 @@ pub inline fn passedPawns(pawn: u64, opp: u64) u64 {
     return ~(lmask | rmask) & pawn;
 }
 
-pub inline fn isolatedPawns(pawn: u64) u64 {
+pub fn isolatedPawns(pawn: u64) u64 {
     // isolated pawn: pawn without a neighboring pawn
     // fill the ranks from top to bottom with a fill algo
     // then ~(shift left | shift right) & pawn
@@ -929,13 +940,34 @@ pub inline fn isolatedPawns(pawn: u64) u64 {
     const rmask = (cols >> 1) & notHFile;
     return ~(lmask | rmask) & pawn;
 }
-pub inline fn stackedPawns(pawn: u64) u64 {
+pub fn stackedPawns(pawn: u64) u64 {
     // stacked pawns: multiple pawns present on the same file
     const upPawns = pawn & (moveGenl.northOne(moveGenl.northOccl(pawn, UNIVERSE)));
     const downPawns = pawn & (moveGenl.southOne(moveGenl.southOccl(pawn, UNIVERSE)));
     const tripleFiles = (upPawns & downPawns);
     return upPawns | downPawns | tripleFiles;
 }
+pub inline fn pawnWithEastNeighbor(pawn: u64) u64 {
+    return (moveGenl.westOne(pawn)) & pawn;
+}
+pub inline fn pawnWithWestNeighbor(pawn: u64) u64 {
+    return (moveGenl.eastOne(pawn)) & pawn;
+}
+// https://www.chessprogramming.org/Duo_Trio_Quart_(Bitboards)
+pub fn duoPhalanx(pawn: u64) u64 {
+    // duo phalanx pawns: two pawns next to one another protecting a large area in front of them
+    const haswestNeighbor = pawnWithWestNeighbor(pawn);
+    const haseastNeighbor = haswestNeighbor >> 1;
+    const oneNeigh = haswestNeighbor ^ haseastNeighbor;
+
+    // filter for only duos not more
+    const oneNeighWest = oneNeigh & haswestNeighbor;
+    const oneNeighEast = oneNeigh & haseastNeighbor;
+    const duoEast = oneNeighWest & (oneNeighEast << 1);
+    const duoWest = duoEast >> 1;
+    return duoWest | duoEast;
+}
+
 pub inline fn openFileRooks(rooks: u64, pawns: u64, white: bool) u64 {
     const obstruct = if (white) (moveGenl.southOne(moveGenl.southOccl(pawns, UNIVERSE))) else (moveGenl.northOne(moveGenl.northOccl(pawns, UNIVERSE)));
     return rooks & (~obstruct);

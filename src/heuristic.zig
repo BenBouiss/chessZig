@@ -42,20 +42,21 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     const phase: scoreType = p_state.getPhase();
 
     var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB, white);
+
+    ret += evaluate_material(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
     ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, white);
     ret += evaluate_pawnStructure(p_state);
-    ret += .{ p_state.frame.psqtEval, p_state.frame.psqtEval };
-    ret += evaluate_king(p_state, (ret[0] + ret[1]) > 0);
+    ret += evaluate_king(p_state, (ret[0] + ret[1]) > 0, white);
 
-    return computeTaperedV(ret, phase);
+    return computeTaperedV(ret, phase) + p_state.frame.psqtEval;
 }
 
 pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreType {
-    const ret = evaluate(p_state) - p_state.frame.halfMoveClock;
-    if (white) return ret;
-    return (-ret) + p_state.frame.halfMoveClock;
+    const ret = evaluate(p_state);
+    if (white) return ret - p_state.frame.halfMoveClock;
+    return (-ret) - p_state.frame.halfMoveClock;
 }
 
 pub const heuristicComponents = struct {
@@ -63,14 +64,15 @@ pub const heuristicComponents = struct {
     Mobility: scoreType = 0,
     PawnStruct: scoreType = 0,
     Safety: scoreType = 0,
+    Material: scoreType = 0,
     Structure: scoreType = 0,
     Tempo: scoreType = 0,
     King: scoreType = 0,
     pub fn total(self: *const heuristicComponents) scoreType {
-        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure + self.Tempo + self.King;
+        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure + self.Tempo + self.King + self.Material;
     }
     pub fn print(self: *const heuristicComponents) void {
-        std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Structure = {d}, Tempo = {d}, King = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Structure, self.Tempo, self.King, self.total() });
+        std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Material = {d}, Structure = {d}, Tempo = {d}, King = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Material, self.Structure, self.Tempo, self.King, self.total() });
     }
 };
 pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
@@ -87,8 +89,8 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
         //.PSQT = evaluate_PSQT(p_state, values, _phase),
         .PSQT = p_state.frame.psqtEval,
         .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB, white), phase),
-        .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0), phase),
-
+        .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0, white), phase),
+        .Material = computeTaperedV(evaluate_material(p_state), phase),
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
         .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .PawnStruct = computeTaperedV(evaluate_pawnStructure(p_state), phase),
@@ -197,7 +199,16 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
     const nWhitePassed: i8 = @intCast(chess.popcount(chess.passedPawns(wp, bp)));
     const nBlackPassed: i8 = @intCast(chess.popcount(chess.passedPawns(bp, wp)));
     const paS: scoreType = @intCast(nWhitePassed - nBlackPassed);
-    return .{ (isoS * weightl.global_IsolatedPawnValue[MG]) + (doS * weightl.global_StackedPawnValue[MG]) + (paS * weightl.global_PassedPawnValue[MG]), (isoS * weightl.global_IsolatedPawnValue[EG]) + (doS * weightl.global_StackedPawnValue[EG]) + (paS * weightl.global_PassedPawnValue[EG]) };
+
+    const nWhiteDuo: i8 = @intCast(chess.popcount(chess.duoPhalanx(wp)));
+    const nBlackDuo: i8 = @intCast(chess.popcount(chess.duoPhalanx(bp)));
+    const duoS: scoreType = @intCast(nWhiteDuo - nBlackDuo);
+
+    const nWhiteConn: i8 = @intCast(chess.popcount(wp & chess.getPawnAttacksFromBB(wp, true)));
+    const nBlackConn: i8 = @intCast(chess.popcount(bp & chess.getPawnAttacksFromBB(bp, false)));
+    const connectS: scoreType = @intCast(nWhiteConn - nBlackConn);
+
+    return .{ (isoS * weightl.global_IsolatedPawnValue[MG]) + (doS * weightl.global_StackedPawnValue[MG]) + (paS * weightl.global_PassedPawnValue[MG]) + (duoS * weightl.global_phalanxDuoPawnValue[MG]) + (connectS * weightl.global_connectionPawnValue[MG]), (isoS * weightl.global_IsolatedPawnValue[EG]) + (doS * weightl.global_StackedPawnValue[EG]) + (paS * weightl.global_PassedPawnValue[EG]) + (duoS * weightl.global_phalanxDuoPawnValue[EG]) + (connectS * weightl.global_connectionPawnValue[EG]) };
 }
 pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
     _ = white;
@@ -230,17 +241,25 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookValue[MG] * deltaOpenRook, weightl.global_OpenFileRookValue[EG] * deltaOpenRook };
     return moveAmountScore + kingMoveScore + pieceMobility;
 }
-pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scoreVect {
+pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whiteToMove: bool) scoreVect {
     //const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
     //const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
+    _ = whiteToMove;
     if (p_state.isEndGame()) {
         const distance: scoreType = squarel.computeMHDistance(p_state.b.wKingSq, p_state.b.bKingSq);
-        const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) squarel.computeMHDistance(p_state.b.bKingSq, squarel.centerSq) else squarel.computeMHDistance(p_state.b.wKingSq, squarel.centerSq);
+        const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) squarel.computeMHDistance(p_state.b.bKingSq, squarel.centerSq) else -squarel.computeMHDistance(p_state.b.wKingSq, squarel.centerSq);
         return .{ bonus * weightl.global_KingProximityValue[MG], bonus * weightl.global_KingProximityValue[EG] };
     } else {
         return .{ 0, 0 };
     }
 }
+pub fn evaluate_material(p_state: *const boardl.boardState) scoreVect {
+    // counting negative for white as the best safety is not attackers => 0 heuristic
+    const nPairs: scoreType = @as(scoreType, @intFromBool(p_state.b.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] == 2)) - @as(scoreType, @intFromBool(p_state.b.pieceCount[@intFromEnum(e_piece.nBlackBishop)] == 2));
+    const bishopPair: scoreVect = .{ nPairs * weightl.global_materialBishopPair[MG], nPairs * weightl.global_materialBishopPair[EG] };
+    return bishopPair;
+}
+
 pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // counting negative for white as the best safety is not attackers => 0 heuristic
     const kingWSafety = chess.safetyArea(p_state.b.wKingSq);
@@ -770,7 +789,7 @@ pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
     var ss: alphaBetal.searchStack = .{};
     const isChecked = p_board.isChecked();
     if (isChecked) return false;
-    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, undefined, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, isChecked, .NonPV, false, &ss);
+    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, undefined, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, isChecked, false, &ss, .NonPV);
     if (stat != quiesc) {
         return false;
     }
@@ -1301,7 +1320,8 @@ pub const dFutilityMargin: scoreType = 300;
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
 pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
 
-pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove, comptime mva: bool) scoreType {
+pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove, comptime mva: bool, white: bool, continuations: [2]*historyl.pieceHistory) scoreType {
+    _ = continuations;
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
@@ -1337,9 +1357,10 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
             //} else if (move.equal(historyl.counterMoves[from][to])) {
             //    return configl.COUNTERMOVE_HEURISTIC_VALUE;
         } else {
-            const w = @intFromEnum(fpiece) <= @intFromEnum(e_piece.nWhiteKing);
-            return historyl.historyHeuristic[@intFromBool(w)][from][to];
+            //return historyl.historyHeuristic[@intFromBool(white)][from][to] + continuations[0][@intFromEnum(fpiece)][to] + continuations[1][@intFromEnum(fpiece)][to];
+            return historyl.historyHeuristic[@intFromBool(white)][from][to];
         }
+        //return historyl.historyHeuristic[@intFromBool(white)][from][to] + continuations[0][@intFromEnum(fpiece)][to] + continuations[1][@intFromEnum(fpiece)][to];
     }
     return 0;
 }
@@ -1351,13 +1372,14 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, depth: u16, prevLineMove: IMove, comptime mva: bool) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, depth: u16, prevLineMove: IMove, continuations: [2]*historyl.pieceHistory, comptime mva: bool) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
+    const w: bool = p_state.whiteToMove();
 
     for (0..p_moves.len) |i| {
         ret.indexes[i] = @intCast(i);
-        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, hashMove, prevLineMove, mva);
+        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, hashMove, prevLineMove, mva, w, continuations);
     }
     ret.len = p_moves.len;
 

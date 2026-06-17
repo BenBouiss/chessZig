@@ -13,6 +13,7 @@ pub const simpleKnightScore: scoreType = 300;
 pub const simpleRookScore: scoreType = 500;
 pub const simpleQueenScore: scoreType = 900;
 pub const simpleCheckMateScore: scoreType = 31000;
+pub const simpleCheckMateThreshold: scoreType = 30000;
 pub const simpleStalemateScore: scoreType = 0;
 
 // ============ pawn structure ============
@@ -129,7 +130,7 @@ pub var global_QueenValue: scoreType = simpleQueenScore;
 // mobility
 pub var global_MobilityValue: [2]scoreType = .{ 1, 1 };
 pub var global_KingMobilityValue: [2]scoreType = .{ 2, 2 };
-pub var global_OpenFileRookValue: [2]scoreType = .{ 10, 0 };
+pub var global_OpenFileRookValue: [2]scoreType = .{ 5, 1 };
 
 // structure
 pub var global_StructureProtectionValue: [2]scoreType = .{ 24, 31 };
@@ -139,10 +140,12 @@ pub var global_centerProtectionValue: [2]scoreType = .{ 8, 12 };
 pub var global_IsolatedPawnValue: [2]scoreType = .{ 1, 1 };
 pub var global_StackedPawnValue: [2]scoreType = .{ 1, 1 };
 pub var global_PassedPawnValue: [2]scoreType = .{ 32, 42 };
+pub var global_phalanxDuoPawnValue: [2]scoreType = .{ 4, 6 };
+pub var global_connectionPawnValue: [2]scoreType = .{ 3, 2 };
 
 // tempo
-pub var global_tempoChecksScore: [2]scoreType = .{ 24, 24 };
-pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore * 3, simplePieceThreatScore };
+pub var global_tempoChecksScore: [2]scoreType = .{ 24, 16 };
+pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore, simplePieceThreatScore >> 1 };
 pub var global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
 // safety
@@ -152,8 +155,10 @@ pub var global_SafetyRookValue: [2]scoreType = .{ 16, 16 };
 pub var global_SafetyQueenValue: [2]scoreType = .{ 16, 16 };
 
 // king
-pub var global_KingProximityValue: [2]scoreType = .{ 1, 1 };
+pub var global_KingProximityValue: [2]scoreType = .{ 1, 2 };
 
+// material
+pub var global_materialBishopPair: [2]scoreType = .{ 16, 24 };
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = .{ pawnScoreArr, pawnScoreArr };
 pub var global_Bishop_PSQT: [2][64]scoreType = .{ bishopScoreArr, bishopScoreArr };
