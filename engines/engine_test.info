@@ -1,14 +1,14 @@
 [engine1]
-path="engines/bin/engine_15_06_26_2";
-name="curr + bishop pair 20, 15 + duo 8 6 + connection 3 1 + king dist whitetomove + fix half move + !whiteWinning -1";
+path="engines/bin/engine_17_06_26";
+name="aspiration";
 "setoption name reportProgress value false";
-"setoption name useLMRHeuristic value true";
+"setoption name useAspiration value true";
 
 [engine2]
 path="engines/bin/engine_17_06_26_1";
-name="next";
+name="curr + no probe on PV";
 "setoption name reportProgress value false";
-"setoption name useLMRHeuristic value true";
+"setoption name useAspiration value true";
 
 [match]
 nMatch=128;

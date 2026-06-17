@@ -139,6 +139,9 @@ pub inline fn sqToBitboard(sq: e_square) u64 {
 pub inline fn xToBitboard(x: u8) u64 {
     return ONE << @intCast(x);
 }
+pub inline fn flipSq(sq: u8) u8 {
+    return sq ^ 56;
+}
 pub inline fn mate_in(depth: u16) scoreType {
     return weightl.simpleCheckMateScore - @as(scoreType, @intCast(depth));
 }

@@ -18,28 +18,31 @@ const pvContainer = movel.pvContainer;
 const scoreType = typel.scoreType;
 const threadInfo = threadingl.threadInfo;
 
-pub fn searchEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack) i8 {
-    p_info.working = true;
-    const alpha: scoreType = -weightl.simpleCheckMateScore;
-    const beta: scoreType = weightl.simpleCheckMateScore;
+// https://github.com/nescitus/cpw-engine/blob/master/search.cpp
+pub fn aspirationSearchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack, val: scoreType) scoreType {
+    var ret: scoreType = val;
+    const alpha = val - typel.aspiration;
+    const beta = val + typel.aspiration;
+    ret = searchEntrypoint(p_state, p_info, depth, p_features, ss, alpha, beta);
+    if (ret <= alpha or ret >= beta) {
+        ret = searchEntrypoint(p_state, p_info, depth, p_features, ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
+    }
+    return ret;
+}
 
-    _ = p_startingMoves;
+pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack, alpha: scoreType, beta: scoreType) scoreType {
+    p_info.working = true;
+
     var pv: pvContainer = .{};
     ss.getFrame(0).pv = &pv;
 
     const score = searchLoop(p_state, p_info, p_features, depth, 0, alpha, beta, ss, .PV);
 
     const move = pv.moves[0];
-
     p_info.currentBest.move = move;
     p_info.currentBest.scoring = score;
     p_info.currentBest.line.setLineFromPV(&pv);
-
-    if (p_info.alive) {
-        return 0;
-    }
-    // 1 is error
-    return 1;
+    return score;
 }
 pub const searchType = enum { NonPV, PV };
 

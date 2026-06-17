@@ -54,8 +54,8 @@ const DEPTH_MASK = 0x3FC;
 const DEPTH_SHIFT = 2;
 
 const NODETYPE_mask = 0x3;
-const VALID_MASK = 0x400;
-const VALID_SHIFT = 10;
+const VALID_MASK = 0x8;
+const WHITE_MASK = 0x4;
 
 const AGE_SHIFT = 11;
 const AGE_MASK = 0xF800;
@@ -73,13 +73,13 @@ pub const searchEntry = struct {
         return .{ .key = key, .evaluation = eval, .bestMove = bestMove, ._depth = depth, ._age = age, .val = val };
     }
     pub inline fn nodeT(self: searchEntry) nodeType {
-        return @enumFromInt(self.val & 0x3);
+        return @enumFromInt(self.val & NODETYPE_mask);
     }
     pub inline fn white(self: searchEntry) bool {
-        return (self.val & 0x4) != 0;
+        return (self.val & WHITE_MASK) != 0;
     }
     pub inline fn valid(self: searchEntry) bool {
-        return (self.val & 0x8) != 0;
+        return (self.val & VALID_MASK) != 0;
     }
 };
 

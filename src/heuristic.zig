@@ -149,32 +149,32 @@ pub fn evaluate_PSQT(p_state: *const boardl.boardState, _phase: scoreType) score
 
             .nBlackPawn => {
                 score_count -= weightl.global_PawnValue;
-                score_mg -= weightl.global_Pawn_PSQT[MG][sq ^ 56];
-                score_eg -= weightl.global_Pawn_PSQT[EG][sq ^ 56];
+                score_mg -= weightl.global_Pawn_PSQT[MG][chess.flipSq(sq)];
+                score_eg -= weightl.global_Pawn_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackBishop => {
                 score_count -= weightl.global_BishopValue;
-                score_mg -= weightl.global_Bishop_PSQT[MG][sq ^ 56];
-                score_eg -= weightl.global_Bishop_PSQT[EG][sq ^ 56];
+                score_mg -= weightl.global_Bishop_PSQT[MG][chess.flipSq(sq)];
+                score_eg -= weightl.global_Bishop_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackKnight => {
                 score_count -= weightl.global_KnightValue;
-                score_mg -= weightl.global_Knight_PSQT[MG][sq ^ 56];
-                score_eg -= weightl.global_Knight_PSQT[EG][sq ^ 56];
+                score_mg -= weightl.global_Knight_PSQT[MG][chess.flipSq(sq)];
+                score_eg -= weightl.global_Knight_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackRook => {
                 score_count -= weightl.global_RookValue;
-                score_mg -= weightl.global_Rook_PSQT[MG][sq ^ 56];
-                score_eg -= weightl.global_Rook_PSQT[EG][sq ^ 56];
+                score_mg -= weightl.global_Rook_PSQT[MG][chess.flipSq(sq)];
+                score_eg -= weightl.global_Rook_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackQueen => {
                 score_count -= weightl.global_QueenValue;
-                score_mg -= weightl.global_Queen_PSQT[MG][sq ^ 56];
-                score_eg -= weightl.global_Queen_PSQT[EG][sq ^ 56];
+                score_mg -= weightl.global_Queen_PSQT[MG][chess.flipSq(sq)];
+                score_eg -= weightl.global_Queen_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackKing => {
-                score_mg -= weightl.global_King_PSQT[MG][sq ^ 56];
-                score_eg -= weightl.global_King_PSQT[EG][sq ^ 56];
+                score_mg -= weightl.global_King_PSQT[MG][chess.flipSq(sq)];
+                score_eg -= weightl.global_King_PSQT[EG][chess.flipSq(sq)];
             },
         }
     }
@@ -352,7 +352,7 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
 
     if (comptime !isCapture) {
         if (isCastle) {
-            const toBis: u8 = if (comptime white) to else (to ^ 56);
+            const toBis: u8 = if (comptime white) to else (chess.flipSq(to));
             if (move.isQueenSideCastle()) {
                 const prev: @Vector(3, scoreType) = getPieceInfos_cst(.ROOK, toBis - 2);
                 const next: @Vector(3, scoreType) = getPieceInfos_cst(.ROOK, toBis + 1);
@@ -596,37 +596,37 @@ pub const heuristicValues = struct {
                 return self.getPieceInfos_cst(.PAWN, @intFromEnum(sq));
             },
             .nBlackPawn => {
-                return self.getPieceInfos_cst(.PAWN, @intFromEnum(sq) ^ 56);
+                return self.getPieceInfos_cst(.PAWN, @intFromEnum(chess.flipSq(sq)));
             },
             .nWhiteBishop => {
                 return self.getPieceInfos_cst(.BISHOP, @intFromEnum(sq));
             },
             .nBlackBishop => {
-                return self.getPieceInfos_cst(.BISHOP, @intFromEnum(sq) ^ 56);
+                return self.getPieceInfos_cst(.BISHOP, @intFromEnum(chess.flipSq(sq)));
             },
             .nWhiteKnight => {
                 return self.getPieceInfos_cst(.KNIGHT, @intFromEnum(sq));
             },
             .nBlackKnight => {
-                return self.getPieceInfos_cst(.KNIGHT, @intFromEnum(sq) ^ 56);
+                return self.getPieceInfos_cst(.KNIGHT, @intFromEnum(chess.flipSq(sq)));
             },
             .nWhiteRook => {
                 return self.getPieceInfos_cst(.ROOK, @intFromEnum(sq));
             },
             .nBlackRook => {
-                return self.getPieceInfos_cst(.ROOK, @intFromEnum(sq) ^ 56);
+                return self.getPieceInfos_cst(.ROOK, @intFromEnum(chess.flipSq(sq)));
             },
             .nWhiteQueen => {
                 return self.getPieceInfos_cst(.QUEEN, @intFromEnum(sq));
             },
             .nBlackQueen => {
-                return self.getPieceInfos_cst(.QUEEN, @intFromEnum(sq) ^ 56);
+                return self.getPieceInfos_cst(.QUEEN, @intFromEnum(chess.flipSq(sq)));
             },
             .nWhiteKing => {
                 return self.getPieceInfos_cst(.KING, @intFromEnum(sq));
             },
             .nBlackKing => {
-                return self.getPieceInfos_cst(.KING, @intFromEnum(sq) ^ 56);
+                return self.getPieceInfos_cst(.KING, @intFromEnum(chess.flipSq(sq)));
             },
         }
     }
@@ -701,37 +701,37 @@ pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) [3]typel.scoreType {
             return getPieceInfos_cst(.PAWN, @intFromEnum(sq));
         },
         .nBlackPawn => {
-            return getPieceInfos_cst(.PAWN, @intFromEnum(sq) ^ 56);
+            return getPieceInfos_cst(.PAWN, chess.flipSq(@intFromEnum(sq)));
         },
         .nWhiteBishop => {
             return getPieceInfos_cst(.BISHOP, @intFromEnum(sq));
         },
         .nBlackBishop => {
-            return getPieceInfos_cst(.BISHOP, @intFromEnum(sq) ^ 56);
+            return getPieceInfos_cst(.BISHOP, chess.flipSq(@intFromEnum(sq)));
         },
         .nWhiteKnight => {
             return getPieceInfos_cst(.KNIGHT, @intFromEnum(sq));
         },
         .nBlackKnight => {
-            return getPieceInfos_cst(.KNIGHT, @intFromEnum(sq) ^ 56);
+            return getPieceInfos_cst(.KNIGHT, chess.flipSq(@intFromEnum(sq)));
         },
         .nWhiteRook => {
             return getPieceInfos_cst(.ROOK, @intFromEnum(sq));
         },
         .nBlackRook => {
-            return getPieceInfos_cst(.ROOK, @intFromEnum(sq) ^ 56);
+            return getPieceInfos_cst(.ROOK, chess.flipSq(@intFromEnum(sq)));
         },
         .nWhiteQueen => {
             return getPieceInfos_cst(.QUEEN, @intFromEnum(sq));
         },
         .nBlackQueen => {
-            return getPieceInfos_cst(.QUEEN, @intFromEnum(sq) ^ 56);
+            return getPieceInfos_cst(.QUEEN, chess.flipSq(@intFromEnum(sq)));
         },
         .nWhiteKing => {
             return getPieceInfos_cst(.KING, @intFromEnum(sq));
         },
         .nBlackKing => {
-            return getPieceInfos_cst(.KING, @intFromEnum(sq) ^ 56);
+            return getPieceInfos_cst(.KING, chess.flipSq(@intFromEnum(sq)));
         },
     }
 }

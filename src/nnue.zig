@@ -52,7 +52,7 @@ pub fn networkIndexPerspective(piece: typel.e_pieceType, color: typel.e_color, s
     var _sq: usize = @intFromEnum(sq);
     if (perspective == .BLACK) {
         side = 1 - side;
-        _sq = sq ^ 56;
+        _sq = chessl.flipSq(_sq);
     }
     return side * 64 * 6 + @intFromEnum(piece) * 64 + _sq;
 }

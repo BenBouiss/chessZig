@@ -25,7 +25,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USELMRHEURISTIC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USELMRHEURISTIC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, USEASPIRATION, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
@@ -215,6 +215,7 @@ pub const engineOptions = struct {
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     useRFP: bool = configl.DEFAULT_USE_RFP,
     useIIR: bool = configl.DEFAULT_USE_IIR,
+    useAspiration: bool = configl.DEFAULT_USE_ASPIRATION,
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
     useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
 
@@ -342,6 +343,8 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "useRFP", .optionType = .USERFP, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RFP } } });
 
         try p_self.addOption(.{ .name = "useIIR", .optionType = .USEIIR, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_IIR } } });
+
+        try p_self.addOption(.{ .name = "useAspiration", .optionType = .USEASPIRATION, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_ASPIRATION } } });
 
         try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
@@ -764,6 +767,12 @@ pub const engine = struct {
             },
             .USEIIR => {
                 p_self.options.useIIR = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                    return false;
+                };
+                return true;
+            },
+            .USEASPIRATION => {
+                p_self.options.useAspiration = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;

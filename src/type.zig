@@ -25,3 +25,4 @@ pub const totalPhase: scoreType = 24;
 pub const phases_arr = [_]usize{ 0, 1, 1, 2, 4, 0 };
 
 pub const centerBB: u64 = 0x183C3C180000;
+pub const aspiration: scoreType = 50;

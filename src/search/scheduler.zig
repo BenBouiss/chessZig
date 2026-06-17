@@ -12,6 +12,7 @@ const timel = @import("../time.zig");
 const mainl = @import("../main.zig");
 const boardl = @import("../board.zig");
 const typel = @import("../type.zig");
+const chessl = @import("../chess.zig");
 
 const IMove = movel.IMove;
 const scoreType = typel.scoreType;
@@ -38,6 +39,7 @@ pub const searchFeatures = struct {
     useFutility: bool = configl.DEFAULT_USE_FUTILITY,
     useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
     useIIR: bool = configl.DEFAULT_USE_IIR,
+    useAspiration: bool = configl.DEFAULT_USE_ASPIRATION,
 };
 pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     var ret: searchFeatures = .{};
@@ -50,6 +52,7 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.useRazoring = p_engine.options.useRazoring;
     ret.useRFP = p_engine.options.useRFP;
     ret.useIIR = p_engine.options.useIIR;
+    ret.useAspiration = p_engine.options.useAspiration;
     ret.reportProgress = p_engine.options.reportProgress;
     ret.useFutility = p_engine.options.useFutility;
     ret.useProbCut = p_engine.options.useProbCut;
@@ -262,20 +265,47 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
     p_info.working = true;
     defer p_info.working = false;
-    var depth: u16 = 0;
-    if (features.useStaticSearch) {
-        depth = maxDepth;
-    }
     if (features.useHash) {
         hashl.hashTable.nextGeneration();
     }
-    var ss: alphaBetal.searchStack = .{};
-    if (sched.isDebugMode()) {
-        std.debug.print("[DEBUG] _startSearch: starting from depth {d} max depth {d} remaining time {d} ms\n", .{ depth, maxDepth, sched.timeM.remainingTimeMs });
+    var depth: u16 = 0;
+    if (features.useAspiration) {
+        depth = aspirationWindow(sched, p_state, p_info, features, maxDepth);
+    } else {
+        depth = iterativeDeepening(sched, p_state, p_info, features, maxDepth);
     }
 
-    var decision = &p_info.currentBest;
-    var score = decision.scoring;
+    if (sched.p_engine.options.trackMetrics) {
+        sched.p_engine.metric.addPlies(depth);
+    }
+}
+pub fn iterativeDeepening(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) u16 {
+    var depth: u16 = if (features.useStaticSearch) maxDepth else 0;
+
+    var ss: alphaBetal.searchStack = .{};
+
+    var score: scoreType = 0;
+    while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
+        depth += 1;
+        if (sched.isDebugMode()) {
+            std.debug.print("[DEBUG] _startSearch: starting line ", .{});
+            ss.printPV();
+        }
+        score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
+
+        ss.setPrevLine(&p_info.currentBest.line);
+
+        if (features.reportProgress) {
+            sendPartial(sched, depth, p_info);
+        }
+    }
+    return depth;
+}
+pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) u16 {
+    var depth: u16 = if (features.useStaticSearch) maxDepth else 1;
+    var ss: alphaBetal.searchStack = .{};
+
+    var score = alphaBetal.searchEntrypoint(p_state, p_info, 1, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
 
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
@@ -283,38 +313,21 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
             std.debug.print("[DEBUG] _startSearch: starting line ", .{});
             ss.printPV();
         }
-        _ = alphaBetal.searchEntrypoint(p_state, undefined, p_info, depth, &features, &ss);
+        score = alphaBetal.aspirationSearchEntrypoint(p_state, p_info, depth, &features, &ss, score);
+        ss.setPrevLine(&p_info.currentBest.line);
 
-        if (depth != 1) {
-            ss.setPrevLine(&p_info.currentBest.line);
-        }
-
-        if (sched.isDebugMode()) {
-            std.debug.print("[DEBUG] _startSearch: after search line ", .{});
-            ss.printPV();
-        }
-        decision = &p_info.currentBest;
-        score = decision.scoring;
         if (features.reportProgress) {
-            sendPartial(sched, depth, decision, p_info);
+            sendPartial(sched, depth, p_info);
         }
     }
-    if (sched.isDebugMode()) {
-        std.debug.print("debug exit status alive: {} overtime thinking: {}\n", .{ p_info.alive, canExtendSearch(&sched.timeM, depth, maxDepth, score, &features) });
-    }
-    if (sched.p_engine.options.trackMetrics) {
-        sched.p_engine.metric.addPlies(depth);
-    }
+    return depth;
 }
 
 pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, score: scoreType, p_features: *const searchFeatures) bool {
     if (p_features.fixedDepth and depth == maxDepth or (depth >= typel.MAX_PLY)) {
         return false;
     }
-    if (@abs(score) >= weightl.simpleCheckMateScore) {
-        return false;
-    }
-    if (timer.isOvertimeSearching()) {
+    if (chessl.isMate(score) or timer.isOvertimeSearching()) {
         return false;
     }
     const prevTime: i64 = timer.timeSinceStartMs();
@@ -323,11 +336,11 @@ pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, sco
     return ((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime);
 }
 
-pub fn sendPartial(p_self: *const scheduler, depth: u16, decision: *const moveDecisionExt, p_info: *const threadingl.threadInfo) void {
+pub fn sendPartial(p_self: *const scheduler, depth: u16, p_info: *const threadingl.threadInfo) void {
     const n_nodes: i64 = @intCast(p_info.searchStat.n_nodeExplored);
     const n_cut = p_info.searchStat.n_cutoffs;
 
-    const final_info = std.fmt.allocPrint(p_self.p_engine.alloc, "info depth {d} score cp {d} nodes {d} cutoff: {d} currmove {s} pv {f}", .{ depth, decision.scoring, n_nodes, n_cut, utilsl.trimStr(&decision.move.getStr()), decision.line }) catch unreachable;
+    const final_info = std.fmt.allocPrint(p_self.p_engine.alloc, "info depth {d} score cp {d} nodes {d} cutoff: {d} currmove {s} pv {f}", .{ depth, p_info.currentBest.scoring, n_nodes, n_cut, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
     defer p_self.p_engine.alloc.free(final_info);
     p_self.p_engine.respond(utilsl.trimStr(final_info));
 }
