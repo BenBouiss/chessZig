@@ -194,7 +194,6 @@ pub const lmr_expectedCutOff: milliDepth = 400;
 pub const lmr_notImproving: milliDepth = 300;
 pub const lmr_hashMoveCapture: milliDepth = 50;
 pub const lmr_baseDeficit: milliDepth = 1024;
-
 pub const lmr_badCapture: milliDepth = 25;
 
 // old moves when using log(10, moves) from 0 -> 2.4
@@ -211,3 +210,15 @@ pub const lmr_killerMove: milliDepth = -250;
 pub const lmr_threatening: milliDepth = -200;
 pub const lmr_inPvMode: milliDepth = -200;
 pub const lmr_isPromotion: milliDepth = -150;
+
+//    lmr_expectedCutOff = 300,
+//    lmr_notImproving = 150,
+//    lmr_hashMoveCapture = 100,
+//    lmr_baseDeficit = 1024,
+//    lmr_badCapture = 80,
+//    lmr_oldMulti = 50,
+//    lmr_givesCheck = -400,
+//    lmr_killerMove = -100,
+//    lmr_inPvNode = -150,
+//    lmr_isPromotion = -75,
+//    lmr_threatening = -75,

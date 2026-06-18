@@ -13,6 +13,8 @@ const mainl = @import("../main.zig");
 const boardl = @import("../board.zig");
 const typel = @import("../type.zig");
 const chessl = @import("../chess.zig");
+const moveGenl = @import("../move_generation.zig");
+const heuristicl = @import("../heuristic.zig");
 
 const IMove = movel.IMove;
 const scoreType = typel.scoreType;
@@ -268,6 +270,15 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
     if (features.useHash) {
         hashl.hashTable.nextGeneration();
     }
+    const fmoves = moveGenl.generateLegalMoves(p_state);
+    if (fmoves.len == 1) {
+        p_info.currentBest.move = fmoves.moves[0];
+        p_info.currentBest.scoring = heuristicl.c_evaluate(p_state, p_state.whiteToMove());
+        p_info.currentBest.line.len = 1;
+        p_info.currentBest.line.moves[0] = fmoves.moves[0];
+        return;
+    }
+
     var depth: u16 = 0;
     if (features.useAspiration) {
         depth = aspirationWindow(sched, p_state, p_info, features, maxDepth);
@@ -305,8 +316,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
     var depth: u16 = if (features.useStaticSearch) maxDepth else 1;
     var ss: alphaBetal.searchStack = .{};
 
-    var score = alphaBetal.searchEntrypoint(p_state, p_info, 1, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
-
+    var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
         if (sched.isDebugMode()) {
@@ -315,7 +325,6 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
         }
         score = alphaBetal.aspirationSearchEntrypoint(p_state, p_info, depth, &features, &ss, score);
         ss.setPrevLine(&p_info.currentBest.line);
-
         if (features.reportProgress) {
             sendPartial(sched, depth, p_info);
         }

@@ -4,7 +4,9 @@ import matplotlib
 # matplotlib.use("TkAgg")
 from dataclasses import dataclass
 import numpy as np
+import numpy.typing as npt
 import random
+import math
 
 MAX_PLY = 255
 
@@ -48,12 +50,19 @@ class modifiers:
     pvNode: bool = False
     promotion: bool = False
     threatening: bool = False
+    indexMove: int = 0
 
 
 def randomModifier() -> modifiers:
     attr = {}
+    template = modifiers()
     for x in modifiers.__dataclass_fields__:
-        attr[x] = random.randint(0, 1) == 0
+        # isBool = type(template.__dict__[x]) is bool
+        if type(template.__dict__[x]) is bool:
+            attr[x] = random.randint(0, 1) == 0
+        elif type(template.__dict__[x]) is int:
+            attr[x] = random.randint(1, 32)
+
     return modifiers(**attr)
 
 
@@ -85,6 +94,9 @@ def computeDepth(values: heuristics, move: modifiers, depth: int) -> int:
         s += values.lmr_badCapture
     if move.threatening:
         s += values.lmr_threatening
+    s += values.lmr_oldMulti * int(
+        math.log(move.indexMove, 3) / (1 + math.log(depth + 1, 3))
+    )
     fDepth = lmrFDepth(depthToMilliDepth(depth))
     ret = depth - 1 - min((max(s, 0) * fDepth) >> 20, depth - 1)
     return ret
@@ -95,6 +107,13 @@ def extrapolate(values: heuristics, move: modifiers) -> list[int]:
     for d in range(MAX_PLY):
         ret[d] = computeDepth(values, move, d)
     return ret
+
+
+def reduceFraction(values: heuristics, move: modifiers) -> npt.NDArray[np.float64]:
+    defaultReduce = np.array([max(0, d - 1) for d in range(MAX_PLY)])
+    reduced = np.array(extrapolate(values, move))
+    delta = 100 * (defaultReduce - reduced) / (defaultReduce + 1)
+    return delta
 
 
 if __name__ == "__main__":

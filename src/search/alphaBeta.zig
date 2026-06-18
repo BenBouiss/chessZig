@@ -24,7 +24,7 @@ pub fn aspirationSearchEntrypoint(p_state: *boardl.boardState, p_info: *threadIn
     const alpha = val - typel.aspiration;
     const beta = val + typel.aspiration;
     ret = searchEntrypoint(p_state, p_info, depth, p_features, ss, alpha, beta);
-    if (ret <= alpha or ret >= beta) {
+    if ((ret <= alpha or ret >= beta) and p_info.alive) {
         ret = searchEntrypoint(p_state, p_info, depth, p_features, ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
     }
     return ret;
@@ -38,10 +38,12 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 
     const score = searchLoop(p_state, p_info, p_features, depth, 0, alpha, beta, ss, .PV);
 
-    const move = pv.moves[0];
-    p_info.currentBest.move = move;
-    p_info.currentBest.scoring = score;
-    p_info.currentBest.line.setLineFromPV(&pv);
+    if (p_info.alive) {
+        const move = pv.moves[0];
+        p_info.currentBest.move = move;
+        p_info.currentBest.scoring = score;
+        p_info.currentBest.line.setLineFromPV(&pv);
+    }
     return score;
 }
 pub const searchType = enum { NonPV, PV };
@@ -332,7 +334,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     if (p_features.useLMR and _depth >= 3 and !isCheck) {
         if (p_features.useLMRHeuristic) {
-            heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType, 0, gen.extra == .CAPTURES);
+            heuristicl.computeLMR_heuristic(p_state, &order, _depth, ply, &gen.moves, improving, t, hashMoveIsCapture, hashType, 0, gen.extra == .CAPTURES);
         } else {
             heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
         }
@@ -347,7 +349,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
             if (useLMR) {
                 if (p_features.useLMRHeuristic) {
-                    heuristicl.computeLMR_heuristic(p_state, &order, _depth, &gen.moves, improving, t, hashMoveIsCapture, hashType, tot, false);
+                    heuristicl.computeLMR_heuristic(p_state, &order, _depth, ply, &gen.moves, improving, t, hashMoveIsCapture, hashType, tot, false);
                 } else {
                     heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
                 }

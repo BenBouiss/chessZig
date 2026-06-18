@@ -636,6 +636,7 @@ const guiState = struct {
         const status = p_self.executeBestMove(cmdBuffer.str) catch |err| {
             std.debug.print("[DEBUG] matchOnBestMove: found err: {} with command: '{s}' len {d}\n", .{ err, cmdBuffer.str, cmdBuffer.str.len });
             if (err == err_eval.unknownMove_error) {
+                chessl.print_boardstate(&p_self.match.chessState);
                 std.debug.print("[DEBUG] expected one of the following moves: \n", .{});
                 p_self.match.availableMoves.print();
                 const moveArr = chessl.getEmptyMoveListFromStr(cmdBuffer.str);
