@@ -34,7 +34,6 @@ pub const searchFeatures = struct {
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
     fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
     useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
-    useLMRHeuristic: bool = configl.DEFAULT_LMR_HEURISTIC,
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     useRFP: bool = configl.DEFAULT_USE_RFP,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
@@ -48,7 +47,6 @@ pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
     ret.useHash = p_engine.options.useHashTable;
     ret.useNullPrune = p_engine.options.useNullPrune;
     ret.useLMR = p_engine.options.useLMR;
-    ret.useLMRHeuristic = p_engine.options.useLMRHeuristic;
     ret.useStaticSearch = p_engine.options.useStaticSearch;
     ret.fixedDepth = p_engine.options.fixedDepth;
     ret.useRazoring = p_engine.options.useRazoring;

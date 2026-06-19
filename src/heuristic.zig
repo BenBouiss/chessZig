@@ -1318,8 +1318,7 @@ pub const dFutilityMargin: scoreType = 300;
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
 pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
 
-pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove, comptime mva: bool, white: bool, continuations: [2]*historyl.pieceHistory) scoreType {
-    _ = continuations;
+pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove, comptime mva: bool, white: bool) scoreType {
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
@@ -1370,14 +1369,15 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, depth: u16, prevLineMove: IMove, continuations: [2]*historyl.pieceHistory, comptime mva: bool) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, depth: u16, prevLineMove: IMove, comptime mva: bool) moveOrdering {
+    _ = depth;
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     const w: bool = p_state.whiteToMove();
 
     for (0..p_moves.len) |i| {
         ret.indexes[i] = @intCast(i);
-        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, hashMove, prevLineMove, mva, w, continuations);
+        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, hashMove, prevLineMove, mva, w);
     }
     ret.len = p_moves.len;
 
@@ -1385,7 +1385,6 @@ pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const
 
     for (0..ret.len) |idx| {
         ret.scores[idx] = scores[ret.indexes[idx]];
-        ret.depths[idx] = depth;
     }
     return ret;
 }
@@ -1405,47 +1404,11 @@ pub inline fn plyModif(ply: u16) u16 {
 
 pub const moveReductionAmount = 4;
 // hashmove + line move + 2 killer moves (?)
-pub fn computeLateMoveReduc(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, fmoves: *const moveContainer, improving: bool) void {
-    // - if move ordering score >= 0.5 * max_history_heurist no reduction
-    // - if capture and score > 0 no reduction score > 0 is the result of the see thus good captures
-    // - if move goes in the vicinity of the other king, is a promotion or delivers check, no reduction
-    // else we reduce by int(depth / 2)  + 1 if not improving
-    const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
-    const safetyArea = chess.safetyArea(otherKingSq);
-    for (0..p_order.len) |i| {
-        if (p_order.scores[i] >= (configl.LMR_SCORE_THRESHOLD) or i < moveReductionAmount) {
-            p_order.depths[i] = depth - 1;
-            continue;
-        }
-        // here we decide what moves are considered to be important as to not sacrifice some depth
 
-        const move = fmoves.moves[p_order.indexes[i]];
-        const to = move.getTo();
-        const isCapture = move.isCapture();
-        // means see of move is good
-        if (isCapture and p_order.scores[i] > 0) {
-            p_order.depths[i] = depth - 1;
-            continue;
-        }
-        if ((to & safetyArea) != 0 or move.isPromotion() or moveGenl.moveDeliverCheck(p_state, move) or chess.isPawnPiece(p_state.getFromPiece(move))) {
-            p_order.depths[i] = depth - 1;
-            continue;
-        }
-
-        //var d: u16 = 1 + @as(u16, @intFromFloat((@as(f16, @floatFromInt(depth)) / 3.0)));
-        //if (!improving) d += 1;
-        const d: u16 = @as(u16, @intFromFloat(if (improving) (@as(f16, @floatFromInt(depth)) / 3.0) else (@as(f16, @floatFromInt(depth)) / 2.0)));
-        //p_order.depths[i] = depth - std.math.clamp(d, 0, depth) - 1;
-        p_order.depths[i] = depth - std.math.clamp(d, 0, depth - 1) - 1;
-    }
-    return;
-}
 pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, ply: u16, fmoves: *const moveContainer, improving: bool, t: alphaBetal.searchType, hashMoveIsCapture: bool, hashFlag: hashl.nodeType, prevExplored: usize, capturePhase: bool) void {
     var baseS: milliDepth = weightl.lmr_baseDeficit;
     // we dont do lmr when checked
-    //if (p_state.isChecked()) {
-    //    baseS += weightl.lmr_inCheck;
-    //}
+
     _ = capturePhase;
     _ = ply;
     //const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
@@ -1527,7 +1490,6 @@ pub const score = struct {
 
 pub const moveOrdering = struct {
     indexes: [chess.MAX_POSSIBLE_MOVE]u8 = undefined,
-    depths: [chess.MAX_POSSIBLE_MOVE]u16 = undefined,
     scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
     len: u8 = 0,
 };

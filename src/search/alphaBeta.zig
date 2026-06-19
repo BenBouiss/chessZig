@@ -17,6 +17,7 @@ const IMove = movel.IMove;
 const pvContainer = movel.pvContainer;
 const scoreType = typel.scoreType;
 const threadInfo = threadingl.threadInfo;
+const milliDepth = typel.milliDepth;
 
 // https://github.com/nescitus/cpw-engine/blob/master/search.cpp
 pub fn aspirationSearchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack, val: scoreType) scoreType {
@@ -63,7 +64,6 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
     var _alpha = alpha;
 
     var currS = ss.getFrame(ply);
-    const continuations: [2]*historyl.pieceHistory = .{ ss.getPrevFrame(ply, 1).continueationHeurist, ss.getPrevFrame(ply, 2).continueationHeurist };
     const static_eval = if (usePrevEval) currS.staticEval.s else heuristicl.c_evaluate(p_state, p_state.whiteToMove());
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
@@ -93,7 +93,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
 
     var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
     gen.fetchNext(p_state);
-    const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, .{}, depth, currS.prevLineMove, continuations, true);
+    const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, .{}, depth, currS.prevLineMove, true);
 
     var i: usize = 0;
     while (gen.pickNext(&order)) |move| : (i += 1) {
@@ -148,7 +148,6 @@ pub const searchFrame = struct {
     valid: bool = false,
     prevLineMove: IMove = .{},
     pv: ?*movel.pvContainer = null,
-    continueationHeurist: *historyl.pieceHistory = &historyl.continuationHeuristic[0][0],
 };
 
 // used to garanty getFrameOffset(0, 4) returns a default value
@@ -234,9 +233,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     const isCheck = p_state.isChecked();
-    const continuations: [2]*historyl.pieceHistory = .{ ss.getPrevFrame(ply, 1).continueationHeurist, ss.getPrevFrame(ply, 2).continueationHeurist };
 
     var improving: bool = false;
+
     if (isCheck) {
         //
     } else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) {
@@ -246,15 +245,28 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     } else {
         improving = true;
     }
+    var lmrDepth: milliDepth = weightl.lmr_baseDeficit;
+    if (t == .PV) {
+        lmrDepth += weightl.lmr_inPvMode;
+    }
+    if (!improving) {
+        lmrDepth += weightl.lmr_notImproving;
+    }
+    if (hashMoveIsCapture) {
+        lmrDepth += weightl.lmr_hashMoveCapture;
+    }
+    if (hashFlag == .LOWER) {
+        lmrDepth += weightl.lmr_expectedCutOff;
+    }
 
     // null move prunning here
     // R = 3
     const isEndGame = p_state.isEndGame();
     if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
-        const R: u16 = if (improving) 3 else 4;
+        const augment: u16 = if (_depth > 14) 2 else 0;
+        const R: u16 = augment + @as(u16, (if (improving) 3 else 4));
         if (_depth > R and !isCheck and !isEndGame) {
-            //currS.continueationHeurist = &historyl.continuationHeuristic[0][0];
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -beta, 1 - beta, ss, .NonPV);
             p_state.undoNullMove();
@@ -330,14 +342,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     if (p_features.useIIR and _depth >= 5 and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
         _depth -= 1;
     }
-    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, continuations, false);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
+    const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
     if (p_features.useLMR and _depth >= 3 and !isCheck) {
-        if (p_features.useLMRHeuristic) {
-            heuristicl.computeLMR_heuristic(p_state, &order, _depth, ply, &gen.moves, improving, t, hashMoveIsCapture, hashType, 0, gen.extra == .CAPTURES);
-        } else {
-            heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
-        }
         useLMR = true;
     }
 
@@ -345,29 +353,34 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     while (gen.pickNext(&order)) |move| : (i += 1) {
         if (!skipQuietMoves and i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
-            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, continuations, false);
-
-            if (useLMR) {
-                if (p_features.useLMRHeuristic) {
-                    heuristicl.computeLMR_heuristic(p_state, &order, _depth, ply, &gen.moves, improving, t, hashMoveIsCapture, hashType, tot, false);
-                } else {
-                    heuristicl.computeLateMoveReduc(p_state, &order, _depth, &gen.moves, improving);
-                }
-            }
+            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
             i_reset = true;
         } else if (i_reset) {
             i = 0;
             i_reset = false;
         }
+
+        var _lmrDepth = lmrDepth;
         const to = move.getTo();
         const from = move.getFrom();
-        //const fromPiece = p_state.getPiece(from);
-        //currS.continueationHeurist = &historyl.continuationHeuristic[@intFromEnum(fromPiece)][to];
+        const givesCheck = moveGenl.moveDeliverCheck(p_state, move);
+
+        const isPromo = move.isPromotion();
 
         if (canFutility and gen.extra != .CAPTURES) {
-            if (!moveGenl.moveDeliverCheck(p_state, move) and tot > heuristicl.moveReductionAmount and !move.isPromotion()) {
+            if (!givesCheck and tot > heuristicl.moveReductionAmount and !isPromo) {
                 continue;
             }
+        }
+
+        if (givesCheck) {
+            _lmrDepth += weightl.lmr_givesCheck;
+        }
+        if (isPromo) {
+            _lmrDepth += weightl.lmr_isPromotion;
+        }
+        if (order.scores[i] >= configl.LMR_SCORE_THRESHOLD) {
+            _lmrDepth += weightl.lmr_killerMove;
         }
 
         _ = p_state.makeMove(move);
@@ -376,8 +389,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if (i == 0) {
             score = -searchLoop(p_state, p_info, p_features, _depth - 1, ply + 1, -beta, -_alpha, ss, t);
         } else {
-            if (useLMR and (order.depths[i] < (_depth - 1))) {
-                score = -searchLoop(p_state, p_info, p_features, order.depths[i], ply + 1, -_alpha - 1, -_alpha, ss, .NonPV);
+            if (useLMR and i > heuristicl.moveReductionAmount) {
+                const d = _depth - 1 - @as(u16, (@intCast(@min((@max(_lmrDepth, 0) * fDepth) >> 20, _depth - 1))));
+                score = -searchLoop(p_state, p_info, p_features, d, ply + 1, -_alpha - 1, -_alpha, ss, .NonPV);
             } else {
                 score = _alpha + 1;
             }
@@ -413,10 +427,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         }
         if (_alpha >= beta) {
             // save here the killer moves
-            //if (!move.isCapture()) {
-            //    //historyl.updateContinuationHeurist(continuations[0], fromPiece, to, bonus);
-            //    //historyl.updateContinuationHeurist(continuations[1], fromPiece, to, bonus >> 1);
-            //    //historyl.counterMoves[from][to] = move;
             //}
             if (gen.extra == .QUIETMOVE) {
                 const bonus = heuristicl.computeHistoryBonus(_depth);
@@ -429,9 +439,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                         const fromP = _move.getFrom();
                         const toP = _move.getTo();
                         historyl.updateHistoryHeurist(white, fromP, toP, -bonus);
-                        //const fromPPiece = p_state.getPiece(fromP);
-                        //historyl.updateContinuationHeurist(continuations[0], fromPPiece, toP, -bonus);
-                        //historyl.updateContinuationHeurist(continuations[1], fromPPiece, toP, -(bonus >> 1));
                     }
                 }
             }
