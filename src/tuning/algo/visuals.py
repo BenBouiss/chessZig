@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing as npt
 import random
 import math
+import copy
 
 MAX_PLY = 255
 
@@ -29,12 +30,12 @@ class heuristics:
     lmr_notImproving: int = 300
     lmr_hashMoveCapture: int = 100
     lmr_baseDeficit: int = 1024
-    lmr_badCapture: int = 80
-    lmr_oldMulti: int = 50
+    lmr_badCapture: int = 25
+    lmr_oldMulti: int = 4
     lmr_givesCheck: int = -600
-    lmr_killerMove: int = -50
+    lmr_killerMove: int = -250
     lmr_inPvNode: int = -200
-    lmr_isPromotion: int = -50
+    lmr_isPromotion: int = -150
     lmr_threatening: int = -100
 
 
@@ -94,11 +95,35 @@ def computeDepth(values: heuristics, move: modifiers, depth: int) -> int:
         s += values.lmr_badCapture
     if move.threatening:
         s += values.lmr_threatening
-    s += values.lmr_oldMulti * int(
-        math.log(move.indexMove, 3) / (1 + math.log(depth + 1, 3))
-    )
+    s += values.lmr_oldMulti * move.indexMove
     fDepth = lmrFDepth(depthToMilliDepth(depth))
     ret = depth - 1 - min((max(s, 0) * fDepth) >> 20, depth - 1)
+    return ret
+
+
+def linearComputeDepth(values: heuristics, move: modifiers, depth: int) -> int:
+    s: int = values.lmr_baseDeficit
+    if move.pvNode:
+        s += values.lmr_inPvNode
+    if not move.improving:
+        s += values.lmr_notImproving
+    if move.hashMoveCapture:
+        s += values.lmr_hashMoveCapture
+    if move.expectCutOff:
+        s += values.lmr_expectedCutOff
+    if move.givesCheck:
+        s += values.lmr_givesCheck
+    if move.promotion:
+        s += values.lmr_isPromotion
+    if move.killerMove:
+        s += values.lmr_killerMove
+    if move.badCapture:
+        s += values.lmr_badCapture
+    if move.threatening:
+        s += values.lmr_threatening
+    s += values.lmr_oldMulti * move.indexMove
+    s += lmrFDepth(depthToMilliDepth(depth))
+    ret = depth - 1 - min((max(s, 0)) >> 10, depth - 1)
     return ret
 
 

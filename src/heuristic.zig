@@ -1336,9 +1336,9 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
         if (chess.isKingPiece(cPiece)) {
             return configl.ORDERING_LINE_VALUE + 2;
         }
-        //return (SEE(p_state, move) * configl.ORDERING_SEE_MULTI) + historyl.captureHistory[@intFromEnum(fpiece)][@intFromEnum(cPiece)][to];
         if (comptime mva) {
-            return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
+            return historyl.captureHistory[@intFromEnum(fpiece)][@intFromEnum(cPiece)][to] + mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
+            //return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
         } else {
             return SEE(p_state, move);
         }
@@ -1396,7 +1396,7 @@ pub inline fn milliDepthToDepth(md: milliDepth) i32 {
     return @intCast(md >> 10);
 }
 pub inline fn lmrFDepth(md: milliDepth) milliDepth {
-    return @divFloor(md, 2); // base reduction of 1/3
+    return @divFloor(md, 3); // base reduction of 1/3
 }
 pub inline fn plyModif(ply: u16) u16 {
     return @intCast(std.math.log(u16, 3, ply + 1));
@@ -1405,66 +1405,6 @@ pub inline fn plyModif(ply: u16) u16 {
 pub const moveReductionAmount = 4;
 // hashmove + line move + 2 killer moves (?)
 
-pub fn computeLMR_heuristic(p_state: *const boardl.boardState, p_order: *moveOrdering, depth: u16, ply: u16, fmoves: *const moveContainer, improving: bool, t: alphaBetal.searchType, hashMoveIsCapture: bool, hashFlag: hashl.nodeType, prevExplored: usize, capturePhase: bool) void {
-    var baseS: milliDepth = weightl.lmr_baseDeficit;
-    // we dont do lmr when checked
-
-    _ = capturePhase;
-    _ = ply;
-    //const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
-    //const safetyArea = chess.safetyArea(otherKingSq);
-
-    if (t == .PV) {
-        baseS += weightl.lmr_inPvMode;
-    }
-    if (!improving) {
-        baseS += weightl.lmr_notImproving;
-    }
-    if (hashMoveIsCapture) {
-        baseS += weightl.lmr_hashMoveCapture;
-    }
-    if (hashFlag == .LOWER) {
-        baseS += weightl.lmr_expectedCutOff;
-    }
-    const fDepth = lmrFDepth(depthToMilliDepth(depth));
-    //const _p = plyModif(ply);
-    _ = prevExplored;
-    for (0..p_order.len) |i| {
-        if (i < moveReductionAmount) {
-            p_order.depths[i] = depth - 1;
-            continue;
-        }
-        var s: milliDepth = baseS;
-        //const log: milliDepth = @intCast(std.math.log(usize, 10, i));
-        //const log: milliDepth = @intCast(std.math.log(usize, 3, i));
-        //s += weightl.lmr_oldMulti * log * _p;
-
-        const move = fmoves.moves[p_order.indexes[i]];
-
-        if (moveGenl.moveDeliverCheck(p_state, move)) {
-            s += weightl.lmr_givesCheck;
-        }
-
-        if (move.isPromotion()) {
-            s += weightl.lmr_isPromotion;
-        }
-        const moveScore = p_order.scores[i];
-        //const to = move.getTo();
-        //const isThreat = (to & safetyArea) != 0;
-        if (moveScore >= configl.LMR_SCORE_THRESHOLD) {
-            s += weightl.lmr_killerMove;
-        }
-        //else if (capturePhase and moveScore < 0 and !(isThreat)) {
-        //    s += weightl.lmr_badCapture;
-        //}
-        //if (isThreat) {
-        //    s += weightl.lmr_threatening;
-        //}
-
-        p_order.depths[i] = depth - 1 - @as(u16, (@intCast(@min((@max(s, 0) * fDepth) >> 20, depth - 1))));
-    }
-    return;
-}
 pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
