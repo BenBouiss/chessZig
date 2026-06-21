@@ -10,6 +10,7 @@ const string = stringl.string;
 pub const file_err = error{
     fileNotFound_error,
     mem_error,
+    fileAlreadyExists_error,
 };
 
 pub fn fileExists(path: []const u8) bool {

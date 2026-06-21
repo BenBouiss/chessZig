@@ -405,9 +405,16 @@ pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !boardl.boardState {
     try applyUciMoves(&ret, uciStr, debug);
     return ret;
 }
+// moveList is a string of fromTo[Promo] moves typically loaded from a log file
+pub fn getMoveContainerFromString(moveList: []const u8, debug: bool) !matchMoveContainer {
+    var ret = getBoardFromFen(DEFAULT_FEN) catch {
+        return debug_err.fenErr;
+    };
+    try applyUciMoves(&ret, moveList, debug);
+    return ret.moveHistory;
+}
 pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: bool) !void {
     const moves = getEmptyMoveListFromStr(uciStr);
-
     for (0..moves.len) |i| {
         var move = moves.moves[i];
         fillMoveFromState(p_board, &move);
@@ -420,6 +427,7 @@ pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: boo
         onMoveStaged(p_board, p_board.whiteToMove());
     }
 }
+
 pub fn getEmptyMoveListFromStr(strBuffer: []const u8) movel.matchMoveContainer {
     var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
     var ret: movel.matchMoveContainer = .{};

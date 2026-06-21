@@ -10,6 +10,7 @@ const nnuel = @import("nnue.zig");
 const heuristicl = @import("heuristic.zig");
 const intrinsics = @import("intrinsics/intrinsics.zig");
 const squarel = @import("square.zig");
+const logl = @import("log.zig");
 
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -149,6 +150,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
     //try intrinsics.main();
-    try heuristicl.main(GPA);
+    //try heuristicl.main(GPA);
     //try nnuel.main(GPA);
+    try logl.main(GPA);
 }

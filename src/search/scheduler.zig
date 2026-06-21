@@ -148,10 +148,12 @@ pub const scheduler = struct {
     timeM: timeManager = .{},
     features: searchFeatures = .{},
     _threadPool: threadingl.threadPool = .{},
+    engineSet: bool = false,
 
     pub fn setEngine(p_self: *scheduler, p_engine: *enginel.engine) void {
         p_self.p_engine = p_engine;
         p_self.features = getSearchFeatures(p_engine);
+        p_self.engineSet = true;
     }
 
     pub fn getSearchStatus(p_self: *scheduler) searchStatus {
@@ -233,7 +235,10 @@ pub const scheduler = struct {
     }
 
     pub inline fn isDebugMode(p_self: *const scheduler) bool {
-        return p_self.p_engine.status.debugMode;
+        if (p_self.engineSet) {
+            return p_self.p_engine.status.debugMode;
+        }
+        return false;
     }
 };
 
@@ -258,6 +263,16 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config
 
     return true;
 }
+pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: u16) threadingl.threadInfo {
+    var sched: scheduler = .{ .features = features };
+    sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
+    sched.features.fixedDepth = true;
+    sched.features.reportProgress = false;
+    sched.timeM.startSearchTick();
+    var info: threadingl.threadInfo = .{ .alive = true };
+    _startSearch(&sched, p_state, &info, features, maxDepth);
+    return info;
+}
 
 pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
     // everything gets "returned" via the p_info
@@ -276,7 +291,6 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
         p_info.currentBest.line.moves[0] = fmoves.moves[0];
         return;
     }
-
     var depth: u16 = 0;
     if (features.useAspiration) {
         depth = aspirationWindow(sched, p_state, p_info, features, maxDepth);
@@ -284,8 +298,10 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
         depth = iterativeDeepening(sched, p_state, p_info, features, maxDepth);
     }
 
-    if (sched.p_engine.options.trackMetrics) {
-        sched.p_engine.metric.addPlies(depth);
+    if (sched.engineSet) {
+        if (sched.p_engine.options.trackMetrics) {
+            sched.p_engine.metric.addPlies(depth);
+        }
     }
 }
 pub fn iterativeDeepening(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) u16 {

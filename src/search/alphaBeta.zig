@@ -37,7 +37,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     var pv: pvContainer = .{};
     ss.getFrame(0).pv = &pv;
 
-    const score = searchLoop(p_state, p_info, p_features, depth, 0, alpha, beta, ss, .PV);
+    const score = searchLoop(p_state, p_info, p_features, depth, 0, alpha, beta, ss, false, .PV);
 
     if (p_info.alive) {
         const move = pv.moves[0];
@@ -76,6 +76,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
         var pv: movel.pvContainer = .{};
         ss.getFrame(ply + 1).pv = &pv;
     }
+
     var best_value = static_eval;
     // stand pat https://www.chessprogramming.org/Quiescence_Search#StandPat
     if (best_value >= beta) {
@@ -178,10 +179,11 @@ pub const searchStack = struct {
 };
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, ss: *searchStack, comptime t: searchType) scoreType {
+pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, ss: *searchStack, wasExtended: bool, comptime t: searchType) scoreType {
     var _alpha = alpha;
     var _depth = depth;
-    //var extention: u16 = 0;
+    var extension: u16 = 0;
+    var extended: bool = wasExtended;
     const white: bool = p_state.whiteToMove();
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
@@ -201,24 +203,36 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             p_info.searchStat.n_hashRetrieve += 1;
             //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
             hashEval = _entry.eval();
+            hashType = _entry.val.search.nodeT();
             if (comptime t == .NonPV) {
-                hashType = _entry.val.search.nodeT();
                 if (hashType == .ALL) {
                     return hashEval;
                 } else if (hashType == .LOWER) {
                     if (hashEval >= beta) {
                         return hashEval;
                     }
+                    //if (!wasExtended) {
+                    //    extension += 1;
+                    //    extended = true;
+                    //}
                 } else if (hashType == .UPPER) {
                     if (hashEval >= _alpha) {
                         return hashEval;
                     }
                 }
+            } else {
+                //if (hashType == .ALL and !wasExtended) {
+                //    extension += 1;
+                //    extended = true;
+                //}
             }
             hashMove = _entry.val.search.bestMove;
         }
     }
-
+    const isCheck = p_state.isChecked();
+    if (isCheck) {
+        _depth += 1;
+    }
     if (_depth == 0 or !p_info.alive) {
         return handleTerminalState(p_state, p_info, p_features, alpha, beta, ply, t, ss);
     }
@@ -232,8 +246,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const static_eval = if (hashMove.isValid()) (hashEval) else (heuristicl.c_evaluate(p_state, white));
     const hashMoveIsCapture = hashMove.isCapture();
     currS.staticEval = .{ .s = static_eval, .t = .STD };
-
-    const isCheck = p_state.isChecked();
 
     var improving: bool = false;
 
@@ -269,7 +281,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         const R: u16 = augment + @as(u16, (if (improving) 3 else 4));
         if (_depth > R and !isCheck and !isEndGame) {
             p_state.makeNullMove();
-            const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -beta, 1 - beta, ss, .NonPV);
+            const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -beta, 1 - beta, ss, extended, .NonPV);
             p_state.undoNullMove();
             p_state.frame = f;
             if (score >= beta) {
@@ -383,7 +395,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                     continue;
                 }
             }
-        } else {}
+        } else {
+            if (!wasExtended and to == p_state.getLastMove().getTo() and historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] > 550 and comptime t == .PV) {
+                extension += 1;
+                extended = true;
+            }
+        }
 
         if (givesCheck) {
             _lmrDepth += weightl.lmr_givesCheck;
@@ -403,21 +420,21 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
         var score: scoreType = 0;
         if (i == 0) {
-            score = -searchLoop(p_state, p_info, p_features, _depth - 1, ply + 1, -beta, -_alpha, ss, t);
+            score = -searchLoop(p_state, p_info, p_features, _depth - 1 + extension, ply + 1, -beta, -_alpha, ss, extended, t);
         } else {
             if (useLMR and i > heuristicl.moveReductionAmount) {
                 const d = _depth - 1 - @as(u16, (@intCast(@min((@max(_lmrDepth + fDepth, 0)) >> 10, _depth - 1))));
-                score = -searchLoop(p_state, p_info, p_features, d, ply + 1, -_alpha - 1, -_alpha, ss, .NonPV);
+                score = -searchLoop(p_state, p_info, p_features, d + extension, ply + 1, -_alpha - 1, -_alpha, ss, extended, .NonPV);
             } else {
                 score = _alpha + 1;
             }
             if (score > _alpha) {
-                score = -searchLoop(p_state, p_info, p_features, _depth - 1, ply + 1, -_alpha - 1, -_alpha, ss, .NonPV);
+                score = -searchLoop(p_state, p_info, p_features, _depth - 1 + extension, ply + 1, -_alpha - 1, -_alpha, ss, extended, .NonPV);
             }
 
             //https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html
             if (score > _alpha and comptime t == .PV) {
-                score = -searchLoop(p_state, p_info, p_features, _depth - 1, ply + 1, -beta, -_alpha, ss, .PV);
+                score = -searchLoop(p_state, p_info, p_features, _depth - 1 + extension, ply + 1, -beta, -_alpha, ss, extended, .PV);
             }
         }
 
