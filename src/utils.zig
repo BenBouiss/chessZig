@@ -237,14 +237,14 @@ pub fn trimStr(str: []const u8) []const u8 {
     return str;
 }
 pub fn stripStr(str: []const u8) []const u8 {
-    // removes empty spaces at the start / end of the string
+    // removes empty spaces and tabs at the start / end of the string
     if (str.len == 0) {
         return str;
     }
     var firstIndex: usize = 0;
     var endIndex: usize = str.len;
     for (0..str.len) |i| {
-        if (str[i] == ' ') {
+        if (str[i] == ' ' or str[i] == '\t') {
             firstIndex = i;
         } else {
             break;
@@ -252,14 +252,14 @@ pub fn stripStr(str: []const u8) []const u8 {
     }
     for (0..str.len) |i| {
         const _i = str.len - 1 - i;
-        if (str[_i] == ' ') {
+        if (str[_i] == ' ' or str[i] == '\t') {
             endIndex = _i;
         } else {
             break;
         }
     }
     firstIndex += 1;
-    if (str[0] != ' ') {
+    if (str[0] != ' ' and str[0] != '\t') {
         firstIndex = 0;
     }
     return str[firstIndex..endIndex];

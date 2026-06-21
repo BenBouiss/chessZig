@@ -1,12 +1,12 @@
 [engine1]
-path="engines/bin/engine_19_06_26";
+path="engines/bin/engine_20_06_26_3";
 name="std";
 "setoption name reportProgress value false";
 "setoption name useAspiration value true";
 
 [engine2]
-path="engines/bin/engine_20_06_26";
-name="std + old = 100 + old * i + capture history";
+path="engines/bin/engine_21_06_26_1";
+name="std + capture extension > 550 + only PV + only once + check extension + 1";
 "setoption name reportProgress value false";
 "setoption name useAspiration value true";
 
