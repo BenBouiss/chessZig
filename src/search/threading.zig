@@ -9,10 +9,6 @@ const boardl = @import("../board.zig");
 
 const std = @import("std");
 
-const IMove = movel.IMove;
-const debug_err = chessl.debug_err;
-const moveDecisionExt = schedulerl.moveDecisionExt;
-
 pub const searchStatistic = struct {
     n_cutoffs: u64 = 0,
     n_hashRetrieve: u64 = 0,
@@ -21,60 +17,17 @@ pub const searchStatistic = struct {
 /// Benchmark function to test the node generation speed in
 /// "real world" settings mainly computing heuristics...
 pub const threadInfo = struct {
-    currentBest: moveDecisionExt = .{},
-    currentMove: moveDecisionExt = .{},
-    depth: u8 = 0,
+    currentBest: schedulerl.moveDecisionExt = .{},
+    currentMove: schedulerl.moveDecisionExt = .{},
+    depth: u16 = 0,
     working: bool = false,
     alive: bool = false,
     searchStat: searchStatistic = .{},
 };
-pub const threadInfo_container = struct {
-    len: u16,
-    items: []threadInfo,
-    n_active: u16 = 0,
-    pub fn init(alloc: std.mem.Allocator, size: u16) !threadInfo_container {
-        var ret: threadInfo_container = undefined;
-        ret.len = size;
-        ret.items = try alloc.alloc(threadInfo, size);
-        const emptyStruct: threadInfo = .{};
-        for (0..size) |i| {
-            ret.items[i] = emptyStruct;
-        }
-        return ret;
-    }
-    pub fn combine(self: *threadInfo_container) threadInfo {
-        var ret: threadInfo = .{};
-        self.n_active = 0;
-        for (0..self.len) |i| {
-            const info = self.items[i];
-            ret.searchStat.n_nodeExplored += info.searchStat.n_nodeExplored;
-            ret.searchStat.n_hashRetrieve += info.searchStat.n_hashRetrieve;
-            ret.searchStat.n_cutoffs += info.searchStat.n_cutoffs;
-            self.n_active += @intFromBool(info.working);
-        }
-        return ret;
-    }
-    pub fn getBestMove(self: *threadInfo_container) moveDecisionExt {
-        var ret: moveDecisionExt = .{};
-        for (0..self.len) |i| {
-            const info = self.items[i];
-            if (i == 0 or info.currentBest.scoring > ret.scoring) {
-                ret = info.currentBest;
-            }
-        }
-        return ret;
-    }
-    pub fn free(self: *threadInfo_container, alloc: std.mem.Allocator) void {
-        alloc.free(self.items);
-    }
-};
-
-// FIXME: this is getting very anoying to use with the .items(._tInfo)[_]... . the initial idea was to not use a std.ArrayList of this to test the more compact in memory use. use 'packed' to fix if needed
-// The original idea behind this was that a threadPackage was supposed to run alongside other threadPackages thus moves was necessary to properly distrube the work among the running packages. In current version of the scheduler this feature is not used and moves is defaulted to undefined as the search is currently single threaded.
 
 pub const threadPackageFrame = struct {
     chessState: boardl.boardState,
-    moves: std.ArrayList(IMove),
+    moves: std.ArrayList(movel.IMove),
     threadHandle: std.Thread,
     _tInfo: threadInfo,
 };
@@ -85,7 +38,7 @@ pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *const boardl.board
     var ret: threadPackageArray = .{};
     var threadedMoves = moveArray.cutEvenly(alloc, _nThread) catch {
         std.debug.print("[ERROR] getThreadPackArray: move container init\n", .{});
-        return debug_err.valueErr;
+        return chessl.debug_err.valueErr;
     };
     defer threadedMoves.deinit(alloc);
     for (0.._nThread) |i| {
@@ -113,7 +66,7 @@ pub fn zeroThreadPackArray(p_array: *threadPackageArray) void {
 }
 pub fn freeThreadPackArray(alloc: std.mem.Allocator, p_array: *threadPackageArray) void {
     for (0..p_array.len) |i| {
-        var cell: std.ArrayList(IMove) = p_array.items(.moves)[i];
+        var cell: std.ArrayList(movel.IMove) = p_array.items(.moves)[i];
         cell.deinit(alloc);
         var state: boardl.boardState = p_array.items(.chessState)[i];
         state.free(alloc);
@@ -145,7 +98,6 @@ pub const threadPool = struct {
     threadProps: [configl.MAX_THREAD]threadP = undefined,
     threadInfos: [configl.MAX_THREAD]threadInfo = undefined,
     packages: [configl.MAX_THREAD]searchPackage = undefined,
-
     nThread: usize = 0,
     running: bool = false,
     working: bool = false,
@@ -227,16 +179,8 @@ pub const threadPool = struct {
         }
         for (0..p_self.nThread) |i| {
             p_self.threadProps[i].searchPing = true;
+            p_self.threadProps[i].status = .WORKING;
         }
-
-        //var sw: timel.stopWatch = .{};
-        //sw.startTimeTick();
-        //while (!p_self.working) {
-        //    try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WR_TICKRATE_NS) }, .real);
-        //    if (sw.timeSinceStartSec > 4) {
-        //        return threadPoolerr.timedOut;
-        //    }
-        //}
         return;
     }
     pub fn getInfos(p_self: *const threadPool) []const threadInfo {
@@ -262,6 +206,8 @@ pub const threadPool = struct {
             ret.searchStat.n_cutoffs += info.searchStat.n_cutoffs;
             if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
                 ret.currentBest = info.currentBest;
+                ret.depth = info.depth;
+                ret.currentBest.depth = info.depth;
             }
         }
         return ret;
@@ -305,10 +251,8 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
         }
     }
     p_self.running = false;
-    const pack = p_self.packages[idx];
 
     if (p_self.debugMode) {
         std.debug.print("[EXIT] threadPool.WaitingRoom: Thread {d} exiting\n", .{idx});
     }
-    pack.scheduler.p_engine.respond("engineOp threadPool.waitingroom .EXITING");
 }

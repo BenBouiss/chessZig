@@ -42,49 +42,44 @@ pub const searchFeatures = struct {
     useIIR: bool = configl.DEFAULT_USE_IIR,
     useAspiration: bool = configl.DEFAULT_USE_ASPIRATION,
 };
-pub fn getSearchFeatures(p_engine: *enginel.engine) searchFeatures {
-    var ret: searchFeatures = .{};
-    ret.useHash = p_engine.options.useHashTable;
-    ret.useNullPrune = p_engine.options.useNullPrune;
-    ret.useLMR = p_engine.options.useLMR;
-    ret.useStaticSearch = p_engine.options.useStaticSearch;
-    ret.fixedDepth = p_engine.options.fixedDepth;
-    ret.useRazoring = p_engine.options.useRazoring;
-    ret.useRFP = p_engine.options.useRFP;
-    ret.useIIR = p_engine.options.useIIR;
-    ret.useAspiration = p_engine.options.useAspiration;
-    ret.reportProgress = p_engine.options.reportProgress;
-    ret.useFutility = p_engine.options.useFutility;
-    ret.useProbCut = p_engine.options.useProbCut;
-    return ret;
-}
 
 pub const uciSearcher = struct {
     schedul: scheduler = .{},
     searching: bool = false,
     interrupt: bool = false,
-    swSinceSearch: timel.stopWatch = .{},
 
     pub fn reset(p_self: *uciSearcher) void {
         p_self.interrupt = false;
         p_self.searching = false;
+        p_self.schedul.reset();
     }
     pub fn close(self: *uciSearcher) !void {
         self.interrupt = true;
         self.searching = false;
+        self.schedul.interrupt = true;
         self.schedul._threadPool.close();
+    }
+    pub fn getSearchStatus(p_self: *uciSearcher) searchStatus {
+        if (p_self.interrupt) {
+            return .INTERRUPTED;
+        }
+        return p_self.schedul._threadPool.getSearchStatus();
     }
 };
 
 pub fn waitingRoomOneShot(self: *enginel.engine) !void {
-    const stat = self.searcher.schedul.getSearchStatus();
+    const stat = self.searcher.getSearchStatus();
     if (stat == .INTERRUPTED or stat == .FINISHED) {
         const decision = self.searcher.schedul.extractBest();
-        _sendFinal(self, &decision);
-        self.searcher.schedul.handleInterrupt();
+        sendFinal(self, &decision);
+        if (stat == .INTERRUPTED) {
+            self.searcher.schedul.handleInterrupt();
+        }
         self.searcher.searching = false;
-        self.searcher.swSinceSearch.reset();
         self.searcher.schedul.timeM.reset();
+        if (self.options.trackMetrics) {
+            self.metric.addPlies(decision.depth);
+        }
     } else {
         // .CONTINUE
         // test for critical time use here
@@ -98,14 +93,15 @@ pub const moveDecisionExt = struct {
     move: IMove = .{},
     scoring: scoreType = 0,
     line: movel.line = .{},
-    pub fn invertScore(p_self: *moveDecisionExt) void {
+    depth: u16 = 0,
+    pub inline fn invertScore(p_self: *moveDecisionExt) void {
         p_self.scoring = -p_self.scoring;
     }
-    pub fn isBetter(p_self: *moveDecisionExt, other: *moveDecisionExt) bool {
+    pub inline fn isBetter(p_self: *moveDecisionExt, other: *moveDecisionExt) bool {
         return p_self.scoring > other.scoring;
     }
     pub fn copy(self: moveDecisionExt) moveDecisionExt {
-        return .{ .move = self.move, .line = self.line, .scoring = self.scoring };
+        return self;
     }
 };
 
@@ -122,11 +118,11 @@ pub const timeManager = struct {
     pub inline fn timeSinceStartSec(p_self: *const timeManager) i64 {
         return p_self.stopWatch.timeSinceStartSec();
     }
-    pub fn reset(p_self: *timeManager) void {
+    pub inline fn reset(p_self: *timeManager) void {
         p_self.remainingTimeMs = 0;
         p_self.stopWatch.reset();
     }
-    pub fn setRemainingTimeMs(p_self: *timeManager, timeMs: i64) void {
+    pub inline fn setRemainingTimeMs(p_self: *timeManager, timeMs: i64) void {
         p_self.remainingTimeMs = timeMs;
     }
 
@@ -143,113 +139,52 @@ pub const timeManager = struct {
 };
 
 pub const scheduler = struct {
-    // used for .respond() and alloc
-    p_engine: *enginel.engine = undefined,
     timeM: timeManager = .{},
-    features: searchFeatures = .{},
     _threadPool: threadingl.threadPool = .{},
-    engineSet: bool = false,
-
-    pub fn setEngine(p_self: *scheduler, p_engine: *enginel.engine) void {
-        p_self.p_engine = p_engine;
-        p_self.features = getSearchFeatures(p_engine);
-        p_self.engineSet = true;
-    }
-
-    pub fn getSearchStatus(p_self: *scheduler) searchStatus {
-        const searcher = p_self.p_engine.searcher;
-        if (searcher.interrupt) {
-            return .INTERRUPTED;
-        }
-        return p_self._threadPool.getSearchStatus();
+    interrupt: bool = false,
+    debugMode: bool = false,
+    pub inline fn reset(self: *scheduler) void {
+        self.interrupt = false;
+        self.timeM.reset();
     }
     pub fn handleInterrupt(p_self: *scheduler) void {
         p_self._threadPool.stop();
         p_self._threadPool.waitOnFinish();
     }
-    pub fn entryPointSearch(p_self: *scheduler, depth: u16) searchReport {
+    pub fn entryPointSearch(p_self: *scheduler, p_engine: *enginel.engine, state: boardl.boardState, depth: u16, features: searchFeatures) searchReport {
         // only used in the benchmark files
         if (!p_self._threadPool.running) {
             return .{};
         }
+        p_self.timeM.startSearchTick();
+        defer p_self.timeM.stopWatch.stop();
+        const pack: threadingl.searchPackage = .{ .depth = depth, .features = features, .scheduler = p_self, .chessState = state };
 
-        const pack: threadingl.searchPackage = .{ .depth = depth, .features = p_self.features, .scheduler = p_self, .chessState = p_self.p_engine.state };
+        p_self._threadPool.submit(&pack) catch {
+            @panic(":)");
+        };
+        p_self._threadPool.waitOnFinish();
 
-        const ret = p_self.incrementalLoop(&pack);
-
-        if (p_self.p_engine.trackMetrics()) {
-            p_self.p_engine.metric.addTimeToSearchingMs(ret.timeTakenMs);
-        }
-        return ret;
+        const decision = p_self.extractBest();
+        sendFinal(p_engine, &decision);
+        const res = p_self._threadPool.getCombinedInfo();
+        return .{ .move = decision.move, .timeTakenMs = p_self.timeM.timeSinceStartMs(), .searchStat = res.searchStat, .score = decision.scoring };
     }
-    pub fn extractBest(p_self: *scheduler) moveDecisionExt {
+    pub inline fn extractBest(p_self: *scheduler) moveDecisionExt {
         const res = p_self._threadPool.getCombinedInfo();
         return res.currentBest.copy();
     }
 
-    pub fn incrementalLoop(p_self: *scheduler, pack: *const threadingl.searchPackage) searchReport {
-        std.debug.assert(p_self._threadPool.running);
-
-        p_self.timeM.startSearchTick();
-        defer p_self.timeM.stopWatch.stop();
-
-        p_self._threadPool.submit(pack) catch {
-            p_self.p_engine.respond("engineOp threadPoolSubmit failed crashing");
-            _ = p_self.p_engine.executeQuitProcedure();
-            @panic(":)");
-        };
-
-        const tickrate = configl.WAIT_TICKRATE_NS;
-        var decision: moveDecisionExt = .{};
-        var countTimePrint = @divFloor(configl.INFO_TICKRATE_NS, tickrate);
-        countTimePrint = @max(1, countTimePrint);
-        var count: usize = 0;
-
-        var stat = p_self.getSearchStatus();
-
-        while (stat == .CONTINUE) {
-            count += 1;
-            if (count % countTimePrint == 0) {
-                if (p_self.features.reportProgress) {
-                    sendUpdate(p_self);
-                }
-                count = 0;
-            }
-            std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(tickrate) }, .real) catch {
-                break;
-            };
-            stat = p_self.getSearchStatus();
-            if (stat == .INTERRUPTED or stat == .FINISHED) {
-                decision = p_self.extractBest();
-                break;
-            }
-        }
-        if (p_self.isDebugMode()) {
-            std.debug.print("[DEBUG] incrementalLoop: last status: {}\n", .{stat});
-        }
-
-        sendFinal(p_self, &decision);
-        p_self.handleInterrupt();
-        const res = p_self._threadPool.getCombinedInfo();
-        return .{ .move = decision.move, .timeTakenMs = p_self.timeM.timeSinceStartMs(), .searchStat = res.searchStat, .score = decision.scoring };
-    }
-
     pub inline fn isDebugMode(p_self: *const scheduler) bool {
-        if (p_self.engineSet) {
-            return p_self.p_engine.status.debugMode;
-        }
-        return false;
+        return p_self.debugMode;
     }
 };
 
 pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config: enginel.goArgStruct) bool {
     _ = cmdBuffer;
-    const pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = getSearchFeatures(p_engine), .scheduler = &(p_engine.searcher.schedul) };
-    p_engine.searcher.schedul.timeM.startSearchTick();
-
+    const pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = p_engine.options.searchF, .scheduler = &(p_engine.searcher.schedul) };
     p_engine.searcher.searching = true;
-    p_engine.searcher.swSinceSearch.startTimeTick();
-    p_engine.searcher.schedul.setEngine(p_engine);
+    p_engine.searcher.schedul.timeM.startSearchTick();
     if (p_engine.state.whiteToMove()) {
         p_engine.searcher.schedul.timeM.setRemainingTimeMs(config.wtime);
     } else {
@@ -264,10 +199,8 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, cmdBuffer: []const u8, config
     return true;
 }
 pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: u16) threadingl.threadInfo {
-    var sched: scheduler = .{ .features = features };
+    var sched: scheduler = .{};
     sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
-    sched.features.fixedDepth = true;
-    sched.features.reportProgress = false;
     sched.timeM.startSearchTick();
     var info: threadingl.threadInfo = .{ .alive = true };
     _startSearch(&sched, p_state, &info, features, maxDepth);
@@ -297,12 +230,7 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
     } else {
         depth = iterativeDeepening(sched, p_state, p_info, features, maxDepth);
     }
-
-    if (sched.engineSet) {
-        if (sched.p_engine.options.trackMetrics) {
-            sched.p_engine.metric.addPlies(depth);
-        }
-    }
+    p_info.depth = depth;
 }
 pub fn iterativeDeepening(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) u16 {
     var depth: u16 = if (features.useStaticSearch) maxDepth else 0;
@@ -321,7 +249,7 @@ pub fn iterativeDeepening(sched: *const scheduler, p_state: *boardl.boardState, 
         ss.setPrevLine(&p_info.currentBest.line);
 
         if (features.reportProgress) {
-            sendPartial(sched, depth, p_info);
+            sendPartial(depth, p_info);
         }
     }
     return depth;
@@ -340,7 +268,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
         score = alphaBetal.aspirationSearchEntrypoint(p_state, p_info, depth, &features, &ss, score);
         ss.setPrevLine(&p_info.currentBest.line);
         if (features.reportProgress) {
-            sendPartial(sched, depth, p_info);
+            sendPartial(depth, p_info);
         }
     }
     return depth;
@@ -359,24 +287,15 @@ pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, sco
     return ((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime);
 }
 
-pub fn sendPartial(p_self: *const scheduler, depth: u16, p_info: *const threadingl.threadInfo) void {
+pub fn sendPartial(depth: u16, p_info: *const threadingl.threadInfo) void {
     const n_nodes: i64 = @intCast(p_info.searchStat.n_nodeExplored);
     const n_cut = p_info.searchStat.n_cutoffs;
-
-    const final_info = std.fmt.allocPrint(p_self.p_engine.alloc, "info depth {d} score cp {d} nodes {d} cutoff: {d} currmove {s} pv {f}", .{ depth, p_info.currentBest.scoring, n_nodes, n_cut, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
-    defer p_self.p_engine.alloc.free(final_info);
-    p_self.p_engine.respond(utilsl.trimStr(final_info));
+    var msgBuffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
+    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} score cp {d} nodes {d} cutoff: {d} currmove {s} pv {f}\n", .{ depth, p_info.currentBest.scoring, n_nodes, n_cut, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
+    respondNoEng(utilsl.trimStr(final_info)) catch {};
 }
-pub fn sendFinal(p_self: *scheduler, decision: *moveDecisionExt) void {
-    var buffer = std.mem.zeroes([32]u8);
 
-    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{decision.move.getStr()}) catch unreachable;
-    if (p_self.p_engine.status.debugMode) {
-        std.debug.print("[DEBUG] sendFinal: best move: '{s}' \n", .{decision.move.getStr()});
-    }
-    p_self.p_engine.respondNonFmt(msg);
-}
-pub fn _sendFinal(p_self: *enginel.engine, decision: *const moveDecisionExt) void {
+pub fn sendFinal(p_self: *enginel.engine, decision: *const moveDecisionExt) void {
     var buffer = std.mem.zeroes([32]u8);
     const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{decision.move.getStr()}) catch unreachable;
     p_self.respondNonFmt(msg);
@@ -386,11 +305,18 @@ pub fn sendUpdate(p_self: *scheduler) void {
     const res = p_self._threadPool.getInfos()[0];
     const n_nodes: i64 = @intCast(res.searchStat.n_nodeExplored);
     const timeDelta = p_self.timeM.timeSinceStartMs();
-
-    const msg = std.fmt.allocPrint(p_self.p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d} cutoff: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion, res.searchStat.n_cutoffs }) catch {
+    var msgBuffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
+    const msg = std.fmt.bufPrint(&msgBuffer, "info nps: {d} nodes {d} retrieved: {d} stored: {d} cutoff: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion, res.searchStat.n_cutoffs }) catch unreachable;
+    respondNoEng(utilsl.trimStr(msg)) catch {};
+}
+pub fn respondNoEng(msg: []const u8) !void {
+    var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
+    var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
+    const interface = &writer.interface;
+    interface.writeAll(msg) catch {
         return;
     };
-    defer p_self.p_engine.alloc.free(msg);
-    p_self.p_engine.respond(msg);
-    return;
+    interface.flush() catch {
+        return;
+    };
 }

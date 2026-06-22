@@ -44,6 +44,8 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         p_info.currentBest.move = move;
         p_info.currentBest.scoring = score;
         p_info.currentBest.line.setLineFromPV(&pv);
+        p_info.currentBest.depth = depth;
+        p_info.depth = depth;
     }
     return score;
 }

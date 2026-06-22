@@ -128,6 +128,22 @@ pub fn splitGenerator(comptime T: type) type {
         pub fn init(a: []const T, sep: T) splitGenerator(T) {
             return .{ .sep = sep, .slice = a, .idx = 0 };
         }
+        pub fn get(p_self: *self, idx: usize) ?[]const T {
+            var id = 0;
+            var ret = p_self.next();
+            while (id != idx) {
+                if (!ret) {
+                    return ret;
+                }
+                ret = p_self.next();
+                id += 1;
+            }
+            return ret;
+        }
+
+        pub fn reset(p_self: *self) void {
+            p_self.idx = 0;
+        }
         pub fn len(p_self: *self) usize {
             var ret: usize = 0;
             const prevIdx = p_self.idx;
@@ -166,44 +182,6 @@ pub fn splitGenerator(comptime T: type) type {
         }
     };
 }
-//pub fn linkedListNode(comptime T: type) type {
-//    return struct {
-//        val: T,
-//        next: ?*linkedListNode,
-//    };
-//}
-//
-//pub fn linkedList(comptime T: type) type {
-//    return struct {
-//        head: ?linkedListNode(T),
-//        len: usize = 0,
-//        const self = @This();
-//        pub fn init(alloc: std.mem.Allocator) !void {
-//            _ = alloc;
-//            return;
-//        }
-//        pub fn gotoLast(p_self: *self) ?linkedListNode(T) {
-//            var node = p_self.head;
-//            while (node.next) |new| {
-//                node = new;
-//            }
-//            return node;
-//        }
-//        pub fn push(p_self: *self, alloc: std.mem.Allocator, item: T) !void {
-//            var node = p_self.head;
-//            if (p_self.len != 0) {
-//                node = p_self.gotoLast();
-//            }
-//            var next = try alloc.create(linkedListNode(T));
-//            next.val = item;
-//            node.next = next;
-//            p_self.len += 1;
-//        }
-//        pub fn pop(p_self: *self, alloc: std.mem.Allocator) T {
-//            //
-//        }
-//    };
-//}
 
 pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !std.ArrayList([]const T) {
     var ret = try std.ArrayList([]const T).initCapacity(alloc, 4);

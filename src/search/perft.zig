@@ -9,7 +9,6 @@ const timel = @import("../time.zig");
 const boardl = @import("../board.zig");
 
 const threadingl = @import("threading.zig");
-const alphaBetal = @import("alphaBeta.zig");
 
 const IMove = movel.IMove;
 const engine = enginel.engine;
@@ -41,7 +40,7 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine, config: enginel.goArgS
     defer p_engine.status.benchmarking = false;
     p_engine.searcher.searching = true;
 
-    const feats: perftSearchFeatures = .{ .useBatched = config.useBatched, .useHash = p_engine.options.useHashTable };
+    const feats: perftSearchFeatures = .{ .useBatched = config.useBatched, .useHash = p_engine.options.searchF.useHash };
     if (p_engine.status.debugMode) {
         if (feats.useHash) {
             std.debug.print("[DEBUG] dispatchUciPerftThreads: use hash is enabled! \n", .{});
@@ -159,12 +158,6 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
             p_info.searchStat.n_nodeExplored += entry.moveA();
             return entry.moveA();
         }
-        //const entry = hashl.getEntryFromPerft(p_state.frame.key, depth);
-        //if (entry) |_entry| {
-        //    p_info.searchStat.n_hashRetrieve += @intCast(_entry.moveA());
-        //    p_info.searchStat.n_nodeExplored += _entry.moveA();
-        //    return _entry.moveA();
-        //}
     }
 
     var count: u64 = 0;
@@ -182,15 +175,12 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
     if (feats.useHash) {
         const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
         writer.write(entry, .perft);
-        //_ = hashl.hashTable.storeEntry(entry, p_state.frame.key.code);
     }
 
     return count;
 }
 
 // non uci depth
-//
-
 pub fn perftThreadStart(p_state: *boardl.boardState, alloc: std.mem.Allocator, depth: u8, nThread: u8, batched: bool) !threadInfo {
     var moves = moveGenl.generateLegalMoves(p_state);
     var _nThread: usize = @intCast(nThread);
@@ -228,6 +218,7 @@ pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: b
     }
 
     const fmoves: movel.moveContainer = moveGenl.generateLegalMoves(p_state);
+
     if (depth == 1 and batched) {
         return fmoves.len;
     }

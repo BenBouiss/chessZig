@@ -24,7 +24,6 @@ pub fn logging(comptime SIZE: usize) type {
         const self = @This();
         pub fn init(alloc: std.mem.Allocator, totalSize: usize, filename: string) !logging(SIZE) {
             if (!filel.fileExists(filename._slice())) {
-                //return file_err.fileAlreadyExists_error;
                 const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), filename._slice(), .{ .read = true });
                 defer file.close(mainl.getGlobalIo());
             }
@@ -123,10 +122,10 @@ pub fn main(alloc: std.mem.Allocator) !void {
     hashl._initOrReallocHashTable(alloc, 25, false);
     defer hashl.hashTable.free(alloc, false);
 
-    var savePath: string = try string.initFromSlice(alloc, "out/csv/res.book");
+    var savePath: string = try string.initFromSlice(alloc, "out/csv/res_1781964187051005583.book");
     defer savePath.free(alloc);
     var logFile = try logging(FEN_EVAL_ENTRY_SIZE).init(alloc, 100, savePath);
-    const name: []const u8 = "out/logs/evaluate/match_logs_1782044146239931455.txt";
+    const name: []const u8 = "out/logs/evaluate/match_logs_1781964187051005583.txt";
     try parseLogFile(alloc, name, &logFile);
     try logFile.free(alloc);
 }

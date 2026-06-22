@@ -25,7 +25,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_LIMITSTRENGHT, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, USEASPIRATION, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, USEASPIRATION, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
@@ -207,31 +207,15 @@ pub const engineMetrics = struct {
 };
 
 pub const engineOptions = struct {
+    searchF: schedulerl.searchFeatures = .{},
+
     nThreads: spinVarType = configl.DEFAULT_THREAD,
-    useHashTable: bool = configl.DEFAULT_USEHASHTABLE,
-    useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
-    useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
-    useRazoring: bool = configl.DEFAULT_USE_RAZORING,
-    useRFP: bool = configl.DEFAULT_USE_RFP,
-    useIIR: bool = configl.DEFAULT_USE_IIR,
-    useAspiration: bool = configl.DEFAULT_USE_ASPIRATION,
-    useFutility: bool = configl.DEFAULT_USE_FUTILITY,
-    useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
-
-    hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
-    limitElo: bool = configl.DEFAULT_LIMIT_ELO,
-    fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
-    useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
-
     engineElo: spinVarType = configl.DEFAULT_ELO,
     nOptions: u16 = 0,
     depthLevel: u16 = configl.DEFAULT_DEPTH,
     trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
-    reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
+    hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     setOptions: std.ArrayList(setOptionEntry) = .empty,
-
-    saveLogs: bool = false,
-    logsPath: stringl.string = undefined,
 };
 pub const logging = struct {
     _logs: std.ArrayList([]u8) = undefined,
@@ -278,6 +262,9 @@ pub const engine = struct {
     metric: engineMetrics = .{},
     logs: logging = .{},
 
+    saveLogs: bool = false,
+    logsPath: stringl.string = undefined,
+
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
         ret.alloc = alloc;
@@ -285,7 +272,7 @@ pub const engine = struct {
         ret.status = .{};
         ret.id = .{};
         ret.options = .{};
-        ret.options.logsPath = try .initFromSlice(alloc, "out/engine.log");
+        ret.logsPath = try .initFromSlice(alloc, "out/engine.log");
         ret.startSw = .{};
         ret.startSw.startTimeTick();
         ret.metric = .{};
@@ -299,6 +286,7 @@ pub const engine = struct {
 
         ret.uciMode = false;
         try ret.initOptions();
+        ret.initInternals();
         ret.state = try chess.getBoardFromFen(chess.DEFAULT_FEN);
 
         return ret;
@@ -344,7 +332,6 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "useAspiration", .optionType = .USEASPIRATION, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_ASPIRATION } } });
 
-        try p_self.addOption(.{ .name = "UCI_LimitStrength", .optionType = .UCI_LIMITSTRENGHT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LIMIT_ELO } } });
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
         try p_self.addOption(.{ .name = "fixedDepth", .optionType = .FIXED_DEPTH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_FIXED_DEPTH } } });
@@ -365,7 +352,7 @@ pub const engine = struct {
     }
     pub fn printMetrics(p_self: *engine) void {
         p_self.metric.printMetric();
-        if (p_self.options.useHashTable) {
+        if (p_self.options.searchF.useHash) {
             hashTablel.printTTStats();
         }
     }
@@ -394,13 +381,13 @@ pub const engine = struct {
                 std.debug.print("[DEBUG] readingThread.engine: got '{s}' ({d} bytes)\n", .{ msg, msg.len });
                 std.debug.print("\n", .{});
             }
-
-            const prevCur = p_self.input.currentIdx;
-            const prevNext = p_self.input.nextIdx;
             _ = p_self.input.putCmd(msg);
-            const nextCur = p_self.input.currentIdx;
-            const nextNext = p_self.input.nextIdx;
-            if (p_self.options.saveLogs) {
+
+            if (p_self.saveLogs) {
+                const prevCur = p_self.input.currentIdx;
+                const prevNext = p_self.input.nextIdx;
+                const nextCur = p_self.input.currentIdx;
+                const nextNext = p_self.input.nextIdx;
                 const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN: '{s}' len {d} before(cur:{d} next:{d}) after(curr{d} next:{d})\n", .{ msg, msg.len, prevCur, prevNext, nextCur, nextNext });
                 defer p_self.alloc.free(respmsg);
                 try p_self.appendLog(respmsg);
@@ -418,11 +405,13 @@ pub const engine = struct {
                     std.debug.print("[DEBUG] executeBuffer.engine: found command type {} status: {}\n", .{ cmdtype, status });
                 }
             }
-            const statMsg = std.fmt.allocPrint(p_self.alloc, "engineOp {} {} '{s}' {d}", .{ cmdtype, status, cmdBuffer, cmdBuffer.len }) catch {
-                return status;
-            };
-            defer p_self.alloc.free(statMsg);
-            p_self.respond(statMsg);
+            if (p_self.options.searchF.reportProgress) {
+                const statMsg = std.fmt.allocPrint(p_self.alloc, "engineOp {} {} '{s}' {d}", .{ cmdtype, status, cmdBuffer, cmdBuffer.len }) catch {
+                    return status;
+                };
+                defer p_self.alloc.free(statMsg);
+                p_self.respond(statMsg);
+            }
             return status;
         } else if (cmdtype == .UCI) {
             p_self.uciMode = true;
@@ -444,7 +433,7 @@ pub const engine = struct {
         }
         p_self.waitOnWorkingThreads();
         p_self.respond("its ovah");
-        if (p_self.options.saveLogs) {
+        if (p_self.saveLogs) {
             p_self.saveLog() catch {};
         }
         p_self.free();
@@ -460,6 +449,7 @@ pub const engine = struct {
             },
             .STOP => {
                 p_self.searcher.interrupt = true;
+                p_self.searcher.schedul.interrupt = true;
                 return true;
             },
             .ISREADY => {
@@ -469,18 +459,11 @@ pub const engine = struct {
             },
             .GO => {
                 if (p_self.searcher.searching) {
-                    if (p_self.status.debugMode) {}
                     return false;
-                }
-                if (!p_self.status.initializedInternals) {
-                    _ = p_self.initInternals();
                 }
                 return p_self.executeGoCmd(cmdBuffer);
             },
             .POSITION => {
-                if (!p_self.status.initializedInternals) {
-                    _ = p_self.initInternals();
-                }
                 return p_self.executePositionCmd(cmdBuffer);
             },
             .UCINEWGAME => {
@@ -509,9 +492,6 @@ pub const engine = struct {
             },
             .BENCHMARK => {
                 // by default single threaded will probably just use the engine options maybe
-                if (!p_self.status.initializedInternals) {
-                    _ = p_self.initInternals();
-                }
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINT => {
@@ -525,10 +505,10 @@ pub const engine = struct {
         if (self.status.debugMode) {
             std.debug.print("[DEBUG] respond.engine: sending msg: '{s}'\n", .{msg});
         }
-        const respmsg = std.fmt.allocPrint(self.alloc, "{s} \n", .{msg}) catch unreachable;
-        defer self.alloc.free(respmsg);
 
-        var buffer: [configl.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
+        var msgBuffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
+        const respmsg = std.fmt.bufPrint(&msgBuffer, "{s} \n", .{msg}) catch unreachable;
+        var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
         var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
         const interface = &writer.interface;
         interface.writeAll(respmsg) catch |err| {
@@ -543,7 +523,7 @@ pub const engine = struct {
             }
             return;
         };
-        if (self.options.saveLogs) {
+        if (self.saveLogs) {
             const _respmsg = std.fmt.allocPrint(self.alloc, "OUT: len {d} '{s}'\n", .{ respmsg.len, respmsg[0..@min(respmsg.len, respmsg.len - 1)] }) catch {
                 return;
             };
@@ -573,7 +553,7 @@ pub const engine = struct {
             }
             return;
         };
-        if (self.options.saveLogs) {
+        if (self.saveLogs) {
             const _respmsg = std.fmt.allocPrint(self.alloc, "OUT: len {d} '{s}'\n", .{ msg.len, msg[0..@min(msg.len, msg.len - 1)] }) catch {
                 return;
             };
@@ -594,14 +574,14 @@ pub const engine = struct {
             //hashTablel.zobristKeys.free(p_self.alloc);
         }
         p_self.logs.free(p_self.alloc);
-        p_self.options.logsPath.free(p_self.alloc);
+        p_self.logsPath.free(p_self.alloc);
     }
 
     pub fn saveLog(self: *engine) !void {
-        if (!self.options.saveLogs) {
+        if (!self.saveLogs) {
             return;
         }
-        const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), self.options.logsPath._slice(), .{ .read = true });
+        const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), self.logsPath._slice(), .{ .read = true });
         defer file.close(mainl.getGlobalIo());
         for (0..self.logs._logs.items.len) |i| {
             _ = try file.writeStreamingAll(mainl.getGlobalIo(), self.logs._logs.items[i]);
@@ -616,11 +596,6 @@ pub const engine = struct {
             .CHANNELREAD => {
                 logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => channel read {s}\n", .{ p_self.startSw.timeSinceStartMs(), log });
             },
-            //.SERVING => {
-            //    logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => channel read {s}\n", .{ p_self.startSw.timeSinceStartMs(), log });
-            //    //SERVING: {s} status {}
-
-            //},
         }
         try p_self.logs.append(p_self.alloc, logmsg);
     }
@@ -637,9 +612,11 @@ pub const engine = struct {
     pub fn executeDebugCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         if (utilsl.contains(cmdBuffer, "on", .ignoreCase)) {
             p_self.status.debugMode = true;
+            p_self.searcher.schedul.debugMode = true;
             return true;
         } else if (utilsl.contains(cmdBuffer, "off", .ignoreCase)) {
             p_self.status.debugMode = false;
+            p_self.searcher.schedul.debugMode = false;
             return true;
         }
         return false;
@@ -689,13 +666,13 @@ pub const engine = struct {
                 return true;
             },
             .USEHASHTABLE => {
-                p_self.options.useHashTable = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useHash = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .SAVELOGS => {
-                p_self.options.saveLogs = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.saveLogs = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
@@ -709,63 +686,63 @@ pub const engine = struct {
                     const newP = stringl.string.initFromSlice(p_self.alloc, path) catch {
                         return false;
                     };
-                    p_self.options.logsPath.free(p_self.alloc);
-                    p_self.options.logsPath = newP;
+                    p_self.logsPath.free(p_self.alloc);
+                    p_self.logsPath = newP;
                 } else {
                     const newP = filel.joinPath(p_self.alloc, path, "engine.log") catch {
                         return false;
                     };
-                    p_self.options.logsPath.free(p_self.alloc);
-                    p_self.options.logsPath = newP;
+                    p_self.logsPath.free(p_self.alloc);
+                    p_self.logsPath = newP;
                 }
                 if (p_self.status.debugMode) {
-                    std.debug.print("[DEBUG] executeSetoptionCmd: new logs path '{s}' \n", .{p_self.options.logsPath._slice()});
+                    std.debug.print("[DEBUG] executeSetoptionCmd: new logs path '{s}' \n", .{p_self.logsPath._slice()});
                 }
                 return true;
             },
 
             .USENULLPRUNE => {
-                p_self.options.useNullPrune = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useNullPrune = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
             },
             .USELATEMOVEREDUC => {
-                p_self.options.useLMR = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useLMR = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
             },
 
             .USEFUTILITY => {
-                p_self.options.useFutility = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useFutility = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
             },
             .USEPROBCUT => {
-                p_self.options.useProbCut = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useProbCut = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
             },
 
             .USERAZORING => {
-                p_self.options.useRazoring = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useRazoring = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USERFP => {
-                p_self.options.useRFP = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useRFP = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USEIIR => {
-                p_self.options.useIIR = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useIIR = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USEASPIRATION => {
-                p_self.options.useAspiration = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useAspiration = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
@@ -786,20 +763,15 @@ pub const engine = struct {
                 };
                 return p_self.updateElo(val);
             },
-            .UCI_LIMITSTRENGHT => {
-                p_self.options.limitElo = getCheckValFromSetOptionCmd(tokens, entry) catch {
-                    return false;
-                };
-                return true;
-            },
+
             .FIXED_DEPTH => {
-                p_self.options.fixedDepth = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.fixedDepth = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USESTATICSEARCH => {
-                p_self.options.useStaticSearch = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useStaticSearch = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
@@ -811,7 +783,7 @@ pub const engine = struct {
                 return true;
             },
             .REPORTPROG => {
-                p_self.options.reportProgress = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.reportProgress = getCheckValFromSetOptionCmd(tokens, entry) catch {
                     return false;
                 };
                 return true;
@@ -844,10 +816,10 @@ pub const engine = struct {
         return true;
     }
 
-    fn setName(p_self: *engine, name: []const u8) void {
+    inline fn setName(p_self: *engine, name: []const u8) void {
         p_self.id.name = name;
     }
-    fn setCode(p_self: *engine, code: []const u8) void {
+    inline fn setCode(p_self: *engine, code: []const u8) void {
         p_self.id.code = code;
     }
     fn executePositionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -879,14 +851,11 @@ pub const engine = struct {
         p_self.state = chess.getBoardFromFen(fen) catch unreachable;
     }
 
-    fn initInternals(p_self: *engine) bool {
+    fn initInternals(p_self: *engine) void {
         p_self.status.initializedInternals = true;
         magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
-
-        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
-
-        _ = p_self.updateElo(p_self.options.engineElo);
-        return true;
+        //hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
+        p_self.refreshInternals();
     }
     pub fn refreshInternals(p_self: *engine) void {
         _ = p_self.updateElo(p_self.options.engineElo);
@@ -923,7 +892,7 @@ pub const engine = struct {
     }
     pub fn executeIsReady(p_self: *engine) !bool {
         if (!p_self.status.initializedInternals) {
-            _ = p_self.initInternals();
+            p_self.initInternals();
         }
         p_self.respond("readyok");
         return true;
@@ -1113,7 +1082,7 @@ fn inputThreading(p_self: *engine) void {
             sw.startTimeTick();
             const cmd = p_self.input.readBuffer();
 
-            if (p_self.options.saveLogs and p_self.status.running) {
+            if (p_self.saveLogs and p_self.status.running) {
                 p_self.appendLogTyped(cmd.cmd[0..cmd.len], .CHANNELREAD) catch {};
             }
 
@@ -1122,7 +1091,7 @@ fn inputThreading(p_self: *engine) void {
             if (p_self.trackMetrics()) {
                 p_self.metric.addTimeToProcessingUs(sw.timeSinceStartUs());
             }
-            if (p_self.options.saveLogs and p_self.status.running) {
+            if (p_self.saveLogs and p_self.status.running) {
                 const respmsg = std.fmt.allocPrint(p_self.alloc, "SERVING: {s} status {}\n", .{ cmd.cmd[0..cmd.len], status }) catch {
                     continue;
                 };
