@@ -9,6 +9,8 @@ const lockl = @import("lock.zig");
 const movel = @import("move.zig");
 const schedulerl = @import("search/scheduler.zig");
 const hashl = @import("hashTable.zig");
+const bookl = @import("book.zig");
+const boardl = @import("board.zig");
 
 const string = stringl.string;
 const file_err = filel.file_err;
@@ -51,12 +53,22 @@ pub fn logging(comptime SIZE: usize) type {
         }
         pub fn commit(p_self: *self) !void {
             const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), p_self.filename._slice(), .{ .mode = .write_only });
+            const base = file.length(mainl.getGlobalIo()) catch unreachable;
             defer file.close(mainl.getGlobalIo());
+            var inserted: u64 = 0;
             for (0..p_self.insertions) |i| {
                 //TODO: fix the unreachables
-                _ = file.writePositionalAll(mainl.getGlobalIo(), utilsl.trimStr(p_self.scratchArr[i][0..SIZE]), file.length(mainl.getGlobalIo()) catch unreachable) catch unreachable;
+                const msg = utilsl.trimStr(p_self.scratchArr[i][0..SIZE]);
+                _ = file.writePositionalAll(mainl.getGlobalIo(), msg, base + inserted) catch unreachable;
+                inserted += @intCast(msg.len);
             }
             p_self.insertions = 0;
+        }
+        pub fn write(p_self: *self, msg: []const u8) !void {
+            const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), p_self.filename._slice(), .{ .mode = .write_only });
+            defer file.close(mainl.getGlobalIo());
+            const base = file.length(mainl.getGlobalIo()) catch unreachable;
+            _ = file.writePositionalAll(mainl.getGlobalIo(), utilsl.trimStr(msg), base) catch unreachable;
         }
         pub fn free(p_self: *self, alloc: std.mem.Allocator) !void {
             p_self.l.acquireLock();
@@ -72,6 +84,8 @@ pub fn logging(comptime SIZE: usize) type {
 //
 
 const FEN_EVAL_ENTRY_SIZE: usize = chessl.MAX_FEN_LENGTH + 1 + 24;
+const INPOSITION_SAVE_FREQ: u64 = 4;
+const FEN_SAVE_FREQ: u64 = 2;
 // [fen] [eval](5-6 size); + more just in case
 pub fn parseLogFile(alloc: std.mem.Allocator, path: []const u8, logFile: *logging(FEN_EVAL_ENTRY_SIZE)) !void {
     var tokens = try filel.getTokensFromFile(alloc, path, '\n');
@@ -100,6 +114,56 @@ pub fn parseLogFile(alloc: std.mem.Allocator, path: []const u8, logFile: *loggin
         }
     }
 }
+pub fn parseBook(alloc: std.mem.Allocator, logFile: *logging(FEN_EVAL_ENTRY_SIZE), path: *string) !void {
+    var db = try bookl.openingDatabase.init(alloc, path, 42);
+    defer db.free(alloc);
+    try parseAlgebraicStringList(alloc, logFile, &db.whiteEntries, 1.0, 4_000_000);
+    try parseAlgebraicStringList(alloc, logFile, &db.drawnEntries, 0.5, 6_000_000);
+    try parseAlgebraicStringList(alloc, logFile, &db.blackEntries, 0.0, 4_000_000);
+}
+pub fn parseAlgebraicStringList(alloc: std.mem.Allocator, logFile: *logging(FEN_EVAL_ENTRY_SIZE), sArr: *std.ArrayList(string), outcomes: f16, positionLimit: u64) !void {
+    const base = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    var parsed: u64 = 0;
+    var realParsed: u64 = 0;
+
+    for (0..sArr.items.len) |i| {
+        if (i % 100 == 0) {
+            std.debug.print("{d} / {d} outcome {d:.1}             \r", .{ i, sArr.items.len, outcomes });
+        }
+        if (i % FEN_SAVE_FREQ == 0) {
+            continue;
+        }
+        if (realParsed >= positionLimit) {
+            break;
+        }
+
+        var tmp = base.copy();
+        const moves = chessl._algebraicLineToIMoveMatch(alloc, sArr.items[i]._slice(), &tmp) catch {
+            continue;
+        };
+        tmp = base.copy();
+        for (0..moves.len) |j| {
+            const move = moves.moves[j];
+            tmp.makeMove(move);
+            parsed += 1;
+            if (j < 5 or (parsed % INPOSITION_SAVE_FREQ == 0)) {
+                continue;
+            }
+            realParsed += 1;
+            //const info = schedulerl.startSearch(&tmp, .{ .fixedDepth = true, .reportProgress = false }, 8);
+            //const score = info.currentBest.scoring;
+            //if (chessl.isMate(score)) {
+            //    break;
+            //}
+            var buffer: [FEN_EVAL_ENTRY_SIZE]u8 = @splat(0);
+            const fen = tmp.get_fen();
+            const written = try std.fmt.bufPrint(&buffer, "{s} [{d:.1}];", .{ utilsl.trimStr(&fen), outcomes });
+            try logFile.append(written);
+        }
+        try logFile.commit();
+    }
+}
+
 pub fn incrementalMoveContainer(logFile: *logging(FEN_EVAL_ENTRY_SIZE), moves: *const movel.matchMoveContainer) !void {
     var state = chessl.getBoardFromFen(chessl.DEFAULT_FEN) catch {
         return;
@@ -117,15 +181,27 @@ pub fn incrementalMoveContainer(logFile: *logging(FEN_EVAL_ENTRY_SIZE), moves: *
     }
     try logFile.commit();
 }
-pub fn main(alloc: std.mem.Allocator) !void {
-    mainl.initAll(alloc, false);
-    hashl._initOrReallocHashTable(alloc, 25, false);
-    defer hashl.hashTable.free(alloc, false);
-
+pub fn parsingLog(alloc: std.mem.Allocator) !void {
     var savePath: string = try string.initFromSlice(alloc, "out/csv/res_1781964187051005583.book");
     defer savePath.free(alloc);
     var logFile = try logging(FEN_EVAL_ENTRY_SIZE).init(alloc, 100, savePath);
     const name: []const u8 = "out/logs/evaluate/match_logs_1781964187051005583.txt";
     try parseLogFile(alloc, name, &logFile);
     try logFile.free(alloc);
+}
+pub fn parsingBook(alloc: std.mem.Allocator) !void {
+    var savePath: string = try string.initFromSlice(alloc, "out/csv/CCRL-4040.[2370489]_2.book");
+    var name: string = try string.initFromSlice(alloc, "../bin/CCRL-4040.[2370489].pgn");
+    defer name.free(alloc);
+    defer savePath.free(alloc);
+
+    var logFile = try logging(FEN_EVAL_ENTRY_SIZE).init(alloc, 1_000_000, savePath);
+    try parseBook(alloc, &logFile, &name);
+    try logFile.free(alloc);
+}
+pub fn main(alloc: std.mem.Allocator) !void {
+    mainl.initAll(alloc, false);
+    hashl._initOrReallocHashTable(alloc, 25, false);
+    defer hashl.hashTable.free(alloc, false);
+    try parsingBook(alloc);
 }

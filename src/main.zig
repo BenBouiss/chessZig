@@ -11,6 +11,7 @@ const heuristicl = @import("heuristic.zig");
 const intrinsics = @import("intrinsics/intrinsics.zig");
 const squarel = @import("square.zig");
 const logl = @import("log.zig");
+const bookl = @import("book.zig");
 
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -140,17 +141,18 @@ pub fn main(init: std.process.Init) anyerror!void {
     const GPA = init.gpa;
     initAll(GPA, false);
     defer hashl._freeHash(GPA, false);
+    //try bookl.main(GPA);
+    //try chessl.main(GPA);
+    //try logl.main(GPA);
 
     //try test_bench(GPA, 10);
     //try test_perft(GPA);
 
     //try test_speed();
-    //try chessl.main(GPA);
     //try test_bug2(GPA);
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
     //try intrinsics.main();
-    //try heuristicl.main(GPA);
+    try heuristicl.main(GPA);
     //try nnuel.main(GPA);
-    try logl.main(GPA);
 }

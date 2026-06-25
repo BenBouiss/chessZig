@@ -127,12 +127,9 @@ pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
 pub const N_POSITIONS: usize = 300000;
 //pub const N_POSITIONS: usize = 8;
 
-pub const TUNE_NORMAL: bool = true; // 392 weights
-pub const TUNE_SAFETY: bool = true; // > 5 weights
 pub const TUNE_COMPLEXITY: bool = false; // ? weights
-pub const TUNE_PSQT: bool = true; // > 5 weights
 
-pub const N_TERMS: usize = 397 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
+pub const N_TERMS: usize = TEXEL_KING_PSQT_IDX + 64; // see below
 
 // TEXEL indexes
 // counts

@@ -1213,7 +1213,7 @@ pub fn fillMoveFromState(p_state: *boardl.boardState, move: *IMove) void {
     move.setFlag(flag);
 }
 
-pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square) u64 {
+pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square, isCapture: bool) u64 {
     // only used in the algebraic "decoding"
     var ret: u64 = EMPTY;
 
@@ -1222,7 +1222,7 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         ret |= knightAttacks(destBB) & p_board.getPieceBB(.nBlackKnight);
         ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen));
         ret |= _AllAttackRookMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen));
-        if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) {
+        if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X) and isCapture) {
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.getPieceBB(.nBlackPawn)));
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nBlackKing));
@@ -1235,7 +1235,7 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
         ret |= _AllAttackRookMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
 
-        if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) {
+        if ((p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) and isCapture) {
             ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.getPieceBB(.nWhitePawn)));
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nWhiteKing));
@@ -1265,6 +1265,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
     // capture: x
     // induces a check: + at the end (useless)
     const white = p_state.whiteToMove();
+    const isCapture = moveStr.containsE("x", .ignoreCase);
     if (moveStr.containsE("O-O-O", .ignoreCase)) {
         if (white) {
             return movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.c1), @intFromEnum(e_moveFlags.QUEENCASTLE));
@@ -1291,6 +1292,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
     }
     const posSq = moveStr._slice()[startXPos .. startXPos + 2];
     const toSq = stringToLERF(posSq[0..2]);
+    const toBB = sqToBitboard(toSq);
     if (toSq == .invalid) {
         return debug_err.valueErr;
     }
@@ -1314,7 +1316,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
             potentialFromBB &= rankMaskFromRankN(rankNbr);
         }
     }
-    potentialFromBB &= getAllMoveMaskFromX(p_state, white, toSq);
+    potentialFromBB &= getAllMoveMaskFromX(p_state, white, toSq, isCapture);
 
     // here filter out the pinned direction only
     if (popcount(potentialFromBB) > 1) {
@@ -1325,7 +1327,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
             _bb &= _bb - 1;
             const _fromBB = xToBitboard(_sq);
             if ((_fromBB & p_state.frame.pinnedBB) != 0) {
-                if ((inBetween(kingSq, toSq) & _fromBB) == 0) {
+                if (((inBetween(kingSq, toSq) | toBB) & ((inBetween(kingSq, @enumFromInt(_sq)) | _fromBB)) == 0)) {
                     potentialFromBB ^= _fromBB;
                 }
             }
@@ -1385,30 +1387,28 @@ pub fn test_avx() !void {
     print_bitboard(state.frame.pinnedBB);
     print_boardstate(&state);
 }
-pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *stringl.string, tmpBoard: *boardl.boardState) !matchMoveContainer {
-    var gen = utils.splitGenerator(u8).init(line._slice(), ' ');
+pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tmpBoard: *boardl.boardState) !matchMoveContainer {
+    var gen = utils.splitGenerator(u8).init(line, ' ');
 
     var ret: matchMoveContainer = undefined;
     ret.len = 0;
     ret.lastIrreversibleMoveIndex = 0;
     while (gen.next()) |str| {
-        var offset: usize = 0;
+        const offset: usize = 0;
         if (utils.contains(str, "1/2-1/2", .ignoreCase) or utils.contains(str, "1-0", .ignoreCase) or utils.contains(str, "0-1", .ignoreCase)) {
             break;
         }
         if (utils.contains(str, ".", .ignoreCase)) {
-            if (str.len == 2) {
-                continue;
-            }
-            // needed because sometimes the #turnCount. is next to the move bug on my part
-            offset = 2;
+            continue;
+            //offset = 2;
         }
 
         var moveStr = try stringl.string.initFromSlice(alloc, str[offset..str.len]);
         defer moveStr.free(alloc);
-        const move = algebraicToIMove(tmpBoard, &moveStr) catch {
-            std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line._slice(), moveStr._slice() });
-            @panic("???");
+        //std.debug.print("[DEBUG] _algebraicLineToIMoveMatch: sending movestr '{s}'\n", .{moveStr._slice()});
+        const move = algebraicToIMove(tmpBoard, &moveStr) catch |err| {
+            std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line, moveStr._slice() });
+            return err;
         };
         if (move.isValid()) {
             tmpBoard.makeMove(move);
@@ -1418,12 +1418,12 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *stringl.strin
     return ret;
 }
 
-pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: *stringl.string) !matchMoveContainer {
+pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8) !matchMoveContainer {
     var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
     return _algebraicLineToIMoveMatch(alloc, line, &tmpBoard);
 }
 pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string) !boardl.boardState {
-    const moves = try algebraicLineToIMoveMatch(alloc, line);
+    const moves = try algebraicLineToIMoveMatch(alloc, line._slice());
     var ret = try getBoardFromFen(DEFAULT_FEN);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
@@ -1432,10 +1432,18 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string
     }
     return ret;
 }
+pub fn test_alge(alloc: std.mem.Allocator) !void {
+    //const line = "1. d4 Nf6 2. c4 g6 3. Nc3 d5 4. cxd5 Nxd5 5. e4 Nxc3 6. bxc3 Bg7 7. Nf3 c5 8. Rb1 O-O 9. Be2 cxd4 10. cxd4 Qa5+ 11. Qd2 Qxd2+ 12. Bxd2 b6 13. O-O Bb7 14. Bd3 Rd8 15. Be3 Bxd4 16. Nxd4 e5 17. Nb5 Rxd3 18. Nc7 Nc6 19. Nxa8 Bxa8 20. Rfd1 Rc3 21. Rbc1 Rxc1 22. Bxc1 Kg7 23. f3 Kf6 24. Ba3 Nd4 25. Bb2 Nc6 26. Rd5 Ke6 27. Ba3 f5 28. Rd6+ Kf7 29. exf5 gxf5 30. h4 a5 31. h5 b5 32. Rd7+ Kf6 33. Rxh7 b4 34. Rh8 bxa3 35. Rg8 Kf7 36. Rxa8 Nd4 37. Kf2 f4 38. Rxa5 Nc6 39. Rxa3 Nb4 40. Ra7+ Kg8 41. a4 Nd3+ 42. Kg1 1-0";
+    //const line = "1. Nf3 d5 2. d4 Nf6 3. c4 c6 4. Nc3 dxc4 5. a4 Bf5 6. e3 e6 7. Bxc4 Bb4 8. O-O Nbd7 9. Nh4 Bg6 10. Nxg6 hxg6 11. Bd2 Qa5 12. Qb3 O-O-O 13. h3 Nb6 14. Bb5 Rhe8 15. Rfc1 Re7 16. Be1 Rdd7 17. f4 Re8 18. Be2 Kb8 19. Bf3 Rc8 20. Kh1 Rh8 21. Bg3 Ka8 22. Kg1 Nh5 23. Be1 Nf6 24. Bf2 Nbd5 25. Qc2 Bd6 26. Qb3 Nxc3 27. Qxc3 Bb4 28. Qb3 Nd5 29. Be1 Bxe1 30. Rxe1 Qd8 31. Bxd5 exd5 32. Qd1 Rd6 33. b4 g5 34. b5 Qf6 35. Qg4 gxf4 36. Qxf4 Qe7 37. bxc6 Rxc6 38. e4 Re6 39. e5 f6 40. Kh2 g5 41. exf6 Qd8 42. Qxg5 Rxf6 43. Rf1 Qb8+ 44. Kg1 Rd6 45. Rf7 Rg8 46. Qe5 Rdg6 47. Qxb8+ Kxb8 48. g4 Ra6 49. Kg2 Rb6 50. a5 Rb4 51. Re1 Rxd4 52. Rb1 Rd2+ 53. Kg3 Rd3+ 54. Kf4 b6 55. axb6 axb6 56. Rxb6+ Kc8 57. Rh6 d4 58. g5 Rd1 59. Ra7 Kb8 60. Rd7 Kc8 61. Rd5 Rf8+ 62. Rf6 Re8 63. g6 Rg1 64. Rfd6 Rh8 65. Ke5 Rxh3 66. Kf6 Rhg3 67. Kg7 Re3 68. Rxd4 Kb7 69. Rf6 Kc7 70. Rc4+ Kb7 71. Kh7 Rh3+ 72. Kg8 Rhg3 73. Rf7+ Kb6 74. g7 Rh3 75. Rcf4 Kc5 76. R7f5+ Kd6 77. Rf1 Rg2 78. R5f2 Rxf2 79. Rxf2 Ke7 80. Re2+ Kd7 81. Re5 Kd6 82. Kf7 Rf3+ 83. Ke8 Kc6 84. g8";
+    const line = "1. e4 e5 2. Nf3 Nc6 3. Bb5 Nf6 4. O-O Nxe4 5. d4 Nd6 6. Bxc6 dxc6 7. dxe5 Nf5 8. Qxd8+ Kxd8 9. Nc3 Ke8 10. Rd1 Be6 11. h3 Bb4 12. Bd2 Rd8 13. a4 Rd7 14. a5 h5 15. Bg5 h4 16. a6 b6 17. Rxd7 Bxd7 18. Kh2 Bxc3 19. bxc3 c5 20. Re1 Rh5 21. Rd1 c4 22. Rd2 c6 23. Kg1 Ne7 24. Bxh4 Nd5 25. Bg5 Nxc3 26. e6 fxe6 27. h4 Ne4 28. Rd4 Nxg5 29. hxg5 c5 30. Rxc4 Bb5 31. Re4 Ke7 32. Ne5 Rxg5 33. g4 Rxe5 34. Rxe5 Bxa6 35. Re1 Bc4 36. Ra1 a5 37. Kg2 Bd5+ 38. Kg3 e5 39. f4 Kd6 40. f5 Be4 41. Rd1+ Kc7 42. c4 a4 43. Kh4 Bc2 44. Re1 Bd3 45. Kg5 Bxc4 46. Kg6 b5 47. Kxg7 a3 48. f6 a2 49. g5 b4 50. g6 b3 51. f7 b2 52. f8=Q a1=Q 53. Qxc5+ Kd7 54. Rxa1 bxa1=Q 55. Qxc4 e4+ 56. Kf7 Qe5 57. Qa4+ Kd8 58. Qa8+ Kc7 59. Qa7+ Kc6 60. Qa6+ Kd7 61. Qb7+ Kd8 62. Qb6+ Kd7 63. g7 Qf5+ 64. Kg8 Qd5+ 65. Kh7 Qf5+ 66. Qg6 Qh3+ 67. Qh6 Qf5+ 68. Kh8 Qe5 69. Qh3+ Kc6 70. Kh7 e3 71. g8=Q e2 72. Qhe6+ Kb5 73. Qxe5+ Ka4 74. Qeb8 Ka3 75. Qbb3# 1-0";
+    const moves = try algebraicLineToIMoveMatch(alloc, line);
+    moves.print();
+}
 
 pub fn main(alloc: std.mem.Allocator) !void {
-    _ = alloc;
+    //_ = alloc;
     //mainl.initAll(alloc, true);
-    try test_avx();
+    //try test_avx();
+    try test_alge(alloc);
     return;
 }

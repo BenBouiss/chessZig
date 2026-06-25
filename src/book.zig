@@ -113,10 +113,9 @@ pub const openingDatabase = struct {
         }
         var ret: std.ArrayList(string) = try .initCapacity(alloc, 4);
         var randInt = p_self.rngIntGenerator.random();
-        for (0..size) |i| {
+        for (0..size) |_| {
             const randIdx = randInt.intRangeAtMost(usize, 0, drawing.items.len);
             try ret.append(alloc, drawing.items[randIdx]);
-            _ = i;
         }
         return ret;
     }
@@ -199,6 +198,7 @@ pub fn test_read(path: *string) !void {
 pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
     var db = try openingDatabase.init(alloc, path, 42);
     defer db.free(alloc);
+    db.printInfo();
     var openings: std.ArrayList(string) = .empty;
     if (full) {
         openings.deinit(alloc);
@@ -212,7 +212,7 @@ pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
     for (0..openings.items.len) |i| {
         var tmp = base.copy();
         var algeFen = openings.items[i];
-        const moves = try chessl._algebraicLineToIMoveMatch(alloc, &algeFen, &tmp);
+        const moves = try chessl._algebraicLineToIMoveMatch(alloc, algeFen._slice(), &tmp);
         tmp = base.copy();
 
         for (0..moves.len) |j| {
@@ -242,10 +242,11 @@ pub fn test_draw(path: *string, alloc: std.mem.Allocator) !void {
 
 pub fn main(alloc: std.mem.Allocator) !void {
     //
-    const path = "opening/8moves_v3.pgn";
+    //const path = "opening/8moves_v3.pgn";
+    const path = "../bin/CCRL-4040.[2370489].pgn";
     var s = try stringl.string.initFromSlice(alloc, path);
     defer s.free(alloc);
-    hashl.zobristKeys.free(alloc);
+    //hashl.zobristKeys.free(alloc);
     if (!filel.fileExists(s._slice())) {
         std.debug.print("File {s} does not exists \n", .{s._slice()});
         return;
