@@ -24,6 +24,7 @@ const hashl = @import("hashTable.zig");
 const boardl = @import("board.zig");
 const stringl = @import("string.zig");
 const weightl = @import("weights.zig");
+const configl = @import("config.zig");
 
 const IMove = movel.IMove;
 const e_moveFlags = movel.e_moveFlags;
@@ -67,7 +68,7 @@ pub const centerBB: u64 = 0x183C3C180000;
 pub const MAX_FEN_LENGTH: u8 = 120;
 pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0";
 
-const arr_piece_str = [_]u8{ 'P', 'B', 'N', 'R', 'Q', 'K', 'p', 'b', 'n', 'r', 'q', 'k', '_', '1', '2' };
+const arr_piece_str = [_]u8{ 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k', '_', '1', '2' };
 
 pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
 
@@ -392,8 +393,10 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
     if (comptime useStaged) {
         onMoveStaged(&board, board.whiteToMove());
     }
+    if (comptime !configl.USE_NNUE) {
+        board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, board.getPhase());
+    }
     board.frame.key = hashl.fullComputeZobristKeys(&board);
-    board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, board.getPhase());
     return board;
 }
 
@@ -511,8 +514,14 @@ pub inline fn getColorPieceOffset(white: bool) u8 {
     }
     return N_PIECES_TYPES;
 }
-pub inline fn getColorFromPiece(piece: e_piece) bool {
+pub inline fn isPieceWhite(piece: e_piece) bool {
     return @intFromEnum(piece) < N_PIECES_TYPES;
+}
+pub inline fn e_colorFromPiece(piece: e_piece) typel.e_color {
+    if (@intFromEnum(piece) < N_PIECES_TYPES) {
+        return .WHITE;
+    }
+    return .BLACK;
 }
 pub const Board_stateContainer = struct {
     array: []boardl.boardState,
@@ -857,6 +866,9 @@ pub inline fn e_pieceTo_e_pieceType(piece: e_piece) e_pieceType {
     const _p = @intFromEnum(piece);
     return @enumFromInt(_p % N_PIECES_TYPES);
 }
+pub inline fn whiteBoolToInt(w: bool) u8 {
+    return @as(u8, (@intFromBool(!w)));
+}
 
 pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_pieceType {
     if (comptime white) {
@@ -864,6 +876,13 @@ pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_p
     } else {
         return @enumFromInt(@intFromEnum(piece) - N_PIECES_TYPES);
     }
+}
+pub inline fn boolTo_e_color(whiteToMove: bool) typel.e_color {
+    if (whiteToMove) return .WHITE;
+    return .BLACK;
+}
+pub inline fn invert_e_color(side: typel.e_color) typel.e_color {
+    return @enumFromInt((@intFromEnum(side) ^ 1));
 }
 
 pub inline fn xrayRookAttacks(occ: u64, blockers: u64, rookSq: e_square) u64 {
@@ -1029,7 +1048,7 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
 pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bool) u64 {
     var ret: u64 = EMPTY;
     var color_offset: u8 = 0;
-    const mask: u64 = p_board.b.c_occupiedBB[@intFromBool(white)];
+    const mask: u64 = p_board.b.c_occupiedBB[whiteBoolToInt(white)];
     if (white) {
         ret |= getPawnAttacksFromBB(p_board.getPieceBB(.nWhitePawn), true);
         ret |= getKingAttacks(p_board.b.wKingSq);
@@ -1096,10 +1115,10 @@ pub inline fn onMoveStaged(p_board: *boardl.boardState, white: bool) void {
 }
 
 pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
-    const rq = p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[@intFromBool(!white)];
-    const bq = p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[@intFromBool(!white)];
-    const n = p_board.getPieceBB_t(.KNIGHT) & p_board.b.c_occupiedBB[@intFromBool(!white)];
-    const p = p_board.getPieceBB_t(.PAWN) & p_board.b.c_occupiedBB[@intFromBool(!white)];
+    const rq = p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
+    const bq = p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
+    const n = p_board.getPieceBB_t(.KNIGHT) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
+    const p = p_board.getPieceBB_t(.PAWN) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
     const king_E = if (comptime white) p_board.b.wKingSq else p_board.b.bKingSq;
     //std.debug.print("getCheckers_cst: rq, bq, n, p, N, P, king_E {} \n", .{king_E});
     //print_bitboard(rq);
@@ -1227,7 +1246,7 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nBlackKing));
 
-        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[@intFromBool(false)];
+        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[whiteBoolToInt(false)];
         ret |= (destBB << 8) & (pBB);
         ret |= (((destBB << 8) & (~p_board.b.occupiedBB())) << 8) & ((pBB & blackPawnDoubleRank));
     } else {
@@ -1240,7 +1259,7 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
         }
         ret |= getKingAttacks(X) & (p_board.getPieceBB(.nWhiteKing));
 
-        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[@intFromBool(true)];
+        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[whiteBoolToInt(true)];
         ret |= (destBB >> 8) & pBB;
         ret |= (((destBB >> 8) & (~p_board.b.occupiedBB())) >> 8) & ((pBB & whitePawnDoubleRank));
     }
@@ -1297,7 +1316,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
         return debug_err.valueErr;
     }
 
-    var potentialFromBB = p_state.b.c_occupiedBB[@intFromBool(white)];
+    var potentialFromBB = p_state.b.c_occupiedBB[whiteBoolToInt(white)];
     var color_offset: u8 = 0;
     if (!white) {
         color_offset = 6;

@@ -6,20 +6,18 @@ const configl = @import("config.zig");
 const boardl = @import("board.zig");
 const hashTablel = @import("hashTable.zig");
 const magicl = @import("magic.zig");
-const moveTablel = @import("moveTables.zig");
 const heuristicl = @import("heuristic.zig");
 const schedulerl = @import("search/scheduler.zig");
-const threadingl = @import("search/threading.zig");
 const benchmarkl = @import("search/benchmark.zig");
 const perftl = @import("search/perft.zig");
 const historyl = @import("history.zig");
+const nnuel = @import("nnue.zig");
 
 const filel = @import("file.zig");
 const timel = @import("time.zig");
 const mainl = @import("main.zig");
 const lockl = @import("lock.zig");
 const stringl = @import("string.zig");
-const typel = @import("type.zig");
 
 const debug_err = chess.debug_err;
 
@@ -286,7 +284,7 @@ pub const engine = struct {
 
         ret.uciMode = false;
         try ret.initOptions();
-        ret.initInternals();
+        try ret.initInternals();
         ret.state = try chess.getBoardFromFen(chess.DEFAULT_FEN);
 
         return ret;
@@ -377,21 +375,7 @@ pub const engine = struct {
         while (p_self.status.running) {
             const inputBuffer = try getMsgStdin(reader);
             const msg = utilsl.trimStr(&inputBuffer);
-            if (p_self.status.debugMode) {
-                std.debug.print("[DEBUG] readingThread.engine: got '{s}' ({d} bytes)\n", .{ msg, msg.len });
-                std.debug.print("\n", .{});
-            }
             _ = p_self.input.putCmd(msg);
-
-            if (p_self.saveLogs) {
-                const prevCur = p_self.input.currentIdx;
-                const prevNext = p_self.input.nextIdx;
-                const nextCur = p_self.input.currentIdx;
-                const nextNext = p_self.input.nextIdx;
-                const respmsg = try std.fmt.allocPrint(p_self.alloc, "IN: '{s}' len {d} before(cur:{d} next:{d}) after(curr{d} next:{d})\n", .{ msg, msg.len, prevCur, prevNext, nextCur, nextNext });
-                defer p_self.alloc.free(respmsg);
-                try p_self.appendLog(respmsg);
-            }
         }
     }
     pub fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -851,11 +835,13 @@ pub const engine = struct {
         p_self.state = chess.getBoardFromFen(fen) catch unreachable;
     }
 
-    fn initInternals(p_self: *engine) void {
+    fn initInternals(p_self: *engine) !void {
         p_self.status.initializedInternals = true;
         magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
-        //hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
         p_self.refreshInternals();
+        if (configl.USE_NNUE and !nnuel.nnueNet.inited) {
+            nnuel.nnueNet = try .init(p_self.alloc, configl.NET_PATH);
+        }
     }
     pub fn refreshInternals(p_self: *engine) void {
         _ = p_self.updateElo(p_self.options.engineElo);
@@ -892,7 +878,7 @@ pub const engine = struct {
     }
     pub fn executeIsReady(p_self: *engine) !bool {
         if (!p_self.status.initializedInternals) {
-            p_self.initInternals();
+            try p_self.initInternals();
         }
         p_self.respond("readyok");
         return true;

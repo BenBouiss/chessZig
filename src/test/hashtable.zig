@@ -122,7 +122,7 @@ test "zobrist key consistency" {
     for (0..openings.items.len) |i| {
         var algeFen = openings.items[i];
 
-        _ = try chessl._algebraicLineToIMoveMatch(alloc, &algeFen, &tmp);
+        _ = try chessl._algebraicLineToIMoveMatch(alloc, algeFen._slice(), &tmp);
         try std.testing.expectEqual(hashl.fullComputeZobristKeys(&tmp).code, tmp.frame.key.code);
 
         const fen = tmp.get_fen();

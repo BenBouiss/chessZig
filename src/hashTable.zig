@@ -27,6 +27,11 @@ pub inline fn keyToUpperKey(key: u64) subKeyType {
     return @intCast(key >> KEY_SHIFT);
 }
 
+pub inline fn qualityHeuristic(entry: Hash_entry, nNodes: scoreType) scoreType {
+    const diff = @mod(MAX_AGE + nNodes - @as(scoreType, @intCast(entry.age(.search))), MAX_AGE);
+    return entry.depth(.search) - diff * 8;
+}
+
 pub const perftEntry = struct {
     // 16 bytes
     // 4 + 2 + 1 + 1
@@ -59,6 +64,7 @@ const WHITE_MASK = 0x4;
 
 const AGE_SHIFT = 11;
 const AGE_MASK = 0xF800;
+const MAX_AGE: u8 = 255;
 
 pub const searchEntry = struct {
     // 16 + 16 +
@@ -308,11 +314,11 @@ pub const Hash_bucket = struct {
         }
         return null;
     }
-    pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, depth: u8, p_state: *const boardl.boardState) getResult {
+    pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, depth: u8, p_state: *const boardl.boardState, nNodes: scoreType) getResult {
         const _hash = keyToUpperKey(hash);
-        var next: u8 = 0;
-        var nextA: u8 = 255;
+        var next: usize = 0;
         const white = p_state.whiteToMove();
+        var worstQuality: scoreType = 0;
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
@@ -329,13 +335,14 @@ pub const Hash_bucket = struct {
                 hashTable.stat.miss += 1;
                 return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = false };
             }
-            if (entry.age(.search) <= nextA) {
-                nextA = entry.age(.search);
-                next = @intCast(i);
+            const quality = qualityHeuristic(entry, nNodes);
+            if (i == 0 or quality < worstQuality) {
+                worstQuality = quality;
+                next = i;
             }
         }
         hashTable.stat.miss += 1;
-        return .{ .entry = null, .nextIdx = next, .nextPerfectHit = false };
+        return .{ .entry = null, .nextIdx = @intCast(next), .nextPerfectHit = false };
     }
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?Hash_entry {
         const _hash = keyToUpperKey(hash);
@@ -447,9 +454,9 @@ pub const Hash_table = struct {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
         return .{ .writer = .{ .bucket = p_bucket, .idx = 0 }, .entry = p_bucket.getEntryPerft(key, depth) };
     }
-    pub fn probeMatch(p_self: *Hash_table, key: u64, depth: u8, p_state: *const boardl.boardState) probeResult {
+    pub fn probeMatch(p_self: *Hash_table, key: u64, depth: u8, p_state: *const boardl.boardState, nNodes: scoreType) probeResult {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
-        const res = p_bucket.getEntryMatchNext(key, depth, p_state);
+        const res = p_bucket.getEntryMatchNext(key, depth, p_state, nNodes);
         return .{ .writer = .{ .bucket = p_bucket, .idx = res.nextIdx, .nextPerfectHit = res.nextPerfectHit }, .entry = res.entry };
     }
     pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64, comptime t: TT_t) bool {

@@ -206,6 +206,14 @@ pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDep
     _startSearch(&sched, p_state, &info, features, maxDepth);
     return info;
 }
+//pub fn startSearch_allMove(p_state: *boardl.boardState, features: searchFeatures, maxDepth: u16) heuristicl.moveOrdering {
+//    var sched: scheduler = .{};
+//    sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
+//    sched.timeM.startSearchTick();
+//    var info: threadingl.threadInfo = .{ .alive = true };
+//    _startSearch(&sched, p_state, &info, features, maxDepth);
+//    return info;
+//}
 
 pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
     // everything gets "returned" via the p_info

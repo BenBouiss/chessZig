@@ -144,6 +144,8 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try bookl.main(GPA);
     //try chessl.main(GPA);
     //try logl.main(GPA);
+    try nnuel.main(GPA);
+    //try heuristicl.main(GPA);
 
     //try test_bench(GPA, 10);
     //try test_perft(GPA);
@@ -153,6 +155,4 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try test_test(GPA);
     //try benchl.main(GLOBAL_ALLOC);
     //try intrinsics.main();
-    try heuristicl.main(GPA);
-    //try nnuel.main(GPA);
 }

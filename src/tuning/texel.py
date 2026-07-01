@@ -9,6 +9,7 @@ from collections.abc import Generator
 import torch
 import torch.nn as nn
 import torch.optim.lr_scheduler as lr_scheduler
+from torch.utils.data import Dataset, DataLoader
 
 import numpy.typing as npt
 
@@ -19,6 +20,38 @@ from texelW import texelWeights
 import constants as cst
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+
+class CSVDataset(Dataset):
+    def __init__(self, path: str, chunksize: int, nb_samples: int):
+        assert os.path.exists(path)
+        self.path: str = path
+        self.chunksize: int = chunksize
+        self.nb_samples: int = nb_samples
+        self.len: int = nb_samples // chunksize
+
+    def __len__(self) -> int:
+        return self.len
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        pos_offset = self.chunksize * idx
+        df = pd.read_csv(
+            self.path,
+            sep=",",
+            dtype=np.float16,
+            header=0,
+            nrows=self.chunksize,
+            skiprows=[1, max(1, pos_offset)],
+        )
+        n_weights = len(df.columns) - 2
+        rho_mg = (256 - df["Phase"]) / 256
+        rho_eg = (df["Phase"]) / 256
+        deltaC = df[[df.columns[i] for i in range(n_weights)]]
+        y: npt.NDArray[np.float16] = np.array(df["Outcome"].values).reshape(-1, 1)
+        x = np.hstack(
+            (deltaC, rho_mg.values.reshape(-1, 1), rho_eg.values.reshape(-1, 1))
+        )
+        return (torch.from_numpy(x).float(), torch.from_numpy(y).float())
 
 
 def loadTexelWeight(
@@ -74,6 +107,7 @@ def fetchNextXY(
 
 
 K = 10
+# K = 0.5
 
 
 def sigm(x):
@@ -84,15 +118,22 @@ class texelNet(nn.Module):
     def __init__(self, n_weights: int):
         super(texelNet, self).__init__()
 
-        self.sigm = sigm
         self.W_mg = nn.Linear(n_weights, 1, bias=False)
         self.W_eg = nn.Linear(n_weights, 1, bias=False)
+        # self.sigm = nn.Sigmoid()
+        self.sigm = sigm
 
+        # self.half()
         self.float()
         # self.int()
 
     def forward(self, x):
         # return self.sigm(self.W_mg(x[:, :-2]) * x[:, -2] + self.W_eg(x[:, :-2]) * x[:, -1])
+        """
+        format of x
+        Delta_0, Delta_1 , Delta_2, ..., Delta_n, rho_mg, rho_eg
+
+        """
         return self.sigm(
             (
                 torch.add(
@@ -131,58 +172,60 @@ def training_loop(
     if opt.initWeights is not None:
         setInitWeight(opt, model)
     freezeM = opt.makeFreezeMask()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.75)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.1, weight_decay=0.01)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
+    # scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
     if fileSize is None:
         size = getFileLineNumbers(opt.path)
     else:
         size = fileSize
-    if batch_size <= 0:
-        batch_size = opt.pos_per_epoch
-    print(f"[DEBUG] training_loop: {size} coeffs found")
-    packetSize = size // opt.pos_per_epoch
-    packetIdx = -1
+
+    print(f"[DEBUG] training_loop: {size} positions found")
+    dataset = CSVDataset(opt.path, chunksize=opt.chunksize, nb_samples=size)
+    trainingDataLoader = DataLoader(dataset, batch_size=1024, shuffle=True)
+    if opt.validationPath is not None:
+        validationDst = CSVDataset(
+            opt.validationPath, chunksize=1024, nb_samples=300_000
+        )
+        validationDataLoader = DataLoader(validationDst, batch_size=1, shuffle=True)
     for ep in range(opt.epoch):
-        if ep % freq_pos_change == 0:
-            # change the x and y
-            packetIdx = (packetIdx + 1) % packetSize
-            X, Y = fetchNextXY(
-                opt.path, n_pos=opt.pos_per_epoch, nskips=packetIdx * opt.pos_per_epoch
-            )
-            assert batch_size != 0
-            amount_batch: int = math.ceil(len(X) / batch_size)
-
-        for batch in range(amount_batch):
-            optimizer.zero_grad()  # Zero the gradients
-
-            outputs = model(X[batch * batch_size : (batch + 1) * batch_size])
-            loss = criterion(outputs, Y[batch * batch_size : (batch + 1) * batch_size])
+        (X, Y) = next(iter(trainingDataLoader))
+        for batch in range(len(X)):
+            optimizer.zero_grad()
+            outputs = model(X[batch])
+            loss = criterion(outputs, Y[batch])
             loss.backward()
-            # here zero out the grad
-            zeroOutGrad(freezeM, model)
             optimizer.step()  # Update the parameters
-            if opt.lrScheduler:
-                scheduler.step()
+
+        if opt.lrScheduler:
+            scheduler.step()
 
         if ep % 10 == 0:
-            print(f"Epoch: {ep}: loss = {loss.item()}")
+            if opt.validationPath is not None:
+                Xvalid, Yvalid = next(iter(validationDataLoader))
+                outputs = model(Xvalid[0])
+                validationLoss = criterion(outputs, Yvalid[0])
+            else:
+                validationLoss = None
+
+            print(
+                f"Epoch: {ep}: loss = {loss.item()} validation loss = {validationLoss} {scheduler.get_last_lr()}"
+            )
 
 
-def print2dTensor(w, centipawn: bool = False) -> None:
-    if centipawn:
-        for x in list(range(8))[::-1]:
-            for y in w[x * 8 : (x + 1) * 8]:
-                print(f"{int(y * 100)}, ", end="")
+def print2dTensor(w, centipawn: bool = False, convertToInt: bool = False) -> None:
+    norm = 100 if centipawn else 1
+    for x in list(range(8))[::-1]:
+        for y in w[x * 8 : (x + 1) * 8]:
+            if convertToInt:
+                print(f"{int(y * norm)}, ", end="")
+            else:
+                print(f"{(y * norm)}, ", end="")
 
-            print("")
-    else:
-        for x in list(range(8))[::-1]:
-            for y in w[x * 8 : (x + 1) * 8]:
-                print(f"{round(y, 4)}, ", end="")
-
-            print("")
+        print("")
 
 
 def texelWeightsToTensor(
@@ -224,6 +267,9 @@ class trainingOptions:
         tuneCfg: tuneConfig = tuneConfig(),
         initialWeights: list[texelWeights] | None = None,
         lrScheduler: bool = False,
+        initialSkip: int = 0,
+        chunksize: int = 32,
+        validationPath: str | None = None,
     ):
         assert os.path.exists(path), f"file {path} not found"
         assert path.endswith(".csv"), (
@@ -231,6 +277,7 @@ class trainingOptions:
         )
         self.path = path
         self.pos_per_epoch = pos_per_epoch
+        self.initialSkip = initialSkip
         self.epoch = epoch
         self.tuneCfg = tuneCfg
         self.initWeights = initialWeights
@@ -243,6 +290,9 @@ class trainingOptions:
             assert self.initWeights is not None, (
                 "Some freezing required(one tune param was set to False) but no initial weights given"
             )
+        assert chunksize > 0
+        self.chunksize = chunksize
+        self.validationPath = validationPath
 
     def setInitialWeight(self, w: list[texelWeights]) -> None:
         assert len(w) == 2, "Weights must contain both MG and EG section"
@@ -309,28 +359,33 @@ class trainingOptions:
             return w
 
 
-def printTensorWeight(w, normalize: bool = False) -> None:
+def printTensorWeight(w, normalize: bool = False, convertToInt: bool = False) -> None:
     norm = 100 if normalize else 1
     for idx in range(cst.PSQT_Pawn_idx):
-        print(f"{cst.strWeightNames[idx]} = {w[idx] * norm}")
+        if convertToInt:
+            print(f"{cst.strWeightNames[idx]} = {int(w[idx] * norm)}")
+        else:
+            print(f"{cst.strWeightNames[idx]} = {w[idx] * norm}")
 
     print("pawnArr: ")
-    print2dTensor(w[cst.PSQT_Pawn_idx : cst.PSQT_Bishop_idx], normalize)
+    print2dTensor(w[cst.PSQT_Pawn_idx : cst.PSQT_Bishop_idx], normalize, convertToInt)
 
     print("bishopArr: ")
-    print2dTensor(w[cst.PSQT_Bishop_idx : cst.PSQT_Knight_idx], normalize)
+    print2dTensor(w[cst.PSQT_Bishop_idx : cst.PSQT_Knight_idx], normalize, convertToInt)
 
     print("knightArr: ")
-    print2dTensor(w[cst.PSQT_Knight_idx : cst.PSQT_Rook_idx], normalize)
+    print2dTensor(w[cst.PSQT_Knight_idx : cst.PSQT_Rook_idx], normalize, convertToInt)
 
     print("rookArr: ")
-    print2dTensor(w[cst.PSQT_Rook_idx : cst.PSQT_Queen_idx], normalize)
+    print2dTensor(w[cst.PSQT_Rook_idx : cst.PSQT_Queen_idx], normalize, convertToInt)
 
     print("queenArr: ")
-    print2dTensor(w[cst.PSQT_Queen_idx : cst.PSQT_King_idx], normalize)
+    print2dTensor(w[cst.PSQT_Queen_idx : cst.PSQT_King_idx], normalize, convertToInt)
 
     print("kingArr: ")
-    print2dTensor(w[cst.PSQT_King_idx : cst.PSQT_King_idx + 64], normalize)
+    print2dTensor(
+        w[cst.PSQT_King_idx : cst.PSQT_King_idx + 64], normalize, convertToInt
+    )
 
 
 def saveModelWeightToFile(path: str, model: texelNet, convertToCP: bool = True) -> None:

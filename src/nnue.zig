@@ -9,25 +9,56 @@ const filel = @import("file.zig");
 const configl = @import("config.zig");
 const utilsl = @import("utils.zig");
 const mainl = @import("main.zig");
+const movel = @import("move.zig");
+const benchmarkl = @import("search/benchmark.zig");
+const ssel = @import("intrinsics/sse.zig");
+const mathl = @import("math.zig");
 
 const scoreType = typel.scoreType;
+const e_color = typel.e_color;
 
 pub const networkScale = 400;
-pub const qA = 255;
-pub const qB = 64;
-pub const HL_SIZE = 1024; // 1024 or 3072 per the site(?)
+pub const QA = 255;
+pub const QB = 64;
+pub const QAQB = 255 * 64;
+pub const HL_SIZE = 128; // 1024 or 3072 per the site(?)
 pub const INPUT_SIZE = 768; // 6 pieces x 2 colors x 64 sqs
+pub const FORWARD_LOOP = HL_SIZE / 16;
+pub const _FORWARD_LOOP = HL_SIZE / 32;
+
+const __m512i = ssel.__m512i;
+const __m256i = ssel.__m256i;
+const __m128i = ssel.__m128i;
+
+const VEC_ZERO: __m256i = ssel._mm_setzero_si256();
+const VEC_QA: __m256i = ssel._mm256_set1_epi16(QA);
+
+const _VEC_ZERO: __m512i = ssel._mm_setzero_si512();
+const _VEC_QA: __m512i = ssel._mm512_set1_epi16(QA);
 
 //https://www.chessprogramming.org/NNUE
 pub const network = struct {
-    accWeights: [INPUT_SIZE][HL_SIZE]i16 = std.mem.zeroes([INPUT_SIZE][HL_SIZE]i16),
-    accBiases: [HL_SIZE]i16 = std.mem.zeroes([HL_SIZE]i16),
+    accWeights: [INPUT_SIZE][HL_SIZE]i16 align(64) = std.mem.zeroes([INPUT_SIZE][HL_SIZE]i16),
+    accBiases: [HL_SIZE]i16 = @splat(0),
 
-    outputWeights: [2 * HL_SIZE]i16 = std.mem.zeroes([2 * HL_SIZE]i16),
+    outputWeights: [2 * HL_SIZE]i16 = @splat(0),
     outputBiase: i16 = 0,
+    pub fn init(alloc: std.mem.Allocator, path: []const u8) !network {
+        const content = try std.Io.Dir.readFileAlloc(.cwd(), mainl.getGlobalIo(), path, alloc, .unlimited);
+        const ret: *network = @ptrCast(@alignCast(content));
+        return ret.*;
+    }
+    //pub fn free(self: *network, alloc: std.mem.Allocator) !void {
+    //    const _ptr: []u8 = @ptrCast(@alignCast(self));
+    //}
 };
 pub const accumulator = struct {
-    values: [HL_SIZE]i16 = std.mem.zeroes([HL_SIZE]i16),
+    values: [HL_SIZE]i16 align(64) = std.mem.zeroes([HL_SIZE]i16),
+    pub inline fn init(arr: *const [HL_SIZE]i16) accumulator {
+        var ret: accumulator = undefined;
+        @memcpy(&ret.values, arr);
+        return ret;
+    }
     pub fn addNetwork(self: *accumulator, n: *network, index: usize) void {
         for (0..HL_SIZE) |i| {
             self.values[i] += n.accWeights[index][i];
@@ -42,27 +73,103 @@ pub const accumulator = struct {
 pub const accumulatorPair = struct {
     w: accumulator = .{},
     b: accumulator = .{},
+    pub fn print(self: *const accumulatorPair) void {
+        std.debug.print("w {any} \n b {any} \n", .{ self.w, self.b });
+    }
+};
+pub const accumulatorPairStack = struct {
+    items: [typel.MAX_PLY + configl.MAX_QUIESC_DEPTH]accumulatorPair = @splat(.{}),
+    len: usize = 0,
+    pub fn getCurrent(self: *const accumulatorPair) *accumulatorPair {
+        return self.items[self.len - 1];
+    }
+    pub fn append(self: *accumulator, item: accumulatorPair) void {
+        self.items[self.len] = item;
+        self.len += 1;
+    }
+    pub fn pop(self: *accumulator) void {
+        self.len -= 1;
+    }
 };
 
-pub inline fn networkIndex(piece: typel.e_pieceType, color: typel.e_color, sq: typel.e_square) usize {
+pub inline fn networkIndex(piece: typel.e_pieceType, color: e_color, sq: typel.e_square) usize {
     return @as(usize, @intFromEnum(color)) * 64 * 6 + @as(usize, @intFromEnum(piece)) * 64 + @as(usize, @intFromEnum(sq));
 }
-pub fn networkIndexPerspective(piece: typel.e_pieceType, color: typel.e_color, sq: typel.e_square, perspective: typel.e_color) usize {
-    var side: usize = @intFromEnum(color);
-    var _sq: usize = @intFromEnum(sq);
+pub fn networkIndexPerspective(piece: typel.e_pieceType, sq: typel.e_square, perspective: e_color, side: e_color) usize {
+    var _sq: u8 = @intFromEnum(sq);
+    var _side = side;
     if (perspective == .BLACK) {
-        side = 1 - side;
+        _side = @enumFromInt(1 - @intFromEnum(_side));
         _sq = chessl.flipSq(_sq);
     }
-    return side * 64 * 6 + @intFromEnum(piece) * 64 + _sq;
+    return networkIndex(piece, _side, @enumFromInt(_sq));
+}
+pub inline fn networkIndexPair(piece: typel.e_pieceType, sq: typel.e_square, side: e_color) [2]usize {
+    return [2]usize{ networkIndex(piece, side, sq), networkIndex(piece, @enumFromInt(1 - @intFromEnum(side)), @enumFromInt(chessl.flipSq(@intFromEnum(sq)))) };
+}
+pub fn quiet_Add_Sub(accPair: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color) void {
+    const sub = networkIndexPair(fromP, fromSq, side);
+    const add = networkIndexPair(toP, toSq, side);
+
+    const prevW = &nnueNet.net.accWeights[sub[@intFromEnum(e_color.WHITE)]];
+    const nextW = &nnueNet.net.accWeights[add[@intFromEnum(e_color.WHITE)]];
+    const prevB = &nnueNet.net.accWeights[sub[@intFromEnum(e_color.BLACK)]];
+    const nextB = &nnueNet.net.accWeights[add[@intFromEnum(e_color.BLACK)]];
+
+    for (0..HL_SIZE) |i| {
+        accPair.w.values[i] += (nextW[i] - prevW[i]);
+        accPair.b.values[i] += (nextB[i] - prevB[i]);
+    }
+}
+pub fn castling_Add_Add_Sub_Sub(accPair: *accumulatorPair, side: e_color, info: *const boardl.castleS) void {
+    const kSub = networkIndexPair(.KING, info.kingFrom, side);
+    const kAdd = networkIndexPair(.KING, info.kingTo, side);
+
+    const rSub = networkIndexPair(.ROOK, info.rookFrom, side);
+    const rAdd = networkIndexPair(.ROOK, info.rookTo, side);
+
+    const kPrevW = &nnueNet.net.accWeights[kSub[@intFromEnum(e_color.WHITE)]];
+    const kNextW = &nnueNet.net.accWeights[kAdd[@intFromEnum(e_color.WHITE)]];
+    const kPrevB = &nnueNet.net.accWeights[kSub[@intFromEnum(e_color.BLACK)]];
+    const kNextB = &nnueNet.net.accWeights[kAdd[@intFromEnum(e_color.BLACK)]];
+
+    const rPrevW = &nnueNet.net.accWeights[rSub[@intFromEnum(e_color.WHITE)]];
+    const rNextW = &nnueNet.net.accWeights[rAdd[@intFromEnum(e_color.WHITE)]];
+    const rPrevB = &nnueNet.net.accWeights[rSub[@intFromEnum(e_color.BLACK)]];
+    const rNextB = &nnueNet.net.accWeights[rAdd[@intFromEnum(e_color.BLACK)]];
+
+    for (0..HL_SIZE) |i| {
+        accPair.w.values[i] += (kNextW[i] + rNextW[i] - kPrevW[i] - rPrevW[i]);
+        accPair.b.values[i] += (kNextB[i] + rNextB[i] - kPrevB[i] - rPrevB[i]);
+    }
+}
+pub fn capture_Add_Sub_Sub(accPair: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color, cPiece: typel.e_pieceType, captureSq: typel.e_square) void {
+    const sub = networkIndexPair(fromP, fromSq, side);
+    const add = networkIndexPair(toP, toSq, side);
+
+    const victimSub = networkIndexPair(cPiece, captureSq, chessl.invert_e_color(side));
+
+    const prevW = &nnueNet.net.accWeights[sub[@intFromEnum(e_color.WHITE)]];
+    const nextW = &nnueNet.net.accWeights[add[@intFromEnum(e_color.WHITE)]];
+    const prevB = &nnueNet.net.accWeights[sub[@intFromEnum(e_color.BLACK)]];
+    const nextB = &nnueNet.net.accWeights[add[@intFromEnum(e_color.BLACK)]];
+
+    const victimW = &nnueNet.net.accWeights[victimSub[@intFromEnum(e_color.WHITE)]];
+    const victimB = &nnueNet.net.accWeights[victimSub[@intFromEnum(e_color.BLACK)]];
+
+    for (0..HL_SIZE) |i| {
+        accPair.w.values[i] += (nextW[i] - prevW[i] - victimW[i]);
+        accPair.b.values[i] += (nextB[i] - prevB[i] - victimB[i]);
+    }
 }
 
 // easier to vectorize compared to below
 //pub inline fn activationFunc(val: i16) i16 {
 //    return std.math.clamp(val, 0, qA);
 //}
+// SCReLU :
 pub inline fn activationFunc(val: i16) i32 {
-    return std.math.pow(i32, std.math.clamp(val, 0, qA), 2);
+    return std.math.pow(i32, std.math.clamp(val, 0, QA), 2);
 }
 pub fn forward(n: *const network, stm_acc: *const accumulator, nstm_acc: *const accumulator) i32 {
     var ret: i32 = 0;
@@ -71,177 +178,168 @@ pub fn forward(n: *const network, stm_acc: *const accumulator, nstm_acc: *const 
         ret += activationFunc(nstm_acc.values[i]) * @as(i32, @intCast(n.outputWeights[i + HL_SIZE]));
     }
     // only used with the activ that uses the pow(2) SCReLU
-    ret /= qA;
-    ret *= networkScale;
-    ret /= (qA * qB);
+    ret = @divFloor(ret, QA);
+    ret += n.outputBiase;
+    ret = @divFloor(ret * networkScale, QAQB);
     return ret;
 }
-pub const nnueEntry = struct {
-    //
-    //seval: i32 = 0,
-    // phase value describing how far the game progressed
-    // turn of the extracted fen
-    turn: bool = true,
-
-    eval: scoreType = 0,
-    // 0.0 black win, 0.5 draw, 1.0 white win
-    result: f32 = -1,
-    phase: scoreType = 0,
-
-    // either 0 or 1
-    input: [INPUT_SIZE]u8 = @splat(0),
-    valid: bool = true,
-    pub fn set_fen(p_self: *nnueEntry, alloc: std.mem.Allocator, fen: []const u8, result: f32) !void {
-        p_self.result = result;
-        var board = chessl.getBoardFromFen(fen) catch {
-            std.debug.print("[ERROR] set_fen: error while using the fen: '{s}'\n", .{fen});
-            @panic("");
-        };
-        defer board.free(alloc);
-        const phase: scoreType = @intCast(board.getPhase());
-
-        p_self.phase = @divFloor((256 * (24 - phase)), 24);
-
-        p_self.turn = board.whiteToMove();
-        p_self.valid = heuristicl.isBoardTexelValid(&board);
-        if (!p_self.valid) {
-            return heuristicl.texel_err.board_err;
-        }
-        p_self.input = nnueInputFromState(&board);
+pub fn _forward(n: *const network, stm_acc: *const accumulator, nstm_acc: *const accumulator) i32 {
+    var ret: i32 = 0;
+    for (0..HL_SIZE) |i| {
+        const us_clamped: i32 = @intCast(std.math.clamp(stm_acc.values[i], 0, QA));
+        const opp_clamped: i32 = @intCast(std.math.clamp(nstm_acc.values[i], 0, QA));
+        ret += (us_clamped * us_clamped) * @as(i32, @intCast(n.outputWeights[i]));
+        ret += (opp_clamped * opp_clamped) * @as(i32, @intCast(n.outputWeights[i + HL_SIZE]));
     }
-    pub fn print(p_self: *nnueEntry) void {
-        //
-        std.debug.print("Printing texelEntry: \n", .{});
-        std.debug.print("Res: {d}\n", .{p_self.result});
-        //std.debug.print("Res: {d}, seval: {d}\n", .{ p_self.result, p_self.seval });
-        std.debug.print("Coefficients array: ", .{});
-        p_self.tuples.print();
+    ret = @divFloor(ret, QA);
+    ret += n.outputBiase;
+    ret = @divFloor(ret * networkScale, QAQB);
+    return ret;
+}
+pub fn __forward(n: *const network, stm_acc: *const accumulator, nstm_acc: *const accumulator) i32 {
+    var sum: __m256i = ssel._mm_setzero_si256();
+    // 8 * 16 = 128 i16
+    // x * 16 = 1024
+    for (0..FORWARD_LOOP) |i| {
+        const us = ssel._mm256_load_si256(@ptrCast(@alignCast(@constCast(&stm_acc.values[i * 16]))));
+        const us_weights = ssel._mm256_load_si256(@ptrCast(@alignCast(@constCast(&n.outputWeights[i * 16]))));
+
+        const us_clamped: __m256i = ssel._mm256_min_epi16(ssel._mm256_max_epi16(us, VEC_ZERO), VEC_QA);
+        const us_results: __m256i = ssel._mm256_madd_epi16(ssel._mm256_mullo_epi16(us_weights, us_clamped), us_clamped);
+
+        const opp = ssel._mm256_load_si256(@ptrCast(@alignCast(@constCast(&nstm_acc.values[i * 16]))));
+        const opp_weights = ssel._mm256_load_si256(@ptrCast(@alignCast(@constCast(&n.outputWeights[i * 16 + HL_SIZE]))));
+
+        const opp_clamped: __m256i = ssel._mm256_min_epi16(ssel._mm256_max_epi16(opp, VEC_ZERO), VEC_QA);
+        const opp_results: __m256i = ssel._mm256_madd_epi16(ssel._mm256_mullo_epi16(opp_weights, opp_clamped), opp_clamped);
+        sum = ssel._mm256_add_epi32(sum, us_results);
+        sum = ssel._mm256_add_epi32(sum, opp_results);
     }
-};
-pub fn nnueInputFromState(p_state: *const boardl.boardState) [INPUT_SIZE]u8 {
-    var ret: [INPUT_SIZE]u8 = @splat(0);
-    for (0..chessl.N_SQUARES) |i| {
-        const p = p_state.getPiece(@intCast(i));
+    const _sum = ssel.__m256i_cast_8x32i(sum);
+    const s: scoreType = @divFloor(_sum[0] + _sum[1] + _sum[2] + _sum[3] + _sum[4] + _sum[5] + _sum[6] + _sum[7], QA) + n.outputBiase;
+    return @divFloor(s * networkScale, QAQB);
+}
+pub fn ___forward(n: *const network, stm_acc: *const accumulator, nstm_acc: *const accumulator) i32 {
+    var sum: __m512i = ssel._mm_setzero_si512();
+    // 8 * 16 = 128 i16
+    // x * 16 = 1024
+    for (0.._FORWARD_LOOP) |i| {
+        const us = ssel._mm512_load_si512(@ptrCast(@alignCast(@constCast(&stm_acc.values[i * 32]))));
+        const us_weights = ssel._mm512_load_si512(@ptrCast(@alignCast(@constCast(&n.outputWeights[i * 32]))));
+
+        const us_clamped: __m512i = ssel._mm512_min_epi16(ssel._mm512_max_epi16(us, _VEC_ZERO), _VEC_QA);
+        const us_results: __m512i = ssel._mm512_madd_epi16(ssel._mm512_mullo_epi16(us_weights, us_clamped), us_clamped);
+
+        const opp = ssel._mm512_load_si512(@ptrCast(@alignCast(@constCast(&nstm_acc.values[i * 32]))));
+        const opp_weights = ssel._mm512_load_si512(@ptrCast(@alignCast(@constCast(&n.outputWeights[i * 32 + HL_SIZE]))));
+
+        const opp_clamped: __m512i = ssel._mm512_min_epi16(ssel._mm512_max_epi16(opp, _VEC_ZERO), _VEC_QA);
+        const opp_results: __m512i = ssel._mm512_madd_epi16(ssel._mm512_mullo_epi16(opp_weights, opp_clamped), opp_clamped);
+        sum = ssel._mm512_add_epi32(sum, us_results);
+        sum = ssel._mm512_add_epi32(sum, opp_results);
+    }
+    const _sum = ssel.__m512i_cast_16x32i(sum);
+    const s: scoreType = @divFloor(_sum[0] + _sum[1] + _sum[2] + _sum[3] + _sum[4] + _sum[5] + _sum[6] + _sum[7] + _sum[8] + _sum[9] + _sum[10] + _sum[11] + _sum[12] + _sum[13] + _sum[14] + _sum[15], QA) + n.outputBiase;
+    return @divFloor(s * networkScale, QAQB);
+}
+
+pub fn computeAccPair(net: *const network, board: *const boardl.boardState) accumulatorPair {
+    var ret: accumulatorPair = .{ .w = .init(&net.accBiases), .b = .init(&net.accBiases) };
+    for (0..64) |sq| {
+        const p = board.getPiece(@intCast(sq));
         if (p == .nEmptySquare) {
             continue;
         }
-        const _p = chessl.e_pieceTo_e_pieceType(p);
-        const white: bool = chessl.getColorFromPiece(p);
-        const w: typel.e_color = if (white) .WHITE else .BLACK;
-        const index = networkIndex(_p, w, @enumFromInt(i));
-        ret[index] = 1;
+        const _sq: typel.e_square = @enumFromInt(sq);
+        const c: e_color = chessl.e_colorFromPiece(p);
+
+        const add = networkIndexPair(chessl.e_pieceTo_e_pieceType(p), _sq, c);
+        const addW = &net.accWeights[add[@intFromEnum(e_color.WHITE)]];
+        const addB = &net.accWeights[add[@intFromEnum(e_color.BLACK)]];
+
+        for (0..HL_SIZE) |i| {
+            ret.w.values[i] += addW[i];
+            ret.b.values[i] += addB[i];
+        }
     }
     return ret;
 }
-pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: stringl.string, nSkips: usize) ![]nnueEntry {
-    var tokens = try filel.getTokensFromFileAlloc(alloc, path._slice(), '\n', configl.N_POSITIONS, nSkips);
-    var entries: []nnueEntry = try alloc.alloc(nnueEntry, configl.N_POSITIONS);
-
-    for (0..tokens.items.len) |i| {
-        var s = tokens.items[i];
-        var tok = try s.split(alloc, ' ');
-        defer tok.deinit(alloc);
-        const outcome = try s.extractFromBounds("[", "]");
-        var foutcome: f32 = 0;
-        if (utilsl.contains(outcome, "0.5", .ignoreCase)) {
-            foutcome = 0.5;
-        } else if (utilsl.contains(outcome, "1.0", .ignoreCase)) {
-            foutcome = 1;
-        }
-        entries[i].set_fen(alloc, s._slice(), foutcome) catch {
-            continue;
-        };
-    }
-    defer stringl.freeArrayList_string(alloc, &tokens);
-    return entries;
+pub inline fn updateNnueOnMove(p_state: *boardl.boardState, move: movel.IMove) void {
+    // !whiteToMove since this is done after makeMove
+    _updateNnueOnMove(p_state, !p_state.whiteToMove(), move.isCapture(), move, move.isPromotion(), move.isCastle());
 }
-const csvHeader = struct {
-    n_weights: usize,
-    pub fn format(self: csvHeader, writer: *std.Io.Writer) !void {
-        for (0..self.n_weights) |i| {
-            try writer.print("Weight_{d},", .{i});
+
+pub fn _updateNnueOnMove(p_state: *boardl.boardState, white: bool, isCapture: bool, move: movel.IMove, isPromo: bool, isCastle: bool) void {
+    const to = move.getTo();
+    var fromPiece: typel.e_pieceType = chessl.e_pieceTo_e_pieceType(p_state.getPiece(to));
+    const _toPiece: typel.e_pieceType = fromPiece;
+    const from = move.getFrom();
+    const c = chessl.boolTo_e_color(white);
+    if (isPromo) {
+        fromPiece = .PAWN;
+    }
+    const accPair = &p_state.frame.nnueAccumul;
+    if (isCapture) {
+        // is capture
+        const victimSq: typel.e_square = if (move.isEnpassant()) chessl.enPassantVictimSq(from, to) else (@enumFromInt(to));
+        capture_Add_Sub_Sub(accPair, fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c, chessl.e_pieceTo_e_pieceType(p_state.frame.victim), victimSq);
+    } else {
+        if (isCastle) {
+            const info = boardl.castleS.init(white, move.isKingSideCastle());
+            castling_Add_Add_Sub_Sub(accPair, c, &info);
+        } else {
+            quiet_Add_Sub(accPair, fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c);
         }
-        try writer.print("Phase, Outcome", .{});
+    }
+}
+pub const _network = struct {
+    net: network = .{},
+    inited: bool = false,
+    pub fn init(alloc: std.mem.Allocator, path: []const u8) !_network {
+        var ret: _network = .{};
+        ret.net = try network.init(alloc, path);
+        ret.inited = true;
+        return ret;
     }
 };
-const csvBody = struct {
-    entry: *nnueEntry = undefined,
-    pub fn format(self: csvBody, writer: *std.Io.Writer) !void {
-        for (0..self.entry.input.len) |i| {
-            try writer.print("{d},", .{self.entry.input[i]});
-        }
+pub var nnueNet: _network = .{};
+//pub var global_nnueAcc: accumulatorPairStack = .{};
 
-        try writer.print("{d},{d}", .{ self.entry.phase, self.entry.result });
-    }
-};
-pub fn createEmptyFile(alloc: std.mem.Allocator, path: stringl.string) !void {
-    // format
-    // Coeff_1_w, Coeff_1_b, ...., Coeff_n_w, Coeff_n_b, phase, outcome)
-    // <--comma separated values--->
-    //const file = try std.fs.cwd().createFile(path._slice(), .{ .read = true });
-    const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{ .read = true });
-    defer file.close(mainl.getGlobalIo());
-
-    // save header
-    const headerTemplate: csvHeader = .{ .n_weights = INPUT_SIZE };
-
-    const header_str = try std.fmt.allocPrint(alloc, "{f}\n", .{headerTemplate});
-    defer alloc.free(header_str);
-    _ = file.writeStreamingAll(mainl.getGlobalIo(), header_str) catch unreachable;
+pub fn initNNUE(alloc: std.mem.Allocator, path: []const u8) !void {
+    nnueNet = try .init(alloc, path);
 }
-fn saveCoefficientToFile(alloc: std.mem.Allocator, entries: []nnueEntry, path: stringl.string) !void {
-    // <--comma separated values--->
-    //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .write_only });
-    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{ .mode = .write_only });
-    defer file.close(mainl.getGlobalIo());
-
-    const print_freq: usize = 10000;
-    for (0..entries.len) |i| {
-        if (i % print_freq == 0) {
-            std.debug.print("{d} / {d} \r", .{ i, entries.len });
-        }
-        if (!entries[i].valid) {
-            continue;
-        }
-        const body: csvBody = .{ .entry = &entries[i] };
-        const body_str = try std.fmt.allocPrint(alloc, "{f}\n", .{body});
-        defer alloc.free(body_str);
-        _ = file.writePositionalAll(mainl.getGlobalIo(), body_str[0..body_str.len], file.length(mainl.getGlobalIo()) catch unreachable) catch unreachable;
-    }
+pub inline fn evaluate(white: bool, pair: *const accumulatorPair) scoreType {
+    return if (white) ___forward(&nnueNet.net, &pair.w, &pair.b) else ___forward(&nnueNet.net, &pair.b, &pair.w);
 }
-pub fn test_save(alloc: std.mem.Allocator, dataPath: stringl.string, savePath: stringl.string) !void {
-    //
-    const allEntries = try filel.getFileLineSize(alloc, dataPath._slice());
-    var remainingEntries = allEntries;
-    std.debug.print("[DEBUG] test_save: number of lines found: {d}\n", .{allEntries});
+//pub const BAD_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w HAha - 0 1";
+pub const BAD_FEN = "1n3R2/r2N4/4kB1p/1P6/8/p4NPB/P1P2P1P/3R2K1 b - - 3 57";
+pub fn debugTest(net: *const network, fen: []const u8) void {
+    var state = chessl.getBoardFromFen(fen) catch {
+        return;
+    };
+    const acc = computeAccPair(net, &state);
+    const eval = if (state.whiteToMove()) forward(net, &acc.w, &acc.b) else (forward(net, &acc.b, &acc.w));
+    const _eval = if (state.whiteToMove()) _forward(net, &acc.w, &acc.b) else (_forward(net, &acc.b, &acc.w));
+    const __eval = if (state.whiteToMove()) __forward(net, &acc.w, &acc.b) else (__forward(net, &acc.b, &acc.w));
+    const ___eval = if (state.whiteToMove()) ___forward(net, &acc.w, &acc.b) else (___forward(net, &acc.b, &acc.w));
 
-    try createEmptyFile(alloc, savePath);
-    var skips: usize = 0;
-    while (remainingEntries != 0) {
-        std.debug.print("Remaining entries: {d} \n", .{remainingEntries});
-        remainingEntries = remainingEntries -| configl.N_POSITIONS;
-        const entries = try getEntriesFromFile(alloc, dataPath, skips);
+    const eW = __forward(net, &acc.w, &acc.b);
+    const eB = __forward(net, &acc.b, &acc.w);
 
-        printEntriesInfo(entries);
-        defer alloc.free(entries);
-        try saveCoefficientToFile(alloc, entries, savePath);
-        skips += configl.N_POSITIONS;
-    }
-}
-fn printEntriesInfo(entries: []const nnueEntry) void {
-    var buffer: [3]usize = .{ 0, 0, 0 };
-    var validBuffer: [2]usize = .{ 0, 0 };
-    for (0..entries.len) |i| {
-        buffer[@intFromFloat(entries[i].result * 2)] += 1;
-        validBuffer[@intFromBool(entries[i].valid)] += 1;
-    }
-    std.debug.print("[DEBUG] printEntriesInfo: Breakdown of entries found 0: {d}, 0.5: {d}, 1: {d}\n valid: {d} non valid: {d}\n\n", .{ buffer[0], buffer[1], buffer[2], validBuffer[1], validBuffer[0] });
+    std.debug.print("fen {s} eval {d} _eval {d} __eval {d} __evalW {d} __evalB {d} ___eval {d}\n", .{ fen, eval, _eval, __eval, eW, eB, ___eval });
 }
 pub fn main(alloc: std.mem.Allocator) !void {
-    //mainl.initAll(alloc, false);
-    var path: stringl.string = try stringl.string.initFromSlice(alloc, "opening/E12.33-1M-D12-Resolved.book");
-    var savePath: stringl.string = try stringl.string.initFromSlice(alloc, "out/logs/nnue_test.csv");
-    defer path.free(alloc);
-    defer savePath.free(alloc);
-    try test_save(alloc, path, savePath);
+    //const netPath = "out/bin/quantised.bin";
+    //const netPath = "out/bin/simple-130/quantised.bin";
+    const netPath = configl.NET_PATH;
+
+    const net: network = try .init(alloc, netPath);
+    for (0..benchmarkl.benchmarkEntries.len) |i| {
+        const fen = benchmarkl.benchmarkEntries[i];
+        debugTest(&net, fen);
+    }
+
+    debugTest(&net, BAD_FEN);
+
+    return;
 }

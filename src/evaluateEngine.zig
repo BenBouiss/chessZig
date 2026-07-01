@@ -15,6 +15,8 @@ const typel = @import("type.zig");
 const hashTablel = @import("hashTable.zig");
 const boardl = @import("board.zig");
 
+const nnuel = @import("nnue.zig");
+
 const stringl = @import("string.zig");
 const std = @import("std");
 
@@ -88,8 +90,8 @@ const matchResultContainer = struct {
     }
     pub fn addOutCome(p_self: *matchResultContainer, alloc: std.mem.Allocator, match: *matchStatus) !void {
         const p = match.chessState.whiteToMove();
-        const currEngine = match.playerInv[@intFromBool(p)].engineUsed;
-        const otherEngine = match.playerInv[@intFromBool(!p)].engineUsed;
+        const currEngine = match.playerInv[chessl.whiteBoolToInt(p)].engineUsed;
+        const otherEngine = match.playerInv[chessl.whiteBoolToInt(!p)].engineUsed;
         const oneEngine: bool = (currEngine == otherEngine);
 
         switch (match.status) {
@@ -97,31 +99,31 @@ const matchResultContainer = struct {
                 std.debug.print("[PANIC] bad status found: {}\n", .{match.status});
             },
             .CheckMate => {
-                p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
-                p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
+                p_self.items[otherEngine].res[chessl.whiteBoolToInt(!p)].win += 1;
+                p_self.items[currEngine].res[chessl.whiteBoolToInt(p)].lose += 1;
             },
 
             .Flagged => {
-                p_self.items[currEngine].res[@intFromBool(p)].flagged += 1;
+                p_self.items[currEngine].res[chessl.whiteBoolToInt(p)].flagged += 1;
                 if (match.chessState.isInsufficientMaterialSide(!p)) {
-                    p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
-                    p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
+                    p_self.items[currEngine].res[chessl.whiteBoolToInt(p)].draw += 1;
+                    p_self.items[otherEngine].res[chessl.whiteBoolToInt(!p)].draw += 1;
                 } else {
-                    p_self.items[otherEngine].res[@intFromBool(!p)].win += 1;
-                    p_self.items[currEngine].res[@intFromBool(p)].lose += 1;
+                    p_self.items[otherEngine].res[chessl.whiteBoolToInt(!p)].win += 1;
+                    p_self.items[currEngine].res[chessl.whiteBoolToInt(p)].lose += 1;
                 }
             },
             .StaleMate, .StaleMateRepetition, .Dnf => {
-                p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
-                p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
+                p_self.items[currEngine].res[chessl.whiteBoolToInt(p)].draw += 1;
+                p_self.items[otherEngine].res[chessl.whiteBoolToInt(!p)].draw += 1;
             },
             .StaleMateInsuficientMaterial => {
-                p_self.items[currEngine].res[@intFromBool(p)].draw += 1;
-                p_self.items[otherEngine].res[@intFromBool(!p)].draw += 1;
+                p_self.items[currEngine].res[chessl.whiteBoolToInt(p)].draw += 1;
+                p_self.items[otherEngine].res[chessl.whiteBoolToInt(!p)].draw += 1;
             },
         }
 
-        for (0..2 - @as(usize, @intCast(@intFromBool(oneEngine)))) |i| {
+        for (0..2 - @as(usize, @intCast(chessl.whiteBoolToInt(oneEngine)))) |i| {
             const currEng = match.playerInv[i].engineUsed;
             p_self.items[currEng].nMatch += 1;
             p_self.items[currEng].stdTimePerTurn = 0;
@@ -248,14 +250,14 @@ const matchStatus = struct {
         return guiStr;
     }
     pub fn timeTick(p_self: *matchStatus) bool {
-        if (p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())].time < p_self.turnSW.timeSinceStartMs()) {
+        if (p_self.playerInv[chessl.whiteBoolToInt(p_self.chessState.whiteToMove())].time < p_self.turnSW.timeSinceStartMs()) {
             return false;
         }
         return true;
     }
     pub fn turnComplete(p_self: *matchStatus) !void {
         // turnComplete now before makemove thus whitetomove()
-        var p = &p_self.playerInv[@intFromBool(p_self.chessState.whiteToMove())];
+        var p = &p_self.playerInv[chessl.whiteBoolToInt(p_self.chessState.whiteToMove())];
         p.timeTakenCum += p_self.turnSW.timeSinceStartMs();
         p.movesMade += 1;
         p.time -= p_self.turnSW.timeSinceStartMs();
@@ -756,10 +758,10 @@ const guiState = struct {
         try p_self.waitEngine();
     }
     pub inline fn setPlayerEngine(p_self: *guiState, white: bool, engineIndex: u8) void {
-        p_self.match.playerInv[@intFromBool(white)].engineUsed = engineIndex;
+        p_self.match.playerInv[chessl.whiteBoolToInt(white)].engineUsed = engineIndex;
     }
     pub inline fn getCurrentPlayer(self: *guiState) *player {
-        return &self.match.playerInv[@intFromBool(self.match.chessState.whiteToMove())];
+        return &self.match.playerInv[chessl.whiteBoolToInt(self.match.chessState.whiteToMove())];
     }
 
     pub inline fn getCurrentEngine(self: *guiState) *engine_info {
@@ -849,6 +851,10 @@ fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u
 
 fn mainGuiThread(p_self: *guiState) !void {
     mainl.initAll(p_self.alloc, p_self.status.debugMode);
+
+    if (configl.USE_NNUE and !nnuel.nnueNet.inited) {
+        nnuel.nnueNet = try .init(p_self.alloc, configl.NET_PATH);
+    }
     if (p_self.config.match.useOpeningBook) {
         // init the db or smth
         p_self.config.match.openingDb = try bookl.openingDatabase.init(p_self.alloc, &p_self.config.match.openingBookPath, configl.SEED);

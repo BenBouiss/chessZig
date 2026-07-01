@@ -1,4 +1,4 @@
-import sys
+import sys, os, struct
 
 
 notAFile = 0xFEFEFEFEFEFEFEFE
@@ -69,7 +69,31 @@ def convertOldHeuristToNew(
     print(f"{new}")
 
 
+layerNames = [b"l0w\n", b"l0b\n", b"l1w\n", b"l1b\n"]
+
+
+def readNNUEbin(path: str):
+    assert os.path.exists(path)
+    n = 0
+    buffers = []
+    with open(path, "rb") as f:
+        neg = False
+        while b := f.read(2):
+            # if b in layerNames:
+            #    continue
+            n += 1
+            # nbr = struct.unpack("i", b)[0]
+            nbr = int.from_bytes(b, byteorder="little")
+            if nbr < 0:
+                neg = True
+            print(f"{nbr}, ", end="")
+        print(f"\n numbers found {n} {neg}")
+
+    # print(buffers)
+
+
 if __name__ == "__main__":
     b = sys.argv[1]
     print(f"Found argument {b} with type {type(b)}")
-    print_bitboard(b)
+    # print_bitboard(b)
+    readNNUEbin(b)

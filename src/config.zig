@@ -90,6 +90,13 @@ pub const _DEFAULT_USE_IIR = "true";
 pub const DEFAULT_USE_ASPIRATION = true;
 pub const _DEFAULT_USE_ASPIRATION = "true";
 
+pub const USE_NNUE = true;
+//pub const NET_PATH = "out/bin/simple-130/quantised.bin";
+pub const NET_PATH = "out/bin/simple-320-colM/quantised.bin";
+//pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
+//pub const NET_PATH = "out/bin/simple_1024_retrained-120/quantised.bin";
+//pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";
+
 pub const MIN_ELO: u32 = 1000;
 pub const MAX_ELO: u32 = 3000;
 

@@ -8,6 +8,8 @@ const heuristicl = @import("heuristic.zig");
 const hashl = @import("hashTable.zig");
 const typel = @import("type.zig");
 const squarel = @import("square.zig");
+const configl = @import("config.zig");
+const nnuel = @import("nnue.zig");
 
 const e_piece = typel.e_piece;
 const e_pieceType = typel.e_pieceType;
@@ -38,12 +40,7 @@ pub const board = struct {
         @memset(&ret.pieceArray, e_piece.nEmptySquare);
         return ret;
     }
-    pub inline fn toMove(self: board) e_color {
-        return @enumFromInt(@intFromBool(self.info.stat.whiteToMove()));
-    }
-    pub inline fn iToMove(self: board) u1 {
-        return @intFromEnum(self.toMove());
-    }
+
     pub inline fn occupiedBB(self: board) bitboard {
         return self.c_occupiedBB[0] | self.c_occupiedBB[1];
     }
@@ -58,7 +55,7 @@ pub const board = struct {
     }
     pub inline fn _placePiece(self: *board, piece: e_piece, sq: u8, comptime white: bool) void {
         const bb = chessl.xToBitboard(sq);
-        self.c_occupiedBB[@intFromBool(white)] ^= bb;
+        self.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= bb;
         self.pieceBB[@intFromEnum(chessl.e_pieceTo_e_pieceType((piece)))] ^= bb;
         self.pieceArray[sq] = piece;
         self.pieceCount[@intFromEnum(piece)] += 1;
@@ -74,7 +71,7 @@ pub const board = struct {
 
     pub inline fn _removePiece(self: *board, piece: e_piece, sq: u8, comptime white: bool) void {
         const bb = chessl.xToBitboard(sq);
-        self.c_occupiedBB[@intFromBool(white)] ^= bb;
+        self.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= bb;
         self.pieceBB[@intFromEnum(chessl.e_pieceTo_e_pieceType(piece))] ^= bb;
         self.pieceCount[@intFromEnum(piece)] -= 1;
         self.pieceArray[sq] = .nEmptySquare;
@@ -89,7 +86,7 @@ pub const board = struct {
     }
     pub inline fn _movePiece(self: *board, piece: e_piece, from: u8, to: u8, comptime white: bool) void {
         const moveBB = chessl.xToBitboard(from) | chessl.xToBitboard(to);
-        self.c_occupiedBB[@intFromBool(white)] ^= moveBB;
+        self.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= moveBB;
         self.pieceBB[@intFromEnum(chessl.e_pieceTo_e_pieceType(piece))] ^= moveBB;
         self.pieceArray[from] = .nEmptySquare;
         self.pieceArray[to] = piece;
@@ -98,7 +95,7 @@ pub const board = struct {
     pub inline fn _movePieceBis(self: *board, pieceFrom: e_piece, from: u8, pieceTo: e_piece, to: u8, comptime white: bool) void {
         const fromBB = chessl.xToBitboard(from);
         const toBB = chessl.xToBitboard(to);
-        self.c_occupiedBB[@intFromBool(white)] ^= (fromBB | toBB);
+        self.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= (fromBB | toBB);
         self.pieceBB[@intFromEnum(chessl.e_pieceTo_e_pieceType(pieceFrom))] ^= fromBB;
         self.pieceBB[@intFromEnum(chessl.e_pieceTo_e_pieceType(pieceTo))] ^= toBB;
 
@@ -165,6 +162,7 @@ pub const boardFrame = struct {
     halfMoveClock: u8 = 0,
     stat: boardStatusl.status = .{},
     psqtEval: scoreType = 0,
+    nnueAccumul: nnuel.accumulatorPair = .{},
     pub inline fn copy(state: *const boardState) boardFrame {
         return state.frame;
     }
@@ -401,11 +399,11 @@ pub const boardState = struct {
             _piece = .PAWN;
             p_self.b.pieceCount[@intFromEnum(piece)] += 1;
         }
-        p_self.b.c_occupiedBB[@intFromBool(white)] ^= (moveBB);
+        p_self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= (moveBB);
         p_self.b.pieceArray[fromSq] = piece;
 
         p_self.b.pieceBB[@intFromEnum(chessl.e_pieceTo_e_pieceTypeCst(victim, !white))] ^= toBB;
-        p_self.b.c_occupiedBB[@intFromBool(!white)] ^= toBB;
+        p_self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)] ^= toBB;
 
         p_self.b.pieceArray[toSq] = victim;
         p_self.b.pieceCount[@intFromEnum(victim)] += 1;
@@ -417,7 +415,7 @@ pub const boardState = struct {
             p_self.b.pieceArray[toSq] = .nEmptySquare;
             p_self.b.pieceArray[@intFromEnum(victimSq)] = victim;
             p_self.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] ^= bisBB;
-            p_self.b.c_occupiedBB[@intFromBool(!white)] ^= bisBB;
+            p_self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)] ^= bisBB;
         } else if (_piece == .KING) {
             if (comptime white) {
                 p_self.b.wKingSq = @enumFromInt(fromSq);
@@ -456,7 +454,7 @@ pub const boardState = struct {
             p_self.b.pieceCount[@intFromEnum(piece)] += 1;
             p_self.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] ^= fromBB;
         }
-        p_self.b.c_occupiedBB[@intFromBool(white)] ^= (moveBB);
+        p_self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= (moveBB);
         p_self.b.pieceArray[toSq] = .nEmptySquare;
         p_self.b.pieceArray[fromSq] = piece;
 
@@ -473,7 +471,7 @@ pub const boardState = struct {
                 const rEnd: e_square = if (isKingC) (if (comptime white) (.f1) else (.f8)) else (if (comptime white) (.d1) else (.d8));
                 const mask: u64 = if (isKingC) (if (comptime white) (boardStatusl.wCastleKRookBit) else (boardStatusl.bCastleKRookBit)) else (if (comptime white) (boardStatusl.wCastleQRookBit) else (boardStatusl.bCastleQRookBit));
                 p_self.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] ^= mask;
-                p_self.b.c_occupiedBB[@intFromBool(white)] ^= (mask);
+                p_self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= (mask);
                 p_self.b.pieceArray[@intFromEnum(rStart)] = r;
                 p_self.b.pieceArray[@intFromEnum(rEnd)] = .nEmptySquare;
             }
@@ -594,7 +592,7 @@ pub const boardState = struct {
             p_self.b.pieceArray[@intFromEnum(rStart)] = .nEmptySquare;
             p_self.b.pieceArray[@intFromEnum(rEnd)] = r;
             p_self.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] ^= mask;
-            p_self.b.c_occupiedBB[@intFromBool(white)] ^= mask;
+            p_self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= mask;
         }
         if (chessl.isKingPiece(toPiece) or comptime t == .CASTLE) {
             if (comptime white) {
@@ -619,13 +617,13 @@ pub const boardState = struct {
 
         if (isCapture) {
             p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, true, toPiece, &p_self.frame, prevCastle, prevEp);
-            if (comptime updatePSQT) {
+            if (comptime updatePSQT and !configl.USE_NNUE) {
                 p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
             }
 
             p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame, prevCastle, prevEp);
         } else {
-            if (comptime updatePSQT) {
+            if (comptime updatePSQT and !configl.USE_NNUE) {
                 p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
             }
         }
@@ -671,17 +669,17 @@ pub const boardState = struct {
 
         p_self.b.pieceArray[from] = .nEmptySquare;
         p_self.b.pieceBB[@intFromEnum(_toPiece)] ^= moveBB;
-        p_self.b.c_occupiedBB[@intFromBool(white)] ^= moveBB;
+        p_self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= moveBB;
         if (_toPiece == .PAWN) {
             isPawn = true;
             if (move.isEnpassant()) {
                 const epSq: e_square = chessl.enPassantVictimSq(from, to);
                 const epBB = chessl.sqToBitboard(epSq);
                 p_self.b.pieceArray[@intFromEnum(epSq)] = e_piece.nEmptySquare;
-                p_self.b.c_occupiedBB[@intFromBool(!white)] ^= epBB;
+                p_self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)] ^= epBB;
                 p_self.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] ^= epBB;
             } else {
-                p_self.b.c_occupiedBB[@intFromBool(!white)] ^= toBB;
+                p_self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)] ^= toBB;
                 p_self.b.pieceBB[@intFromEnum(_victim)] ^= toBB;
                 if (move.isPromotion()) {
                     isPromo = true;
@@ -695,7 +693,7 @@ pub const boardState = struct {
                 }
             }
         } else {
-            p_self.b.c_occupiedBB[@intFromBool(!white)] ^= toBB;
+            p_self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)] ^= toBB;
             p_self.b.pieceBB[@intFromEnum(_victim)] ^= toBB;
 
             if (_toPiece == .ROOK) {
@@ -712,7 +710,7 @@ pub const boardState = struct {
         p_self.b.pieceArray[to] = toPiece;
         p_self.frame.key.code = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame, prevCastle, prevEp);
 
-        if (comptime updatePSQT) {
+        if (comptime updatePSQT and !configl.USE_NNUE) {
             p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, isPromo, false, toPiece, p_self.getPhase(), &p_self.frame);
         }
 
@@ -749,7 +747,7 @@ pub const boardState = struct {
 
         p_self.b.pieceArray[from] = .nEmptySquare;
         p_self.b.pieceBB[@intFromEnum(_toPiece)] ^= moveBB;
-        p_self.b.c_occupiedBB[@intFromBool(white)] ^= moveBB;
+        p_self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= moveBB;
 
         var isPawn: bool = false;
         if (_toPiece == .PAWN) {
@@ -787,7 +785,7 @@ pub const boardState = struct {
                     p_self.b.pieceArray[@intFromEnum(rStart)] = .nEmptySquare;
                     p_self.b.pieceArray[@intFromEnum(rEnd)] = r;
                     p_self.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] ^= mask;
-                    p_self.b.c_occupiedBB[@intFromBool(white)] ^= mask;
+                    p_self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] ^= mask;
                 }
                 p_self.frame.stat.onKingMove(white);
             } else if (_toPiece == .ROOK) {
@@ -796,7 +794,8 @@ pub const boardState = struct {
         }
         p_self.b.pieceArray[to] = toPiece;
         p_self.frame.key.code = chessl.updateKeyOnMove(white, move, isPromo, isCastle, false, toPiece, &p_self.frame, prevCastle, prevEp);
-        if (comptime updatePSQT) {
+
+        if (comptime updatePSQT and !configl.USE_NNUE) {
             p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, isPromo, isCastle, toPiece, p_self.getPhase(), &p_self.frame);
         }
 
@@ -819,7 +818,7 @@ pub const boardState = struct {
     }
     pub inline fn getCapturePiece(self: *const boardState, move: IMove) e_piece {
         if (move.isEnpassant()) {
-            return chessl.pawnFromColor(!chessl.getColorFromPiece(self.getFromPiece(move)));
+            return chessl.pawnFromColor(!chessl.isPieceWhite(self.getFromPiece(move)));
         }
         return self.getPiece(move.getTo());
     }
@@ -873,6 +872,19 @@ pub const boardState = struct {
         }
         return self.frame.stat.canQueensideCastle(false) and (chessl.canMove(.e8, .a8, self.b.occupiedBB()));
     }
+    pub inline fn _canQueenSideCastle(self: boardState, white: bool) bool {
+        if (white) {
+            return self.canQueenSideCastle(true);
+        }
+        return self.canQueenSideCastle(false);
+    }
+
+    pub inline fn _canKingSideCastle(self: boardState, white: bool) bool {
+        if (white) {
+            return self.canKingSideCastle(true);
+        }
+        return self.canKingSideCastle(false);
+    }
     pub inline fn canKingSideCastleAtt(self: boardState, white: bool, attackedSquares: u64) bool {
         if (white) {
             return self.frame.stat.canKingsideCastle(true) and chessl.canMove(.e1, .h1, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.e1, .h1)) == chessl.EMPTY);
@@ -890,7 +902,7 @@ pub const boardState = struct {
         return self.b.pieceCount[@intFromEnum(piece)];
     }
     pub inline fn getPieceBB(self: boardState, piece: e_piece) u64 {
-        return self.getPieceBB_t(chessl.e_pieceTo_e_pieceType(piece)) & self.b.c_occupiedBB[@intFromBool(chessl.getColorFromPiece(piece))];
+        return self.getPieceBB_t(chessl.e_pieceTo_e_pieceType(piece)) & self.b.c_occupiedBB[chessl.whiteBoolToInt(chessl.isPieceWhite(piece))];
     }
     pub inline fn getPieceBB_t(self: boardState, piece: e_pieceType) u64 {
         return self.b.pieceBB[@intFromEnum(piece)];
@@ -1023,7 +1035,7 @@ pub const boardState = struct {
         const fromBB = chessl.xToBitboard(from);
         const toBB = chessl.xToBitboard(to);
         const white = self.whiteToMove();
-        if (fromBB & self.b.c_occupiedBB[@intFromBool(white)] == 0) {
+        if (fromBB & self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] == 0) {
             return false;
         }
         if (move.isCapture()) {
@@ -1032,7 +1044,7 @@ pub const boardState = struct {
                     return false;
                 }
             } else {
-                if (toBB & self.b.c_occupiedBB[@intFromBool(!white)] == 0 or toBB & self.b.c_occupiedBB[@intFromBool(white)] != 0) {
+                if (toBB & self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)] == 0 or toBB & self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] != 0) {
                     // catches case where trying to capture own piece
                     return false;
                 }
@@ -1063,3 +1075,104 @@ pub fn isEndGame(self: board) bool {
     const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
     return (nWhiteP < 3) and (nBlackP < 3);
 }
+pub const viriGame = struct {
+    b: packedBoard align(1),
+    bestMove: viriPackedMove align(1),
+    pad: u32 align(1) = 0,
+};
+// ref https://github.com/cosmobobak/viriformat
+pub const packedBoard = struct {
+    occ: u64 align(1) = chessl.ONE,
+    pieces: [16]u8 align(1) = @splat(0),
+    enP_side: u8 = 0,
+
+    halfMove: u8 = 0,
+    fullMove: u16 align(1) = 0,
+    score: i16 align(1) = 0,
+    outcome: u8 = 0, // 0 b, 1 draw, 2 w
+    pad: u8 = 0,
+    pub fn init(state: *const boardState) packedBoard {
+        var ret: packedBoard = .{ .occ = state.b.occupiedBB(), .halfMove = state.frame.halfMoveClock, .fullMove = state.b.turnCount };
+        var offset: usize = 0;
+        for (0..64) |sq| {
+            const p = state.getPiece(@intCast(sq));
+            if (p == .nEmptySquare) {
+                continue;
+            }
+            const w = chessl.isPieceWhite(p);
+            var _p: u8 = @intFromEnum(chessl.e_pieceTo_e_pieceType(p));
+
+            if (chessl.isRookPiece(p)) {
+                if (w) {
+                    if (sq == 0 and state.frame.stat.canQueensideCastle(true) or (sq == 7 and state.frame.stat.canKingsideCastle(true))) {
+                        _p = 6;
+                    }
+                } else {
+                    if (sq == 56 and state.frame.stat.canQueensideCastle(false) or (sq == 63 and state.frame.stat.canKingsideCastle(false))) {
+                        _p = 6;
+                    }
+                }
+            }
+            const val: u8 = _p | (@as(u8, chessl.whiteBoolToInt(!w)) << 3);
+
+            if (offset % 2 == 0) {
+                ret.pieces[offset >> 1] = val;
+            } else {
+                ret.pieces[offset >> 1] |= (val << 4);
+            }
+            offset += 1;
+        }
+        const w: u8 = chessl.whiteBoolToInt(!state.whiteToMove());
+        const enP: u8 = if (state.frame.enPassantIdx == 0) 64 else @intCast(state.frame.enPassantIdx);
+        ret.enP_side = (w << 7) | enP;
+        return ret;
+    }
+};
+pub const viriPackedMove = struct {
+    move: viriMove align(1) = .{},
+    score: i16 align(1) = 0,
+};
+pub const viriMove = struct {
+    m_move: u16 align(1) = 0,
+    // 6 bit from, 6 bit to, 2 bit promo piece, 2 bit enP capture=1, castling = 2, promotions 3
+    pub fn init(move: IMove) viriMove {
+        var to = move.getTo();
+        const from = move.getFrom();
+        var flag: u6 = 0;
+        if (move.isPromotion()) {
+            const p: u6 = @intCast((move.getFlag() - @intFromEnum(typel.e_moveFlags.KNIGHTPROMO)) % 4);
+            flag |= p | @as(u6, 3 << 2);
+        } else if (move.isCastle()) {
+            flag |= @as(u6, 2 << 2);
+            if (move.isKingSideCastle()) {
+                to += 1;
+            } else {
+                to -= 2;
+            }
+        } else if (move.isEnpassant()) {
+            flag |= @as(u6, 1 << 2);
+        }
+        return .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
+    }
+};
+pub const castleS = struct {
+    kingFrom: e_square = .a1,
+    kingTo: e_square = .a1,
+    rookFrom: e_square = .a1,
+    rookTo: e_square = .a1,
+    pub inline fn init(white: bool, kingSide: bool) castleS {
+        if (white) {
+            if (kingSide) {
+                return .{ .kingFrom = .e1, .kingTo = .g1, .rookFrom = .h1, .rookTo = .f1 };
+            } else {
+                return .{ .kingFrom = .e1, .kingTo = .c1, .rookFrom = .a1, .rookTo = .d1 };
+            }
+        } else {
+            if (kingSide) {
+                return .{ .kingFrom = .e8, .kingTo = .g8, .rookFrom = .h8, .rookTo = .f8 };
+            } else {
+                return .{ .kingFrom = .e8, .kingTo = .c8, .rookFrom = .a8, .rookTo = .d8 };
+            }
+        }
+    }
+};

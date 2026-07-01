@@ -9,6 +9,7 @@ const typel = @import("../type.zig");
 const moveGenl = @import("../move_generation.zig");
 const historyl = @import("../history.zig");
 const chessl = @import("../chess.zig");
+const nnuel = @import("../nnue.zig");
 
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
@@ -37,6 +38,9 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     var pv: pvContainer = .{};
     ss.getFrame(0).pv = &pv;
 
+    if (nnuel.nnueNet.inited and comptime configl.USE_NNUE) {
+        p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
+    }
     const score = searchLoop(p_state, p_info, p_features, depth, 0, alpha, beta, ss, false, .PV);
 
     if (p_info.alive) {
@@ -51,15 +55,6 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn handleTerminalState(p_state: *boardl.boardState, p_info: *threadInfo, p_features: *const schedulerl.searchFeatures, alpha: scoreType, beta: scoreType, ply: u16, comptime t: searchType, ss: *searchStack) scoreType {
-    p_info.searchStat.n_nodeExplored += 1;
-    const ischeck = p_state.isChecked();
-    var currS = ss.getFrame(ply);
-    currS.staticEval.t = .NONE;
-
-    // perform quiesc
-    return quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ischeck, false, ss, t);
-}
 pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, usePrevEval: bool, ss: *searchStack, comptime t: searchType) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
 
@@ -99,6 +94,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
     const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, .{}, depth, currS.prevLineMove, true);
 
     var i: usize = 0;
+    const historyBonus = heuristicl.computeHistoryBonus(depth);
     while (gen.pickNext(&order)) |move| : (i += 1) {
         var _delta = BIG_DELTA;
         if (move.isPromotion()) {
@@ -116,7 +112,9 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
         // problem here where a checking sequence ie
         // black checked -> white not checked nor capture = end of quiescence, the search might need to continue
         p_state.makeMove(move);
-
+        if (comptime configl.USE_NNUE) {
+            nnuel.updateNnueOnMove(p_state, move);
+        }
         const score = -quiescenceSearch(p_state, p_info, p_features, depth - 1, -beta, -_alpha, ply + 1, wasChecked, false, ss, t);
 
         _ = p_state.undoMove();
@@ -129,6 +127,20 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
             }
         }
         if (score >= beta) {
+            const from = move.getFrom();
+            const to = move.getTo();
+            const fPiece = p_state.getPiece(from);
+            const cPiece = p_state.getCapturePiece(move);
+            historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
+            for (0..gen.moves.len) |j| {
+                const idx = order.indexes[j];
+                const _move = gen.moves.moves[idx];
+                if (j != i) {
+                    const fromP = _move.getFrom();
+                    const toP = _move.getTo();
+                    historyl.updateCaptureHistory(p_state.getPiece(fromP), p_state.getCapturePiece(_move), toP, -historyBonus);
+                }
+            }
             p_info.searchStat.n_cutoffs += 1;
             if (comptime t == .PV) {
                 currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
@@ -199,7 +211,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     var writer: hashl.hashWriter = .init(p_state.frame.key.code);
     var hashEval: scoreType = 0;
     if (p_features.useHash) {
-        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(_depth), p_state);
+        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(_depth), p_state, @intCast(p_info.searchStat.n_nodeExplored));
         writer = res.writer;
         if (res.entry) |_entry| {
             p_info.searchStat.n_hashRetrieve += 1;
@@ -236,7 +248,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         _depth += 1;
     }
     if (_depth == 0 or !p_info.alive) {
-        return handleTerminalState(p_state, p_info, p_features, alpha, beta, ply, t, ss);
+        p_info.searchStat.n_nodeExplored += 1;
+        return quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, isCheck, false, ss, t);
     }
     if (comptime t == .PV) {
         var pv: movel.pvContainer = .{};
@@ -420,6 +433,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
         _ = p_state.makeMove(move);
 
+        if (comptime configl.USE_NNUE) {
+            nnuel.updateNnueOnMove(p_state, move);
+        }
+
         var score: scoreType = 0;
         if (i == 0) {
             score = -searchLoop(p_state, p_info, p_features, _depth - 1 + extension, ply + 1, -beta, -_alpha, ss, extended, t);
@@ -466,7 +483,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             // save here the killer moves
             if (isQuiet) {
                 historyl.onKillerMove(move, ply);
-                historyl.updateHistoryHeurist(white, from, to, historyBonus);
+                //historyl.updateHistoryHeurist(white, from, to, historyBonus);
                 for (0..gen.moves.len) |j| {
                     const idx = order.indexes[j];
                     const _move = gen.moves.moves[idx];
@@ -478,7 +495,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 }
             } else {
                 // in capture mode
-                historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
+                //historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
                 for (0..gen.moves.len) |j| {
                     const idx = order.indexes[j];
                     const _move = gen.moves.moves[idx];
