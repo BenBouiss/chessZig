@@ -393,6 +393,9 @@ pub const engine = struct {
         if (p_self.uciMode) {
             const trimmedBuffer = utilsl.trimStr(cmdBuffer);
             const status = p_self.uci_executeCmd(cmdtype, trimmedBuffer);
+            if (p_self.status.debugMode) {
+                std.debug.print("cmd {} status {}\n", .{ cmdtype, status });
+            }
             return status;
         } else if (cmdtype == .UCI) {
             p_self.uciMode = true;
@@ -439,7 +442,7 @@ pub const engine = struct {
                 };
             },
             .GO => {
-                if (p_self.searcher.searching) {
+                if (p_self.searcher.schedul.searching) {
                     return false;
                 }
                 return p_self.executeGoCmd(cmdBuffer);
@@ -848,9 +851,9 @@ pub const engine = struct {
     }
 
     fn updateHash(p_self: *engine, hashSize: spinVarType) !bool {
-        if (p_self.searcher.searching) {
+        if (p_self.searcher.schedul.searching) {
             p_self.searcher.interrupt = true;
-            while (p_self.searcher.searching) {
+            while (p_self.searcher.schedul.searching) {
                 try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
             }
         }
@@ -902,7 +905,7 @@ pub const engine = struct {
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         _ = cmdBuffer;
-        if (p_self.searcher.searching) {
+        if (p_self.searcher.schedul.searching) {
             return false;
         }
         p_self.searcher.reset();
@@ -1049,7 +1052,7 @@ fn inputThreading(p_self: *engine) void {
         }
 
         if (p_self.status.running) {
-            if (p_self.searcher.searching and !p_self.status.benchmarking) {
+            if (p_self.searcher.schedul.searching and !p_self.status.benchmarking) {
                 // check things here what scheduler is doing
                 schedulerl.waitingRoomOneShot(p_self) catch {};
             }

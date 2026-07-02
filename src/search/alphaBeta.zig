@@ -23,8 +23,8 @@ const milliDepth = typel.milliDepth;
 // https://github.com/nescitus/cpw-engine/blob/master/search.cpp
 pub fn aspirationSearchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack, val: scoreType) scoreType {
     var ret: scoreType = val;
-    const alpha = val - typel.aspiration;
-    const beta = val + typel.aspiration;
+    const alpha = val - weightl.aspirationCoefficient;
+    const beta = val + weightl.aspirationCoefficient;
     ret = searchEntrypoint(p_state, p_info, depth, p_features, ss, alpha, beta);
     if ((ret <= alpha or ret >= beta) and p_info.alive) {
         ret = searchEntrypoint(p_state, p_info, depth, p_features, ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
@@ -292,8 +292,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const isEndGame = p_state.isEndGame();
     if (p_features.useNullPrune and ply != 0) {
         // see chess programming video
-        const augment: u16 = if (_depth > 14) 2 else 0;
-        const R: u16 = augment + @as(u16, (if (improving) 3 else 4));
+        const augment: u16 = if (_depth > weightl.nullMoveDepthAugmentThreshold) @intCast(weightl.nullMoveDepthAugment) else 0;
+        const R: u16 = augment + @as(u16, @intCast(if (improving) weightl.nullMoveReductionImproving else weightl.nullMoveReduction));
         if (_depth > R and !isCheck and !isEndGame) {
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -beta, 1 - beta, ss, extended, .NonPV);
@@ -315,37 +315,37 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     //    futilityScore = static_eval + margin;
     //    canFutility = true;
     //}
-    if (p_features.useFutility and !isCheck and !chessl.isMate(alpha) and _depth <= 3 and (static_eval + heuristicl.futilityMargin[_depth]) <= _alpha and comptime t == .NonPV) {
+    if (p_features.useFutility and !isCheck and !chessl.isMate(alpha) and _depth <= 3 and (static_eval + weightl.futilityMargin[_depth]) <= _alpha and comptime t == .NonPV) {
         canFutility = true;
     }
 
     if (!isCheck and !hashMove.isValid() and comptime t == .NonPV) {
         if (p_features.useRFP and _depth <= 3) {
-            const margin: scoreType = if (improving) 0 else -25;
-            if (static_eval >= (beta + _depth * 75 + margin)) {
+            const margin: scoreType = if (improving) 0 else weightl.rfpImproving;
+            if (static_eval >= (beta + weightl.rfpMargin[_depth] + margin)) {
                 return (static_eval + beta) >> 1;
             }
         }
         //https://www.chessprogramming.org/Razoring limited razoring
         //const threshold = _alpha - 300 - (_depth - 1) * 60;
-        if (p_features.useRazoring) {
-            const threshold: scoreType = if (improving) 500 else 350;
-            if (_depth == 3 and (static_eval + threshold) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
-                _depth = 2;
-            }
-        }
-
-        // this version from the cpw cpp code using the qsearch method
         //if (p_features.useRazoring) {
-        //    const base: scoreType = if (improving) 0 else 150;
-        //    const threshold = _alpha - (_depth * _depth * 150) - base;
-        //    if (static_eval < threshold and @abs(_alpha) < weightl.simpleCheckMateScore) {
-        //        const val = quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, .NonPV, true, ss);
-        //        if (val < _alpha) {
-        //            return _alpha;
-        //        }
+        //    const threshold: scoreType = if (improving) weightl.razoringThresholdImproving else weightl.razoringThresholdNotImproving;
+        //    if (_depth == 3 and (static_eval + threshold) <= _alpha and p_state.getTotalPieceCount(!white) > 3) {
+        //        _depth = 2;
         //    }
         //}
+
+        // this version from the cpw cpp code using the qsearch method
+        if (p_features.useRazoring) {
+            const base: scoreType = if (improving) weightl.razoringBaseImproving else weightl.razoringBaseNotImproving;
+            const threshold = _alpha - (_depth * _depth * weightl.razoringCoefficient) - base;
+            if (static_eval < threshold and @abs(_alpha) < weightl.simpleCheckMateScore) {
+                const val = quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, true, ss, .NonPV);
+                if (val < _alpha) {
+                    return _alpha;
+                }
+            }
+        }
     }
 
     var i: usize = 0;
@@ -368,13 +368,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
     const prevSS = ss.getPrevFrame(ply, 1);
     //if (p_features.useIIR and _depth >= 5 and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and (hashType == .LOWER or comptime t == .PV)) {
-    if (p_features.useIIR and _depth >= 5 and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
+    if (p_features.useIIR and _depth >= weightl.IIRDepth and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
         _depth -= 1;
     }
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
     const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
-    if (p_features.useLMR and _depth >= 3 and !isCheck) {
+    if (p_features.useLMR and _depth >= weightl.LMRDepth and !isCheck) {
         useLMR = true;
     }
     const otherKingSq = p_state.getKingSq(!white);
@@ -406,12 +406,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
         if (isQuiet) {
             if (canFutility) {
-                if (!givesCheck and tot > heuristicl.moveReductionAmount and !isPromo) {
+                if (!givesCheck and tot > weightl.moveReductionAmount and !isPromo) {
                     continue;
                 }
             }
         } else {
-            if (!wasExtended and to == p_state.getLastMove().getTo() and historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] > 550 and comptime t == .PV) {
+            if (!wasExtended and to == p_state.getLastMove().getTo() and historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] > weightl.captureExtensionThresh and comptime t == .PV) {
                 extension += 1;
                 extended = true;
             }
@@ -429,7 +429,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         } else if (isCapture and !isThreat) {
             _lmrDepth += weightl.lmr_badCapture;
         }
-        _lmrDepth += (weightl.lmr_oldMulti * @as(scoreType, @intCast(i)));
+        _lmrDepth += (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
 
         _ = p_state.makeMove(move);
 
@@ -441,7 +441,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if (i == 0) {
             score = -searchLoop(p_state, p_info, p_features, _depth - 1 + extension, ply + 1, -beta, -_alpha, ss, extended, t);
         } else {
-            if (useLMR and i > heuristicl.moveReductionAmount) {
+            if (useLMR and i > weightl.moveReductionAmount) {
                 const d = _depth - 1 - @as(u16, (@intCast(@min((@max(_lmrDepth + fDepth, 0)) >> 10, _depth - 1))));
                 score = -searchLoop(p_state, p_info, p_features, d + extension, ply + 1, -_alpha - 1, -_alpha, ss, extended, .NonPV);
             } else {

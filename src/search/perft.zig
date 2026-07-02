@@ -38,7 +38,7 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine, config: enginel.goArgS
 
     p_engine.status.benchmarking = true;
     defer p_engine.status.benchmarking = false;
-    p_engine.searcher.searching = true;
+    p_engine.searcher.schedul.searching = true;
 
     const feats: perftSearchFeatures = .{ .useBatched = config.useBatched, .useHash = p_engine.options.searchF.useHash };
     if (p_engine.status.debugMode) {
@@ -89,7 +89,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, co
     if (p_engine.status.debugMode) {
         std.debug.print("[DEBUG] waitThreadFinish: exiting\n", .{});
     }
-    p_engine.searcher.searching = false;
+    p_engine.searcher.schedul.searching = false;
     if (endCounter != p_engine.options.nThreads) {
         for (0..p_threadPack.len) |i| {
             p_threadPack.items(._tInfo)[i].alive = false;

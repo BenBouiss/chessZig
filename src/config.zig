@@ -23,8 +23,8 @@ pub const DEFAULT_HASHTABLE_SIZE = 16; // in MB
 pub const DEFAULT_TRACKMETRICS = true;
 pub const _DEFAULT_TRACKMETRICS = "true";
 
-pub const DEFAULT_REPORTPROGRESS = true;
-pub const _DEFAULT_REPORTPROGRESS = "true";
+pub const DEFAULT_REPORTPROGRESS = false;
+pub const _DEFAULT_REPORTPROGRESS = "false";
 
 pub const DEFAULT_USEHASHTABLE = true;
 pub const _DEFAULT_USEHASHTABLE = "true";
@@ -78,8 +78,8 @@ pub const _DEFAULT_USE_FUTILITY = "true";
 pub const DEFAULT_USE_PROBCUT = false;
 pub const _DEFAULT_USE_PROBCUT = "false";
 
-pub const DEFAULT_USE_RAZORING = false;
-pub const _DEFAULT_USE_RAZORING = "false";
+pub const DEFAULT_USE_RAZORING = true;
+pub const _DEFAULT_USE_RAZORING = "true";
 
 pub const DEFAULT_USE_RFP = true;
 pub const _DEFAULT_USE_RFP = "true";

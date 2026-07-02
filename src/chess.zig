@@ -68,7 +68,7 @@ pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 
 
 const arr_piece_str = [_]u8{ 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k', '_', '1', '2' };
 
-pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
+//pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
 
 pub const debug_err = error{ fenErr, earlyReturn, valueErr, memErr };
 
@@ -1372,7 +1372,6 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tm
 
         var moveStr = try stringl.string.initFromSlice(alloc, str[offset..str.len]);
         defer moveStr.free(alloc);
-        //std.debug.print("[DEBUG] _algebraicLineToIMoveMatch: sending movestr '{s}'\n", .{moveStr._slice()});
         const move = algebraicToIMove(tmpBoard, &moveStr) catch |err| {
             std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line, moveStr._slice() });
             return err;

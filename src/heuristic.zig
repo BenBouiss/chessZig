@@ -14,7 +14,6 @@ const typel = @import("type.zig");
 const alphaBetal = @import("search/alphaBeta.zig");
 const threadingl = @import("search/threading.zig");
 const historyl = @import("history.zig");
-const hashl = @import("hashTable.zig");
 const logl = @import("log.zig");
 const nnuel = @import("nnue.zig");
 
@@ -27,7 +26,6 @@ const e_color = typel.e_color;
 
 const string = stringl.string;
 const IMove = movel.IMove;
-const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
 const scoreType: type = typel.scoreType;
 pub const scoreVect: type = @Vector(2, scoreType);
@@ -298,7 +296,7 @@ pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const 
     const Queen: scoreType = wQueen - bQueen;
 
     // white is advantaged from a high safety_arr index, more =wPieceAtt are present in the black king vicinity thus it should be counted as positive
-    const saf: scoreType = SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnight + wBishop + wRook + wQueen))] - SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnight + bBishop + bRook + bQueen))];
+    const saf: scoreType = weightl.SAFETY_ARR[@intCast(@min(weightl.SAFETY_ARR.len - 1, wKnight + wBishop + wRook + wQueen))] - weightl.SAFETY_ARR[@intCast(@min(weightl.SAFETY_ARR.len - 1, bKnight + bBishop + bRook + bQueen))];
     const v: scoreVect = .{ saf + (weightl.global_SafetyKnightVal[MG] * Knight) + (weightl.global_SafetyBishopVal[MG] * Bishop) + (weightl.global_SafetyRookVal[MG] * Rook) + (weightl.global_SafetyQueenVal[MG] * Queen), saf + (weightl.global_SafetyKnightVal[EG] * Knight) + (weightl.global_SafetyBishopVal[EG] * Bishop) + (weightl.global_SafetyRookVal[EG] * Rook) + weightl.global_SafetyQueenVal[EG] * Queen };
     return v;
 }
@@ -309,8 +307,8 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)] ^ chess.sqToBitboard(p_state.b.bKingSq));
     const s = @as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()));
 
-    const w_pieceCenterProt = p_whiteMoveBB.andFn(typel.centerBB).collapse();
-    const b_pieceCenterProt = p_blackMoveBB.andFn(typel.centerBB).collapse();
+    const w_pieceCenterProt = p_whiteMoveBB.andFn(chess.centerBB).collapse();
+    const b_pieceCenterProt = p_blackMoveBB.andFn(chess.centerBB).collapse();
     const s2 = @as(scoreType, @intCast(chess.popcount(w_pieceCenterProt))) - @as(scoreType, @intCast(chess.popcount(b_pieceCenterProt)));
     return .{ weightl.global_StructureProtectionVal[MG] * s + weightl.global_centerProtectionVal[MG] * s2, weightl.global_StructureProtectionVal[EG] * s + weightl.global_centerProtectionVal[EG] * s2 };
 }
@@ -564,146 +562,6 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
     }
 }
 
-pub const heuristicValues = struct {
-    // container storing every heuristics/ weights to evaluate a given board
-    PawnVal: scoreType = weightl.simplePawnScore,
-    BishopVal: scoreType = weightl.simpleBishopScore,
-    KnightVal: scoreType = weightl.simpleKnightScore,
-    RookVal: scoreType = weightl.simpleRookScore,
-    QueenVal: scoreType = weightl.simpleQueenScore,
-
-    MobilityVal: [N_PHASES]scoreType = .{ weightl.simpleMobilityScore, weightl.simpleMobilityScore },
-    KingMobilityVal: [N_PHASES]scoreType = .{ weightl.simpleKingMobilityScore, weightl.simpleKingMobilityScore },
-    weakCheckmate: [N_PHASES]scoreType = .{ weightl.simpleWeakCheckMateScore, weightl.simpleWeakCheckMateScore },
-
-    tempoChecksScore: [N_PHASES]scoreType = .{ weightl.simpleTempoChecksScore, weightl.simpleTempoChecksScore },
-    pieceThreatScore: [N_PHASES]scoreType = .{ weightl.simplePieceThreatScore, weightl.simplePieceThreatScore },
-
-    IsolatedPawnVal: [N_PHASES]scoreType = .{ weightl.simpleIsolatedPawnScore, weightl.simpleIsolatedPawnScore },
-    StackedPawnVal: [N_PHASES]scoreType = .{ weightl.simpleStackedPawnScore, weightl.simpleStackedPawnScore },
-    PassedPawnVal: [N_PHASES]scoreType = .{ weightl.simplePassedPawnScore, weightl.simplePassedPawnScore },
-
-    SafetyBishopVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyBishopScore, weightl.simpleSafetyBishopScore },
-    SafetyKnightVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyKnightScore, weightl.simpleSafetyKnightScore },
-    SafetyRookVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyRookScore, weightl.simpleSafetyRookScore },
-    SafetyQueenVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyQueenScore, weightl.simpleSafetyQueenScore },
-
-    StructureProtectionVal: [N_PHASES]scoreType = .{ weightl.simpleStructureProtectionScore, weightl.simpleStructureProtectionScore },
-
-    KingProximityVal: [N_PHASES]scoreType = .{ weightl.simpleKingProximity, weightl.simpleKingProximity },
-
-    Pawn_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.pawnScoreArr, weightl.pawnScoreArr },
-    Bishop_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.bishopScoreArr, weightl.bishopScoreArr },
-    Knight_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.knightScoreArr, weightl.knightScoreArr },
-    Rook_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.rookScoreArr, weightl.rookScoreArr },
-    Queen_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.queenScoreArr, weightl.queenScoreArr },
-    King_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.kingScoreArr, weightl.kingScoreArr_EG },
-
-    pub inline fn getPieceCountValues(self: *const heuristicValues) [chess.N_PIECES]scoreType {
-        return .{ self.PawnVal, self.BishopVal, self.KnightVal, self.RookVal, self.QueenVal, 0 };
-    }
-    // other more complex values may be inserted below
-    pub fn getPieceInfos(self: *const heuristicValues, piece: e_piece, sq: typel.e_square) [3]typel.scoreType {
-        switch (piece) {
-            .nEmptySquare, .nWhite, .nBlack => {
-                return .{ 0, 0, 0 };
-            },
-            .nWhitePawn => {
-                return self.getPieceInfos_cst(.PAWN, @intFromEnum(sq));
-            },
-            .nBlackPawn => {
-                return self.getPieceInfos_cst(.PAWN, @intFromEnum(chess.flipSq(sq)));
-            },
-            .nWhiteBishop => {
-                return self.getPieceInfos_cst(.BISHOP, @intFromEnum(sq));
-            },
-            .nBlackBishop => {
-                return self.getPieceInfos_cst(.BISHOP, @intFromEnum(chess.flipSq(sq)));
-            },
-            .nWhiteKnight => {
-                return self.getPieceInfos_cst(.KNIGHT, @intFromEnum(sq));
-            },
-            .nBlackKnight => {
-                return self.getPieceInfos_cst(.KNIGHT, @intFromEnum(chess.flipSq(sq)));
-            },
-            .nWhiteRook => {
-                return self.getPieceInfos_cst(.ROOK, @intFromEnum(sq));
-            },
-            .nBlackRook => {
-                return self.getPieceInfos_cst(.ROOK, @intFromEnum(chess.flipSq(sq)));
-            },
-            .nWhiteQueen => {
-                return self.getPieceInfos_cst(.QUEEN, @intFromEnum(sq));
-            },
-            .nBlackQueen => {
-                return self.getPieceInfos_cst(.QUEEN, @intFromEnum(chess.flipSq(sq)));
-            },
-            .nWhiteKing => {
-                return self.getPieceInfos_cst(.KING, @intFromEnum(sq));
-            },
-            .nBlackKing => {
-                return self.getPieceInfos_cst(.KING, @intFromEnum(chess.flipSq(sq)));
-            },
-        }
-    }
-    pub inline fn getPieceInfos_cst(self: *const heuristicValues, comptime piece: typel.e_pieceType, sq: u8) [3]typel.scoreType {
-        switch (piece) {
-            .PAWN => {
-                return .{ self.PawnVal, self.Pawn_PSQT[MG][sq], self.Pawn_PSQT[EG][sq] };
-            },
-            .BISHOP => {
-                return .{ self.BishopVal, self.Bishop_PSQT[MG][sq], self.Bishop_PSQT[EG][sq] };
-            },
-            .KNIGHT => {
-                return .{ self.KnightVal, self.Knight_PSQT[MG][sq], self.Knight_PSQT[EG][sq] };
-            },
-            .ROOK => {
-                return .{ self.RookVal, self.Rook_PSQT[MG][sq], self.Rook_PSQT[EG][sq] };
-            },
-            .QUEEN => {
-                return .{ self.QueenVal, self.Queen_PSQT[MG][sq], self.Queen_PSQT[EG][sq] };
-            },
-            .KING => {
-                return .{ 0, self.King_PSQT[MG][sq], self.King_PSQT[EG][sq] };
-            },
-        }
-    }
-    pub fn modifyGlobals(self: *const heuristicValues) void {
-        weightl.global_PawnVal = self.PawnVal;
-        weightl.global_BishopVal = self.BishopVal;
-        weightl.global_KnightVal = self.KnightVal;
-        weightl.global_RookVal = self.RookVal;
-        weightl.global_QueenVal = self.QueenVal;
-
-        weightl.global_MobilityVal = self.MobilityVal;
-        weightl.global_KingMobilityVal = self.KingMobilityVal;
-        weightl.global_weakCheckmate = self.weakCheckmate;
-
-        weightl.global_tempoChecksScore = self.tempoChecksScore;
-        weightl.global_pieceThreatScore = self.pieceThreatScore;
-
-        weightl.global_IsolatedPawnVal = self.IsolatedPawnVal;
-        weightl.global_StackedPawnVal = self.StackedPawnVal;
-        weightl.global_PassedPawnVal = self.PassedPawnVal;
-
-        weightl.global_SafetyBishopVal = self.SafetyBishopVal;
-        weightl.global_SafetyKnightVal = self.SafetyKnightVal;
-        weightl.global_SafetyRookVal = self.SafetyRookVal;
-        weightl.global_SafetyQueenVal = self.SafetyQueenVal;
-
-        weightl.global_StructureProtectionVal = self.StructureProtectionVal;
-
-        weightl.global_KingProximityVal = self.KingProximityVal;
-
-        weightl.global_Pawn_PSQT = self.Pawn_PSQT;
-        weightl.global_Bishop_PSQT = self.Bishop_PSQT;
-        weightl.global_Knight_PSQT = self.Knight_PSQT;
-        weightl.global_Rook_PSQT = self.Rook_PSQT;
-        weightl.global_Queen_PSQT = self.Queen_PSQT;
-        weightl.global_King_PSQT = self.King_PSQT;
-    }
-};
-
 pub inline fn getPieceCountValues() [chess.N_PIECES]scoreType {
     return .{ weightl.global_PawnVal, weightl.global_BishopVal, weightl.global_KnightVal, weightl.global_RookVal, weightl.global_QueenVal, 0 };
 }
@@ -774,12 +632,7 @@ pub inline fn getPieceInfos_cst(comptime piece: typel.e_pieceType, sq: u8) [3]ty
     }
 }
 
-// source: https://www.chessprogramming.org/King_Safety
-const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
-
 const N_PHASES: usize = 2;
-const N_WEIGHTS: usize = 256;
-const NTERMS: usize = 1024;
 
 pub const MG: usize = 0;
 pub const EG: usize = 1;
@@ -925,8 +778,8 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !voi
     std.debug.assert(idx == configl.TEXEL_PROTECTION_COUNT_IDX);
     idx += 1;
 
-    const w_pieceCenterProt = allwhiteMoveBB.andFn(typel.centerBB).collapse();
-    const b_pieceCenterProt = allblackMoveBB.andFn(typel.centerBB).collapse();
+    const w_pieceCenterProt = allwhiteMoveBB.andFn(chess.centerBB).collapse();
+    const b_pieceCenterProt = allblackMoveBB.andFn(chess.centerBB).collapse();
     p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.popcount(w_pieceCenterProt)), .bcoeff = @intCast(chess.popcount(b_pieceCenterProt)) });
     std.debug.assert(idx == configl.TEXEL_CENTER_PROTECTION_IDX);
     idx += 1;
@@ -1043,76 +896,7 @@ pub const NVector = struct {
         //try writer.writeAll(" }");
         return;
     }
-    pub fn dotProduct(p_self: *const NVector, p_other: *const NVector) scoreType {
-        var acc: scoreType = 0;
-        for (p_self.val, p_other.val) |x1, x2| {
-            acc += x1 * x2;
-        }
-        return acc;
-    }
-    pub fn substractVectEq(p_self: *NVector, p_other: *const NVector) void {
-        for (0..p_self.val.len) |i| {
-            p_self.val[i] -= p_other.val[i];
-        }
-    }
-    pub fn substractVect(p_self: *const NVector, p_other: *const NVector) NVector {
-        var ret: NVector = .{};
-        for (0..p_self.val.len) |i| {
-            ret.val[i] = p_self.val[i] - p_other.val[i];
-        }
-        return ret;
-    }
-    pub fn addVectEq(p_self: *NVector, p_other: *const NVector) void {
-        for (0..p_self.val.len) |i| {
-            p_self.val[i] += p_other.val[i];
-        }
-    }
-    pub fn addVect(p_self: *const NVector, p_other: *const NVector) NVector {
-        var ret: NVector = .{};
-        for (0..p_self.val.len) |i| {
-            ret.val[i] = p_self.val[i] + p_other.val[i];
-        }
-        return ret;
-    }
-    pub fn substract(p_self: *const NVector, val: scoreType) NVector {
-        var ret: NVector = .{};
-        for (0..p_self.val.len) |i| {
-            ret.val[i] = p_self.val[i] - val;
-        }
-        return ret;
-    }
-    pub fn addEq(p_self: *NVector, val: scoreType) void {
-        for (0..p_self.val.len) |i| {
-            p_self.val[i] += val;
-        }
-    }
-    pub fn add(p_self: *const NVector, val: scoreType) NVector {
-        var ret: NVector = .{};
-        for (0..p_self.val.len) |i| {
-            ret.val[i] = p_self.val[i] + val;
-        }
-        return ret;
-    }
-    pub fn multiplyEq(p_self: *NVector, val: scoreType) void {
-        for (0..p_self.val.len) |i| {
-            p_self.val[i] *= val;
-        }
-    }
-    pub fn multiply(p_self: *const NVector, val: scoreType) NVector {
-        var ret: NVector = .{};
-        for (0..p_self.val.len) |i| {
-            ret.val[i] = p_self.val[i] * val;
-        }
-        return ret;
-    }
-    pub fn divide(p_self: *const NVector, val: scoreType) NVector {
-        std.debug.assert(val != 0);
-        var ret: NVector = .{};
-        for (0..p_self.val.len) |i| {
-            ret.val[i] = p_self.val[i] / val;
-        }
-        return ret;
-    }
+
     pub fn print(p_self: *NVector) void {
         std.debug.print("( ", .{});
         for (0..p_self.val.len) |i| {
@@ -1266,7 +1050,6 @@ pub fn test_save(alloc: std.mem.Allocator, logFile: *logl.logging(CSV_ENTRY_SIZE
 }
 //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
 // test for first futility implem
-pub const futilityMargin: [4]scoreType = .{ 0, 200, 300, 500 };
 pub const probCutMoveCount: [6]scoreType = .{ 8, 10, 14, 20, 20, 40 };
 //pub const futilityMargin: scoreType = 400;
 pub const dFutilityMargin: scoreType = 300;
@@ -1359,7 +1142,6 @@ pub inline fn plyModif(ply: u16) u16 {
     return @intCast(std.math.log(u16, 3, ply + 1));
 }
 
-pub const moveReductionAmount = 4;
 // hashmove + line move + 2 killer moves (?)
 
 pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
@@ -1391,7 +1173,7 @@ pub const moveOrdering = struct {
     len: u8 = 0,
 };
 pub const moveGenerator = struct {
-    moves: moveContainer = undefined,
+    moves: movel.moveContainer = undefined,
     bbState: moveBBState = undefined,
     bbStateGenerated: bool = false,
     extra: moveGenl.generationModifiers = .NONE,

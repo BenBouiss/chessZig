@@ -195,7 +195,34 @@ pub fn appendAll() void {
     add_param(&lmr_threatening, -2000, 0, "lmr_threatening");
     add_param(&lmr_inPvMode, -2000, 0, "lmr_inPvMode");
     add_param(&lmr_isPromotion, -2000, 0, "lmr_isPromotion");
-    //
+
+    // margins
+    add_param(&futilityMargin[0], 0, 1500, "futilityMargin_0");
+    add_param(&futilityMargin[1], 0, 1500, "futilityMargin_1");
+    add_param(&futilityMargin[2], 0, 1500, "futilityMargin_2");
+    add_param(&futilityMargin[3], 0, 1500, "futilityMargin_3");
+
+    add_param(&rfpMargin[0], 0, 1500, "rfpMargin_0");
+    add_param(&rfpMargin[1], 0, 1500, "rfpMargin_1");
+    add_param(&rfpMargin[2], 0, 1500, "rfpMargin_2");
+    add_param(&rfpMargin[3], 0, 1500, "rfpMargin_3");
+
+    add_param(&rfpImproving, -500, 0, "rfpImproving");
+
+    add_param(&captureExtensionThresh, 0, 1500, "captureExtensionThresh");
+
+    add_param(&aspirationCoefficient, 0, 200, "aspirationCoefficient");
+    add_param(&nullMoveDepthAugmentThreshold, 8, 32, "nullMoveDepthAugmentThreshold");
+    add_param(&nullMoveDepthAugment, 0, 6, "nullMoveDepthAugment");
+    add_param(&nullMoveReduction, 0, 5, "nullMoveReduction");
+    add_param(&nullMoveReductionImproving, 0, 4, "nullMoveReductionImproving");
+
+    add_param(&razoringBaseImproving, 0, 1000, "razoringBaseImproving");
+    add_param(&razoringBaseNotImproving, 0, 1000, "razoringBaseNotImproving");
+    add_param(&razoringCoefficient, 0, 1000, "razoringCoefficient");
+
+    add_param(&IIRDepth, 0, 6, "IIRDepth");
+    add_param(&LMRDepth, 0, 4, "LMRDepth");
 }
 pub var global_PawnVal: scoreType = simplePawnScore;
 
@@ -283,14 +310,29 @@ pub var lmr_threatening: milliDepth = -219;
 pub var lmr_inPvMode: milliDepth = -406;
 pub var lmr_isPromotion: milliDepth = -193;
 
-//    lmr_expectedCutOff = 300,
-//    lmr_notImproving = 150,
-//    lmr_hashMoveCapture = 100,
-//    lmr_baseDeficit = 1024,
-//    lmr_badCapture = 80,
-//    lmr_oldMulti = 50,
-//    lmr_givesCheck = -400,
-//    lmr_killerMove = -100,
-//    lmr_inPvNode = -150,
-//    lmr_isPromotion = -75,
-//    lmr_threatening = -75,
+// margins
+
+pub var futilityMargin: [4]scoreType = .{ 0, 200, 300, 500 };
+pub var rfpMargin: [4]scoreType = .{ 0, 75, 150, 300 };
+pub var rfpImproving: scoreType = -25;
+
+pub var captureExtensionThresh: scoreType = 550;
+
+pub const moveReductionAmount = 4;
+
+// source: https://www.chessprogramming.org/King_Safety
+pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
+
+pub var aspirationCoefficient: scoreType = 50;
+
+pub var nullMoveDepthAugmentThreshold: scoreType = 14;
+pub var nullMoveDepthAugment: scoreType = 2;
+pub var nullMoveReduction: scoreType = 4;
+pub var nullMoveReductionImproving: scoreType = 3;
+
+pub var razoringBaseImproving: scoreType = 0;
+pub var razoringBaseNotImproving: scoreType = 150;
+pub var razoringCoefficient: scoreType = 150;
+
+pub var IIRDepth: scoreType = 5; // >= 5
+pub var LMRDepth: scoreType = 3; // >= 3

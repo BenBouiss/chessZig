@@ -39,18 +39,20 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
         sched._threadPool.addThread(1) catch unreachable;
     }
     std.debug.print("============ Benchmark evaluation ============\n", .{});
-    const features: schedulerl.searchFeatures = .{ .fixedDepth = true, .reportProgress = true };
+    var features: schedulerl.searchFeatures = p_engine.options.searchF;
+    features.fixedDepth = true;
+    features.reportProgress = true;
     for (0..benchmarkEntries.len) |i| {
         p_engine.refreshInternals();
-        p_engine.searcher.searching = true;
+        p_engine.searcher.schedul.searching = true;
         sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
-        const res = sched.entryPointSearch(p_engine.state, benchmarkDepth, features);
+        const res = sched.entryPointSearch(p_engine, p_engine.state, benchmarkDepth, features);
         results.append(p_engine.alloc, res) catch unreachable;
-        p_engine.searcher.searching = false;
+        p_engine.searcher.schedul.searching = false;
     }
-    p_engine.searcher.searching = false;
+    p_engine.searcher.schedul.searching = false;
     printResults(&benchmarkEntries, &results);
     std.debug.print("============ Benchmark perft ============\nComing soon\n", .{});
 }
