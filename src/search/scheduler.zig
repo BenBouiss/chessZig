@@ -70,16 +70,8 @@ pub const uciSearcher = struct {
 pub fn waitingRoomOneShot(self: *enginel.engine) !void {
     const stat = self.searcher.getSearchStatus();
     if (stat == .INTERRUPTED or stat == .FINISHED) {
-        const decision = self.searcher.schedul.extractBest();
-        sendFinal(self, &decision);
-        if (stat == .INTERRUPTED) {
-            self.searcher.schedul.handleInterrupt();
-        }
         self.searcher.searching = false;
         self.searcher.schedul.timeM.reset();
-        if (self.options.trackMetrics) {
-            self.metric.addPlies(decision.depth);
-        }
     } else {
         // .CONTINUE
         // test for critical time use here
@@ -142,7 +134,6 @@ pub const scheduler = struct {
     timeM: timeManager = .{},
     _threadPool: threadingl.threadPool = .{},
     interrupt: bool = false,
-    debugMode: bool = false,
     pub inline fn reset(self: *scheduler) void {
         self.interrupt = false;
         self.timeM.reset();
@@ -151,7 +142,7 @@ pub const scheduler = struct {
         p_self._threadPool.stop();
         p_self._threadPool.waitOnFinish();
     }
-    pub fn entryPointSearch(p_self: *scheduler, p_engine: *enginel.engine, state: boardl.boardState, depth: u16, features: searchFeatures) searchReport {
+    pub fn entryPointSearch(p_self: *scheduler, state: boardl.boardState, depth: u16, features: searchFeatures) searchReport {
         // only used in the benchmark files
         if (!p_self._threadPool.running) {
             return .{};
@@ -166,17 +157,12 @@ pub const scheduler = struct {
         p_self._threadPool.waitOnFinish();
 
         const decision = p_self.extractBest();
-        sendFinal(p_engine, &decision);
         const res = p_self._threadPool.getCombinedInfo();
         return .{ .move = decision.move, .timeTakenMs = p_self.timeM.timeSinceStartMs(), .searchStat = res.searchStat, .score = decision.scoring };
     }
     pub inline fn extractBest(p_self: *scheduler) moveDecisionExt {
         const res = p_self._threadPool.getCombinedInfo();
         return res.currentBest.copy();
-    }
-
-    pub inline fn isDebugMode(p_self: *const scheduler) bool {
-        return p_self.debugMode;
     }
 };
 
@@ -206,15 +192,6 @@ pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDep
     _startSearch(&sched, p_state, &info, features, maxDepth);
     return info;
 }
-//pub fn startSearch_allMove(p_state: *boardl.boardState, features: searchFeatures, maxDepth: u16) heuristicl.moveOrdering {
-//    var sched: scheduler = .{};
-//    sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
-//    sched.timeM.startSearchTick();
-//    var info: threadingl.threadInfo = .{ .alive = true };
-//    _startSearch(&sched, p_state, &info, features, maxDepth);
-//    return info;
-//}
-
 pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
     // everything gets "returned" via the p_info
     // launched as single threaded
@@ -239,6 +216,7 @@ pub fn _startSearch(sched: *const scheduler, p_state: *boardl.boardState, p_info
         depth = iterativeDeepening(sched, p_state, p_info, features, maxDepth);
     }
     p_info.depth = depth;
+    _sendFinal(&p_info.currentBest);
 }
 pub fn iterativeDeepening(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) u16 {
     var depth: u16 = if (features.useStaticSearch) maxDepth else 0;
@@ -248,10 +226,6 @@ pub fn iterativeDeepening(sched: *const scheduler, p_state: *boardl.boardState, 
     var score: scoreType = 0;
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
-        if (sched.isDebugMode()) {
-            std.debug.print("[DEBUG] _startSearch: starting line ", .{});
-            ss.printPV();
-        }
         score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
 
         ss.setPrevLine(&p_info.currentBest.line);
@@ -265,14 +239,9 @@ pub fn iterativeDeepening(sched: *const scheduler, p_state: *boardl.boardState, 
 pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) u16 {
     var depth: u16 = if (features.useStaticSearch) maxDepth else 1;
     var ss: alphaBetal.searchStack = .{};
-
     var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
-        if (sched.isDebugMode()) {
-            std.debug.print("[DEBUG] _startSearch: starting line ", .{});
-            ss.printPV();
-        }
         score = alphaBetal.aspirationSearchEntrypoint(p_state, p_info, depth, &features, &ss, score);
         ss.setPrevLine(&p_info.currentBest.line);
         if (features.reportProgress) {
@@ -308,23 +277,16 @@ pub fn sendFinal(p_self: *enginel.engine, decision: *const moveDecisionExt) void
     const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{utilsl.trimStr(&decision.move.getStr())}) catch unreachable;
     p_self.respondNonFmt(msg);
 }
-
-pub fn sendUpdate(p_self: *scheduler) void {
-    const res = p_self._threadPool.getInfos()[0];
-    const n_nodes: i64 = @intCast(res.searchStat.n_nodeExplored);
-    const timeDelta = p_self.timeM.timeSinceStartMs();
-    var msgBuffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
-    const msg = std.fmt.bufPrint(&msgBuffer, "info nps: {d} nodes {d} retrieved: {d} stored: {d} cutoff: {d}", .{ @divFloor(n_nodes, (timeDelta + 1)) * 1000, n_nodes, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion, res.searchStat.n_cutoffs }) catch unreachable;
-    respondNoEng(utilsl.trimStr(msg)) catch {};
+pub fn _sendFinal(decision: *const moveDecisionExt) void {
+    var buffer = std.mem.zeroes([32]u8);
+    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{utilsl.trimStr(&decision.move.getStr())}) catch unreachable;
+    respondNoEng(msg) catch unreachable;
 }
+
 pub fn respondNoEng(msg: []const u8) !void {
     var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
     var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
     const interface = &writer.interface;
-    interface.writeAll(msg) catch {
-        return;
-    };
-    interface.flush() catch {
-        return;
-    };
+    try interface.writeAll(msg);
+    try interface.flush();
 }

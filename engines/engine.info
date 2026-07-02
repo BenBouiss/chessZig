@@ -1,6 +1,6 @@
 [engine1]
-path="engines/bin/engine_01_07_26";
-name="std";
+path="engines/bin/engine_02_07_26_1";
+name="after spsa v2";
 "setoption name reportProgress value false";
 "setoption name useAspiration value true";
 

@@ -566,12 +566,19 @@ pub fn filterMoveLegal(p_state: *const boardState, move_list: *moveContainer, wh
     const linePieceBB = cached[0];
     const diagPieceBB = cached[1];
     for (0..move_list.len) |i| {
-        if (move_list.moves[i].isCastle()) {
-            if (p_state.isCastleLegalPreMove(white, move_list.moves[i], all_attacks)) {
-                ret.append(move_list.moves[i]);
+        const move = move_list.moves[i];
+        if (move.isCastle()) {
+            if (move.isKingSideCastle()) {
+                if (p_state.canKingSideCastleAtt(white, all_attacks)) {
+                    ret.append(move);
+                }
+            } else {
+                if (p_state.canQueenSideCastleAtt(white, all_attacks)) {
+                    ret.append(move);
+                }
             }
-        } else if (p_state.isLegalFast(all_attacks, move_list.moves[i], &kingSqInfo, &checks, diagPieceBB, linePieceBB)) {
-            ret.append(move_list.moves[i]);
+        } else if (p_state.isLegalFast(all_attacks, move, &kingSqInfo, &checks, diagPieceBB, linePieceBB)) {
+            ret.append(move);
         }
     }
 

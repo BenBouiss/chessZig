@@ -164,7 +164,6 @@ pub const engineIdentification = struct {
     name: []const u8 = configl.NAME,
     author: []const u8 = configl.AUTHOR,
     code: []const u8 = configl.VERSION,
-    setLater: bool = false,
 };
 pub const engineMetrics = struct {
     timeSearchingUs: i64 = 0,
@@ -283,7 +282,6 @@ pub const engine = struct {
         ret.searcher = try alloc.create(schedulerl.uciSearcher);
         ret.searcher.* = .{};
         ret.searcher.schedul = .{};
-
         ret.uciMode = false;
         try ret.initOptions();
         try ret.initInternals();
@@ -353,7 +351,6 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
 
         try p_self.addOption(.{ .name = "reportProgress", .optionType = .REPORTPROG, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_REPORTPROGRESS } } });
-        //if (build_options.use) {}
         if (build_options.useTune) {
             weightl.appendAll();
         }
@@ -393,22 +390,9 @@ pub const engine = struct {
     }
     pub fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) bool {
         const cmdtype = getEngineCmdType(cmdBuffer);
-
         if (p_self.uciMode) {
             const trimmedBuffer = utilsl.trimStr(cmdBuffer);
             const status = p_self.uci_executeCmd(cmdtype, trimmedBuffer);
-            if (p_self.status.debugMode) {
-                if (cmdtype != .NOOP) {
-                    std.debug.print("[DEBUG] executeBuffer.engine: found command type {} status: {}\n", .{ cmdtype, status });
-                }
-            }
-            if (p_self.options.searchF.reportProgress) {
-                const statMsg = std.fmt.allocPrint(p_self.alloc, "engineOp {} {} '{s}' {d}", .{ cmdtype, status, cmdBuffer, cmdBuffer.len }) catch {
-                    return status;
-                };
-                defer p_self.alloc.free(statMsg);
-                p_self.respond(statMsg);
-            }
             return status;
         } else if (cmdtype == .UCI) {
             p_self.uciMode = true;
@@ -616,38 +600,16 @@ pub const engine = struct {
     pub fn executeDebugCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         if (utilsl.contains(cmdBuffer, "on", .ignoreCase)) {
             p_self.status.debugMode = true;
-            p_self.searcher.schedul.debugMode = true;
             return true;
         } else if (utilsl.contains(cmdBuffer, "off", .ignoreCase)) {
             p_self.status.debugMode = false;
-            p_self.searcher.schedul.debugMode = false;
             return true;
         }
         return false;
     }
     pub fn executeRegisterCmd(p_self: *engine, cmdBuffer: []const u8) bool {
-        //
-        var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer, ' ') catch {
-            return false;
-        };
-        defer tokens.deinit(p_self.alloc);
-        var tokenIndex: u32 = 1;
-        while (tokenIndex != tokens.items.len) {
-            if (utilsl.contains(tokens.items[tokenIndex], "later", .ignoreCase)) {
-                p_self.id.setLater = true;
-                return true;
-            }
-            if (utilsl.contains(tokens.items[tokenIndex], "name", .ignoreCase)) {
-                if ((tokenIndex != tokens.items.len) and !utilsl.contains(tokens.items[tokenIndex + 1], "code", .ignoreCase)) {
-                    p_self.setName(tokens.items[tokenIndex + 1]);
-                }
-            } else if (utilsl.contains(tokens.items[tokenIndex], "code", .ignoreCase)) {
-                if ((tokenIndex != tokens.items.len) and !utilsl.contains(tokens.items[tokenIndex + 1], "name", .ignoreCase)) {
-                    p_self.setCode(tokens.items[tokenIndex + 1]);
-                }
-            }
-            tokenIndex += 2;
-        }
+        _ = p_self;
+        _ = cmdBuffer;
         return true;
     }
     pub fn executeSetOptionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -664,25 +626,25 @@ pub const engine = struct {
 
         switch (name) {
             .THREADS => {
-                p_self.options.nThreads = getSpinValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.nThreads = getSpinValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USEHASHTABLE => {
-                p_self.options.searchF.useHash = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useHash = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .SAVELOGS => {
-                p_self.saveLogs = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.saveLogs = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .LOGSPATH => {
-                const path = getStringValFromSetOptionCmd(tokens) catch {
+                const path = getValueSlice(&tokens) catch {
                     return false;
                 };
 
@@ -706,54 +668,54 @@ pub const engine = struct {
             },
 
             .USENULLPRUNE => {
-                p_self.options.searchF.useNullPrune = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useNullPrune = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
             },
             .USELATEMOVEREDUC => {
-                p_self.options.searchF.useLMR = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useLMR = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
             },
 
             .USEFUTILITY => {
-                p_self.options.searchF.useFutility = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useFutility = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
             },
             .USEPROBCUT => {
-                p_self.options.searchF.useProbCut = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useProbCut = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
             },
 
             .USERAZORING => {
-                p_self.options.searchF.useRazoring = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useRazoring = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USERFP => {
-                p_self.options.searchF.useRFP = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useRFP = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USEIIR => {
-                p_self.options.searchF.useIIR = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useIIR = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USEASPIRATION => {
-                p_self.options.searchF.useAspiration = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useAspiration = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
 
             .HASHTABLESIZE => {
-                p_self.options.hashTableSize = getSpinValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.hashTableSize = getSpinValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
 
@@ -762,32 +724,32 @@ pub const engine = struct {
                 };
             },
             .UCI_ELO => {
-                const val = getSpinValFromSetOptionCmd(tokens, entry) catch {
+                const val = getSpinValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return p_self.updateElo(val);
             },
 
             .FIXED_DEPTH => {
-                p_self.options.searchF.fixedDepth = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.fixedDepth = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .USESTATICSEARCH => {
-                p_self.options.searchF.useStaticSearch = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.useStaticSearch = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .TRACKMETRICS => {
-                p_self.options.trackMetrics = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.trackMetrics = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
             },
             .REPORTPROG => {
-                p_self.options.searchF.reportProgress = getCheckValFromSetOptionCmd(tokens, entry) catch {
+                p_self.options.searchF.reportProgress = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;
@@ -803,7 +765,7 @@ pub const engine = struct {
                 return true;
             },
             .HEUR_WEIGHTS_PATH => {
-                const path = getStringValFromSetOptionCmd(tokens) catch {
+                const path = getValueSlice(&tokens) catch {
                     return false;
                 };
                 if (!filel.fileExists(path)) {
@@ -816,7 +778,7 @@ pub const engine = struct {
                 for (0..weightl.tunerOpts.items.len) |i| {
                     const opt = weightl.tunerOpts.items[i];
                     if (utilsl.contains(cmdBuffer, opt.opt.name, .ignoreCase)) {
-                        const val = getSpinValFromSetOptionCmd(tokens, opt.opt) catch {
+                        const val = getSpinValFromSetOptionCmd(&tokens, opt.opt) catch {
                             return false;
                         };
                         opt.addr.* = val;
@@ -892,7 +854,6 @@ pub const engine = struct {
                 try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
             }
         }
-
         p_self.options.hashTableSize = hashSize;
         hashTablel._initOrReallocHashTable(p_self.alloc, @intCast(p_self.options.hashTableSize), p_self.status.debugMode);
         return true;
@@ -923,9 +884,6 @@ pub const engine = struct {
         p_self.searcher.reset();
 
         if (goArg.depth == 0) {
-            if (p_self.status.debugMode) {
-                std.debug.print("[DEBUG] executeGoCmd: No depth found in the cmd string using the default engine option \n", .{});
-            }
             goArg.depth = p_self.options.depthLevel;
         }
         if (goArg.type == .PERFT) {
@@ -1040,60 +998,41 @@ pub fn parseSetOptionTypeCmd(options: *std.ArrayList(setOptionEntry), cmdBuffer:
     }
     return .INVALID;
 }
-pub fn getSpinValFromSetOptionCmd(tokens: std.ArrayList([]const u8), entry: setOptionEntry) !spinVarType {
+pub fn getValueSlice(tokens: *std.ArrayList([]const u8)) ![]const u8 {
     for (0..tokens.items.len) |i| {
         const token = tokens.items[i];
-        if (utilsl.contains(token, "value", .ignoreCase)) {
-            if (i != tokens.items.len - 1) {
-                const ret = std.fmt.parseInt(spinVarType, tokens.items[i + 1], 10) catch {
-                    return debug_err.valueErr;
-                };
-
-                if (!entry.info.spin.validateValue(ret)) {
-                    return debug_err.valueErr;
-                }
-                return ret;
-            }
-        }
-    }
-    return debug_err.valueErr;
-}
-pub fn getCheckValFromSetOptionCmd(tokens: std.ArrayList([]const u8), entry: setOptionEntry) !bool {
-    for (0..tokens.items.len) |i| {
-        const token = tokens.items[i];
-
-        if (utilsl.contains(token, "value", .ignoreCase)) {
-            if (i != tokens.items.len - 1) {
-                const val = tokens.items[i + 1];
-                if (!entry.info.str.validateValue(val)) {
-                    return debug_err.valueErr;
-                }
-                return utilsl.contains(val, "true", .ignoreCase);
-            }
-        }
-    }
-    return debug_err.valueErr;
-}
-pub fn getStringValFromSetOptionCmd(tokens: std.ArrayList([]const u8)) ![]const u8 {
-    for (0..tokens.items.len) |i| {
-        const token = tokens.items[i];
-
         if (utilsl.contains(token, "value", .ignoreCase)) {
             if (i != tokens.items.len - 1) {
                 return tokens.items[i + 1];
+            } else {
+                return debug_err.valueErr;
             }
         }
     }
     return debug_err.valueErr;
 }
+pub fn getSpinValFromSetOptionCmd(tokens: *std.ArrayList([]const u8), entry: setOptionEntry) !spinVarType {
+    const s = try getValueSlice(tokens);
+    const ret = std.fmt.parseInt(spinVarType, s, 10) catch {
+        return debug_err.valueErr;
+    };
+    if (!entry.info.spin.validateValue(ret)) {
+        return debug_err.valueErr;
+    }
+    return ret;
+}
+
+pub fn getCheckValFromSetOptionCmd(tokens: *std.ArrayList([]const u8), entry: setOptionEntry) !bool {
+    const s = try getValueSlice(tokens);
+    if (!entry.info.str.validateValue(s)) {
+        return debug_err.valueErr;
+    }
+    return utilsl.contains(s, "true", .ignoreCase);
+}
 
 fn inputThreading(p_self: *engine) void {
-    var cumulSw: timel.stopWatch = .{};
-    cumulSw.startTimeTick();
     while (p_self.status.running) {
         while (p_self.input.nonEmpty() and p_self.status.running) {
-            cumulSw.reset();
-            cumulSw.startTimeTick();
             var sw: timel.stopWatch = .{};
             sw.startTimeTick();
             const cmd = p_self.input.readBuffer();
@@ -1102,26 +1041,13 @@ fn inputThreading(p_self: *engine) void {
                 p_self.appendLogTyped(cmd.cmd[0..cmd.len], .CHANNELREAD) catch {};
             }
 
-            const status = p_self.executeBuffer(cmd.cmd[0..cmd.len]);
+            _ = p_self.executeBuffer(cmd.cmd[0..cmd.len]);
 
             if (p_self.trackMetrics()) {
                 p_self.metric.addTimeToProcessingUs(sw.timeSinceStartUs());
             }
-            if (p_self.saveLogs and p_self.status.running) {
-                const respmsg = std.fmt.allocPrint(p_self.alloc, "SERVING: {s} status {}\n", .{ cmd.cmd[0..cmd.len], status }) catch {
-                    continue;
-                };
-                defer p_self.alloc.free(respmsg);
-                p_self.appendLog(respmsg) catch {
-                    continue;
-                };
-            }
         }
-        if (cumulSw.timeSinceStartUs() > configl.DEBUG_INACTIVITY_READING_US) {
-            std.debug.print("[INACTIVITY] inputThreading.engine: no activity found in the last {d}s \n", .{configl.DEBUG_INACTIVITY_READING_S});
-            cumulSw.reset();
-            cumulSw.startTimeTick();
-        }
+
         if (p_self.status.running) {
             if (p_self.searcher.searching and !p_self.status.benchmarking) {
                 // check things here what scheduler is doing
@@ -1189,17 +1115,6 @@ pub fn launch_engine(debugMode: bool) !void {
     return;
 }
 
-//pub fn main(init: std.process.Init.Minimal) anyerror!void {
-//    _ = init;
-//    const allocator = std.heap.page_allocator;
-//    var threaded: std.Io.Threaded = .init(allocator, .{});
-//    defer threaded.deinit();
-//    const io = threaded.io();
-//    mainl.GLOBAL_CTX.setIO(io);
-//    mainl.GLOBAL_CTX.setGPA(allocator);
-//    mainl.GLOBAL_CTX.isInit = true;
-//    try launch_engine(false);
-//}
 pub fn main(init: std.process.Init) anyerror!void {
     mainl.GLOBAL_CTX.setInit(init);
     try launch_engine(false);

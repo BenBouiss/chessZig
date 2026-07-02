@@ -1,5 +1,4 @@
 const movel = @import("../move.zig");
-const chessl = @import("../chess.zig");
 const schedulerl = @import("scheduler.zig");
 const configl = @import("../config.zig");
 const mainl = @import("../main.zig");
@@ -36,10 +35,7 @@ pub const threadPackageArray = std.MultiArrayList(threadPackageFrame);
 pub fn getThreadPackArray(alloc: std.mem.Allocator, p_state: *const boardl.boardState, moveArray: *const movel.moveContainer, n_threads: u32) !threadPackageArray {
     const _nThread = @min(n_threads, moveArray.len);
     var ret: threadPackageArray = .{};
-    var threadedMoves = moveArray.cutEvenly(alloc, _nThread) catch {
-        std.debug.print("[ERROR] getThreadPackArray: move container init\n", .{});
-        return chessl.debug_err.valueErr;
-    };
+    var threadedMoves = try moveArray.cutEvenly(alloc, _nThread);
     defer threadedMoves.deinit(alloc);
     for (0.._nThread) |i| {
         try ret.append(alloc, .{ .chessState = p_state.copy(), .moves = threadedMoves.items[i], .threadHandle = undefined, ._tInfo = .{} });
@@ -59,11 +55,7 @@ pub fn getCombinedFromPack(p_array: *threadPackageArray) threadInfo {
     }
     return ret;
 }
-pub fn zeroThreadPackArray(p_array: *threadPackageArray) void {
-    for (0..p_array.len) |i| {
-        p_array.items(._tInfo)[i].searchStat.n_nodeExplored = 0;
-    }
-}
+
 pub fn freeThreadPackArray(alloc: std.mem.Allocator, p_array: *threadPackageArray) void {
     for (0..p_array.len) |i| {
         var cell: std.ArrayList(movel.IMove) = p_array.items(.moves)[i];
@@ -120,9 +112,6 @@ pub const threadPool = struct {
 
     pub fn addThread(p_self: *threadPool, n: usize) !void {
         p_self.running = true;
-        if (p_self.debugMode) {
-            std.debug.print("[DEBUG] addThread: Adding {d} thread(s) current nbr {d}\n", .{ n, p_self.nThread });
-        }
         for (0..n) |_| {
             p_self.threadInfos[p_self.nThread] = .{ .alive = true };
             p_self.threadProps[p_self.nThread]._handle = try std.Thread.spawn(.{}, waitingRoom, .{ p_self, p_self.nThread });
@@ -131,13 +120,11 @@ pub const threadPool = struct {
     }
 
     pub fn close(p_self: *threadPool) void {
-        std.debug.print("[EXIT] Closing threadPool with {d} threads\n", .{p_self.nThread});
         p_self.running = false;
         for (0..p_self.nThread) |i| {
             p_self.threadInfos[i].alive = false;
             p_self.threadProps[i].alive = false;
         }
-        std.debug.print("[EXIT] Joining on threadPool\n", .{});
         for (0..p_self.nThread) |i| {
             p_self.threadProps[i]._handle.join();
         }
@@ -149,18 +136,7 @@ pub const threadPool = struct {
         }
     }
     pub fn waitOnFinish(p_self: *threadPool) void {
-        var sw: timel.stopWatch = .{};
-        sw.startTimeTick();
-        const timeout = 5;
-        while (p_self.getNumberOfWorking() != 0 and p_self.isRunning()) {
-            if (sw.timeSinceStartSec() > timeout) {
-                sw.reset();
-                sw.startTimeTick();
-                if (p_self.debugMode) {
-                    std.debug.print("[INACTIVITY] threadPool.waitOnFinish : no activity in the last {d} seconds\n", .{timeout});
-                }
-            }
-        }
+        while (p_self.getNumberOfWorking() != 0 and p_self.isRunning()) {}
     }
     pub fn getNumberOfWorking(p_self: *const threadPool) usize {
         var ret: usize = 0;
@@ -219,40 +195,22 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     p_self.threadProps[idx].status = .WAITING;
     p_self.threadProps[idx].alive = true;
     p_self.threadProps[idx].timeWorkingUs = 0;
-    var sw: timel.stopWatch = .{};
-    sw.startTimeTick();
-    const timeout = 2;
     const alive = &p_self.threadProps[idx].alive;
-
-    if (p_self.debugMode) {
-        std.debug.print("[DEBUG] threadPool.WaitingRoom: Thread {d} entering loop\n", .{idx});
-    }
     while (p_self.isRunning() and alive.*) {
         if (!p_self.working) {
             std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.THREADPOOL_TICKRATE_NS) }, .real) catch unreachable;
         }
-        if (sw.timeSinceStartSec() > timeout) {
-            sw.reset();
-            sw.startTimeTick();
-            if (p_self.debugMode) {
-                std.debug.print("[INACTIVITY] threadPool.WaitingRoom: Thread {d} no activity in the last {d} seconds. Running {} alive {}\n", .{ idx, timeout, p_self.running, alive.* });
-            }
-        }
+
         if (p_self.threadProps[idx].searchPing) {
-            sw.reset();
+            var sw: timel.stopWatch = .{};
             sw.startTimeTick();
             p_self.threadProps[idx].searchPing = false;
             p_self.threadProps[idx].status = .WORKING;
             var pack = p_self.packages[idx];
             schedulerl._startSearch(pack.scheduler, &pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth);
-
             p_self.threadProps[idx].timeWorkingUs += sw.timeSinceStartUs();
             p_self.threadProps[idx].status = .WAITING;
         }
     }
     p_self.running = false;
-
-    if (p_self.debugMode) {
-        std.debug.print("[EXIT] threadPool.WaitingRoom: Thread {d} exiting\n", .{idx});
-    }
 }

@@ -112,16 +112,7 @@ pub const board = struct {
     pub inline fn getPieceCount(self: board, piece: e_piece) e_piece {
         return self.pieceCount[@intFromEnum(piece)];
     }
-    pub inline fn getKingSq(self: board, white: bool) e_square {
-        if (white) {
-            return self.wKingSq;
-        }
-        return self.bKingSq;
-    }
 
-    pub inline fn getKingBB(self: board, white: bool) bitboard {
-        return chessl.sqToBitboard(self.getKingSq(white));
-    }
     pub inline fn getSidePieceCount(self: board, color: e_color) u8 {
         return chessl.popcount(self.c_occupiedBB[@intFromEnum(color)]);
     }
@@ -136,10 +127,6 @@ pub const board = struct {
         self.turnCount -= 1;
         self.invertTurn();
     }
-
-    pub fn printCount(self: board) void {
-        std.debug.print("{any}\n", .{self.pieceCount});
-    }
 };
 pub inline fn pieceToColor(piece: e_piece) e_color {
     if (@intFromEnum(piece) < chessl.N_PIECES_TYPES) {
@@ -147,10 +134,6 @@ pub inline fn pieceToColor(piece: e_piece) e_color {
     }
     return .BLACK;
 }
-pub const moveStore = struct {
-    lastMove: IMove = .{},
-};
-
 pub const boardFrame = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
@@ -828,36 +811,20 @@ pub const boardState = struct {
         return @divFloor((ret << 8) + (typel.totalPhase >> 1), typel.totalPhase);
         // ((24 - p) * 256) + (24 / 2)) / 24
     }
-    pub fn isEndGame(self: *const boardState) bool {
+    pub inline fn isEndGame(self: *const boardState) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
         const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
         return (nWhiteP < 3) and (nBlackP < 3);
     }
 
-    pub inline fn getKingBB(self: boardState, white: bool) u64 {
-        if (white) {
-            return self.getPieceBB(.nWhiteKing);
-        }
-        return self.getPieceBB(.nBlackKing);
-    }
     pub inline fn getKingSq(self: *const boardState, white: bool) e_square {
         if (white) {
             return self.b.wKingSq;
         }
         return self.b.bKingSq;
     }
-    pub fn isCastleLegalPreMove(p_self: *const boardState, white: bool, move: IMove, all_attacks: u64) bool {
-        const kingBB = p_self.getKingBB(white);
-        if (move.isKingSideCastle()) {
-            if ((all_attacks & (kingBB | (kingBB << 1) | (kingBB << 2))) != 0) {
-                return false;
-            }
-        } else {
-            if ((all_attacks & (kingBB | (kingBB >> 1) | (kingBB >> 2))) != 0) {
-                return false;
-            }
-        }
-        return true;
+    pub inline fn getKingBB(self: *const boardState, white: bool) bitboard {
+        return chessl.sqToBitboard(self.getKingSq(white));
     }
 
     pub inline fn canKingSideCastle(self: boardState, comptime white: bool) bool {
@@ -872,19 +839,7 @@ pub const boardState = struct {
         }
         return self.frame.stat.canQueensideCastle(false) and (chessl.canMove(.e8, .a8, self.b.occupiedBB()));
     }
-    pub inline fn _canQueenSideCastle(self: boardState, white: bool) bool {
-        if (white) {
-            return self.canQueenSideCastle(true);
-        }
-        return self.canQueenSideCastle(false);
-    }
 
-    pub inline fn _canKingSideCastle(self: boardState, white: bool) bool {
-        if (white) {
-            return self.canKingSideCastle(true);
-        }
-        return self.canKingSideCastle(false);
-    }
     pub inline fn canKingSideCastleAtt(self: boardState, white: bool, attackedSquares: u64) bool {
         if (white) {
             return self.frame.stat.canKingsideCastle(true) and chessl.canMove(.e1, .h1, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.e1, .h1)) == chessl.EMPTY);
@@ -922,8 +877,9 @@ pub const boardState = struct {
         return self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
     }
     //https://home.hccnet.nl/h.g.muller/deepfut.html
-    pub fn getNthBestPiece(self: *const boardState, colorOffset: usize, n: u8) e_piece {
+    pub fn getNthBestPiece(self: *const boardState, white: bool, n: u8) e_piece {
         var _n: i32 = @intCast(n);
+        const colorOffset: usize = if (white) 0 else chessl.N_PIECES_TYPES;
         for (1..chessl.N_PIECES_TYPES) |idx| {
             // 1: skips the king
             const pieceIdx = colorOffset + (chessl.N_PIECES_TYPES - 1) - idx;
@@ -936,20 +892,7 @@ pub const boardState = struct {
         // returns the king if no piece found
         return @enumFromInt(colorOffset + chessl.N_PIECES_TYPES - 1);
     }
-    pub inline fn firstPiece(self: *const boardState, white: bool) e_piece {
-        if (white) {
-            return self.getNthBestPiece(0, 1);
-        } else {
-            return self.getNthBestPiece(chessl.N_PIECES_TYPES, 1);
-        }
-    }
-    pub inline fn secondPiece(self: *const boardState, white: bool) e_piece {
-        if (white) {
-            return self.getNthBestPiece(0, 2);
-        } else {
-            return self.getNthBestPiece(chessl.N_PIECES_TYPES, 2);
-        }
-    }
+
     pub inline fn getSidePieceCount(self: boardState, color: e_color) u8 {
         return chessl.popcount(self.b.c_occupiedBB[@intFromEnum(color)]);
     }
@@ -965,7 +908,7 @@ pub const boardState = struct {
         }
         return p_self.isLegal(p_self.whiteToMove());
     }
-    pub fn isInsufficientMaterial(p_self: *const boardState) bool {
+    pub inline fn isInsufficientMaterial(p_self: *const boardState) bool {
         return p_self.isInsufficientMaterialSide(false) and p_self.isInsufficientMaterialSide(true);
     }
     pub fn isInsufficientMaterialSide(p_self: *const boardState, white: bool) bool {

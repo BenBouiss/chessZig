@@ -110,9 +110,9 @@ pub fn parseLogFile(alloc: std.mem.Allocator, path: []const u8, logFile: boardLo
             continue;
         }
         if (finalPositionFlag) {
-            const moves = chessl.getMoveContainerFromString(utilsl.stripStr(s._slice()), false) catch {
-                continue;
-            };
+            var ret = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+            try chessl.applyUciMoves(&ret, utilsl.stripStr(s._slice()), false);
+            const moves = ret.moveHistory;
             switch (outFile) {
                 .bulletFF => {
                     str_incrementalMoveContainer(logFile.bulletFF, &moves) catch {

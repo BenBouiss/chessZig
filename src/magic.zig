@@ -1,7 +1,3 @@
-const build_options = @import("build_options");
-
-const useMagic = build_options.useMagic;
-
 const chess = @import("chess.zig");
 const squarel = @import("square.zig");
 

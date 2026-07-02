@@ -29,8 +29,6 @@ pub fn dispatchUciBenchmark(p_engine: *engine) bool {
 pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
     defer p_engine.status.benchmarking = false;
     var results: std.ArrayList(schedulerl.searchReport) = std.ArrayList(schedulerl.searchReport).initCapacity(p_engine.alloc, 4) catch {
-        //
-        std.debug.print("[ERROR] dispatchUciBenchmarkThreads: Cant init array of results\n", .{});
         return;
     };
     defer results.deinit(p_engine.alloc);
@@ -38,9 +36,7 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
 
     var sched = &p_engine.searcher.schedul;
     if (!sched._threadPool.running) {
-        sched._threadPool.addThread(1) catch {
-            std.debug.print("[ERROR] dispatchUciBenchmarkThreads: Cant init threadpool and none found\n", .{});
-        };
+        sched._threadPool.addThread(1) catch unreachable;
     }
     std.debug.print("============ Benchmark evaluation ============\n", .{});
     const features: schedulerl.searchFeatures = .{ .fixedDepth = true, .reportProgress = true };
@@ -50,7 +46,7 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
         sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
-        const res = sched.entryPointSearch(p_engine, p_engine.state, benchmarkDepth, features);
+        const res = sched.entryPointSearch(p_engine.state, benchmarkDepth, features);
         results.append(p_engine.alloc, res) catch unreachable;
         p_engine.searcher.searching = false;
     }

@@ -25,11 +25,8 @@ pub fn build(b: *std.Build) void {
     const build_options = b.addOptions();
     // add command line flag
     // and set default value
-    build_options.addOption(bool, "fastBitscan", b.option(bool, "fastBitscan", "Use the branchless version of bitscan and reverse bitscan") orelse false);
-    build_options.addOption(bool, "useMagic", b.option(bool, "useMagic", "Use magic generation for ray pieces") orelse false);
     build_options.addOption(bool, "useStaged", b.option(bool, "useStaged", "Use the staged move generation") orelse false);
     build_options.addOption(bool, "useDebug", b.option(bool, "useDebug", "Use debugging checks in the gen/make/unmake of move") orelse false);
-    build_options.addOption(bool, "useHash", b.option(bool, "useHash", "Use hashtable for perft") orelse false);
 
     build_options.addOption(bool, "useAVX2", b.option(bool, "useAVX2", "Use avx2 for checkers bitboard generation") orelse false);
 

@@ -3,8 +3,6 @@ const std = @import("std");
 //https://stackoverflow.com/questions/76384694/how-to-do-conditional-compilation-with-zig
 const build_options = @import("build_options");
 
-pub const fastBitscan = build_options.fastBitscan;
-const useMagic = build_options.useMagic;
 const useStaged = build_options.useStaged;
 const useAVX2 = build_options.useAVX2;
 
@@ -179,43 +177,17 @@ pub inline fn popcount(bb: u64) u8 {
 }
 pub inline fn bitscan(bb: u64) u8 {
     // assumes bb is non empty
-    if (comptime fastBitscan) {
-        var ret: u32 = undefined;
-        _ = intrinsicsl._BitScanForward64(&ret, bb);
-        return @intCast(ret);
-    } else {
-        return bitscanK(bb);
-    }
-}
-pub fn bitscanK(b: u64) u8 {
-    var lsb: u64 = (((b - 1)) ^ b) & b;
-    var count: u8 = 0;
-    while (lsb != 0) {
-        count += 1;
-        lsb = lsb >> 1;
-    }
-    return count;
+    var ret: u32 = undefined;
+    _ = intrinsicsl._BitScanForward64(&ret, bb);
+    return @intCast(ret);
 }
 
 pub inline fn r_bitscan(bb: u64) u8 {
-    if (comptime fastBitscan) {
-        var ret: u32 = undefined;
-        _ = intrinsicsl._BitScanForwardReverse64(&ret, bb);
-        return @intCast(ret);
-    } else {
-        return r_bitscanK(bb);
-    }
+    var ret: u32 = undefined;
+    _ = intrinsicsl._BitScanForwardReverse64(&ret, bb);
+    return @intCast(ret);
 }
 
-pub fn r_bitscanK(b: u64) u8 {
-    var bb = b;
-    var count: u8 = 0;
-    while (bb != 0) {
-        count += 1;
-        bb = (bb >> 1);
-    }
-    return count;
-}
 pub fn print_board(p_board: *const boardl.boardState) void {
     var print_buffer: [8][8]u8 = undefined;
     @memset(&print_buffer, .{ 0, 0, 0, 0, 0, 0, 0, 0 });
@@ -306,13 +278,6 @@ pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
         }
         const tmp_enum = getPieceFromStr(letter);
 
-        if (board_offset == N_SQUARES) {
-            std.debug.print("[DEBUG] getBoardFromFen_pieces: letter: {d}, fen: {s}\n", .{ letter, fen });
-            for (0..fen.len) |i| {
-                std.debug.print("({c}, {d}), ", .{ fen[i], fen[i] });
-            }
-            std.debug.print("[DEBUG] getBoardFromFen_pieces. \n", .{});
-        }
         if (!ret.placePiece(tmp_enum, @enumFromInt(board_offset))) {
             std.debug.print("[DEBUG] getBoardFromFen_pieces: Fen problem with piece placement {s}\n", .{fen});
             print_board(&ret);
@@ -408,14 +373,7 @@ pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !boardl.boardState {
     try applyUciMoves(&ret, uciStr, debug);
     return ret;
 }
-// moveList is a string of fromTo[Promo] moves typically loaded from a log file
-pub fn getMoveContainerFromString(moveList: []const u8, debug: bool) !matchMoveContainer {
-    var ret = getBoardFromFen(DEFAULT_FEN) catch {
-        return debug_err.fenErr;
-    };
-    try applyUciMoves(&ret, moveList, debug);
-    return ret.moveHistory;
-}
+
 pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: bool) !void {
     const moves = getEmptyMoveListFromStr(uciStr);
     for (0..moves.len) |i| {
@@ -786,11 +744,7 @@ pub inline fn rankMaskFromRankN(rank: u8) u64 {
 }
 
 pub inline fn getRookAttacks(occBB: u64, sq: e_square) u64 {
-    if (comptime useMagic) {
-        return magicl.getRookMoves(sq, occBB);
-    } else {
-        return getRookAttacksRay(occBB, sq);
-    }
+    return magicl.getRookMoves(sq, occBB);
 }
 pub inline fn getRookAttacksRay(occBB: u64, sq: e_square) u64 {
     const sqBB = sqToBitboard(sq);
@@ -804,18 +758,10 @@ pub inline fn getBishopAttacksRay(occBB: u64, sq: e_square) u64 {
     return moveGenl.northWestOne(moveGenl.northWestOccl(sqBB, free)) | moveGenl.northEastOne(moveGenl.northEastOccl(sqBB, free)) | moveGenl.southEastOne(moveGenl.southEastOccl(sqBB, free)) | moveGenl.southWestOne(moveGenl.southWestOccl(sqBB, free));
 }
 pub inline fn getBishopAttacks(occBB: u64, sq: e_square) u64 {
-    if (comptime useMagic) {
-        return magicl.getBishopMoves(sq, occBB);
-    } else {
-        return getBishopAttacksRay(occBB, sq);
-    }
+    return magicl.getBishopMoves(sq, occBB);
 }
 pub inline fn getQueenAttacks(occBB: u64, sq: e_square) u64 {
-    if (comptime useMagic) {
-        return magicl.getRookMoves(sq, occBB) | magicl.getBishopMoves(sq, occBB);
-    } else {
-        return getBishopAttacksRay(occBB, sq) | getRookAttacksRay(occBB, sq);
-    }
+    return magicl.getRookMoves(sq, occBB) | magicl.getBishopMoves(sq, occBB);
 }
 
 pub inline fn getPawnAttacks(sq: e_square, comptime white: bool) u64 {
@@ -1268,14 +1214,14 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
     return ret;
 }
 
-pub fn algebraicIsLetterPiece(letter: u8) bool {
+pub inline fn algebraicIsLetterPiece(letter: u8) bool {
     // P, B, N, R, Q, K
     return letter == 'P' or letter == 'B' or letter == 'N' or letter == 'R' or letter == 'Q' or letter == 'K';
 }
-pub fn algebraicIsLetterFile(letter: u8) bool {
+pub inline fn algebraicIsLetterFile(letter: u8) bool {
     return letter >= 'a' and letter <= 'h';
 }
-pub fn algebraicIsLetterRank(letter: u8) bool {
+pub inline fn algebraicIsLetterRank(letter: u8) bool {
     return letter >= '1' and letter <= '8';
 }
 pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !IMove {
