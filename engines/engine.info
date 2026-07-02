@@ -1,12 +1,15 @@
 [engine1]
-path="engines/bin/engine_15_06_26_2";
-name="prev";
+path="engines/bin/engine_01_07_26";
+name="std";
 "setoption name reportProgress value false";
+"setoption name useAspiration value true";
 
 [engine2]
-path="engines/bin/engine_17_06_26_3";
-name="new mate thingy";
+path="engines/bin/engine_01_07_26";
+name="new texel";
 "setoption name reportProgress value false";
+"setoption name useAspiration value true";
+"setoption name heuristicWeightsPath value test/texel_dataloader_1782943104_2.winfo";
 
 [match]
 nMatch=128;

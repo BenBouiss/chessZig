@@ -33,6 +33,8 @@ pub fn build(b: *std.Build) void {
 
     build_options.addOption(bool, "useAVX2", b.option(bool, "useAVX2", "Use avx2 for checkers bitboard generation") orelse false);
 
+    build_options.addOption(bool, "useTune", b.option(bool, "useTune", "Tuning mode for spsa tuning") orelse false);
+
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
     // Zig modules are the preferred way of making Zig code available to consumers.

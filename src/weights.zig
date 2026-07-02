@@ -2,6 +2,10 @@ const heuristicl = @import("heuristic.zig");
 const chessl = @import("chess.zig");
 const typel = @import("type.zig");
 
+const std = @import("std");
+const mainl = @import("main.zig");
+const enginel = @import("engine.zig");
+
 const scoreType = typel.scoreType;
 const milliDepth = typel.milliDepth;
 const heuristicValues = heuristicl.heuristicValues;
@@ -110,52 +114,125 @@ pub const kingScoreArr = [chessl.N_SQUARES]scoreType{
 // source: https://www.chessprogramming.org/Simplified_Evaluation_Function
 pub const kingScoreArr_EG = [chessl.N_SQUARES]scoreType{ -50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0, 0, -10, -20, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -30, 0, 0, 0, 0, -30, -30, -50, -30, -30, -30, -30, -30, -30, -50 };
 
-// optionnal pre filled heuristic values
-// ============ presets ============
-//const simple: heuristicValues = .{};
-//const vals_iter6_pop16: heuristicValues = .{ .StackedPawnValue = .{ -12, -12 }, .PassedPawnValue = .{ 93, 93 }, .IsolatedPawnValue = .{ 6, 6 }, .SafetyKnightValue = .{ 36, 36 }, .SafetyBishopValue = .{ 8, 8 }, .SafetyRookValue = .{ -5, -5 }, .SafetyQueenValue = .{ 44, 44 }, .StructureProtectionValue = .{ 1, 1 }, .MobilityValue = .{ -4, -4 } };
-
-//const vals_iter26_pop16: heuristicValues = .{ .StackedPawnValue = .{ .{-16}, -16, .{-16}, -16 }, .PassedPawnValue = .{ -12, -12 }, .IsolatedPawnValue = .{ 27, 27 }, .SafetyKnightValue = .{ 6, 6 }, .SafetyBishopValue = .{ 5, 5 }, .SafetyRookValue = .{ -7, -7 }, .SafetyQueenValue = .{ 12, 12 }, .StructureProtectionValue = .{ 2, 2 }, .MobilityValue = .{ -2, -2 } };
-
-//https://www.chessprogramming.org/Futility_Pruning
-// ============ futility prunning ============
+pub var tunerOpts: std.ArrayList(param_entry) = .empty;
+pub const param_entry = struct {
+    opt: enginel.setOptionEntry,
+    addr: *scoreType,
+};
+pub fn add_param(addr: *scoreType, min: scoreType, max: scoreType, name: []const u8) void {
+    const p: param_entry = .{ .addr = addr, .opt = .{ .argType = .SPIN, .optionType = .INVALID, .name = name, .info = enginel.optionInfo{ .spin = .{ .default = addr.*, .min = min, .max = max } } } };
+    tunerOpts.append(mainl.getGlobalGPA(), p) catch unreachable;
+}
 
 // global things here
-pub var global_PawnValue: scoreType = simplePawnScore;
-pub var global_BishopValue: scoreType = simpleBishopScore;
-pub var global_KnightValue: scoreType = simpleKnightScore;
-pub var global_RookValue: scoreType = simpleRookScore;
-pub var global_QueenValue: scoreType = simpleQueenScore;
+pub fn appendAll() void {
+    // counts
+    //add_param(&global_PawnVal, 0, 1000, "global_PawnVal");
+    //add_param(&global_BishopVal, 0, 100, "global_BishopVal");
+    //add_param(&global_KnightVal, 0, 100, "global_KnightVal");
+    //add_param(&global_RookVal, 0, 100, "global_RookVal");
+    //add_param(&global_QueenVal, 0, 100, "global_QueenVal");
+
+    // 'texel'
+    add_param(&global_MobilityVal[0], 0, 100, "global_MobilityVal_MG");
+    add_param(&global_MobilityVal[1], 0, 100, "global_MobilityVal_EG");
+
+    add_param(&global_KingMobilityVal[0], 0, 100, "global_KingMobilityVal_MG");
+    add_param(&global_KingMobilityVal[1], 0, 100, "global_KingMobilityVal_EG");
+    add_param(&global_OpenFileRookVal[0], 0, 100, "global_OpenFileRookVal_MG");
+    add_param(&global_OpenFileRookVal[1], 0, 100, "global_OpenFileRookVal_EG");
+
+    // structure
+    add_param(&global_StructureProtectionVal[0], 0, 100, "global_StructureProtectionVal_MG");
+    add_param(&global_StructureProtectionVal[1], 0, 100, "global_StructureProtectionVal_EG");
+    add_param(&global_centerProtectionVal[0], 0, 100, "global_centerProtectionVal_MG");
+    add_param(&global_centerProtectionVal[1], 0, 100, "global_centerProtectionVal_EG");
+
+    // pawn structure
+    add_param(&global_IsolatedPawnVal[0], 0, 100, "global_IsolatedPawnVal_MG");
+    add_param(&global_IsolatedPawnVal[1], 0, 100, "global_IsolatedPawnVal_EG");
+    add_param(&global_StackedPawnVal[0], 0, 100, "global_StackedPawnVal_MG");
+    add_param(&global_StackedPawnVal[1], 0, 100, "global_StackedPawnVal_EG");
+    add_param(&global_PassedPawnVal[0], 0, 100, "global_PassedPawnVal_MG");
+    add_param(&global_PassedPawnVal[1], 0, 100, "global_PassedPawnVal_EG");
+    add_param(&global_phalanxDuoPawnVal[0], 0, 100, "global_phalanxDuoPawnVal_MG");
+    add_param(&global_phalanxDuoPawnVal[1], 0, 100, "global_phalanxDuoPawnVal_EG");
+    add_param(&global_connectionPawnVal[0], 0, 100, "global_connectionPawnVal_MG");
+    add_param(&global_connectionPawnVal[1], 0, 100, "global_connectionPawnVal_EG");
+
+    // tempo
+    add_param(&global_tempoChecksScore[0], 0, 100, "global_tempoChecksScore_MG");
+    add_param(&global_tempoChecksScore[1], 0, 100, "global_tempoChecksScore_EG");
+    add_param(&global_pieceThreatScore[0], 0, 100, "global_pieceThreatScore_MG");
+    add_param(&global_pieceThreatScore[1], 0, 100, "global_pieceThreatScore_EG");
+
+    // safety
+    add_param(&global_SafetyBishopVal[0], 0, 100, "global_SafetyBishopVal_MG");
+    add_param(&global_SafetyBishopVal[1], 0, 100, "global_SafetyBishopVal_EG");
+    add_param(&global_SafetyKnightVal[0], 0, 100, "global_SafetyKnightVal_MG");
+    add_param(&global_SafetyKnightVal[1], 0, 100, "global_SafetyKnightVal_EG");
+    add_param(&global_SafetyRookVal[0], 0, 100, "global_SafetyRookVal_MG");
+    add_param(&global_SafetyRookVal[1], 0, 100, "global_SafetyRookVal_EG");
+    add_param(&global_SafetyQueenVal[0], 0, 100, "global_SafetyQueenVal_MG");
+    add_param(&global_SafetyQueenVal[1], 0, 100, "global_SafetyQueenVal_EG");
+
+    // king
+    add_param(&global_KingProximityVal[0], 0, 100, "global_KingProximityVal_MG");
+    add_param(&global_KingProximityVal[1], 0, 100, "global_KingProximityVal_EG");
+
+    // material
+    add_param(&global_materialBishopPair[0], 0, 100, "global_materialBishopPair_MG");
+    add_param(&global_materialBishopPair[1], 0, 100, "global_materialBishopPair_EG");
+    // LMR
+    add_param(&lmr_expectedCutOff, 0, 2000, "lmr_expectedCutOff");
+    add_param(&lmr_notImproving, 0, 2000, "lmr_notImproving");
+    add_param(&lmr_hashMoveCapture, 0, 2000, "lmr_hashMoveCapture");
+    add_param(&lmr_baseDeficit, 0, 2000, "lmr_baseDeficit");
+    add_param(&lmr_badCapture, 0, 2000, "lmr_badCapture");
+    add_param(&lmr_oldMulti, 0, 800, "lmr_oldMulti");
+    add_param(&lmr_givesCheck, -2000, 0, "lmr_givesCheck");
+    add_param(&lmr_killerMove, -2000, 0, "lmr_killerMove");
+    add_param(&lmr_threatening, -2000, 0, "lmr_threatening");
+    add_param(&lmr_inPvMode, -2000, 0, "lmr_inPvMode");
+    add_param(&lmr_isPromotion, -2000, 0, "lmr_isPromotion");
+    //
+}
+pub var global_PawnVal: scoreType = simplePawnScore;
+
+pub var global_BishopVal: scoreType = simpleBishopScore;
+pub var global_KnightVal: scoreType = simpleKnightScore;
+pub var global_RookVal: scoreType = simpleRookScore;
+pub var global_QueenVal: scoreType = simpleQueenScore;
 
 // mobility
-pub var global_MobilityValue: [2]scoreType = .{ 1, 1 };
-pub var global_KingMobilityValue: [2]scoreType = .{ 2, 2 };
-pub var global_OpenFileRookValue: [2]scoreType = .{ 5, 1 };
+pub var global_MobilityVal: [2]scoreType = .{ 1, 1 };
+pub var global_KingMobilityVal: [2]scoreType = .{ 2, 2 };
+pub var global_OpenFileRookVal: [2]scoreType = .{ 5, 1 };
 
 // structure
-pub var global_StructureProtectionValue: [2]scoreType = .{ 24, 31 };
-pub var global_centerProtectionValue: [2]scoreType = .{ 8, 12 };
+pub var global_StructureProtectionVal: [2]scoreType = .{ 24, 31 };
+pub var global_centerProtectionVal: [2]scoreType = .{ 8, 12 };
 
 // pawn structure
-pub var global_IsolatedPawnValue: [2]scoreType = .{ 1, 1 };
-pub var global_StackedPawnValue: [2]scoreType = .{ 1, 1 };
-pub var global_PassedPawnValue: [2]scoreType = .{ 32, 42 };
-pub var global_phalanxDuoPawnValue: [2]scoreType = .{ 4, 6 };
-pub var global_connectionPawnValue: [2]scoreType = .{ 3, 2 };
+pub var global_IsolatedPawnVal: [2]scoreType = .{ 1, 1 };
+pub var global_StackedPawnVal: [2]scoreType = .{ 1, 1 };
+pub var global_PassedPawnVal: [2]scoreType = .{ 32, 42 };
+pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 4, 6 };
+pub var global_connectionPawnVal: [2]scoreType = .{ 3, 2 };
 
 // tempo
 pub var global_tempoChecksScore: [2]scoreType = .{ 24, 16 };
 pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore, simplePieceThreatScore >> 1 };
-pub var global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
+pub const global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
 // safety
-pub var global_SafetyBishopValue: [2]scoreType = .{ 8, 8 };
-pub var global_SafetyKnightValue: [2]scoreType = .{ 4, 4 };
-pub var global_SafetyRookValue: [2]scoreType = .{ 16, 16 };
-pub var global_SafetyQueenValue: [2]scoreType = .{ 16, 16 };
+pub var global_SafetyBishopVal: [2]scoreType = .{ 8, 8 };
+pub var global_SafetyKnightVal: [2]scoreType = .{ 4, 4 };
+pub var global_SafetyRookVal: [2]scoreType = .{ 16, 16 };
+pub var global_SafetyQueenVal: [2]scoreType = .{ 16, 16 };
 
 // king
-pub var global_KingProximityValue: [2]scoreType = .{ 1, 2 };
+pub var global_KingProximityVal: [2]scoreType = .{ 1, 2 };
 
 // material
 pub var global_materialBishopPair: [2]scoreType = .{ 16, 24 };
@@ -188,21 +265,23 @@ const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
     -30, -22, -11, -14, -6,  -8,  -17, -30,
     -40, -30, -30, -30, -30, -30, -30, -30,
 };
+
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
-pub const lmr_expectedCutOff: milliDepth = 1000;
-pub const lmr_notImproving: milliDepth = 512;
-pub const lmr_hashMoveCapture: milliDepth = 300;
-pub const lmr_baseDeficit: milliDepth = 1024;
-pub const lmr_badCapture: milliDepth = 300;
-pub const lmr_oldMulti: milliDepth = 100;
+pub var lmr_expectedCutOff: milliDepth = 1000;
+pub var lmr_notImproving: milliDepth = 512;
+pub var lmr_hashMoveCapture: milliDepth = 300;
+pub var lmr_baseDeficit: milliDepth = 1024;
+pub var lmr_badCapture: milliDepth = 300;
+pub var lmr_oldMulti: milliDepth = 100;
 // LMR negative (less reduction)
-pub const lmr_inCheck: milliDepth = -600; // not used since no lmr in check
-pub const lmr_givesCheck: milliDepth = -700;
-pub const lmr_killerMove: milliDepth = -512;
-pub const lmr_threatening: milliDepth = -256;
-pub const lmr_inPvMode: milliDepth = -400;
-pub const lmr_isPromotion: milliDepth = -200;
+pub var lmr_inCheck: milliDepth = -600; // not used since no lmr in check
+// try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
+pub var lmr_givesCheck: milliDepth = -700;
+pub var lmr_killerMove: milliDepth = -512;
+pub var lmr_threatening: milliDepth = -256;
+pub var lmr_inPvMode: milliDepth = -400;
+pub var lmr_isPromotion: milliDepth = -200;
 
 //    lmr_expectedCutOff = 300,
 //    lmr_notImproving = 150,

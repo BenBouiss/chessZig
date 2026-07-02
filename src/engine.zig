@@ -12,6 +12,9 @@ const benchmarkl = @import("search/benchmark.zig");
 const perftl = @import("search/perft.zig");
 const historyl = @import("history.zig");
 const nnuel = @import("nnue.zig");
+const weightl = @import("weights.zig");
+
+const build_options = @import("build_options");
 
 const filel = @import("file.zig");
 const timel = @import("time.zig");
@@ -21,7 +24,7 @@ const stringl = @import("string.zig");
 
 const debug_err = chess.debug_err;
 
-const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK };
+const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
 const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, USEASPIRATION, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
@@ -107,7 +110,7 @@ pub const inputChannel = struct {
     }
 };
 
-const spinVarType: type = u32;
+const spinVarType: type = i32;
 const optionInfo_spin = struct {
     min: spinVarType,
     max: spinVarType,
@@ -126,7 +129,7 @@ const optionInfo_str = struct {
     }
 };
 
-const optionInfo = union { spin: optionInfo_spin, str: optionInfo_str };
+pub const optionInfo = union { spin: optionInfo_spin, str: optionInfo_str };
 
 pub const setOptionEntry = struct {
     name: []const u8 = undefined,
@@ -206,7 +209,6 @@ pub const engineMetrics = struct {
 
 pub const engineOptions = struct {
     searchF: schedulerl.searchFeatures = .{},
-
     nThreads: spinVarType = configl.DEFAULT_THREAD,
     engineElo: spinVarType = configl.DEFAULT_ELO,
     nOptions: u16 = 0,
@@ -304,6 +306,13 @@ pub const engine = struct {
             defer p_self.alloc.free(msg);
             p_self.respond(msg);
         }
+        if (build_options.useTune) {
+            for (0..weightl.tunerOpts.items.len) |i| {
+                const msg = weightl.tunerOpts.items[i].opt.optionNameMsg(p_self.alloc) catch unreachable;
+                defer p_self.alloc.free(msg);
+                p_self.respond(msg);
+            }
+        }
         p_self.respond("uciok");
     }
     pub fn initOptions(p_self: *engine) !void {
@@ -344,6 +353,10 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
 
         try p_self.addOption(.{ .name = "reportProgress", .optionType = .REPORTPROG, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_REPORTPROGRESS } } });
+        //if (build_options.use) {}
+        if (build_options.useTune) {
+            weightl.appendAll();
+        }
     }
     pub inline fn trackMetrics(p_self: *engine) bool {
         return p_self.options.trackMetrics;
@@ -478,6 +491,12 @@ pub const engine = struct {
                 // by default single threaded will probably just use the engine options maybe
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
+            .PRINTPARAMS => {
+                for (0..weightl.tunerOpts.items.len) |i| {
+                    const opt = weightl.tunerOpts.items[i];
+                    std.debug.print("{d} name = {s} val = {d} min = {d} max {d}\n", .{ i, opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max });
+                }
+            },
             .PRINT => {
                 chess.print_boardstate(&p_self.state);
                 return true;
@@ -559,6 +578,7 @@ pub const engine = struct {
         }
         p_self.logs.free(p_self.alloc);
         p_self.logsPath.free(p_self.alloc);
+        weightl.tunerOpts.deinit(p_self.alloc);
     }
 
     pub fn saveLog(self: *engine) !void {
@@ -793,6 +813,16 @@ pub const engine = struct {
             },
 
             .INVALID => {
+                for (0..weightl.tunerOpts.items.len) |i| {
+                    const opt = weightl.tunerOpts.items[i];
+                    if (utilsl.contains(cmdBuffer, opt.opt.name, .ignoreCase)) {
+                        const val = getSpinValFromSetOptionCmd(tokens, opt.opt) catch {
+                            return false;
+                        };
+                        opt.addr.* = val;
+                        return true;
+                    }
+                }
                 return false;
             },
         }
@@ -864,7 +894,7 @@ pub const engine = struct {
         }
 
         p_self.options.hashTableSize = hashSize;
-        hashTablel._initOrReallocHashTable(p_self.alloc, p_self.options.hashTableSize, p_self.status.debugMode);
+        hashTablel._initOrReallocHashTable(p_self.alloc, @intCast(p_self.options.hashTableSize), p_self.status.debugMode);
         return true;
     }
     fn updateElo(p_self: *engine, elo: spinVarType) bool {
@@ -1145,6 +1175,8 @@ fn getEngineCmdType(cmd: []const u8) e_engineCmd {
         return .QUIT;
     } else if (utilsl.contains(cmd, "ponderhit", .ignoreCase)) {
         return .PONDERHIT;
+    } else if (utilsl.contains(cmd, "printparams", .ignoreCase)) {
+        return .PRINTPARAMS;
     } else if (utilsl.contains(cmd, "print", .ignoreCase)) {
         return .PRINT;
     } else if (utilsl.contains(cmd, "benchmark", .ignoreCase)) {

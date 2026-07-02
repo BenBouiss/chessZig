@@ -23,8 +23,8 @@ pub const DEFAULT_HASHTABLE_SIZE = 16; // in MB
 pub const DEFAULT_TRACKMETRICS = true;
 pub const _DEFAULT_TRACKMETRICS = "true";
 
-pub const DEFAULT_REPORTPROGRESS = true;
-pub const _DEFAULT_REPORTPROGRESS = "true";
+pub const DEFAULT_REPORTPROGRESS = false;
+pub const _DEFAULT_REPORTPROGRESS = "false";
 
 pub const DEFAULT_USEHASHTABLE = true;
 pub const _DEFAULT_USEHASHTABLE = "true";
@@ -90,11 +90,11 @@ pub const _DEFAULT_USE_IIR = "true";
 pub const DEFAULT_USE_ASPIRATION = true;
 pub const _DEFAULT_USE_ASPIRATION = "true";
 
-pub const USE_NNUE = true;
+pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
-pub const NET_PATH = "out/bin/simple-320-colM/quantised.bin";
+//pub const NET_PATH = "out/bin/simple-320-colM/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
-//pub const NET_PATH = "out/bin/simple_1024_retrained-120/quantised.bin";
+pub const NET_PATH = "out/bin/simple_1024_retrained-120/quantised.bin";
 //pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";
 
 pub const MIN_ELO: u32 = 1000;

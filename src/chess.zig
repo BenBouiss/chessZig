@@ -866,9 +866,6 @@ pub inline fn e_pieceTo_e_pieceType(piece: e_piece) e_pieceType {
     const _p = @intFromEnum(piece);
     return @enumFromInt(_p % N_PIECES_TYPES);
 }
-pub inline fn whiteBoolToInt(w: bool) u8 {
-    return @as(u8, (@intFromBool(!w)));
-}
 
 pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_pieceType {
     if (comptime white) {
@@ -881,6 +878,11 @@ pub inline fn boolTo_e_color(whiteToMove: bool) typel.e_color {
     if (whiteToMove) return .WHITE;
     return .BLACK;
 }
+
+pub inline fn whiteBoolToInt(w: bool) u8 {
+    return @as(u8, (@intFromBool(!w)));
+}
+
 pub inline fn invert_e_color(side: typel.e_color) typel.e_color {
     return @enumFromInt((@intFromEnum(side) ^ 1));
 }

@@ -305,7 +305,7 @@ pub fn sendPartial(depth: u16, p_info: *const threadingl.threadInfo) void {
 
 pub fn sendFinal(p_self: *enginel.engine, decision: *const moveDecisionExt) void {
     var buffer = std.mem.zeroes([32]u8);
-    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{decision.move.getStr()}) catch unreachable;
+    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{utilsl.trimStr(&decision.move.getStr())}) catch unreachable;
     p_self.respondNonFmt(msg);
 }
 

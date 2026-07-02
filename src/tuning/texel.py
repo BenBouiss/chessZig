@@ -23,12 +23,15 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 
 class CSVDataset(Dataset):
-    def __init__(self, path: str, chunksize: int, nb_samples: int):
+    def __init__(
+        self, path: str, chunksize: int, nb_samples: int, optimizeOutcome: bool = True
+    ):
         assert os.path.exists(path)
         self.path: str = path
         self.chunksize: int = chunksize
         self.nb_samples: int = nb_samples
         self.len: int = nb_samples // chunksize
+        self.optimizeOutcome = optimizeOutcome
 
     def __len__(self) -> int:
         return self.len
@@ -43,11 +46,15 @@ class CSVDataset(Dataset):
             nrows=self.chunksize,
             skiprows=[1, max(1, pos_offset)],
         )
-        n_weights = len(df.columns) - 2
+        n_weights = len(df.columns) - 3
         rho_mg = (256 - df["Phase"]) / 256
         rho_eg = (df["Phase"]) / 256
         deltaC = df[[df.columns[i] for i in range(n_weights)]]
-        y: npt.NDArray[np.float16] = np.array(df["Outcome"].values).reshape(-1, 1)
+        if self.optimizeOutcome:
+            y: npt.NDArray[np.float16] = np.array(df["Outcome"].values).reshape(-1, 1)
+        else:
+            y: npt.NDArray[np.float16] = np.array(df["Eval"].values).reshape(-1, 1)
+
         x = np.hstack(
             (deltaC, rho_mg.values.reshape(-1, 1), rho_eg.values.reshape(-1, 1))
         )
@@ -78,34 +85,6 @@ def getFileLineNumbers(path: str) -> int:
     return num_lines - 1
 
 
-def extractXYFromDF(
-    df: pd.DataFrame,
-) -> tuple[npt.NDArray[np.float16], npt.NDArray[np.float16]]:
-    n_weights = int(df.columns[-3].split("_")[1]) + 1
-    rho_mg = (256 - df["Phase"]) / 256
-    rho_eg = (df["Phase"]) / 256
-    if "Coeff_0_w" in df.columns:
-        C_w = df[[f"Coeff_{i}_w" for i in range(n_weights)]]
-        C_b = df[[f"Coeff_{i}_b" for i in range(n_weights)]]
-        deltaC = C_w.values - C_b.values
-    else:
-        deltaC = df[[f"Delta_{i}" for i in range(n_weights)]]
-    y: npt.NDArray[np.float16] = np.array(df[" Outcome"].values)
-    x = np.hstack((deltaC, rho_mg.values.reshape(-1, 1), rho_eg.values.reshape(-1, 1)))
-    return (x, y)
-
-
-def fetchNextXY(
-    path: str, n_pos: int, nskips: int
-) -> tuple[torch.Tensor, torch.Tensor]:
-    df = loadTexelWeight(path, n_pos=n_pos, pos_offset=nskips)
-    x, y = extractXYFromDF(df)
-    del df
-    torch_x = torch.from_numpy(x).float()
-    torch_y = torch.from_numpy(y.reshape(-1, 1)).float()
-    return torch_x, torch_y
-
-
 K = 10
 # K = 0.5
 
@@ -125,7 +104,6 @@ class texelNet(nn.Module):
 
         # self.half()
         self.float()
-        # self.int()
 
     def forward(self, x):
         # return self.sigm(self.W_mg(x[:, :-2]) * x[:, -2] + self.W_eg(x[:, :-2]) * x[:, -1])
@@ -141,6 +119,28 @@ class texelNet(nn.Module):
                     torch.mul(self.W_eg(x[:, :-2]), x[:, -1].reshape(-1, 1)),
                 )
             )
+        )
+
+
+class texelNetEval(nn.Module):
+    def __init__(self, n_weights: int):
+        super(texelNetEval, self).__init__()
+
+        self.W_mg = nn.Linear(n_weights, 1, bias=False)
+        self.W_eg = nn.Linear(n_weights, 1, bias=False)
+        self.sigm = sigm
+
+        self.float()
+
+    def forward(self, x):
+        """
+        format of x
+        Delta_0, Delta_1 , Delta_2, ..., Delta_n, rho_mg, rho_eg
+
+        """
+        return torch.add(
+            torch.mul(self.W_mg(x[:, :-2]), x[:, -2].reshape(-1, 1)),
+            torch.mul(self.W_eg(x[:, :-2]), x[:, -1].reshape(-1, 1)),
         )
 
 
@@ -172,9 +172,9 @@ def training_loop(
     if opt.initWeights is not None:
         setInitWeight(opt, model)
     freezeM = opt.makeFreezeMask()
-    # optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.1, weight_decay=0.01)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.1, weight_decay=0.01)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
     # scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
@@ -184,11 +184,19 @@ def training_loop(
         size = fileSize
 
     print(f"[DEBUG] training_loop: {size} positions found")
-    dataset = CSVDataset(opt.path, chunksize=opt.chunksize, nb_samples=size)
+    dataset = CSVDataset(
+        opt.path,
+        chunksize=opt.chunksize,
+        nb_samples=size,
+        optimizeOutcome=opt.optimizeOutcome,
+    )
     trainingDataLoader = DataLoader(dataset, batch_size=1024, shuffle=True)
     if opt.validationPath is not None:
         validationDst = CSVDataset(
-            opt.validationPath, chunksize=1024, nb_samples=300_000
+            opt.validationPath,
+            chunksize=1024,
+            nb_samples=300_000,
+            optimizeOutcome=opt.optimizeOutcome,
         )
         validationDataLoader = DataLoader(validationDst, batch_size=1, shuffle=True)
     for ep in range(opt.epoch):
@@ -270,6 +278,7 @@ class trainingOptions:
         initialSkip: int = 0,
         chunksize: int = 32,
         validationPath: str | None = None,
+        optimizeOutcome: bool = True,
     ):
         assert os.path.exists(path), f"file {path} not found"
         assert path.endswith(".csv"), (
@@ -281,6 +290,7 @@ class trainingOptions:
         self.epoch = epoch
         self.tuneCfg = tuneCfg
         self.initWeights = initialWeights
+        self.optimizeOutcome = optimizeOutcome
         if type(self.initWeights) is list:
             assert len(self.initWeights) == 2, (
                 "Weights must contain both MG and EG section"

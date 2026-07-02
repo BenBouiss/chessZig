@@ -27,7 +27,7 @@ pub fn dispatchUciPerftCmd(p_engine: *enginel.engine, config: enginel.goArgStruc
 
 pub fn dispatchUciPerftThreads(p_engine: *enginel.engine, config: enginel.goArgStruct) void {
     var moveArray = moveGenl.generateLegalMoves(&p_engine.state);
-    const _nThread: u32 = @min(p_engine.options.nThreads, moveArray.len);
+    const _nThread: u32 = @min(@as(u32, @intCast(p_engine.options.nThreads)), moveArray.len);
     if (_nThread == 0) {
         @panic("No thread or no moves available");
     }

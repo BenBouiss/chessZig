@@ -23,6 +23,7 @@ const std = @import("std");
 const e_piece = chess.e_piece;
 const e_pieceType = chess.e_pieceType;
 const e_turn = statusl.e_turn;
+const e_color = typel.e_color;
 
 const string = stringl.string;
 const IMove = movel.IMove;
@@ -37,8 +38,8 @@ pub const texel_err = error{board_err};
 pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)]);
-    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)]);
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)]);
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)]);
     const white = p_state.whiteToMove();
 
     const phase: scoreType = p_state.getPhase();
@@ -90,8 +91,8 @@ pub const heuristicComponents = struct {
 pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)]);
-    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)]);
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)]);
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)]);
 
     const phase: scoreType = p_state.getPhase();
     const white = p_state.whiteToMove();
@@ -135,27 +136,27 @@ pub fn evaluate_PSQT(p_state: *const boardl.boardState, _phase: scoreType) score
         switch (piece) {
             .nEmptySquare, .nWhite, .nBlack => {},
             .nWhitePawn => {
-                score_count += weightl.global_PawnValue;
+                score_count += weightl.global_PawnVal;
                 score_mg += weightl.global_Pawn_PSQT[MG][sq];
                 score_eg += weightl.global_Pawn_PSQT[EG][sq];
             },
             .nWhiteBishop => {
-                score_count += weightl.global_BishopValue;
+                score_count += weightl.global_BishopVal;
                 score_mg += weightl.global_Bishop_PSQT[MG][sq];
                 score_eg += weightl.global_Bishop_PSQT[EG][sq];
             },
             .nWhiteKnight => {
-                score_count += weightl.global_KnightValue;
+                score_count += weightl.global_KnightVal;
                 score_mg += weightl.global_Knight_PSQT[MG][sq];
                 score_eg += weightl.global_Knight_PSQT[EG][sq];
             },
             .nWhiteRook => {
-                score_count += weightl.global_RookValue;
+                score_count += weightl.global_RookVal;
                 score_mg += weightl.global_Rook_PSQT[MG][sq];
                 score_eg += weightl.global_Rook_PSQT[EG][sq];
             },
             .nWhiteQueen => {
-                score_count += weightl.global_QueenValue;
+                score_count += weightl.global_QueenVal;
                 score_mg += weightl.global_Queen_PSQT[MG][sq];
                 score_eg += weightl.global_Queen_PSQT[EG][sq];
             },
@@ -165,27 +166,27 @@ pub fn evaluate_PSQT(p_state: *const boardl.boardState, _phase: scoreType) score
             },
 
             .nBlackPawn => {
-                score_count -= weightl.global_PawnValue;
+                score_count -= weightl.global_PawnVal;
                 score_mg -= weightl.global_Pawn_PSQT[MG][chess.flipSq(sq)];
                 score_eg -= weightl.global_Pawn_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackBishop => {
-                score_count -= weightl.global_BishopValue;
+                score_count -= weightl.global_BishopVal;
                 score_mg -= weightl.global_Bishop_PSQT[MG][chess.flipSq(sq)];
                 score_eg -= weightl.global_Bishop_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackKnight => {
-                score_count -= weightl.global_KnightValue;
+                score_count -= weightl.global_KnightVal;
                 score_mg -= weightl.global_Knight_PSQT[MG][chess.flipSq(sq)];
                 score_eg -= weightl.global_Knight_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackRook => {
-                score_count -= weightl.global_RookValue;
+                score_count -= weightl.global_RookVal;
                 score_mg -= weightl.global_Rook_PSQT[MG][chess.flipSq(sq)];
                 score_eg -= weightl.global_Rook_PSQT[EG][chess.flipSq(sq)];
             },
             .nBlackQueen => {
-                score_count -= weightl.global_QueenValue;
+                score_count -= weightl.global_QueenVal;
                 score_mg -= weightl.global_Queen_PSQT[MG][chess.flipSq(sq)];
                 score_eg -= weightl.global_Queen_PSQT[EG][chess.flipSq(sq)];
             },
@@ -225,7 +226,7 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
     const nBlackConn: i8 = @intCast(chess.popcount(bp & chess.getPawnAttacksFromBB(bp, false)));
     const connectS: scoreType = @intCast(nWhiteConn - nBlackConn);
 
-    return .{ (isoS * weightl.global_IsolatedPawnValue[MG]) + (doS * weightl.global_StackedPawnValue[MG]) + (paS * weightl.global_PassedPawnValue[MG]) + (duoS * weightl.global_phalanxDuoPawnValue[MG]) + (connectS * weightl.global_connectionPawnValue[MG]), (isoS * weightl.global_IsolatedPawnValue[EG]) + (doS * weightl.global_StackedPawnValue[EG]) + (paS * weightl.global_PassedPawnValue[EG]) + (duoS * weightl.global_phalanxDuoPawnValue[EG]) + (connectS * weightl.global_connectionPawnValue[EG]) };
+    return .{ (isoS * weightl.global_IsolatedPawnVal[MG]) + (doS * weightl.global_StackedPawnVal[MG]) + (paS * weightl.global_PassedPawnVal[MG]) + (duoS * weightl.global_phalanxDuoPawnVal[MG]) + (connectS * weightl.global_connectionPawnVal[MG]), (isoS * weightl.global_IsolatedPawnVal[EG]) + (doS * weightl.global_StackedPawnVal[EG]) + (paS * weightl.global_PassedPawnVal[EG]) + (duoS * weightl.global_phalanxDuoPawnVal[EG]) + (connectS * weightl.global_connectionPawnVal[EG]) };
 }
 pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
     _ = white;
@@ -233,18 +234,18 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
     const v = @as(scoreType, @intCast(moveW - moveB));
-    const moveAmountScore: scoreVect = .{ weightl.global_MobilityValue[MG] * v, weightl.global_MobilityValue[EG] * v };
+    const moveAmountScore: scoreVect = .{ weightl.global_MobilityVal[MG] * v, weightl.global_MobilityVal[EG] * v };
     const wkingBB = chess.sqToBitboard(p_state.b.wKingSq);
     const bkingBB = chess.sqToBitboard(p_state.b.bKingSq);
 
     const bAttacks = (p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
     const wAttacks = (p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
-    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks) & ~p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)];
-    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)];
+    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks) & ~p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)];
+    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)];
     const nw: scoreType = @intCast(chess.ipopcount(kingMoveW));
     const nb: scoreType = @intCast(chess.ipopcount(kingMoveB));
     const v2 = (nw - nb);
-    var kingMoveScore: scoreVect = .{ weightl.global_KingMobilityValue[MG] * v2, weightl.global_KingMobilityValue[EG] * v2 };
+    var kingMoveScore: scoreVect = .{ weightl.global_KingMobilityVal[MG] * v2, weightl.global_KingMobilityVal[EG] * v2 };
 
     if (nw == 0 and (wkingBB & bAttacks) != 0) {
         kingMoveScore -= .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
@@ -252,10 +253,10 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     if (nb == 0 and (bkingBB & wAttacks) != 0) {
         kingMoveScore += .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
     }
-    const nOpenRookW: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)], p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)], true)));
-    const nOpenRookB: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)], p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)], false)));
+    const nOpenRookW: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)], p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)], true)));
+    const nOpenRookB: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)], p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)], false)));
     const deltaOpenRook = nOpenRookW - nOpenRookB;
-    const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookValue[MG] * deltaOpenRook, weightl.global_OpenFileRookValue[EG] * deltaOpenRook };
+    const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookVal[MG] * deltaOpenRook, weightl.global_OpenFileRookVal[EG] * deltaOpenRook };
     return moveAmountScore + kingMoveScore + pieceMobility;
 }
 pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whiteToMove: bool) scoreVect {
@@ -263,14 +264,14 @@ pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whit
     if (p_state.isEndGame()) {
         const distance: scoreType = squarel.computeMHDistance(p_state.b.wKingSq, p_state.b.bKingSq);
         const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) squarel.computeMHDistance(p_state.b.bKingSq, squarel.centerSq) else -squarel.computeMHDistance(p_state.b.wKingSq, squarel.centerSq);
-        return .{ bonus * weightl.global_KingProximityValue[MG], bonus * weightl.global_KingProximityValue[EG] };
+        return .{ bonus * weightl.global_KingProximityVal[MG], bonus * weightl.global_KingProximityVal[EG] };
     } else {
         return .{ 0, 0 };
     }
 }
 pub fn evaluate_material(p_state: *const boardl.boardState) scoreVect {
     // counting negative for white as the best safety is not attackers => 0 heuristic
-    const nPairs: scoreType = @as(scoreType, chess.whiteBoolToInt(p_state.b.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] == 2)) - @as(scoreType, chess.whiteBoolToInt(p_state.b.pieceCount[@intFromEnum(e_piece.nBlackBishop)] == 2));
+    const nPairs: scoreType = @as(scoreType, @intFromBool(p_state.b.pieceCount[@intFromEnum(e_piece.nWhiteBishop)] == 2)) - @as(scoreType, @intFromBool(p_state.b.pieceCount[@intFromEnum(e_piece.nBlackBishop)] == 2));
     const bishopPair: scoreVect = .{ nPairs * weightl.global_materialBishopPair[MG], nPairs * weightl.global_materialBishopPair[EG] };
     return bishopPair;
 }
@@ -298,25 +299,25 @@ pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const 
 
     // white is advantaged from a high safety_arr index, more =wPieceAtt are present in the black king vicinity thus it should be counted as positive
     const saf: scoreType = SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, wKnight + wBishop + wRook + wQueen))] - SAFETY_ARR[@intCast(@min(SAFETY_ARR.len - 1, bKnight + bBishop + bRook + bQueen))];
-    const v: scoreVect = .{ saf + (weightl.global_SafetyKnightValue[MG] * Knight) + (weightl.global_SafetyBishopValue[MG] * Bishop) + (weightl.global_SafetyRookValue[MG] * Rook) + (weightl.global_SafetyQueenValue[MG] * Queen), saf + (weightl.global_SafetyKnightValue[EG] * Knight) + (weightl.global_SafetyBishopValue[EG] * Bishop) + (weightl.global_SafetyRookValue[EG] * Rook) + weightl.global_SafetyQueenValue[EG] * Queen };
+    const v: scoreVect = .{ saf + (weightl.global_SafetyKnightVal[MG] * Knight) + (weightl.global_SafetyBishopVal[MG] * Bishop) + (weightl.global_SafetyRookVal[MG] * Rook) + (weightl.global_SafetyQueenVal[MG] * Queen), saf + (weightl.global_SafetyKnightVal[EG] * Knight) + (weightl.global_SafetyBishopVal[EG] * Bishop) + (weightl.global_SafetyRookVal[EG] * Rook) + weightl.global_SafetyQueenVal[EG] * Queen };
     return v;
 }
 pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // structure protection,
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
-    const w_pieceProtect = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)] ^ chess.sqToBitboard(p_state.b.wKingSq));
-    const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)] ^ chess.sqToBitboard(p_state.b.bKingSq));
+    const w_pieceProtect = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)] ^ chess.sqToBitboard(p_state.b.wKingSq));
+    const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)] ^ chess.sqToBitboard(p_state.b.bKingSq));
     const s = @as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()));
 
     const w_pieceCenterProt = p_whiteMoveBB.andFn(typel.centerBB).collapse();
     const b_pieceCenterProt = p_blackMoveBB.andFn(typel.centerBB).collapse();
     const s2 = @as(scoreType, @intCast(chess.popcount(w_pieceCenterProt))) - @as(scoreType, @intCast(chess.popcount(b_pieceCenterProt)));
-    return .{ weightl.global_StructureProtectionValue[MG] * s + weightl.global_centerProtectionValue[MG] * s2, weightl.global_StructureProtectionValue[EG] * s + weightl.global_centerProtectionValue[EG] * s2 };
+    return .{ weightl.global_StructureProtectionVal[MG] * s + weightl.global_centerProtectionVal[MG] * s2, weightl.global_StructureProtectionVal[EG] * s + weightl.global_centerProtectionVal[EG] * s2 };
 }
 pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
     const nonPawns = ~p_state.getPieceBB_t(.PAWN);
-    const wThreats = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)] & nonPawns);
-    const bThreats = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)] & nonPawns);
+    const wThreats = p_whiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)] & nonPawns);
+    const bThreats = p_blackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)] & nonPawns);
     const deltaThreat: scoreType = @as(scoreType, (@intCast(wThreats.count()))) - @as(scoreType, (@intCast(bThreats.count())));
 
     var ret: scoreVect = .{ weightl.global_pieceThreatScore[MG] * deltaThreat, weightl.global_pieceThreatScore[EG] * deltaThreat };
@@ -336,22 +337,22 @@ pub fn e_pieceToHeuristic(piece: e_piece) scoreType {
             return 0;
         },
         .nWhiteKing, .nBlackKing => {
-            return weightl.global_QueenValue << 2;
+            return weightl.global_QueenVal << 2;
         },
         .nWhitePawn, .nBlackPawn => {
-            return weightl.global_PawnValue;
+            return weightl.global_PawnVal;
         },
         .nWhiteBishop, .nBlackBishop => {
-            return weightl.global_BishopValue;
+            return weightl.global_BishopVal;
         },
         .nWhiteKnight, .nBlackKnight => {
-            return weightl.global_KnightValue;
+            return weightl.global_KnightVal;
         },
         .nWhiteRook, .nBlackRook => {
-            return weightl.global_RookValue;
+            return weightl.global_RookVal;
         },
         .nWhiteQueen, .nBlackQueen => {
-            return weightl.global_QueenValue;
+            return weightl.global_QueenVal;
         },
     }
 }
@@ -395,7 +396,7 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
 pub fn materialImbalance(p_state: *const boardl.boardState) scoreType {
     const wPiece: @Vector(5, scoreType) = .{p_state.b.pieceCount[0..5]};
     const bPiece: @Vector(5, scoreType) = .{p_state.b.pieceCount[6..11]};
-    const scores = (wPiece - bPiece) * .{ weightl.global_PawnValue, weightl.simpleBishopScore, weightl.global_KnightValue, weightl.global_RookValue, weightl.global_QueenValue };
+    const scores = (wPiece - bPiece) * .{ weightl.global_PawnVal, weightl.simpleBishopScore, weightl.global_KnightVal, weightl.global_RookVal, weightl.global_QueenVal };
     return scores[0] + scores[1] + scores[2] + scores[3] + scores[4];
 }
 pub inline fn c_materialImbalance(p_state: *const boardl.boardState, white: bool) scoreType {
@@ -512,33 +513,33 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
 
     var dest: *[N_PHASES]scoreType = undefined;
     if (s.containsE("isolatedPawn", .ignoreCase)) {
-        dest = &weightl.global_IsolatedPawnValue;
+        dest = &weightl.global_IsolatedPawnVal;
     } else if (s.containsE("mobilityScore", .ignoreCase)) {
-        dest = &weightl.global_MobilityValue;
+        dest = &weightl.global_MobilityVal;
     } else if (s.containsE("mobilityKingScore", .ignoreCase)) {
-        dest = &weightl.global_KingMobilityValue;
+        dest = &weightl.global_KingMobilityVal;
     } else if (s.containsE("stackedPawn", .ignoreCase)) {
-        dest = &weightl.global_StackedPawnValue;
+        dest = &weightl.global_StackedPawnVal;
     } else if (s.containsE("passedPawn", .ignoreCase)) {
-        dest = &weightl.global_PassedPawnValue;
+        dest = &weightl.global_PassedPawnVal;
     } else if (s.containsE("tempoChecksScore", .ignoreCase)) {
         dest = &weightl.global_tempoChecksScore;
     } else if (s.containsE("pieceThreatScore", .ignoreCase)) {
         dest = &weightl.global_pieceThreatScore;
     } else if (s.containsE("safetyKnight", .ignoreCase)) {
-        dest = &weightl.global_SafetyKnightValue;
+        dest = &weightl.global_SafetyKnightVal;
     } else if (s.containsE("safetyBishop", .ignoreCase)) {
-        dest = &weightl.global_SafetyBishopValue;
+        dest = &weightl.global_SafetyBishopVal;
     } else if (s.containsE("safetyRook", .ignoreCase)) {
-        dest = &weightl.global_SafetyRookValue;
+        dest = &weightl.global_SafetyRookVal;
     } else if (s.containsE("safetyQueen", .ignoreCase)) {
-        dest = &weightl.global_SafetyQueenValue;
+        dest = &weightl.global_SafetyQueenVal;
     } else if (s.containsE("structureProtection", .ignoreCase)) {
-        dest = &weightl.global_StructureProtectionValue;
+        dest = &weightl.global_StructureProtectionVal;
     } else if (s.containsE("centerProtection", .ignoreCase)) {
-        dest = &weightl.global_centerProtectionValue;
+        dest = &weightl.global_centerProtectionVal;
     } else if (s.containsE("kingProximity", .ignoreCase)) {
-        dest = &weightl.global_KingProximityValue;
+        dest = &weightl.global_KingProximityVal;
     } else {
         if (debug) {
             std.debug.print("[DEBUG] modifyHeuristicWeight: unknown token {s}\n", .{s._slice()});
@@ -565,31 +566,31 @@ pub fn modifyHeuristicWeight_number(alloc: std.mem.Allocator, s: *string, debug:
 
 pub const heuristicValues = struct {
     // container storing every heuristics/ weights to evaluate a given board
-    PawnValue: scoreType = weightl.simplePawnScore,
-    BishopValue: scoreType = weightl.simpleBishopScore,
-    KnightValue: scoreType = weightl.simpleKnightScore,
-    RookValue: scoreType = weightl.simpleRookScore,
-    QueenValue: scoreType = weightl.simpleQueenScore,
+    PawnVal: scoreType = weightl.simplePawnScore,
+    BishopVal: scoreType = weightl.simpleBishopScore,
+    KnightVal: scoreType = weightl.simpleKnightScore,
+    RookVal: scoreType = weightl.simpleRookScore,
+    QueenVal: scoreType = weightl.simpleQueenScore,
 
-    MobilityValue: [N_PHASES]scoreType = .{ weightl.simpleMobilityScore, weightl.simpleMobilityScore },
-    KingMobilityValue: [N_PHASES]scoreType = .{ weightl.simpleKingMobilityScore, weightl.simpleKingMobilityScore },
+    MobilityVal: [N_PHASES]scoreType = .{ weightl.simpleMobilityScore, weightl.simpleMobilityScore },
+    KingMobilityVal: [N_PHASES]scoreType = .{ weightl.simpleKingMobilityScore, weightl.simpleKingMobilityScore },
     weakCheckmate: [N_PHASES]scoreType = .{ weightl.simpleWeakCheckMateScore, weightl.simpleWeakCheckMateScore },
 
     tempoChecksScore: [N_PHASES]scoreType = .{ weightl.simpleTempoChecksScore, weightl.simpleTempoChecksScore },
     pieceThreatScore: [N_PHASES]scoreType = .{ weightl.simplePieceThreatScore, weightl.simplePieceThreatScore },
 
-    IsolatedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleIsolatedPawnScore, weightl.simpleIsolatedPawnScore },
-    StackedPawnValue: [N_PHASES]scoreType = .{ weightl.simpleStackedPawnScore, weightl.simpleStackedPawnScore },
-    PassedPawnValue: [N_PHASES]scoreType = .{ weightl.simplePassedPawnScore, weightl.simplePassedPawnScore },
+    IsolatedPawnVal: [N_PHASES]scoreType = .{ weightl.simpleIsolatedPawnScore, weightl.simpleIsolatedPawnScore },
+    StackedPawnVal: [N_PHASES]scoreType = .{ weightl.simpleStackedPawnScore, weightl.simpleStackedPawnScore },
+    PassedPawnVal: [N_PHASES]scoreType = .{ weightl.simplePassedPawnScore, weightl.simplePassedPawnScore },
 
-    SafetyBishopValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyBishopScore, weightl.simpleSafetyBishopScore },
-    SafetyKnightValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyKnightScore, weightl.simpleSafetyKnightScore },
-    SafetyRookValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyRookScore, weightl.simpleSafetyRookScore },
-    SafetyQueenValue: [N_PHASES]scoreType = .{ weightl.simpleSafetyQueenScore, weightl.simpleSafetyQueenScore },
+    SafetyBishopVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyBishopScore, weightl.simpleSafetyBishopScore },
+    SafetyKnightVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyKnightScore, weightl.simpleSafetyKnightScore },
+    SafetyRookVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyRookScore, weightl.simpleSafetyRookScore },
+    SafetyQueenVal: [N_PHASES]scoreType = .{ weightl.simpleSafetyQueenScore, weightl.simpleSafetyQueenScore },
 
-    StructureProtectionValue: [N_PHASES]scoreType = .{ weightl.simpleStructureProtectionScore, weightl.simpleStructureProtectionScore },
+    StructureProtectionVal: [N_PHASES]scoreType = .{ weightl.simpleStructureProtectionScore, weightl.simpleStructureProtectionScore },
 
-    KingProximityValue: [N_PHASES]scoreType = .{ weightl.simpleKingProximity, weightl.simpleKingProximity },
+    KingProximityVal: [N_PHASES]scoreType = .{ weightl.simpleKingProximity, weightl.simpleKingProximity },
 
     Pawn_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.pawnScoreArr, weightl.pawnScoreArr },
     Bishop_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.bishopScoreArr, weightl.bishopScoreArr },
@@ -599,7 +600,7 @@ pub const heuristicValues = struct {
     King_PSQT: [N_PHASES][chess.N_SQUARES]scoreType = .{ weightl.kingScoreArr, weightl.kingScoreArr_EG },
 
     pub inline fn getPieceCountValues(self: *const heuristicValues) [chess.N_PIECES]scoreType {
-        return .{ self.PawnValue, self.BishopValue, self.KnightValue, self.RookValue, self.QueenValue, 0 };
+        return .{ self.PawnVal, self.BishopVal, self.KnightVal, self.RookVal, self.QueenVal, 0 };
     }
     // other more complex values may be inserted below
     pub fn getPieceInfos(self: *const heuristicValues, piece: e_piece, sq: typel.e_square) [3]typel.scoreType {
@@ -648,19 +649,19 @@ pub const heuristicValues = struct {
     pub inline fn getPieceInfos_cst(self: *const heuristicValues, comptime piece: typel.e_pieceType, sq: u8) [3]typel.scoreType {
         switch (piece) {
             .PAWN => {
-                return .{ self.PawnValue, self.Pawn_PSQT[MG][sq], self.Pawn_PSQT[EG][sq] };
+                return .{ self.PawnVal, self.Pawn_PSQT[MG][sq], self.Pawn_PSQT[EG][sq] };
             },
             .BISHOP => {
-                return .{ self.BishopValue, self.Bishop_PSQT[MG][sq], self.Bishop_PSQT[EG][sq] };
+                return .{ self.BishopVal, self.Bishop_PSQT[MG][sq], self.Bishop_PSQT[EG][sq] };
             },
             .KNIGHT => {
-                return .{ self.KnightValue, self.Knight_PSQT[MG][sq], self.Knight_PSQT[EG][sq] };
+                return .{ self.KnightVal, self.Knight_PSQT[MG][sq], self.Knight_PSQT[EG][sq] };
             },
             .ROOK => {
-                return .{ self.RookValue, self.Rook_PSQT[MG][sq], self.Rook_PSQT[EG][sq] };
+                return .{ self.RookVal, self.Rook_PSQT[MG][sq], self.Rook_PSQT[EG][sq] };
             },
             .QUEEN => {
-                return .{ self.QueenValue, self.Queen_PSQT[MG][sq], self.Queen_PSQT[EG][sq] };
+                return .{ self.QueenVal, self.Queen_PSQT[MG][sq], self.Queen_PSQT[EG][sq] };
             },
             .KING => {
                 return .{ 0, self.King_PSQT[MG][sq], self.King_PSQT[EG][sq] };
@@ -668,31 +669,31 @@ pub const heuristicValues = struct {
         }
     }
     pub fn modifyGlobals(self: *const heuristicValues) void {
-        weightl.global_PawnValue = self.PawnValue;
-        weightl.global_BishopValue = self.BishopValue;
-        weightl.global_KnightValue = self.KnightValue;
-        weightl.global_RookValue = self.RookValue;
-        weightl.global_QueenValue = self.QueenValue;
+        weightl.global_PawnVal = self.PawnVal;
+        weightl.global_BishopVal = self.BishopVal;
+        weightl.global_KnightVal = self.KnightVal;
+        weightl.global_RookVal = self.RookVal;
+        weightl.global_QueenVal = self.QueenVal;
 
-        weightl.global_MobilityValue = self.MobilityValue;
-        weightl.global_KingMobilityValue = self.KingMobilityValue;
+        weightl.global_MobilityVal = self.MobilityVal;
+        weightl.global_KingMobilityVal = self.KingMobilityVal;
         weightl.global_weakCheckmate = self.weakCheckmate;
 
         weightl.global_tempoChecksScore = self.tempoChecksScore;
         weightl.global_pieceThreatScore = self.pieceThreatScore;
 
-        weightl.global_IsolatedPawnValue = self.IsolatedPawnValue;
-        weightl.global_StackedPawnValue = self.StackedPawnValue;
-        weightl.global_PassedPawnValue = self.PassedPawnValue;
+        weightl.global_IsolatedPawnVal = self.IsolatedPawnVal;
+        weightl.global_StackedPawnVal = self.StackedPawnVal;
+        weightl.global_PassedPawnVal = self.PassedPawnVal;
 
-        weightl.global_SafetyBishopValue = self.SafetyBishopValue;
-        weightl.global_SafetyKnightValue = self.SafetyKnightValue;
-        weightl.global_SafetyRookValue = self.SafetyRookValue;
-        weightl.global_SafetyQueenValue = self.SafetyQueenValue;
+        weightl.global_SafetyBishopVal = self.SafetyBishopVal;
+        weightl.global_SafetyKnightVal = self.SafetyKnightVal;
+        weightl.global_SafetyRookVal = self.SafetyRookVal;
+        weightl.global_SafetyQueenVal = self.SafetyQueenVal;
 
-        weightl.global_StructureProtectionValue = self.StructureProtectionValue;
+        weightl.global_StructureProtectionVal = self.StructureProtectionVal;
 
-        weightl.global_KingProximityValue = self.KingProximityValue;
+        weightl.global_KingProximityVal = self.KingProximityVal;
 
         weightl.global_Pawn_PSQT = self.Pawn_PSQT;
         weightl.global_Bishop_PSQT = self.Bishop_PSQT;
@@ -704,7 +705,7 @@ pub const heuristicValues = struct {
 };
 
 pub inline fn getPieceCountValues() [chess.N_PIECES]scoreType {
-    return .{ weightl.global_PawnValue, weightl.global_BishopValue, weightl.global_KnightValue, weightl.global_RookValue, weightl.global_QueenValue, 0 };
+    return .{ weightl.global_PawnVal, weightl.global_BishopVal, weightl.global_KnightVal, weightl.global_RookVal, weightl.global_QueenVal, 0 };
 }
 // other more complex values may be inserted below
 pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) [3]typel.scoreType {
@@ -753,19 +754,19 @@ pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) [3]typel.scoreType {
 pub inline fn getPieceInfos_cst(comptime piece: typel.e_pieceType, sq: u8) [3]typel.scoreType {
     switch (piece) {
         .PAWN => {
-            return .{ weightl.global_PawnValue, weightl.global_Pawn_PSQT[MG][sq], weightl.global_Pawn_PSQT[EG][sq] };
+            return .{ weightl.global_PawnVal, weightl.global_Pawn_PSQT[MG][sq], weightl.global_Pawn_PSQT[EG][sq] };
         },
         .BISHOP => {
-            return .{ weightl.global_BishopValue, weightl.global_Bishop_PSQT[MG][sq], weightl.global_Bishop_PSQT[EG][sq] };
+            return .{ weightl.global_BishopVal, weightl.global_Bishop_PSQT[MG][sq], weightl.global_Bishop_PSQT[EG][sq] };
         },
         .KNIGHT => {
-            return .{ weightl.global_KnightValue, weightl.global_Knight_PSQT[MG][sq], weightl.global_Knight_PSQT[EG][sq] };
+            return .{ weightl.global_KnightVal, weightl.global_Knight_PSQT[MG][sq], weightl.global_Knight_PSQT[EG][sq] };
         },
         .ROOK => {
-            return .{ weightl.global_RookValue, weightl.global_Rook_PSQT[MG][sq], weightl.global_Rook_PSQT[EG][sq] };
+            return .{ weightl.global_RookVal, weightl.global_Rook_PSQT[MG][sq], weightl.global_Rook_PSQT[EG][sq] };
         },
         .QUEEN => {
-            return .{ weightl.global_QueenValue, weightl.global_Queen_PSQT[MG][sq], weightl.global_Queen_PSQT[EG][sq] };
+            return .{ weightl.global_QueenVal, weightl.global_Queen_PSQT[MG][sq], weightl.global_Queen_PSQT[EG][sq] };
         },
         .KING => {
             return .{ 0, weightl.global_King_PSQT[MG][sq], weightl.global_King_PSQT[EG][sq] };
@@ -796,18 +797,18 @@ pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
     }
 
     //const color_mask: scoreType = if (p_board.whiteToMove()) 1 else -1;
-    //const stat = color_mask * evaluate(p_board);
-    //var info: threadingl.threadInfo = .{ .alive = true, .working = true };
+    const stat = c_evaluate(p_board, p_board.whiteToMove());
+    var info: threadingl.threadInfo = .{ .alive = true, .working = true };
 
-    //const alpha: scoreType = -weightl.simpleCheckMateScore;
-    //const beta: scoreType = weightl.simpleCheckMateScore;
-    //var ss: alphaBetal.searchStack = .{};
-    //const isChecked = p_board.isChecked();
-    //if (isChecked) return false;
-    //const quiesc = alphaBetal.quiescenceSearch(p_board, &info, undefined, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, isChecked, false, &ss, .NonPV);
-    //if (stat != quiesc) {
-    //    return false;
-    //}
+    const alpha: scoreType = -weightl.simpleCheckMateScore;
+    const beta: scoreType = weightl.simpleCheckMateScore;
+    var ss: alphaBetal.searchStack = .{};
+    const isChecked = p_board.isChecked();
+    if (isChecked) return false;
+    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, undefined, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, isChecked, false, &ss, .NonPV);
+    if (stat != quiesc) {
+        return false;
+    }
     return true;
 }
 pub const texelEntry = struct {
@@ -849,6 +850,9 @@ pub const texelEntry = struct {
             @panic("");
         };
         defer board.free(alloc);
+
+        board.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, &board);
+        p_self.eval = c_evaluate(&board, true);
         p_self.phase = (board.getPhase());
         p_self.turn = board.whiteToMove();
         p_self.valid = isBoardTexelValid(&board);
@@ -893,8 +897,8 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !voi
 
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    //const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)]);
-    //const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)]);
+    //const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)]);
+    //const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)]);
     // mobility
     const moveW: scoreType = @intCast(allwhiteMoveBB.count());
     const moveB: scoreType = @intCast(allblackMoveBB.count());
@@ -907,16 +911,16 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !voi
     const wAttacks = (allwhiteMoveBB.getAttackedMask(chess.UNIVERSE));
     //const kingMoveW = allwhiteMoveBB.kingMoves & (~allblackMoveBB.getAttackedMask(chess.UNIVERSE));
     //const kingMoveB = allblackMoveBB.kingMoves & (~allwhiteMoveBB.getAttackedMask(chess.UNIVERSE));
-    const kingMoveW = allwhiteMoveBB.kingMoves & (~bAttacks) & ~p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)];
-    const kingMoveB = allblackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)];
+    const kingMoveW = allwhiteMoveBB.kingMoves & (~bAttacks) & ~p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)];
+    const kingMoveB = allblackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)];
 
     p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.popcount(kingMoveW)), .bcoeff = @intCast(chess.popcount(kingMoveB)) });
     std.debug.assert(idx == configl.TEXEL_KINGMOVE_COUNT_IDX);
     idx += 1;
 
     // structure protection
-    const w_pieceProtect = allwhiteMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)] ^ chess.sqToBitboard(p_state.b.wKingSq));
-    const b_pieceProtect = allblackMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)] ^ chess.sqToBitboard(p_state.b.bKingSq));
+    const w_pieceProtect = allwhiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)] ^ chess.sqToBitboard(p_state.b.wKingSq));
+    const b_pieceProtect = allblackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)] ^ chess.sqToBitboard(p_state.b.bKingSq));
     p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(w_pieceProtect.count()), .bcoeff = @intCast(b_pieceProtect.count()) });
     std.debug.assert(idx == configl.TEXEL_PROTECTION_COUNT_IDX);
     idx += 1;
@@ -947,16 +951,16 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !voi
 
     // tempo
     if (p_state.whiteToMove()) {
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = 0, .bcoeff = @intCast(chess.whiteBoolToInt(p_state.isChecked())) });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = 0, .bcoeff = @intFromBool(p_state.isChecked()) });
     } else {
-        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(chess.whiteBoolToInt(p_state.isChecked())), .bcoeff = 0 });
+        p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intFromBool(p_state.isChecked()), .bcoeff = 0 });
     }
     std.debug.assert(idx == configl.TEXEL_TEMPO_CHECKS_IDX);
     idx += 1;
 
     const nonPawns = ~p_state.getPieceBB_t(.PAWN);
-    const wThreats = allwhiteMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(false)] & nonPawns);
-    const bThreats = allblackMoveBB.andFn(p_state.b.c_occupiedBB[chess.whiteBoolToInt(true)] & nonPawns);
+    const wThreats = allwhiteMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)] & nonPawns);
+    const bThreats = allblackMoveBB.andFn(p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)] & nonPawns);
 
     p_out.appendCoeff(.{ .index = @intCast(idx), .wcoeff = @intCast(wThreats.count()), .bcoeff = @intCast(bThreats.count()) });
     std.debug.assert(idx == configl.TEXEL_PIECE_THREAT_IDX);
@@ -1118,70 +1122,6 @@ pub const NVector = struct {
     }
 };
 
-pub const coeffTuple = struct {
-    val: [N_PHASES]NVector = std.mem.zeroes([N_PHASES]NVector),
-    pub fn init(seed: u64, usePastPSQT: bool) coeffTuple {
-        var rngIntGenerator = std.Random.DefaultPrng.init(seed);
-        const randGen = rngIntGenerator.random();
-        var ret: coeffTuple = .{};
-        for (0..N_PHASES) |p| {
-            for (0..NTERMS) |i| {
-                const r: scoreType = @intCast(randGen.intRangeAtMost(i64, configl.WEIGHT_MIN, configl.WEIGHT_MAX));
-                ret.val[p].val[i] = r;
-            }
-        }
-        if (usePastPSQT) {
-            ret.load_prev();
-        }
-        return ret;
-    }
-    pub fn load_prev(p_self: *coeffTuple) void {
-        std.debug.print("[DEBUG] load_prev: Loading previous PSQT values\n", .{});
-        for (0..chess.N_SQUARES) |sq| {
-            p_self.val[MG].val[configl.TEXEL_PAWN_PSQT_IDX + sq] = weightl.pawnScoreArr[sq];
-            p_self.val[EG].val[configl.TEXEL_PAWN_PSQT_IDX + sq] = weightl.pawnScoreArr[sq];
-
-            p_self.val[MG].val[configl.TEXEL_BISHOP_PSQT_IDX + sq] = weightl.bishopScoreArr[sq];
-            p_self.val[EG].val[configl.TEXEL_BISHOP_PSQT_IDX + sq] = weightl.bishopScoreArr[sq];
-
-            p_self.val[MG].val[configl.TEXEL_KNIGHT_PSQT_IDX + sq] = weightl.knightScoreArr[sq];
-            p_self.val[EG].val[configl.TEXEL_KNIGHT_PSQT_IDX + sq] = weightl.knightScoreArr[sq];
-
-            p_self.val[MG].val[configl.TEXEL_ROOK_PSQT_IDX + sq] = weightl.rookScoreArr[sq];
-            p_self.val[EG].val[configl.TEXEL_ROOK_PSQT_IDX + sq] = weightl.rookScoreArr[sq];
-
-            p_self.val[MG].val[configl.TEXEL_QUEEN_PSQT_IDX + sq] = weightl.queenScoreArr[sq];
-            p_self.val[EG].val[configl.TEXEL_QUEEN_PSQT_IDX + sq] = weightl.queenScoreArr[sq];
-
-            p_self.val[MG].val[configl.TEXEL_KING_PSQT_IDX + sq] = weightl.kingScoreArr[sq];
-            p_self.val[EG].val[configl.TEXEL_KING_PSQT_IDX + sq] = weightl.kingScoreArr[sq];
-        }
-    }
-    pub fn print(p_self: *const coeffTuple) void {
-        for (0..NTERMS) |i| {
-            std.debug.print("(MG: {d}, EG: {d})\n", .{ p_self.val[MG].val[i], p_self.val[EG].val[i] });
-        }
-    }
-    pub fn copy(p_self: *const coeffTuple) coeffTuple {
-        var ret: coeffTuple = .{};
-        @memcpy(&ret.val[MG].val, &p_self.val[MG].val);
-        @memcpy(&ret.val[EG].val, &p_self.val[EG].val);
-        return ret;
-    }
-    pub fn saveToFile(p_self: *const coeffTuple, alloc: std.mem.Allocator, path: []const u8) !void {
-        const mg_str = try std.fmt.allocPrint(alloc, "mg: {f}\n", .{p_self.val[MG]});
-        defer alloc.free(mg_str);
-
-        const eg_str = try std.fmt.allocPrint(alloc, "eg: {f}\n", .{p_self.val[EG]});
-        defer alloc.free(eg_str);
-
-        const file = try std.fs.cwd().createFile(path, .{ .read = true });
-        defer file.close(mainl.getGlobalIo());
-        _ = try file.write(mg_str);
-        _ = try file.write(eg_str);
-    }
-};
-
 pub const coeffs = struct {
     index: i32 = -1,
     wcoeff: scoreType = 0,
@@ -1213,13 +1153,6 @@ pub const coeffVector = struct {
             const item: coeffs = .{ .index = @intCast(idx.*), .wcoeff = w[i], .bcoeff = b[i] };
             p_self.appendCoeff(item);
             idx.* += 1;
-        }
-    }
-    pub fn print(p_self: *coeffVector) void {
-        std.debug.print("\n", .{});
-        for (0..p_self.len) |i| {
-            const tuple = p_self.items[i];
-            std.debug.print("(w: {d}, b: {d})\n", .{ tuple.wcoeff, tuple.bcoeff });
         }
     }
 };
@@ -1254,7 +1187,7 @@ pub const csvHeader = struct {
             try writer.print("Delta_{d},", .{i});
         }
 
-        try writer.print("Phase,Outcome", .{});
+        try writer.print("Phase,Outcome,Eval", .{});
     }
 };
 pub const csvBody = struct {
@@ -1266,7 +1199,7 @@ pub const csvBody = struct {
             try writer.print("{d},", .{val});
         }
 
-        try writer.print("{d},{d}", .{ self.entry.phase, self.entry.result });
+        try writer.print("{d},{d},{d}", .{ self.entry.phase, self.entry.result, self.entry.eval });
     }
 };
 pub fn createEmptyFile(alloc: std.mem.Allocator, logFile: *logl.logging(CSV_ENTRY_SIZE)) !void {
@@ -1279,10 +1212,11 @@ pub fn createEmptyFile(alloc: std.mem.Allocator, logFile: *logl.logging(CSV_ENTR
     defer alloc.free(header_str);
     try logFile.write(header_str);
 }
-pub fn saveCoefficientToFile(logFile: *logl.logging(CSV_ENTRY_SIZE), entries: []texelEntry) !void {
+pub fn saveCoefficientToFile(logFile: *logl.logging(CSV_ENTRY_SIZE), entries: []texelEntry) !u64 {
     // <--comma separated values--->
 
     const print_freq: usize = 10000;
+    var saved: u64 = 0;
     for (0..entries.len) |i| {
         if (i % print_freq == 0) {
             std.debug.print("{d} / {d} \r", .{ i, entries.len });
@@ -1290,12 +1224,14 @@ pub fn saveCoefficientToFile(logFile: *logl.logging(CSV_ENTRY_SIZE), entries: []
         if (!entries[i].valid) {
             continue;
         }
+        saved += 1;
         const body: csvBody = .{ .entry = &entries[i] };
 
         var buffer: [CSV_ENTRY_SIZE]u8 = std.mem.zeroes([CSV_ENTRY_SIZE]u8);
         const body_str = try std.fmt.bufPrint(&buffer, "{f}", .{body});
         try logFile.append(body_str);
     }
+    return saved;
 }
 
 pub fn printEntriesInfo(entries: []const texelEntry) void {
@@ -1303,7 +1239,7 @@ pub fn printEntriesInfo(entries: []const texelEntry) void {
     var validBuffer: [2]usize = .{ 0, 0 };
     for (0..entries.len) |i| {
         buffer[@intFromFloat(entries[i].result * 2)] += 1;
-        validBuffer[chess.whiteBoolToInt(entries[i].valid)] += 1;
+        validBuffer[@intFromBool(entries[i].valid)] += 1;
     }
     std.debug.print("[DEBUG] printEntriesInfo: Breakdown of entries found 0: {d}, 0.5: {d}, 1: {d}\n valid: {d} non valid: {d}\n\n", .{ buffer[0], buffer[1], buffer[2], validBuffer[1], validBuffer[0] });
 }
@@ -1316,14 +1252,15 @@ pub fn test_save(alloc: std.mem.Allocator, logFile: *logl.logging(CSV_ENTRY_SIZE
 
     try createEmptyFile(alloc, logFile);
     var skips: usize = 0;
+    var saved: u64 = 0;
     while (remainingEntries != 0) {
-        std.debug.print("Remaining entries: {d} \n", .{remainingEntries});
+        std.debug.print("Remaining entries: {d} {d} saved positions\n", .{ remainingEntries, saved });
         remainingEntries = remainingEntries -| configl.N_POSITIONS;
         const entries = try getEntriesFromFile(alloc, dataPath, skips);
 
         printEntriesInfo(entries);
         defer alloc.free(entries);
-        try saveCoefficientToFile(logFile, entries);
+        saved += try saveCoefficientToFile(logFile, entries);
         skips += configl.N_POSITIONS;
     }
 }
@@ -1623,20 +1560,21 @@ pub fn lowestAttackDefPiece(p_state: *const boardl.boardState, attDef: u64, whit
 const CSV_ENTRY_SIZE: usize = 1024;
 
 pub fn saveTexelCsv(alloc: std.mem.Allocator) !void {
-    var savePath: string = try string.initFromSlice(alloc, "out/csv/CCRL-4040.[2370489]_13990894pos.csv");
+    var savePath: string = try string.initFromSlice(alloc, "out/csv/CCRL-4040.[2370489]_13990894pos_eval.csv");
     var name: string = try string.initFromSlice(alloc, "opening/CCRL-4040.[2370489]_shuffled.book");
     //var name: string = try string.initFromSlice(alloc, "opening/E12.33-1M-D12-Resolved.book");
 
     defer name.free(alloc);
     defer savePath.free(alloc);
 
-    var logFile = try logl.logging(CSV_ENTRY_SIZE).init(alloc, 100_000, savePath);
+    var logFile = try logl.logging(CSV_ENTRY_SIZE).init(alloc, 100_000, savePath, true);
     try test_save(alloc, &logFile, name);
     try logFile.free(alloc);
 }
 
 pub fn main(alloc: std.mem.Allocator) !void {
     mainl.initAll(alloc, false);
+    nnuel.nnueNet = try .init(alloc, configl.NET_PATH);
     //try sanityCheck();
     //try test_main();
     try saveTexelCsv(alloc);
