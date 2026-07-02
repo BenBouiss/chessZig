@@ -205,37 +205,37 @@ pub var global_RookVal: scoreType = simpleRookScore;
 pub var global_QueenVal: scoreType = simpleQueenScore;
 
 // mobility
-pub var global_MobilityVal: [2]scoreType = .{ 1, 1 };
-pub var global_KingMobilityVal: [2]scoreType = .{ 2, 2 };
-pub var global_OpenFileRookVal: [2]scoreType = .{ 5, 1 };
+pub var global_MobilityVal: [2]scoreType = .{ 6, 4 };
+pub var global_KingMobilityVal: [2]scoreType = .{ 2, 4 };
+pub var global_OpenFileRookVal: [2]scoreType = .{ 6, 0 };
 
 // structure
-pub var global_StructureProtectionVal: [2]scoreType = .{ 24, 31 };
-pub var global_centerProtectionVal: [2]scoreType = .{ 8, 12 };
+pub var global_StructureProtectionVal: [2]scoreType = .{ 24, 28 };
+pub var global_centerProtectionVal: [2]scoreType = .{ 5, 10 };
 
 // pawn structure
-pub var global_IsolatedPawnVal: [2]scoreType = .{ 1, 1 };
-pub var global_StackedPawnVal: [2]scoreType = .{ 1, 1 };
-pub var global_PassedPawnVal: [2]scoreType = .{ 32, 42 };
-pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 4, 6 };
-pub var global_connectionPawnVal: [2]scoreType = .{ 3, 2 };
+pub var global_IsolatedPawnVal: [2]scoreType = .{ 0, 0 };
+pub var global_StackedPawnVal: [2]scoreType = .{ 0, 2 };
+pub var global_PassedPawnVal: [2]scoreType = .{ 31, 41 };
+pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 3, 5 };
+pub var global_connectionPawnVal: [2]scoreType = .{ 5, 1 };
 
 // tempo
-pub var global_tempoChecksScore: [2]scoreType = .{ 24, 16 };
-pub var global_pieceThreatScore: [2]scoreType = .{ simplePieceThreatScore, simplePieceThreatScore >> 1 };
+pub var global_tempoChecksScore: [2]scoreType = .{ 25, 17 };
+pub var global_pieceThreatScore: [2]scoreType = .{ 15, 8 };
 pub const global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
 // safety
 pub var global_SafetyBishopVal: [2]scoreType = .{ 8, 8 };
-pub var global_SafetyKnightVal: [2]scoreType = .{ 4, 4 };
-pub var global_SafetyRookVal: [2]scoreType = .{ 16, 16 };
-pub var global_SafetyQueenVal: [2]scoreType = .{ 16, 16 };
+pub var global_SafetyKnightVal: [2]scoreType = .{ 5, 4 };
+pub var global_SafetyRookVal: [2]scoreType = .{ 17, 14 };
+pub var global_SafetyQueenVal: [2]scoreType = .{ 14, 18 };
 
 // king
-pub var global_KingProximityVal: [2]scoreType = .{ 1, 2 };
+pub var global_KingProximityVal: [2]scoreType = .{ 0, 0 };
 
 // material
-pub var global_materialBishopPair: [2]scoreType = .{ 16, 24 };
+pub var global_materialBishopPair: [2]scoreType = .{ 17, 24 };
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = .{ pawnScoreArr, pawnScoreArr };
 pub var global_Bishop_PSQT: [2][64]scoreType = .{ bishopScoreArr, bishopScoreArr };
@@ -268,20 +268,20 @@ const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
 
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
-pub var lmr_expectedCutOff: milliDepth = 1000;
-pub var lmr_notImproving: milliDepth = 512;
+pub var lmr_expectedCutOff: milliDepth = 1002;
+pub var lmr_notImproving: milliDepth = 525;
 pub var lmr_hashMoveCapture: milliDepth = 300;
-pub var lmr_baseDeficit: milliDepth = 1024;
-pub var lmr_badCapture: milliDepth = 300;
-pub var lmr_oldMulti: milliDepth = 100;
+pub var lmr_baseDeficit: milliDepth = 1029;
+pub var lmr_badCapture: milliDepth = 312;
+pub var lmr_oldMulti: milliDepth = 76;
 // LMR negative (less reduction)
 pub var lmr_inCheck: milliDepth = -600; // not used since no lmr in check
 // try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
-pub var lmr_givesCheck: milliDepth = -700;
-pub var lmr_killerMove: milliDepth = -512;
-pub var lmr_threatening: milliDepth = -256;
-pub var lmr_inPvMode: milliDepth = -400;
-pub var lmr_isPromotion: milliDepth = -200;
+pub var lmr_givesCheck: milliDepth = -703;
+pub var lmr_killerMove: milliDepth = -515;
+pub var lmr_threatening: milliDepth = -245;
+pub var lmr_inPvMode: milliDepth = -410;
+pub var lmr_isPromotion: milliDepth = -195;
 
 //    lmr_expectedCutOff = 300,
 //    lmr_notImproving = 150,
