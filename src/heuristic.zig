@@ -1055,6 +1055,8 @@ pub const probCutMoveCount: [6]scoreType = .{ 8, 10, 14, 20, 20, 40 };
 pub const dFutilityMargin: scoreType = 300;
 
 // move heuristic "sections"
+pub const SEE_values: [13]scoreType = .{ weightl.simplePawnScore, weightl.simpleKnightScore, weightl.simpleBishopScore, weightl.simpleRookScore, weightl.simpleQueenScore, weightl.simpleKingScore, weightl.simplePawnScore, weightl.simpleKnightScore, weightl.simpleBishopScore, weightl.simpleRookScore, weightl.simpleQueenScore, weightl.simpleKingScore, 0 };
+
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
 pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
 
@@ -1071,7 +1073,7 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
     const to = move.getTo();
 
     if (move.isCapture()) {
-        const cPiece: e_piece = if (move.isEnpassant()) (e_piece.nWhitePawn) else (p_state.getPiece(to));
+        const cPiece: e_piece = if (move.isEnpassant()) (if (white) .nBlackPawn else (.nWhitePawn)) else (p_state.getPiece(to));
         // done for pseudo legal move stuff
         if (chess.isKingPiece(cPiece)) {
             return configl.ORDERING_LINE_VALUE + 2;
@@ -1091,10 +1093,7 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
             return configl.KILLER_0_HEURISTIC_VALUE;
         } else if (move.equal(historyl.killerMoves[ply][1])) {
             return configl.KILLER_1_HEURISTIC_VALUE;
-            //} else if (move.equal(historyl.counterMoves[from][to])) {
-            //    return configl.COUNTERMOVE_HEURISTIC_VALUE;
         } else {
-            //return historyl.historyHeuristic[chess.whiteBoolToInt(white)][from][to] + continuations[0][@intFromEnum(fpiece)][to] + continuations[1][@intFromEnum(fpiece)][to];
             return historyl.historyHeuristic[chess.whiteBoolToInt(white)][from][to];
         }
         //return historyl.historyHeuristic[chess.whiteBoolToInt(white)][from][to] + continuations[0][@intFromEnum(fpiece)][to] + continuations[1][@intFromEnum(fpiece)][to];
@@ -1237,33 +1236,21 @@ pub fn SEE(p_state: *const boardl.boardState, move: IMove) scoreType {
     }
     const to = move.getTo();
     const from = move.getFrom();
-    return _SEE_recalc(p_state, @enumFromInt(to), @enumFromInt(from), p_state.whiteToMove());
+    return _SEE_loop(p_state, @enumFromInt(to), @enumFromInt(from), p_state.whiteToMove());
 }
-pub const SEE_context = struct {
-    attadef: u64 = 0,
-    diagPiece: u64 = 0,
-    horizPiece: u64 = 0,
-    pub fn init(p_board: *const boardl.boardState, toSq: squarel.e_square, white: bool) SEE_context {
-        var ret: SEE_context = undefined;
-        ret.horizPiece = (p_board.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] |
-            p_board.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
-
-        ret.diagPiece = (p_board.b.pieceBB[@intFromEnum(e_pieceType.BISHOP)] |
-            p_board.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
-
-        const attacker = chess.getAllAttackerFromSq(p_board, !white, toSq);
-        const defender = chess.getAllAttackerFromSq(p_board, white, toSq);
-        ret.attadef = attacker | defender;
-        return ret;
-    }
-};
 
 // source: https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
-pub inline fn _SEE_recalc(p_state: *const boardl.boardState, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool) scoreType {
-    const ctx: SEE_context = SEE_context.init(p_state, toSq, white);
-    return _SEE_loop(p_state, toSq, fromSq, white, ctx.attadef, ctx.diagPiece, ctx.horizPiece);
-}
-pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool, attadef: u64, diagPiece: u64, horizPiece: u64) scoreType {
+pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, fromSq: squarel.e_square, white: bool) scoreType {
+    const horizPiece = (p_state.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] |
+        p_state.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
+
+    const diagPiece = (p_state.b.pieceBB[@intFromEnum(e_pieceType.BISHOP)] |
+        p_state.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
+
+    const attacker = chess.getAllAttackerFromSq(p_state, !white, toSq);
+    const defender = chess.getAllAttackerFromSq(p_state, white, toSq);
+
+    const attadef = attacker | defender;
     var fromSet = chess.sqToBitboard(fromSq);
     const mayXray = diagPiece | horizPiece;
     var _attadef = attadef;
@@ -1305,6 +1292,57 @@ pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, from
     }
     return gain[0];
 }
+pub fn SEE_threshold(p_state: *const boardl.boardState, move: IMove, threshold: scoreType) bool {
+    // returns if moves is atleast better than threshold source: heavely inspired by https://github.com/Adam-Kulju/Patricia/
+
+    const to = move.getTo();
+    const from = move.getFrom();
+    var gain: scoreType = SEE_values[@intFromEnum(p_state.getPiece(to))] - threshold;
+    if (gain < 0) return false;
+
+    gain -= SEE_values[@intFromEnum(p_state.getPiece(from))];
+    if (gain >= 0) return true;
+
+    const toSq: typel.e_square = @enumFromInt(to);
+    const horizPiece = (p_state.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] | p_state.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
+
+    const diagPiece = (p_state.b.pieceBB[@intFromEnum(e_pieceType.BISHOP)] | p_state.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
+    var occ = p_state.b.occupiedBB() ^ chess.xToBitboard(from);
+    var white = p_state.whiteToMove();
+    var attadef = chess.getAllAttackerFromSq(p_state, !white, toSq) | chess.getAllAttackerFromSq(p_state, white, toSq);
+
+    while (true) {
+        white = !white;
+        attadef &= occ;
+        const currAtt = attadef & p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)];
+        if (currAtt == 0) {
+            return white != p_state.whiteToMove();
+        }
+        // this is always a hit
+        var attType: e_pieceType = .PAWN;
+        for (0..chess.N_PIECES_TYPES) |i| {
+            const p = currAtt & p_state.b.pieceBB[i];
+            if (p != 0) {
+                const pIdx = chess.bitscan(p);
+                occ ^= chess.xToBitboard(pIdx);
+                attType = @enumFromInt(i);
+                break;
+            }
+        }
+        if (attType == .PAWN or attType == .BISHOP or attType == .QUEEN) {
+            attadef |= chess.getBishopAttacks(occ, toSq) & diagPiece;
+        }
+        if (attType == .ROOK or attType == .QUEEN) {
+            attadef |= chess.getRookAttacks(occ, toSq) & horizPiece;
+        }
+        gain = -gain - SEE_values[@intFromEnum(attType)] - 1;
+        if (gain >= 0) {
+            return white == p_state.whiteToMove();
+        }
+    }
+    return true;
+}
+
 pub fn considerXrays(occ: u64, fromSq: squarel.e_square, fromDiags: u64, movingBB: u64, diagPiece: u64, horizPiece: u64) u64 {
     if (fromDiags & movingBB == 0) {
         // then horizontal or vertical

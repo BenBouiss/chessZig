@@ -16,6 +16,8 @@ pub const simpleBishopScore: scoreType = 300;
 pub const simpleKnightScore: scoreType = 300;
 pub const simpleRookScore: scoreType = 500;
 pub const simpleQueenScore: scoreType = 900;
+pub const simpleKingScore: scoreType = 16000;
+
 pub const simpleCheckMateScore: scoreType = 31000;
 pub const simpleCheckMateThreshold: scoreType = 30000;
 pub const simpleStalemateScore: scoreType = 0;
@@ -119,13 +121,23 @@ pub const param_entry = struct {
     opt: enginel.setOptionEntry,
     addr: *scoreType,
 };
+pub var strOpts: std.ArrayList([]u8) = .empty;
+
 pub fn add_param(addr: *scoreType, min: scoreType, max: scoreType, name: []const u8) void {
     const p: param_entry = .{ .addr = addr, .opt = .{ .argType = .SPIN, .optionType = .INVALID, .name = name, .info = enginel.optionInfo{ .spin = .{ .default = addr.*, .min = min, .max = max } } } };
     tunerOpts.append(mainl.getGlobalGPA(), p) catch unreachable;
 }
+pub fn add_param_1d(values: *[64]scoreType, min: scoreType, max: scoreType, name: []const u8) !void {
+    for (0..values.len) |i| {
+        const n = try std.fmt.allocPrint(mainl.getGlobalGPA(), "{s}_{d}", .{ name, i });
+        try strOpts.append(mainl.getGlobalGPA(), n);
+        const p: param_entry = .{ .addr = &values[i], .opt = .{ .argType = .SPIN, .optionType = .INVALID, .name = strOpts.items[strOpts.items.len - 1][0..n.len], .info = enginel.optionInfo{ .spin = .{ .default = values[i], .min = min, .max = max } } } };
+        tunerOpts.append(mainl.getGlobalGPA(), p) catch unreachable;
+    }
+}
 
 // global things here
-pub fn appendAll() void {
+pub fn appendAll() !void {
     // counts
     //add_param(&global_PawnVal, 0, 1000, "global_PawnVal");
     //add_param(&global_BishopVal, 0, 100, "global_BishopVal");
@@ -220,12 +232,34 @@ pub fn appendAll() void {
     add_param(&razoringBaseImproving, 0, 1000, "razoringBaseImproving");
     add_param(&razoringBaseNotImproving, 0, 1000, "razoringBaseNotImproving");
     add_param(&razoringCoefficient, 0, 1000, "razoringCoefficient");
-
     add_param(&IIRDepth, 0, 6, "IIRDepth");
     add_param(&LMRDepth, 0, 4, "LMRDepth");
+    const start = tunerOpts.items.len;
+
+    try add_param_1d(&global_Pawn_PSQT[0], -100, 200, "global_Pawn_PSQT_MG");
+    try add_param_1d(&global_Pawn_PSQT[1], -100, 200, "global_Pawn_PSQT_EG");
+
+    try add_param_1d(&global_Knight_PSQT[0], -100, 200, "global_Knight_PSQT_MG");
+    try add_param_1d(&global_Knight_PSQT[1], -100, 200, "global_Knight_PSQT_EG");
+
+    try add_param_1d(&global_Bishop_PSQT[0], -100, 200, "global_Bishop_PSQT_MG");
+    try add_param_1d(&global_Bishop_PSQT[1], -100, 200, "global_Bishop_PSQT_EG");
+
+    try add_param_1d(&global_Rook_PSQT[0], -100, 200, "global_Rook_PSQT_MG");
+    try add_param_1d(&global_Rook_PSQT[1], -100, 200, "global_Rook_PSQT_EG");
+
+    try add_param_1d(&global_Queen_PSQT[0], -100, 200, "global_Queen_PSQT_MG");
+    try add_param_1d(&global_Queen_PSQT[1], -100, 200, "global_Queen_PSQT_EG");
+
+    try add_param_1d(&global_King_PSQT[0], -100, 200, "global_King_PSQT_MG");
+    try add_param_1d(&global_King_PSQT[1], -100, 200, "global_King_PSQT_EG");
+    _ = start;
+    //for (start..tunerOpts.items.len) |i| {
+    //    const e = tunerOpts.items[i];
+    //    std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\":{d} }}, \n", .{ e.opt.name, e.addr.*, -100, 200, 20 });
+    //}
 }
 pub var global_PawnVal: scoreType = simplePawnScore;
-
 pub var global_BishopVal: scoreType = simpleBishopScore;
 pub var global_KnightVal: scoreType = simpleKnightScore;
 pub var global_RookVal: scoreType = simpleRookScore;
@@ -264,14 +298,12 @@ pub var global_KingProximityVal: [2]scoreType = .{ 0, 0 };
 // material
 pub var global_materialBishopPair: [2]scoreType = .{ 17, 22 };
 // PSQT
-pub var global_Pawn_PSQT: [2][64]scoreType = .{ pawnScoreArr, pawnScoreArr };
-pub var global_Bishop_PSQT: [2][64]scoreType = .{ bishopScoreArr, bishopScoreArr };
-pub var global_Knight_PSQT: [2][64]scoreType = .{ knightScoreArr, knightScoreArr };
-pub var global_Rook_PSQT: [2][64]scoreType = .{ rookScoreArr, rookScoreArr };
-pub var global_Queen_PSQT: [2][64]scoreType = .{ queenScoreArr, queenScoreArr };
-pub var global_King_PSQT: [2][64]scoreType = .{ _kingScoreArrMG, _kingScoreArrEG };
-
-const _kingScoreArrMG = [chessl.N_SQUARES]scoreType{
+pub var global_Pawn_PSQT: [2][64]scoreType = @splat(pawnScoreArr);
+pub var global_Bishop_PSQT: [2][64]scoreType = @splat(bishopScoreArr);
+pub var global_Knight_PSQT: [2][64]scoreType = @splat(knightScoreArr);
+pub var global_Rook_PSQT: [2][64]scoreType = @splat(rookScoreArr);
+pub var global_Queen_PSQT: [2][64]scoreType = @splat(queenScoreArr);
+pub var global_King_PSQT: [2][64]scoreType = .{ [_]scoreType{
     30,  30,  30,  10,  12,  10,  30,  30,
     10,  10,  10,  0,   0,   0,   10,  10,
     0,   0,   0,   -10, -20, -10, 0,   0,
@@ -280,9 +312,7 @@ const _kingScoreArrMG = [chessl.N_SQUARES]scoreType{
     -20, -40, -50, -50, -50, -50, -40, -20,
     -30, -40, -50, -50, -50, -50, -40, -30,
     -40, -40, -50, -50, -50, -50, -40, -40,
-};
-
-const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
+}, [_]scoreType{
     -40, -30, -30, -30, -30, -30, -30, -30,
     -30, -22, -23, -29, -40, -28, -37, -30,
     -30, -10, 4,   1,   4,   3,   -10, -30,
@@ -291,7 +321,7 @@ const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
     -30, -10, 14,  5,   9,   8,   -10, -30,
     -30, -22, -11, -14, -6,  -8,  -17, -30,
     -40, -30, -30, -30, -30, -30, -30, -30,
-};
+} };
 
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
@@ -336,3 +366,7 @@ pub var razoringCoefficient: scoreType = 167;
 
 pub var IIRDepth: scoreType = 4; // >= 5
 pub var LMRDepth: scoreType = 3; // >= 3
+
+pub var SeePruningMaxDepth: scoreType = 6;
+pub var SeePruningQuietMargin: scoreType = -50;
+pub var SeePruningCaptureMargin: scoreType = -25;

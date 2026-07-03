@@ -194,7 +194,6 @@ pub const boardState = struct {
     }
     pub inline fn whiteToMove(self: *const boardState) bool {
         return self.b._whiteToMove;
-        //return self.frame.stat.whiteToMove();
     }
     pub inline fn makeFrame(self: *const boardState) boardFrame {
         return self.frame;

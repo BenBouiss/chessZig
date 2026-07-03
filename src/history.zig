@@ -3,6 +3,7 @@ const std = @import("std");
 const movel = @import("move.zig");
 const typel = @import("type.zig");
 const configl = @import("config.zig");
+const chessl = @import("chess.zig");
 
 const IMove = movel.IMove;
 const scoreType = typel.scoreType;
@@ -45,7 +46,7 @@ pub inline fn updateCaptureHistory(fPiece: e_piece, cPiece: e_piece, toSq: u8, b
 
 pub fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) void {
     const _bonus = std.math.clamp(bonus, -configl.MAX_HIST_HEURISTIC_VALUE, configl.MAX_HIST_HEURISTIC_VALUE);
-    const turnIdx = @intFromBool(white);
+    const turnIdx: usize = @intFromEnum(chessl.boolTo_e_color(white));
     historyHeuristic[turnIdx][from][to] += _bonus - @divFloor(historyHeuristic[turnIdx][from][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
 }
 pub fn updateContinuationHeurist(heurist: *pieceHistory, piece: e_piece, to: u8, bonus: scoreType) void {

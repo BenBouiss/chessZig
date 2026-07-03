@@ -341,7 +341,7 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "reportProgress", .optionType = .REPORTPROG, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_REPORTPROGRESS } } });
         if (build_options.useTune) {
-            weightl.appendAll();
+            try weightl.appendAll();
         }
     }
     pub inline fn trackMetrics(p_self: *engine) bool {

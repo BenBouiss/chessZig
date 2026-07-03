@@ -416,6 +416,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 extended = true;
             }
         }
+        if (ply != 0 and depth <= weightl.SeePruningMaxDepth) {
+            const margin = if (isQuiet) weightl.SeePruningQuietMargin else weightl.SeePruningCaptureMargin;
+            if (!heuristicl.SEE_threshold(p_state, move, depth * margin)) {
+                continue;
+            }
+        }
 
         if (givesCheck) {
             _lmrDepth += weightl.lmr_givesCheck;
@@ -483,7 +489,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             // save here the killer moves
             if (isQuiet) {
                 historyl.onKillerMove(move, ply);
-                //historyl.updateHistoryHeurist(white, from, to, historyBonus);
                 for (0..gen.moves.len) |j| {
                     const idx = order.indexes[j];
                     const _move = gen.moves.moves[idx];
