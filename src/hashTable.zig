@@ -17,9 +17,6 @@ pub const Key = struct {
 
 // note: the gain in space is not visible in the debug build
 // will try to implement the chess programming version where way more stuff is stored
-pub const TT_t = enum { search, perft };
-
-const entryComponents = union(TT_t) { search: searchEntry, perft: perftEntry };
 
 pub const subKeyType = u16;
 pub const KEY_SHIFT = 64 - @bitSizeOf(subKeyType);
@@ -28,25 +25,9 @@ pub inline fn keyToUpperKey(key: u64) subKeyType {
 }
 
 pub inline fn qualityHeuristic(entry: Hash_entry, nNodes: scoreType) scoreType {
-    const diff = @mod(MAX_AGE + nNodes - @as(scoreType, @intCast(entry.age(.search))), MAX_AGE);
-    return entry.depth(.search) - diff * 8;
+    const diff = @mod(MAX_AGE + nNodes - @as(scoreType, @intCast(entry._age)), MAX_AGE);
+    return entry._depth - diff * 8;
 }
-
-pub const perftEntry = struct {
-    // 16 bytes
-    // 4 + 2 + 1 + 1
-    moveAmount: u32 align(1) = 0,
-    key: subKeyType align(1) = 0,
-    _depth: u8 = 0,
-    _age: u8 = 0,
-    val: u8 = 0,
-    pub fn init(key: subKeyType, moveA: u32, depth: u8, age: u8) perftEntry {
-        return .{ .key = key, .moveAmount = moveA, ._depth = depth, ._age = age, .val = 1 };
-    }
-    pub inline fn valid(self: perftEntry) bool {
-        return (self.val & 1) != 0;
-    }
-};
 
 // Types of nodes:
 //  ALL: Upper bound: less than alpha
@@ -90,59 +71,34 @@ pub const searchEntry = struct {
 };
 
 pub const Hash_entry = struct {
-    val: entryComponents = undefined,
-    pub inline fn moveA(self: *const Hash_entry) u64 {
-        return @intCast(self.val.perft.moveAmount);
+    // 16 + 16 +
+    key: subKeyType align(1) = 0,
+    evaluation: i16 align(1) = 0,
+    bestMove: movel.IMove align(1) = .{},
+    _depth: u8 = 0,
+    _age: u8 = 0,
+    val: u8 = 0,
+    pub fn init(key: subKeyType, eval: i16, bestMove: movel.IMove, depth: u8, age: u8, node: nodeType, whiteToMove: bool) Hash_entry {
+        const val: u8 = @as(u8, @intFromEnum(node)) | 0x8 | (@as(u8, @intFromBool(whiteToMove)) << 2);
+        return .{ .key = key, .evaluation = eval, .bestMove = bestMove, ._depth = depth, ._age = age, .val = val };
     }
-    pub inline fn eval(self: *const Hash_entry) scoreType {
-        return self.val.search.evaluation;
+    pub inline fn valid(self: Hash_entry) bool {
+        return (self.val & VALID_MASK) != 0;
     }
-    pub inline fn age(self: *const Hash_entry, comptime t: TT_t) u8 {
-        if (comptime t == .perft) {
-            return self.val.perft._age;
-        } else {
-            return self.val.search._age;
-        }
+    pub inline fn nodeT(self: Hash_entry) nodeType {
+        return @enumFromInt(self.val & NODETYPE_mask);
     }
-    pub inline fn depth(self: *const Hash_entry, comptime t: TT_t) u8 {
-        if (comptime t == .perft) {
-            return self.val.perft._depth;
-        } else {
-            return self.val.search._depth;
-        }
-    }
-    pub inline fn key(self: *const Hash_entry, comptime t: TT_t) subKeyType {
-        if (comptime t == .perft) {
-            return self.val.perft.key;
-        } else {
-            return self.val.search.key;
-        }
-    }
-    pub inline fn nodeT(self: *const Hash_entry) nodeType {
-        return self.val.search.nodeT();
-    }
-    pub inline fn valid(self: *const Hash_entry, comptime t: TT_t) bool {
-        if (comptime t == .perft) {
-            return self.val.perft.valid();
-        } else {
-            return self.val.search.valid();
-        }
-    }
-
-    pub inline fn copy(self: *const Hash_entry) Hash_entry {
-        return .{ .val = self.val, .key = self.key };
+    pub inline fn white(self: Hash_entry) bool {
+        return (self.val & WHITE_MASK) != 0;
     }
 };
 
-pub inline fn buildEntryFromPerftResult(key: Key, depth: u8, moveAmount: u64) Hash_entry {
-    return .{ .val = .{ .perft = .init(keyToUpperKey(key.code), @truncate(moveAmount), depth, @intCast(hashTable.gen >> 6)) } };
-}
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType, whiteToMove: bool) Hash_entry {
-    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 6), .ALL, whiteToMove) } };
+    return .init(keyToUpperKey(key.code), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 6), .ALL, whiteToMove);
 }
 
 pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove, whiteToMove: bool) Hash_entry {
-    return .{ .val = .{ .search = .init(keyToUpperKey(key.code), @intCast(eval), bestMove, depth, @intCast(hashTable.gen >> 6), nodeT, whiteToMove) } };
+    return .init(keyToUpperKey(key.code), @intCast(eval), bestMove, depth, @intCast(hashTable.gen >> 6), nodeT, whiteToMove);
 }
 
 pub const getResult = struct {
@@ -165,11 +121,11 @@ pub const hashWriter = struct {
     pub inline fn writeShort(self: *hashWriter, entry: Hash_entry) void {
         const prev = self.bucket.entries[self.idx];
         if (self.nextPerfectHit) {
-            if (prev.depth(.search) > entry.depth(.search)) {
+            if (prev._depth > entry._depth) {
                 hashTable.stat.missInsertion += 1;
                 return;
             }
-            if ((prev.depth(.search) == entry.depth(.search)) and (prev.nodeT() == .ALL)) {
+            if ((prev._depth == entry._depth) and (prev.nodeT() == .ALL)) {
                 hashTable.stat.missInsertion += 1;
                 return;
             }
@@ -178,8 +134,8 @@ pub const hashWriter = struct {
         hashTable.stat.insertion += 1;
     }
 
-    pub inline fn write(self: *hashWriter, entry: Hash_entry, comptime t: TT_t) void {
-        const stat = self.bucket.addEntry(entry, configl.DEFAULT_TT_STRAT, t);
+    pub inline fn write(self: *hashWriter, entry: Hash_entry) void {
+        const stat = self.bucket.addEntry(entry, configl.DEFAULT_TT_STRAT);
         if (stat) {
             hashTable.stat.insertion += 1;
         }
@@ -192,64 +148,50 @@ pub const Hash_bucket = struct {
     pub fn printSize(p_self: *const Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
         std.debug.print("[DEBUG] printSize: entries size is {d} bytes\n", .{@sizeOf(Hash_entry)});
-        std.debug.print("[DEBUG] printSize: entries val size is {d} bytes\n", .{@sizeOf(entryComponents)});
-        std.debug.print("[DEBUG] printSize: is of perft entry is {d} bytes\n", .{@sizeOf(perftEntry)});
-        std.debug.print("[DEBUG] printSize: is of search entry is {d} bytes\n", .{@sizeOf(searchEntry)});
 
         _ = p_self;
     }
-    pub fn t_len(self: Hash_bucket, comptime t: TT_t) u8 {
+    pub fn t_len(self: Hash_bucket) u8 {
         var ret: u8 = 0;
         for (0..configl.ITEM_PER_BUCKET) |i| {
-            if (comptime t == .perft) {
-                ret += @intFromBool(self.entries[i].valid(.perft));
-            } else {
-                ret += @intFromBool(self.entries[i].valid(.search));
-            }
+            ret += @intFromBool(self.entries[i].valid());
         }
         return ret;
     }
     pub fn len(self: Hash_bucket) u8 {
         var ret: u8 = 0;
         for (0..configl.ITEM_PER_BUCKET) |i| {
-            switch (self.entries[i].val) {
-                .search => |*s| {
-                    ret += @intFromBool(s.valid());
-                },
-                .perft => |*p| {
-                    ret += @intFromBool(p.valid());
-                },
-            }
+            ret += @intFromBool(self.entries[i].valid());
         }
         return ret;
     }
-    pub fn addEntry(p_self: *Hash_bucket, entry: Hash_entry, strategy: TT_strat, comptime t: TT_t) bool {
+    pub fn addEntry(p_self: *Hash_bucket, entry: Hash_entry, strategy: TT_strat) bool {
         switch (strategy) {
             .ALWAYS_REPLACE => {
-                return p_self.addEntry_AR(entry, t);
+                return p_self.addEntry_AR(entry);
             },
             .ALWAYS_REPLACE_OLDEST => {
-                return p_self.addEntry_oldest(entry, t);
+                return p_self.addEntry_oldest(entry);
             },
             .KEEP_DEEPER => {
-                return p_self.addEntry_deep(entry, t);
+                return p_self.addEntry_deep(entry);
             },
         }
     }
 
-    pub fn addEntry_deep(p_self: *Hash_bucket, n_entry: Hash_entry, comptime t: TT_t) bool {
+    pub fn addEntry_deep(p_self: *Hash_bucket, n_entry: Hash_entry) bool {
         var idxS: usize = 0;
         var sDepth: u8 = 255;
-        const reqDepth = n_entry.depth(t);
+        const reqDepth = n_entry._depth;
         // if a better entry exists for this hash key we exit
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
-            const currDepth = entry.depth(t);
-            if (!entry.valid(t) or (entry.age(t) + configl.OLD_THRESHOLD) < n_entry.age(t)) {
+            const currDepth = entry._depth;
+            if (!entry.valid() or (entry._age + configl.OLD_THRESHOLD) < n_entry._age) {
                 p_self.entries[i] = n_entry;
                 return true;
             }
-            if (entry.key(t) == n_entry.key(t)) {
+            if (entry.key == n_entry.key) {
                 if (currDepth > reqDepth) {
                     return false;
                 }
@@ -266,21 +208,21 @@ pub const Hash_bucket = struct {
         p_self.entries[idxS] = n_entry;
         return true;
     }
-    pub fn addEntry_oldest(p_self: *Hash_bucket, n_entry: Hash_entry, comptime t: TT_t) bool {
+    pub fn addEntry_oldest(p_self: *Hash_bucket, n_entry: Hash_entry) bool {
         var idxS: usize = 0;
         var sAge: usize = 0;
-        const reqDepth = n_entry.depth(t);
+        const reqDepth = n_entry._depth;
         // if a better n_entry exists for this hash key we exit
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const _entry = p_self.entries[i];
-            const _age = _entry.age(t);
-            if (!_entry.valid(t) or (_age + typel.MAX_PLY) < n_entry.age(t)) {
+            const _age = _entry._age;
+            if (!_entry.valid() or (_age + typel.MAX_PLY) < n_entry._age) {
                 p_self.entries[i] = n_entry;
                 //p_self.len = @min(p_self.len + 1, p_self.entries.len);
                 return true;
             }
-            if (_entry.key(t) == n_entry.key(t)) {
-                if (_entry.depth(t) > reqDepth) {
+            if (_entry.key == n_entry.key) {
+                if (_entry._depth > reqDepth) {
                     return false;
                 }
                 p_self.entries[i] = n_entry;
@@ -296,24 +238,14 @@ pub const Hash_bucket = struct {
         return true;
         //p_self.len = @min(p_self.len + 1, p_self.entries.len);
     }
-    pub fn addEntry_AR(p_self: *Hash_bucket, entry: Hash_entry, comptime t: TT_t) bool {
+    pub fn addEntry_AR(p_self: *Hash_bucket, entry: Hash_entry) bool {
         _ = p_self;
         _ = entry;
-        _ = t;
         //p_self.entries[p_self.len] = entry;
         //p_self.len = (p_self.len + 1) % configl.ITEM_PER_BUCKET;
         return true;
     }
-    pub fn getEntryPerft(p_self: *Hash_bucket, hash: u64, depth: u8) ?Hash_entry {
-        const _hash = keyToUpperKey(hash);
-        for (0..configl.ITEM_PER_BUCKET) |i| {
-            var entry = p_self.entries[i];
-            if (entry.key(.perft) == _hash and entry.depth(.perft) == depth) {
-                return entry;
-            }
-        }
-        return null;
-    }
+
     pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, depth: u8, p_state: *const boardl.boardState, nNodes: scoreType) getResult {
         const _hash = keyToUpperKey(hash);
         var next: usize = 0;
@@ -322,8 +254,8 @@ pub const Hash_bucket = struct {
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
-            if ((entry.key(.search) == _hash) and white == entry.val.search.white() and p_state.isMovePseudoLegal(entry.val.search.bestMove)) {
-                if (entry.depth(.search) >= depth) {
+            if ((entry.key == _hash) and white == entry.white() and p_state.isMovePseudoLegal(entry.bestMove)) {
+                if (entry._depth >= depth) {
                     hashTable.stat.hit += 1;
                     return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
                 } else {
@@ -331,7 +263,7 @@ pub const Hash_bucket = struct {
                     return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = true };
                 }
             }
-            if (!entry.valid(.search)) {
+            if (!entry.valid()) {
                 hashTable.stat.miss += 1;
                 return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = false };
             }
@@ -347,8 +279,8 @@ pub const Hash_bucket = struct {
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?Hash_entry {
         const _hash = keyToUpperKey(hash);
         for (0..configl.ITEM_PER_BUCKET) |i| {
-            var entry = p_self.entries[i];
-            if (entry.key(.search) == _hash and entry.depth(.search) >= depth) {
+            const entry = p_self.entries[i];
+            if (entry.key == _hash and entry._depth >= depth) {
                 hashTable.stat.hit += 1;
                 return entry;
             }
@@ -395,7 +327,7 @@ pub const Hash_table = struct {
         for (0..ret.size) |i| {
             var b = ret.getBucket(@intCast(i));
             for (0..configl.ITEM_PER_BUCKET) |j| {
-                b.entries[j] = .{ .val = .{ .search = .{} } };
+                b.entries[j] = .{};
             }
         }
         ret.initialized = true;
@@ -438,30 +370,27 @@ pub const Hash_table = struct {
         for (0..configl.ITEM_PER_BUCKET) |i| {
             var ent = &p_bucket.entries[i];
             if (ent.key == p_entry.key) {
-                ent.val.search.evaluation = score;
+                ent.evaluation = score;
             }
         }
     }
-    pub fn storeEntry_cst(p_self: *Hash_table, p_entry: Hash_entry, key: u64, comptime strategy: TT_strat, comptime t: TT_t) bool {
+    pub fn storeEntry_cst(p_self: *Hash_table, p_entry: Hash_entry, key: u64, comptime strategy: TT_strat) bool {
         var p_bucket = p_self.getBucketFromFullHashIndex(key);
-        const stat = p_bucket.addEntry(p_entry, strategy, t);
+        const stat = p_bucket.addEntry(p_entry, strategy);
         if (stat) {
             p_self.stat.insertion += 1;
         }
         return true;
     }
-    pub inline fn probePerft(p_self: *Hash_table, key: u64, depth: u8) probeResult {
-        const p_bucket = p_self.getBucketFromFullHashIndex(key);
-        return .{ .writer = .{ .bucket = p_bucket, .idx = 0 }, .entry = p_bucket.getEntryPerft(key, depth) };
-    }
+
     pub fn probeMatch(p_self: *Hash_table, key: u64, depth: u8, p_state: *const boardl.boardState, nNodes: scoreType) probeResult {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
         const res = p_bucket.getEntryMatchNext(key, depth, p_state, nNodes);
         return .{ .writer = .{ .bucket = p_bucket, .idx = res.nextIdx, .nextPerfectHit = res.nextPerfectHit }, .entry = res.entry };
     }
-    pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64, comptime t: TT_t) bool {
+    pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64) bool {
         var p_bucket = p_self.getBucketFromFullHashIndex(key);
-        const stat = p_bucket.addEntry(entry, configl.DEFAULT_TT_STRAT, t);
+        const stat = p_bucket.addEntry(entry, configl.DEFAULT_TT_STRAT);
         if (stat) {
             p_self.stat.insertion += 1;
         }
@@ -495,10 +424,6 @@ pub const Hash_table = struct {
     }
 };
 
-pub fn getEntryFromPerft(key: Key, depth: u8) ?Hash_entry {
-    const p_bucket: Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
-    return p_bucket.getEntryPerft(key.code, depth);
-}
 pub inline fn getEntryFromMatch(key: Key, depth: u8) ?Hash_entry {
     var p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
     return p_bucket.getEntryMatch(key.code, depth);

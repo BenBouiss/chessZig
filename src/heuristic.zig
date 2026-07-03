@@ -658,7 +658,7 @@ pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
     var ss: alphaBetal.searchStack = .{};
     const isChecked = p_board.isChecked();
     if (isChecked) return false;
-    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, undefined, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, isChecked, false, &ss, .NonPV);
+    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, isChecked, false, &ss, .NonPV);
     if (stat != quiesc) {
         return false;
     }

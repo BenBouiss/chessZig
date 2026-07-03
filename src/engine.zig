@@ -26,7 +26,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, USEHASHTABLE, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USENULLPRUNE, USELATEMOVEREDUC, USEFUTILITY, USEPROBCUT, USERAZORING, USERFP, USEIIR, USEASPIRATION, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEPROBCUT, USERAZORING, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
@@ -317,25 +317,14 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
 
         try p_self.addOption(.{ .name = "savelogs", .optionType = .SAVELOGS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "false" } } });
+
         try p_self.addOption(.{ .name = "logsPath", .optionType = .LOGSPATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "engine.log" } } });
 
         try p_self.addOption(.{ .name = "hashS", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
-        try p_self.addOption(.{ .name = "useHash", .optionType = .USEHASHTABLE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USEHASHTABLE } } });
-
-        try p_self.addOption(.{ .name = "useNullPruning", .optionType = .USENULLPRUNE, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_NULLPRUNE } } });
-
-        try p_self.addOption(.{ .name = "useLMR ", .optionType = .USELATEMOVEREDUC, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_LATE_MOVE_REDUCTION } } });
-
-        try p_self.addOption(.{ .name = "useFutility", .optionType = .USEFUTILITY, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_FUTILITY } } });
 
         try p_self.addOption(.{ .name = "useProbCut", .optionType = .USEPROBCUT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_PROBCUT } } });
 
         try p_self.addOption(.{ .name = "useRazoring", .optionType = .USERAZORING, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RAZORING } } });
-        try p_self.addOption(.{ .name = "useRFP", .optionType = .USERFP, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RFP } } });
-
-        try p_self.addOption(.{ .name = "useIIR", .optionType = .USEIIR, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_IIR } } });
-
-        try p_self.addOption(.{ .name = "useAspiration", .optionType = .USEASPIRATION, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_ASPIRATION } } });
 
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
@@ -360,9 +349,7 @@ pub const engine = struct {
     }
     pub fn printMetrics(p_self: *engine) void {
         p_self.metric.printMetric();
-        if (p_self.options.searchF.useHash) {
-            hashTablel.printTTStats();
-        }
+        hashTablel.printTTStats();
     }
     pub fn addOption(p_self: *engine, opt: setOptionEntry) !void {
         try p_self.options.setOptions.append(p_self.alloc, opt);
@@ -634,12 +621,7 @@ pub const engine = struct {
                 };
                 return true;
             },
-            .USEHASHTABLE => {
-                p_self.options.searchF.useHash = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-                return true;
-            },
+
             .SAVELOGS => {
                 p_self.saveLogs = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
@@ -670,22 +652,6 @@ pub const engine = struct {
                 return true;
             },
 
-            .USENULLPRUNE => {
-                p_self.options.searchF.useNullPrune = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-            },
-            .USELATEMOVEREDUC => {
-                p_self.options.searchF.useLMR = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-            },
-
-            .USEFUTILITY => {
-                p_self.options.searchF.useFutility = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-            },
             .USEPROBCUT => {
                 p_self.options.searchF.useProbCut = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
@@ -694,24 +660,6 @@ pub const engine = struct {
 
             .USERAZORING => {
                 p_self.options.searchF.useRazoring = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-                return true;
-            },
-            .USERFP => {
-                p_self.options.searchF.useRFP = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-                return true;
-            },
-            .USEIIR => {
-                p_self.options.searchF.useIIR = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-                return true;
-            },
-            .USEASPIRATION => {
-                p_self.options.searchF.useAspiration = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
                 };
                 return true;

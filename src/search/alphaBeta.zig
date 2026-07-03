@@ -55,7 +55,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, usePrevEval: bool, ss: *searchStack, comptime t: searchType) scoreType {
+pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, wasChecked: bool, usePrevEval: bool, ss: *searchStack, comptime t: searchType) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
 
     var _alpha = alpha;
@@ -115,7 +115,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, p_feat
         if (comptime configl.USE_NNUE) {
             nnuel.updateNnueOnMove(p_state, move);
         }
-        const score = -quiescenceSearch(p_state, p_info, p_features, depth - 1, -beta, -_alpha, ply + 1, wasChecked, false, ss, t);
+        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1, wasChecked, false, ss, t);
 
         _ = p_state.undoMove();
         p_state.frame = f;
@@ -210,38 +210,36 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const skipQuietMoves: bool = false;
     var writer: hashl.hashWriter = .init(p_state.frame.key.code);
     var hashEval: scoreType = 0;
-    if (p_features.useHash) {
-        const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(_depth), p_state, @intCast(p_info.searchStat.n_nodeExplored));
-        writer = res.writer;
-        if (res.entry) |_entry| {
-            p_info.searchStat.n_hashRetrieve += 1;
-            //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
-            hashEval = _entry.eval();
-            hashType = _entry.val.search.nodeT();
-            if (comptime t == .NonPV) {
-                if (hashType == .ALL) {
+    const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(_depth), p_state, @intCast(p_info.searchStat.n_nodeExplored));
+    writer = res.writer;
+    if (res.entry) |_entry| {
+        p_info.searchStat.n_hashRetrieve += 1;
+        //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
+        hashEval = _entry.evaluation;
+        hashType = _entry.nodeT();
+        if (comptime t == .NonPV) {
+            if (hashType == .ALL) {
+                return hashEval;
+            } else if (hashType == .LOWER) {
+                if (hashEval >= beta) {
                     return hashEval;
-                } else if (hashType == .LOWER) {
-                    if (hashEval >= beta) {
-                        return hashEval;
-                    }
-                    //if (!wasExtended) {
-                    //    extension += 1;
-                    //    extended = true;
-                    //}
-                } else if (hashType == .UPPER) {
-                    if (hashEval >= _alpha) {
-                        return hashEval;
-                    }
                 }
-            } else {
-                //if (hashType == .ALL and !wasExtended) {
+                //if (!wasExtended) {
                 //    extension += 1;
                 //    extended = true;
                 //}
+            } else if (hashType == .UPPER) {
+                if (hashEval >= _alpha) {
+                    return hashEval;
+                }
             }
-            hashMove = _entry.val.search.bestMove;
+        } else {
+            //if (hashType == .ALL and !wasExtended) {
+            //    extension += 1;
+            //    extended = true;
+            //}
         }
+        hashMove = _entry.bestMove;
     }
     const isCheck = p_state.isChecked();
     if (isCheck) {
@@ -249,7 +247,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     if (_depth == 0 or !p_info.alive) {
         p_info.searchStat.n_nodeExplored += 1;
-        return quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, isCheck, false, ss, t);
+        return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, isCheck, false, ss, t);
     }
     if (comptime t == .PV) {
         var pv: movel.pvContainer = .{};
@@ -264,9 +262,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     var improving: bool = false;
 
-    if (isCheck) {
-        //
-    } else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) {
+    if (isCheck) {} else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) {
         improving = currS.staticEval.s > ss.getPrevFrame(ply, 2).staticEval.s;
     } else if (ss.getPrevFrame(ply, 4).staticEval.t != .NONE) {
         improving = currS.staticEval.s > ss.getPrevFrame(ply, 4).staticEval.s;
@@ -290,7 +286,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     // null move prunning here
     // R = 3
     const isEndGame = p_state.isEndGame();
-    if (p_features.useNullPrune and ply != 0) {
+    if (ply != 0) {
         // see chess programming video
         const augment: u16 = if (_depth > weightl.nullMoveDepthAugmentThreshold) @intCast(weightl.nullMoveDepthAugment) else 0;
         const R: u16 = augment + @as(u16, @intCast(if (improving) weightl.nullMoveReductionImproving else weightl.nullMoveReduction));
@@ -315,12 +311,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     //    futilityScore = static_eval + margin;
     //    canFutility = true;
     //}
-    if (p_features.useFutility and !isCheck and !chessl.isMate(alpha) and _depth <= 3 and (static_eval + weightl.futilityMargin[_depth]) <= _alpha and comptime t == .NonPV) {
+    if (!isCheck and !chessl.isMate(alpha) and _depth <= 3 and (static_eval + weightl.futilityMargin[_depth]) <= _alpha and comptime t == .NonPV) {
         canFutility = true;
     }
 
     if (!isCheck and !hashMove.isValid() and comptime t == .NonPV) {
-        if (p_features.useRFP and _depth <= 3) {
+        if (_depth <= 3) {
             const margin: scoreType = if (improving) 0 else weightl.rfpImproving;
             if (static_eval >= (beta + weightl.rfpMargin[_depth] + margin)) {
                 return (static_eval + beta) >> 1;
@@ -340,7 +336,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             const base: scoreType = if (improving) weightl.razoringBaseImproving else weightl.razoringBaseNotImproving;
             const threshold = _alpha - (_depth * _depth * weightl.razoringCoefficient) - base;
             if (static_eval < threshold and @abs(_alpha) < weightl.simpleCheckMateScore) {
-                const val = quiescenceSearch(p_state, p_info, p_features, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, true, ss, .NonPV);
+                const val = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, isCheck, true, ss, .NonPV);
                 if (val < _alpha) {
                     return _alpha;
                 }
@@ -367,14 +363,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
     const prevSS = ss.getPrevFrame(ply, 1);
-    //if (p_features.useIIR and _depth >= 5 and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and (hashType == .LOWER or comptime t == .PV)) {
-    if (p_features.useIIR and _depth >= weightl.IIRDepth and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
+    if (_depth >= weightl.IIRDepth and !hashMove.isValid() and !p_state.getLastMove().equal(prevSS.prevLineMove) and hashType == .LOWER and comptime t == .NonPV) {
         _depth -= 1;
     }
     var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
 
     const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
-    if (p_features.useLMR and _depth >= weightl.LMRDepth and !isCheck) {
+    if (_depth >= weightl.LMRDepth and !isCheck) {
         useLMR = true;
     }
     const otherKingSq = p_state.getKingSq(!white);
@@ -401,6 +396,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         const isThreat = (chessl.xToBitboard(to) & safetyArea) != 0;
         const isQuiet = gen.extra != .CAPTURES;
         const cPiece = p_state.getCapturePiece(move);
+
+        if (chessl.isKingPiece(cPiece)) {
+            // pseudo legal move gen
+            return weightl.simpleCheckMateScore;
+        }
 
         const isPromo = move.isPromotion();
 
@@ -506,10 +506,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                     }
                 }
             }
-            if (p_features.useHash) {
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move, white);
-                writer.writeShort(s_entry);
-            }
+            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move, white);
+            writer.writeShort(s_entry);
             if (comptime t == .PV) {
                 currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
@@ -525,7 +523,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             _alpha = weightl.simpleStalemateScore;
         }
     }
-    if (p_features.useHash and comptime t == .PV) {
+    if (comptime t == .PV) {
         // .PV set to not store position that could be obtained after a possible nullmove. TODO: just filter out nullmove
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove, white);
         writer.writeShort(s_entry);

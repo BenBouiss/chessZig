@@ -67,7 +67,6 @@ pub fn moveGenBBToMoveContainer(p_board: *const boardState, p_moveBB: *moveBBSta
 pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const boardState, p_moveBB: *moveBBState, comptime white: bool, p_out: *moveContainer, comptime extra: generationModifiers) void {
     const pawnDir: i8 = if (comptime white) 8 else -8;
     const pPawn: e_piece = if (comptime white) .nWhitePawn else .nBlackPawn;
-    //const opPawn: e_piece = if (comptime white) .nBlackPawn else .nWhitePawn;
     const pBishop: e_piece = if (comptime white) .nWhiteBishop else .nBlackBishop;
     const pRook: e_piece = if (comptime white) .nWhiteRook else .nBlackRook;
     const pQueen: e_piece = if (comptime white) .nWhiteQueen else .nBlackQueen;
@@ -644,24 +643,14 @@ pub inline fn moveGenKnightBB(p_board: *const boardState, comptime white: bool, 
 }
 
 pub fn moveGenKingBB(p_board: *const boardState, comptime white: bool, emptyOrEnemy: u64, p_out: *moveBBState) void {
-    if (comptime white) {
-        p_out.kingMoves = chess.getKingAttacks(p_board.b.wKingSq) & emptyOrEnemy;
-        const kingBB = chess.sqToBitboard(p_board.b.wKingSq);
-        if (p_board.canQueenSideCastle(white)) {
-            p_out.queenSideCastlingMoves |= (kingBB >> 2);
-        }
-        if (p_board.canKingSideCastle(white)) {
-            p_out.kingSideCastlingMoves |= (kingBB << 2);
-        }
-    } else {
-        p_out.kingMoves = chess.getKingAttacks(p_board.b.bKingSq) & emptyOrEnemy;
-        const kingBB = chess.sqToBitboard(p_board.b.bKingSq);
-        if (p_board.canQueenSideCastle(white)) {
-            p_out.queenSideCastlingMoves |= (kingBB >> 2);
-        }
-        if (p_board.canKingSideCastle(white)) {
-            p_out.kingSideCastlingMoves |= (kingBB << 2);
-        }
+    const sq = if (comptime white) p_board.b.wKingSq else p_board.b.bKingSq;
+    p_out.kingMoves = chess.getKingAttacks(sq) & emptyOrEnemy;
+    const kingBB = chess.sqToBitboard(sq);
+    if (p_board.canQueenSideCastle(white)) {
+        p_out.queenSideCastlingMoves |= (kingBB >> 2);
+    }
+    if (p_board.canKingSideCastle(white)) {
+        p_out.kingSideCastlingMoves |= (kingBB << 2);
     }
 }
 pub inline fn moveGenBishopBB(p_board: *const boardState, comptime white: bool, emptyOrEnemy: u64, occ: u64, p_out: *moveBBState) void {
@@ -684,11 +673,7 @@ pub inline fn moveGenBB(p_board: *const boardState) moveBBState {
     cst_moveGenBB(p_board, false, &ret, .STD);
     return ret;
 }
-pub inline fn _cst_moveGenBB(p_board: *const boardState, comptime white: bool) moveBBState {
-    var ret: moveBBState = .{};
-    cst_moveGenBB(p_board, white, &ret, .STD);
-    return ret;
-}
+
 pub fn cst_moveGenBB(p_board: *const boardState, comptime white: bool, p_out: *moveBBState, comptime extra: generationModifiers) void {
     const EmptyOrEnemy = if (comptime extra == .ALL) (chess.UNIVERSE) else ~p_board.b.c_occupiedBB[chess.whiteBoolToInt(white)];
     const slidingOcc = p_board.b.occupiedBB() ^ p_board.getPieceBB_t(.KING);
@@ -1000,12 +985,21 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
             return false;
         }
     }
-    const att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), p_state.b.occupiedBB() ^ fromBB) catch {
+    const _occ = p_state.b.occupiedBB() ^ fromBB;
+    var att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), _occ) catch {
         std.debug.print("[PANIC] panic with move {s}\n", .{move.getStr()});
         chess.sanityCheckBoardState(p_state);
         @panic("???");
     };
-    return (att & chess.xToBitboard(otherKing)) != 0;
+    const toBB = chess.xToBitboard(toSq);
+    const proxim = chess.getKingAttacks(@enumFromInt(otherKing)) & fromBB;
+    const inB = chess.inBetweenX(from, otherKing) | proxim;
+    const nproxim = chess.getKingAttacks(@enumFromInt(otherKing)) & toBB;
+    const ninB = chess.inBetweenX(toSq, otherKing) | nproxim;
+    if ((inB & ninB) == 0) {
+        att |= chess.getAllAttackMask(p_state, _occ, white);
+    }
+    return ((att) & chess.xToBitboard(otherKing)) != 0;
 }
 pub const moveGene = struct {
     // generates pseudo legal moves

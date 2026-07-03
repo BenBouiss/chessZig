@@ -29,18 +29,11 @@ pub const searchReport = struct {
 };
 
 pub const searchFeatures = struct {
-    useHash: bool = configl.DEFAULT_USEHASHTABLE,
-    useNullPrune: bool = configl.DEFAULT_USE_NULLPRUNE,
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
     fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
-    useLMR: bool = configl.DEFAULT_LATE_MOVE_REDUCTION,
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
-    useRFP: bool = configl.DEFAULT_USE_RFP,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
-    useFutility: bool = configl.DEFAULT_USE_FUTILITY,
     useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
-    useIIR: bool = configl.DEFAULT_USE_IIR,
-    useAspiration: bool = configl.DEFAULT_USE_ASPIRATION,
 };
 
 pub const uciSearcher = struct {
@@ -205,9 +198,7 @@ pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *thr
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
     p_info.working = true;
     defer p_info.working = false;
-    if (features.useHash) {
-        hashl.hashTable.nextGeneration();
-    }
+    hashl.hashTable.nextGeneration();
     const fmoves = moveGenl.generateLegalMoves(p_state);
     if (fmoves.len == 1) {
         p_info.currentBest.move = fmoves.moves[0];

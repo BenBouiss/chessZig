@@ -1029,20 +1029,13 @@ pub inline fn getAllAttackerFromSq(p_board: *const boardl.boardState, white: boo
 pub fn cst_getAllAttackerFromSq(p_board: *const boardl.boardState, comptime white: bool, sq: e_square) u64 {
     var ret: u64 = EMPTY;
     const bb = sqToBitboard(sq);
-    if (comptime white) {
-        ret |= knightAttacks(bb) & p_board.getPieceBB(.nBlackKnight);
-        ret |= _AllAttackBishopMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen));
-        ret |= _AllAttackRookMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen));
-        ret |= _AllAttackPawnMask(bb, white) & (p_board.getPieceBB(.nBlackPawn));
-        ret |= getKingAttacks(sq) & (p_board.getPieceBB(.nBlackKing));
-    } else {
-        ret |= knightAttacks(bb) & p_board.getPieceBB(.nWhiteKnight);
-        ret |= (_AllAttackBishopMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen)));
-        ret |= _AllAttackRookMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
-        ret |= _AllAttackPawnMask(bb, white) & (p_board.getPieceBB(.nWhitePawn));
-        ret |= getKingAttacks(sq) & (p_board.getPieceBB(.nWhiteKing));
-    }
-    return ret;
+    const opp = p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
+    ret |= knightAttacks(bb) & p_board.getPieceBB_t(.KNIGHT);
+    ret |= _AllAttackBishopMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN));
+    ret |= _AllAttackRookMask(bb, p_board.b.occupiedBB()) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN));
+    ret |= _AllAttackPawnMask(bb, white) & (p_board.getPieceBB_t(.PAWN));
+    ret |= getKingAttacks(sq) & (p_board.getPieceBB_t(.KING));
+    return ret & opp;
 }
 pub inline fn getCheckers(p_board: *boardl.boardState, white: bool) void {
     // this method is responsible for ~30-40% of the compute cost of perft when using staged move generation
@@ -1063,20 +1056,12 @@ pub inline fn onMoveStaged(p_board: *boardl.boardState, white: bool) void {
 }
 
 pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
-    const rq = p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
-    const bq = p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
-    const n = p_board.getPieceBB_t(.KNIGHT) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
-    const p = p_board.getPieceBB_t(.PAWN) & p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
+    const opp = p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
+    const rq = p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN) & opp;
+    const bq = p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN) & opp;
+    const n = p_board.getPieceBB_t(.KNIGHT) & opp;
+    const p = p_board.getPieceBB_t(.PAWN) & opp;
     const king_E = if (comptime white) p_board.b.wKingSq else p_board.b.bKingSq;
-    //std.debug.print("getCheckers_cst: rq, bq, n, p, N, P, king_E {} \n", .{king_E});
-    //print_bitboard(rq);
-    //print_bitboard(bq);
-    //print_bitboard(n);
-    //print_bitboard(p);
-
-    //print_bitboard(p_board.getPieceBB_t(.KNIGHT));
-    //print_bitboard(p_board.getPieceBB_t(.PAWN));
-
     const occ = p_board.b.occupiedBB();
 
     const cachedBishAtt = getBishopAttacks(occ, king_E);
@@ -1143,7 +1128,7 @@ pub fn isPiecePinned(occBB: u64, sq: e_square, p_kingSq: *const squareInfo, diag
     return EMPTY;
 }
 
-pub fn fillMoveFromState(p_state: *boardl.boardState, move: *IMove) void {
+pub fn fillMoveFromState(p_state: *const boardl.boardState, move: *IMove) void {
     const fromIdx: u8 = move.getFrom();
     const toIdx: u8 = move.getTo();
     var c_piece = p_state.getPiece(toIdx);
@@ -1185,32 +1170,25 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
     var ret: u64 = EMPTY;
 
     const destBB = sqToBitboard(X);
-    if (!white) {
-        ret |= knightAttacks(destBB) & p_board.getPieceBB(.nBlackKnight);
-        ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackBishop) | p_board.getPieceBB(.nBlackQueen));
-        ret |= _AllAttackRookMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nBlackRook) | p_board.getPieceBB(.nBlackQueen));
-        if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X) and isCapture) {
-            ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.getPieceBB(.nBlackPawn)));
-        }
-        ret |= getKingAttacks(X) & (p_board.getPieceBB(.nBlackKing));
+    const occ = p_board.b.c_occupiedBB[whiteBoolToInt(white)];
+    ret |= knightAttacks(destBB) & p_board.getPieceBB_t(.KNIGHT) & occ;
+    ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN) & occ);
+    ret |= _AllAttackRookMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN) & occ);
 
-        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[whiteBoolToInt(false)];
-        ret |= (destBB << 8) & (pBB);
-        ret |= (((destBB << 8) & (~p_board.b.occupiedBB())) << 8) & ((pBB & blackPawnDoubleRank));
-    } else {
-        ret |= knightAttacks(destBB) & p_board.getPieceBB(.nWhiteKnight);
-        ret |= _AllAttackBishopMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteBishop) | p_board.getPieceBB(.nWhiteQueen));
-        ret |= _AllAttackRookMask(destBB, p_board.b.occupiedBB()) & (p_board.getPieceBB(.nWhiteRook) | p_board.getPieceBB(.nWhiteQueen));
+    const pBB = p_board.getPieceBB_t(.PAWN) & occ;
 
-        if ((p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X)) and isCapture) {
-            ret |= (_AllAttackPawnMask(destBB, !white) & (p_board.getPieceBB(.nWhitePawn)));
-        }
-        ret |= getKingAttacks(X) & (p_board.getPieceBB(.nWhiteKing));
-
-        const pBB = p_board.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_board.b.c_occupiedBB[whiteBoolToInt(true)];
+    if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X) and isCapture) {
+        ret |= (_AllAttackPawnMask(destBB, !white) & pBB);
+    }
+    ret |= getKingAttacks(X) & (p_board.getPieceBB_t(.KING) & occ);
+    if (white) {
         ret |= (destBB >> 8) & pBB;
         ret |= (((destBB >> 8) & (~p_board.b.occupiedBB())) >> 8) & ((pBB & whitePawnDoubleRank));
+    } else {
+        ret |= (destBB << 8) & (pBB);
+        ret |= (((destBB << 8) & (~p_board.b.occupiedBB())) << 8) & ((pBB & blackPawnDoubleRank));
     }
+
     return ret;
 }
 
@@ -1405,11 +1383,20 @@ pub fn test_alge(alloc: std.mem.Allocator) !void {
     const moves = try algebraicLineToIMoveMatch(alloc, line);
     moves.print();
 }
+fn test_inbetween() !void {
+    print_bitboard(inBetween(.a1, .a8));
+    print_bitboard(inBetween(.f1, .f8));
+    print_bitboard(inBetween(.h4, .a4));
+    print_bitboard(inBetween(.a8, .h8));
+    print_bitboard(inBetween(.a1, .h8));
+    print_bitboard(inBetween(.a8, .h1));
+}
 
 pub fn main(alloc: std.mem.Allocator) !void {
-    //_ = alloc;
+    _ = alloc;
     //mainl.initAll(alloc, true);
     //try test_avx();
-    try test_alge(alloc);
+    //Jtry test_alge(alloc);
+    //try test_inbetween();
     return;
 }

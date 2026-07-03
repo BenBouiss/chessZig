@@ -40,12 +40,8 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine, config: enginel.goArgS
     defer p_engine.status.benchmarking = false;
     p_engine.searcher.schedul.searching = true;
 
-    const feats: perftSearchFeatures = .{ .useBatched = config.useBatched, .useHash = p_engine.options.searchF.useHash };
-    if (p_engine.status.debugMode) {
-        if (feats.useHash) {
-            std.debug.print("[DEBUG] dispatchUciPerftThreads: use hash is enabled! \n", .{});
-        }
-    }
+    const feats: perftSearchFeatures = .{ .useBatched = config.useBatched };
+
     _ = dispatchPerftPackage(p_engine, &pack, config.depth, feats);
     _ = waitThreadFinish(p_engine, &pack, config) catch {
         std.debug.print("[ERROR] wait thread\n", .{});
@@ -108,7 +104,6 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, co
 
 const perftSearchFeatures = struct {
     useBatched: bool = false,
-    useHash: bool = false,
 };
 
 pub fn perftUciEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feats: perftSearchFeatures) void {
@@ -149,16 +144,6 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
         p_info.searchStat.n_nodeExplored += fmoves.len;
         return fmoves.len;
     }
-    var writer: hashl.hashWriter = .{};
-    if (feats.useHash) {
-        const res = hashl.hashTable.probePerft(p_state.frame.key.code, depth);
-        writer = res.writer;
-        if (res.entry) |entry| {
-            p_info.searchStat.n_hashRetrieve += @intCast(entry.moveA());
-            p_info.searchStat.n_nodeExplored += entry.moveA();
-            return entry.moveA();
-        }
-    }
 
     var count: u64 = 0;
 
@@ -171,10 +156,6 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
 
         p_state.undoMove();
         p_state.frame = f;
-    }
-    if (feats.useHash) {
-        const entry: hashl.Hash_entry = hashl.buildEntryFromPerftResult(p_state.frame.key, depth, count);
-        writer.write(entry, .perft);
     }
 
     return count;

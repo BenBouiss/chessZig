@@ -23,14 +23,10 @@ pub const DEFAULT_HASHTABLE_SIZE = 16; // in MB
 pub const DEFAULT_TRACKMETRICS = true;
 pub const _DEFAULT_TRACKMETRICS = "true";
 
-pub const DEFAULT_REPORTPROGRESS = false;
-pub const _DEFAULT_REPORTPROGRESS = "false";
+pub const DEFAULT_REPORTPROGRESS = true;
+pub const _DEFAULT_REPORTPROGRESS = "true";
 
 pub const DEFAULT_USEHASHTABLE = true;
-pub const _DEFAULT_USEHASHTABLE = "true";
-
-pub const DEFAULT_USE_NULLPRUNE = true;
-pub const _DEFAULT_USE_NULLPRUNE = "true";
 
 pub const ORDERING_LINE_VALUE = 99999;
 
@@ -52,8 +48,6 @@ pub const MIN_DEPTH: u16 = 1;
 pub const MAX_DEPTH: u16 = 6;
 pub const MAX_QUIESC_DEPTH: u16 = 16;
 
-pub const _DEFAULT_LIMIT_ELO = "false";
-pub const DEFAULT_LIMIT_ELO = false;
 pub const DEFAULT_ELO: u32 = 2500;
 
 pub const _DEFAULT_FIXED_DEPTH = "false";
@@ -62,9 +56,6 @@ pub const DEFAULT_FIXED_DEPTH = false;
 pub const _DEFAULT_STATIC_SEARCH = "false";
 pub const DEFAULT_STATIC_SEARCH = false;
 
-pub const DEFAULT_LATE_MOVE_REDUCTION = true;
-pub const _DEFAULT_LATE_MOVE_REDUCTION = "true";
-
 pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 // 5 - 6 based on current avg ply computed of 6.8 for 5+0 timeformat
@@ -72,23 +63,11 @@ pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 // >> 4 thus every multiple of 16 gets stored
 pub const OLD_THRESHOLD: u8 = 2;
 
-pub const DEFAULT_USE_FUTILITY = true;
-pub const _DEFAULT_USE_FUTILITY = "true";
-
 pub const DEFAULT_USE_PROBCUT = false;
 pub const _DEFAULT_USE_PROBCUT = "false";
 
 pub const DEFAULT_USE_RAZORING = true;
 pub const _DEFAULT_USE_RAZORING = "true";
-
-pub const DEFAULT_USE_RFP = true;
-pub const _DEFAULT_USE_RFP = "true";
-
-pub const DEFAULT_USE_IIR = true;
-pub const _DEFAULT_USE_IIR = "true";
-
-pub const DEFAULT_USE_ASPIRATION = true;
-pub const _DEFAULT_USE_ASPIRATION = "true";
 
 pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
@@ -115,10 +94,6 @@ pub const ITEM_PER_BUCKET = 3;
 pub const DEBUG_INACTIVITY_SERVING_S = 30; // 30 seconds in ns
 pub const DEBUG_INACTIVITY_SERVING_NS = DEBUG_INACTIVITY_SERVING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
 //
-pub const DEBUG_INACTIVITY_READING_S = 30; // 30 seconds in ns
-pub const DEBUG_INACTIVITY_READING_NS = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
-pub const DEBUG_INACTIVITY_READING_US = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 6); // 30 seconds in us
-//
 
 pub const START_TICKRATE_NS = 2 * std.math.pow(u64, 10, 9); // 2 seconds in ns
 
@@ -127,7 +102,6 @@ pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 pub const INFO_TICKRATE_NS = INFO_TICKRATE * (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 500_000;
 pub const THREADPOOL_TICKRATE_NS = 100_000;
-pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
 
 // Tuner settings
 //pub const N_POSITIONS: usize = 800000;

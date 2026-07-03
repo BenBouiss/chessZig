@@ -232,37 +232,37 @@ pub var global_RookVal: scoreType = simpleRookScore;
 pub var global_QueenVal: scoreType = simpleQueenScore;
 
 // mobility
-pub var global_MobilityVal: [2]scoreType = .{ 6, 9 };
-pub var global_KingMobilityVal: [2]scoreType = .{ 1, 1 };
-pub var global_OpenFileRookVal: [2]scoreType = .{ 10, 1 };
+pub var global_MobilityVal: [2]scoreType = .{ 7, 8 };
+pub var global_KingMobilityVal: [2]scoreType = .{ 1, 0 };
+pub var global_OpenFileRookVal: [2]scoreType = .{ 5, 0 };
 
 // structure
 pub var global_StructureProtectionVal: [2]scoreType = .{ 21, 26 };
-pub var global_centerProtectionVal: [2]scoreType = .{ 3, 4 };
+pub var global_centerProtectionVal: [2]scoreType = .{ 1, 13 };
 
 // pawn structure
-pub var global_IsolatedPawnVal: [2]scoreType = .{ 1, 0 };
-pub var global_StackedPawnVal: [2]scoreType = .{ 1, 2 };
-pub var global_PassedPawnVal: [2]scoreType = .{ 22, 35 };
-pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 2, 6 };
-pub var global_connectionPawnVal: [2]scoreType = .{ 4, 3 };
+pub var global_IsolatedPawnVal: [2]scoreType = .{ 4, 2 };
+pub var global_StackedPawnVal: [2]scoreType = .{ 6, 2 };
+pub var global_PassedPawnVal: [2]scoreType = .{ 26, 32 };
+pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 5, 3 };
+pub var global_connectionPawnVal: [2]scoreType = .{ 5, 1 };
 
 // tempo
-pub var global_tempoChecksScore: [2]scoreType = .{ 25, 14 };
-pub var global_pieceThreatScore: [2]scoreType = .{ 16, 6 };
+pub var global_tempoChecksScore: [2]scoreType = .{ 25, 13 };
+pub var global_pieceThreatScore: [2]scoreType = .{ 24, 7 };
 pub const global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
 // safety
-pub var global_SafetyBishopVal: [2]scoreType = .{ 11, 9 };
-pub var global_SafetyKnightVal: [2]scoreType = .{ 3, 1 };
-pub var global_SafetyRookVal: [2]scoreType = .{ 10, 4 };
-pub var global_SafetyQueenVal: [2]scoreType = .{ 11, 12 };
+pub var global_SafetyBishopVal: [2]scoreType = .{ 5, 0 };
+pub var global_SafetyKnightVal: [2]scoreType = .{ 7, 7 };
+pub var global_SafetyRookVal: [2]scoreType = .{ 8, 3 };
+pub var global_SafetyQueenVal: [2]scoreType = .{ 13, 18 };
 
 // king
-pub var global_KingProximityVal: [2]scoreType = .{ 1, 0 };
+pub var global_KingProximityVal: [2]scoreType = .{ 0, 0 };
 
 // material
-pub var global_materialBishopPair: [2]scoreType = .{ 16, 23 };
+pub var global_materialBishopPair: [2]scoreType = .{ 17, 22 };
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = .{ pawnScoreArr, pawnScoreArr };
 pub var global_Bishop_PSQT: [2][64]scoreType = .{ bishopScoreArr, bishopScoreArr };
@@ -295,44 +295,44 @@ const _kingScoreArrEG = [chessl.N_SQUARES]scoreType{
 
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
-pub var lmr_expectedCutOff: milliDepth = 1021;
-pub var lmr_notImproving: milliDepth = 525;
-pub var lmr_hashMoveCapture: milliDepth = 270;
-pub var lmr_baseDeficit: milliDepth = 1000;
-pub var lmr_badCapture: milliDepth = 295;
-pub var lmr_oldMulti: milliDepth = 0;
+pub var lmr_expectedCutOff: milliDepth = 969;
+pub var lmr_notImproving: milliDepth = 520;
+pub var lmr_hashMoveCapture: milliDepth = 337;
+pub var lmr_baseDeficit: milliDepth = 985;
+pub var lmr_badCapture: milliDepth = 258;
+pub var lmr_oldMulti: milliDepth = 53;
 // LMR negative (less reduction)
 pub var lmr_inCheck: milliDepth = -600; // not used since no lmr in check
 // try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
-pub var lmr_givesCheck: milliDepth = -684;
-pub var lmr_killerMove: milliDepth = -525;
-pub var lmr_threatening: milliDepth = -219;
-pub var lmr_inPvMode: milliDepth = -406;
-pub var lmr_isPromotion: milliDepth = -193;
+pub var lmr_givesCheck: milliDepth = -685;
+pub var lmr_killerMove: milliDepth = -487;
+pub var lmr_threatening: milliDepth = -243;
+pub var lmr_inPvMode: milliDepth = -424;
+pub var lmr_isPromotion: milliDepth = -206;
 
 // margins
 
-pub var futilityMargin: [4]scoreType = .{ 0, 200, 300, 500 };
-pub var rfpMargin: [4]scoreType = .{ 0, 75, 150, 300 };
-pub var rfpImproving: scoreType = -25;
+pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
+pub var rfpMargin: [4]scoreType = .{ 0, 47, 185, 235 };
+pub var rfpImproving: scoreType = -1;
 
-pub var captureExtensionThresh: scoreType = 550;
+pub var captureExtensionThresh: scoreType = 537;
 
 pub const moveReductionAmount = 4;
 
 // source: https://www.chessprogramming.org/King_Safety
 pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
-pub var aspirationCoefficient: scoreType = 50;
+pub var aspirationCoefficient: scoreType = 84;
 
-pub var nullMoveDepthAugmentThreshold: scoreType = 14;
+pub var nullMoveDepthAugmentThreshold: scoreType = 13;
 pub var nullMoveDepthAugment: scoreType = 2;
 pub var nullMoveReduction: scoreType = 4;
 pub var nullMoveReductionImproving: scoreType = 3;
 
-pub var razoringBaseImproving: scoreType = 0;
-pub var razoringBaseNotImproving: scoreType = 150;
-pub var razoringCoefficient: scoreType = 150;
+pub var razoringBaseImproving: scoreType = 60;
+pub var razoringBaseNotImproving: scoreType = 170;
+pub var razoringCoefficient: scoreType = 167;
 
-pub var IIRDepth: scoreType = 5; // >= 5
+pub var IIRDepth: scoreType = 4; // >= 5
 pub var LMRDepth: scoreType = 3; // >= 3
