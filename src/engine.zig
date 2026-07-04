@@ -149,7 +149,6 @@ pub const setOptionEntry = struct {
         } else if (self.argType == .STRING) {
             msg = try std.fmt.allocPrint(alloc, "option name {s} type string", .{self.name});
         }
-
         return msg;
     }
 };
@@ -209,9 +208,7 @@ pub const engineMetrics = struct {
 pub const engineOptions = struct {
     searchF: schedulerl.searchFeatures = .{},
     nThreads: spinVarType = configl.DEFAULT_THREAD,
-    engineElo: spinVarType = configl.DEFAULT_ELO,
     nOptions: u16 = 0,
-    depthLevel: u16 = configl.DEFAULT_DEPTH,
     trackMetrics: bool = configl.DEFAULT_TRACKMETRICS,
     hashTableSize: spinVarType = configl.DEFAULT_HASHTABLE_SIZE, // in MB
     setOptions: std.ArrayList(setOptionEntry) = .empty,
@@ -466,10 +463,19 @@ pub const engine = struct {
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINTPARAMS => {
+                const stepDiv: f32 = 20;
+                std.debug.print("{{\n", .{});
                 for (0..weightl.tunerOpts.items.len) |i| {
                     const opt = weightl.tunerOpts.items[i];
-                    std.debug.print("{d} name = {s} val = {d} min = {d} max {d}\n", .{ i, opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max });
+                    //std.debug.print("{d} name = {s} val = {d} min = {d} max {d}\n", .{ i, opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max });
+                    const step = @max(@ceil(@as(f32, @floatFromInt(@max(@abs(opt.opt.info.spin.max), @abs(opt.opt.info.spin.min)))) / stepDiv), 1);
+                    if (i == weightl.tunerOpts.items.len - 1) {
+                        std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\": {d} }}\n", .{ opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max, step });
+                    } else {
+                        std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\": {d} }},\n", .{ opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max, step });
+                    }
                 }
+                std.debug.print("}}\n", .{});
             },
             .PRINT => {
                 chess.print_boardstate(&p_self.state);
@@ -675,10 +681,7 @@ pub const engine = struct {
                 };
             },
             .UCI_ELO => {
-                const val = getSpinValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-                return p_self.updateElo(val);
+                return true;
             },
 
             .FIXED_DEPTH => {
@@ -787,7 +790,6 @@ pub const engine = struct {
         }
     }
     pub fn refreshInternals(p_self: *engine) void {
-        _ = p_self.updateElo(p_self.options.engineElo);
         historyl._initMoveOrdering();
         _ = p_self.updateHash(p_self.options.hashTableSize) catch {};
     }
@@ -809,15 +811,7 @@ pub const engine = struct {
         hashTablel._initOrReallocHashTable(p_self.alloc, @intCast(p_self.options.hashTableSize), p_self.status.debugMode);
         return true;
     }
-    fn updateElo(p_self: *engine, elo: spinVarType) bool {
-        p_self.options.engineElo = elo;
-        const _elo: f32 = @floatFromInt(elo);
-        const delta: f32 = (_elo - configl.MIN_ELO) / (configl.MAX_ELO - configl.MIN_ELO);
-        const proj = configl.MIN_DEPTH + (configl.MAX_DEPTH - configl.MIN_DEPTH) * delta;
-        p_self.options.depthLevel = @intFromFloat(proj);
 
-        return true;
-    }
     pub fn executeIsReady(p_self: *engine) !bool {
         if (!p_self.status.initializedInternals) {
             try p_self.initInternals();
@@ -835,7 +829,7 @@ pub const engine = struct {
         p_self.searcher.reset();
 
         if (goArg.depth == 0) {
-            goArg.depth = p_self.options.depthLevel;
+            goArg.depth = configl.DEFAULT_DEPTH;
         }
         if (goArg.type == .PERFT) {
             return perftl.dispatchUciPerftCmd(p_self, goArg);
@@ -867,69 +861,69 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
     var tokenIndex: u32 = 1;
     while (tokenIndex < tokens.items.len) {
         const arg = tokens.items[tokenIndex];
-        if (utilsl.contains(arg, "searchmoves", .ignoreCase)) {
+        if (utilsl.startsWith(arg, "searchmoves", .ignoreCase)) {
             goArgs.searchMoves = true;
             tokenIndex -= 1;
-        } else if (utilsl.contains(arg, "eval", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "eval", .ignoreCase)) {
             goArgs.type = .EVAL;
             tokenIndex -= 1;
-        } else if (utilsl.contains(arg, "perft", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "perft", .ignoreCase)) {
             goArgs.type = .PERFT;
             tokenIndex -= 1;
-        } else if (utilsl.contains(arg, "batched", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "batched", .ignoreCase)) {
             goArgs.useBatched = true;
             tokenIndex -= 1;
-        } else if (utilsl.contains(arg, "ponder", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "ponder", .ignoreCase)) {
             goArgs.type = .PONDER;
             tokenIndex -= 1;
-        } else if (utilsl.contains(arg, "wtime", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "wtime", .ignoreCase)) {
             goArgs.wtime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "btime", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "btime", .ignoreCase)) {
             goArgs.btime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "winc", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "winc", .ignoreCase)) {
             goArgs.winc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "binc", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "binc", .ignoreCase)) {
             goArgs.binc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "movestogo", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "movestogo", .ignoreCase)) {
             goArgs.movestogo = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "depth", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "depth", .ignoreCase)) {
             goArgs.depth = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "nodes", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "nodes", .ignoreCase)) {
             goArgs.nodes = std.fmt.parseInt(u64, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "mate", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "mate", .ignoreCase)) {
             goArgs.mate = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
-        } else if (utilsl.contains(arg, "movetime", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "movetime", .ignoreCase)) {
             goArgs.movetime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
                 tokenIndex += 1;
                 continue;
             };
             goArgs.wtime = goArgs.movetime;
             goArgs.btime = goArgs.movetime;
-        } else if (utilsl.contains(arg, "infinite", .ignoreCase)) {
+        } else if (utilsl.startsWith(arg, "infinite", .ignoreCase)) {
             goArgs.infinite = true;
         } else {
             tokenIndex -= 1;
@@ -943,7 +937,7 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
 pub fn parseSetOptionTypeCmd(options: *std.ArrayList(setOptionEntry), cmdBuffer: []const u8) e_engineOptions {
     for (0..options.items.len) |i| {
         const entry = options.items[i];
-        if (utilsl.contains(cmdBuffer, entry.name, .ignoreCase)) {
+        if (utilsl.startsWith(cmdBuffer, entry.name, .ignoreCase)) {
             return entry.optionType;
         }
     }
@@ -952,7 +946,7 @@ pub fn parseSetOptionTypeCmd(options: *std.ArrayList(setOptionEntry), cmdBuffer:
 pub fn getValueSlice(tokens: *std.ArrayList([]const u8)) ![]const u8 {
     for (0..tokens.items.len) |i| {
         const token = tokens.items[i];
-        if (utilsl.contains(token, "value", .ignoreCase)) {
+        if (utilsl.startsWith(token, "value", .ignoreCase)) {
             if (i != tokens.items.len - 1) {
                 return tokens.items[i + 1];
             } else {
@@ -1030,33 +1024,33 @@ fn mainThread(debugMode: bool) void {
 }
 
 fn getEngineCmdType(cmd: []const u8) e_engineCmd {
-    if (utilsl.contains(cmd, "isready", .ignoreCase)) {
+    if (utilsl.startsWith(cmd, "isready", .ignoreCase)) {
         return .ISREADY;
-    } else if (utilsl.contains(cmd, "go", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "go", .ignoreCase)) {
         return .GO;
-    } else if (utilsl.contains(cmd, "position", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "position", .ignoreCase)) {
         return .POSITION;
-    } else if (utilsl.contains(cmd, "ucinewgame", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "ucinewgame", .ignoreCase)) {
         return .UCINEWGAME;
-    } else if (utilsl.contains(cmd, "register", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "register", .ignoreCase)) {
         return .REGISTER;
-    } else if (utilsl.contains(cmd, "setoption", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "setoption", .ignoreCase)) {
         return .SETOPTION;
-    } else if (utilsl.contains(cmd, "debug", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "debug", .ignoreCase)) {
         return .DEBUG;
-    } else if (utilsl.contains(cmd, "uci", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "uci", .ignoreCase)) {
         return .UCI;
-    } else if (utilsl.contains(cmd, "stop", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "stop", .ignoreCase)) {
         return .STOP;
-    } else if (utilsl.contains(cmd, "quit", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "quit", .ignoreCase)) {
         return .QUIT;
-    } else if (utilsl.contains(cmd, "ponderhit", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "ponderhit", .ignoreCase)) {
         return .PONDERHIT;
-    } else if (utilsl.contains(cmd, "printparams", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "printparams", .ignoreCase)) {
         return .PRINTPARAMS;
-    } else if (utilsl.contains(cmd, "print", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "print", .ignoreCase)) {
         return .PRINT;
-    } else if (utilsl.contains(cmd, "benchmark", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "benchmark", .ignoreCase)) {
         return .BENCHMARK;
     }
     return .NOOP;

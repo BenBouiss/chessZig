@@ -54,6 +54,23 @@ pub fn lowerLetter(letter: u8) u8 {
     }
     return letter;
 }
+pub fn startsWith(a: []const u8, b: []const u8, comptime token: strTokens) bool {
+    if (b.len > a.len) {
+        return false;
+    }
+    for (0..b.len) |i| {
+        if (comptime token == .standardToken) {
+            if (a[i] != b[i]) {
+                return false;
+            }
+        } else if (comptime token == .ignoreCase) {
+            if (lowerLetter(a[i]) != lowerLetter(b[i])) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 pub fn contains(a: []const u8, b: []const u8, comptime token: strTokens) bool {
     // checks if the string b is present in a

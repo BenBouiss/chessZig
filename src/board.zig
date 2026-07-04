@@ -898,7 +898,7 @@ pub const boardState = struct {
 
     pub fn isLegal(p_self: *const boardState, white: bool) bool {
         // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
-        const king_attacks = chessl.getAllAttackerFromKing(p_self, white);
+        const king_attacks = chessl.getAllAttackerFromSq(p_self, white, p_self.getKingSq(white));
         return king_attacks == 0;
     }
     pub inline fn isChecked(p_self: *const boardState) bool {

@@ -1238,7 +1238,7 @@ pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
 
     for (0..tokens.items.len) |i| {
         var s = tokens.items[i];
-        if (s.startsWith("//")) {
+        if (s.startsWith("//", .standardToken)) {
             continue;
         }
         if (s.containsE("[match]", .ignoreCase)) {
@@ -1260,7 +1260,7 @@ pub fn parseInfoFile(alloc: std.mem.Allocator, path: []const u8) !guiSetting {
     return ret;
 }
 fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: *string) bool {
-    if (buffer.startsWith("nMatch")) {
+    if (buffer.startsWith("nMatch", .ignoreCase)) {
         const nbrStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
@@ -1276,7 +1276,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         };
         return true;
-    } else if (buffer.startsWith("playerSwitch")) {
+    } else if (buffer.startsWith("playerSwitch", .ignoreCase)) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
@@ -1289,7 +1289,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
         }
 
         return true;
-    } else if (buffer.startsWith("debugMode")) {
+    } else if (buffer.startsWith("debugMode", .ignoreCase)) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
@@ -1301,7 +1301,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         }
         return true;
-    } else if (buffer.startsWith("useOpeningBook")) {
+    } else if (buffer.startsWith("useOpeningBook", .ignoreCase)) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
@@ -1313,7 +1313,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         }
         return true;
-    } else if (buffer.startsWith("openingBookPath")) {
+    } else if (buffer.startsWith("openingBookPath", .ignoreCase)) {
         const path = buffer.extractFromBounds("\"", "\"") catch {
             return false;
         };
@@ -1345,7 +1345,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         }
         return true;
-    } else if (buffer.startsWith("logsLocation")) {
+    } else if (buffer.startsWith("logsLocation", .ignoreCase)) {
         const path = buffer.extractFromBounds("\"", "\"") catch {
             return false;
         };
@@ -1353,7 +1353,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
             return false;
         };
         return true;
-    } else if (buffer.startsWith("timeFormat")) {
+    } else if (buffer.startsWith("timeFormat", .ignoreCase)) {
         const start = buffer.extractFromBounds("(", ",") catch {
             return false;
         };
@@ -1370,7 +1370,7 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
 
         settings.match.timeF = .{ .time = _start, .inc = _inc };
         return true;
-    } else if (buffer.startsWith("infinite")) {
+    } else if (buffer.startsWith("infinite", .ignoreCase)) {
         const boolStr = buffer.extractFromBounds("=", ";") catch {
             return false;
         };
@@ -1434,13 +1434,13 @@ fn handleMatchInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buf
 }
 
 fn handleInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: *string) bool {
-    if (buffer.startsWith("[")) {
+    if (buffer.startsWith("[", .standardToken)) {
         if (settings.nEngines == chessl.NUMBER_PLAYER) {
             return false;
         }
         settings.nEngines += 1;
         return true;
-    } else if (buffer.startsWith("name")) {
+    } else if (buffer.startsWith("name", .ignoreCase)) {
         const name = buffer.extractFromBounds("\"", "\"") catch {
             return false;
         };
@@ -1448,7 +1448,7 @@ fn handleInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: 
             return false;
         };
         return true;
-    } else if (buffer.startsWith("path")) {
+    } else if (buffer.startsWith("path", .ignoreCase)) {
         const path = buffer.extractFromBounds("\"", "\"") catch {
             return false;
         };
@@ -1456,7 +1456,7 @@ fn handleInfoStrBuffer(alloc: std.mem.Allocator, settings: *guiSetting, buffer: 
             return false;
         };
         return true;
-    } else if (buffer.startsWith("\"")) {
+    } else if (buffer.startsWith("\"", .standardToken)) {
         const opt = buffer.extractFromBounds("\"", "\"") catch {
             return false;
         };

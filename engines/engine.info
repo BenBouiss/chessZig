@@ -1,13 +1,16 @@
 [engine1]
-path="engines/bin/engine_02_07_26_2";
+path="engines/bin/engine_04_07_26";
 name="std";
 "setoption name reportProgress value false";
+"setoption name userazoring value false";
+"setoption name useProbCut value true";
 
 [engine2]
-path="engines/bin/engine_03_07_26";
-name="more tuning + see pruning";
+path="engines/bin/engine_04_07_26_2";
+name="tuning probcut params";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
+"setoption name useProbCut value true";
 
 [match]
 nMatch=64;
@@ -20,6 +23,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-//sprtmode=true;
+sprtmode=true;
 //maxSPRTMatch=1000;
 

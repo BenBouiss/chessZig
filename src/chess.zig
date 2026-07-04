@@ -476,7 +476,7 @@ pub inline fn isPieceWhite(piece: e_piece) bool {
     return @intFromEnum(piece) < N_PIECES_TYPES;
 }
 pub inline fn e_colorFromPiece(piece: e_piece) typel.e_color {
-    if (@intFromEnum(piece) < N_PIECES_TYPES) {
+    if (isPieceWhite(piece)) {
         return .WHITE;
     }
     return .BLACK;
@@ -1011,22 +1011,7 @@ pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bo
     return ret;
 }
 
-pub inline fn getAllAttackerFromKing(p_board: *const boardl.boardState, white: bool) u64 {
-    if (white) {
-        return cst_getAllAttackerFromSq(p_board, true, p_board.b.wKingSq);
-    } else {
-        return cst_getAllAttackerFromSq(p_board, false, p_board.b.bKingSq);
-    }
-}
 pub inline fn getAllAttackerFromSq(p_board: *const boardl.boardState, white: bool, sq: e_square) u64 {
-    if (white) {
-        return cst_getAllAttackerFromSq(p_board, true, sq);
-    } else {
-        return cst_getAllAttackerFromSq(p_board, false, sq);
-    }
-}
-
-pub fn cst_getAllAttackerFromSq(p_board: *const boardl.boardState, comptime white: bool, sq: e_square) u64 {
     var ret: u64 = EMPTY;
     const bb = sqToBitboard(sq);
     const opp = p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
@@ -1037,6 +1022,7 @@ pub fn cst_getAllAttackerFromSq(p_board: *const boardl.boardState, comptime whit
     ret |= getKingAttacks(sq) & (p_board.getPieceBB_t(.KING));
     return ret & opp;
 }
+
 pub inline fn getCheckers(p_board: *boardl.boardState, white: bool) void {
     // this method is responsible for ~30-40% of the compute cost of perft when using staged move generation
     // plan when loading a fen do a "full" get checkers
@@ -1345,7 +1331,6 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tm
         }
         if (utils.contains(str, ".", .ignoreCase)) {
             continue;
-            //offset = 2;
         }
 
         var moveStr = try stringl.string.initFromSlice(alloc, str[offset..str.len]);

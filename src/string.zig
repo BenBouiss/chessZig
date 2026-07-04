@@ -78,19 +78,11 @@ pub const string = struct {
     pub fn free(p_self: *string, alloc: std.mem.Allocator) void {
         alloc.free(p_self.data);
     }
-    pub fn startsWith(p_self: *const string, other: []const u8) bool {
-        if (other.len > p_self.len) {
-            return false;
-        }
-        for (0..other.len) |i| {
-            if (p_self.data[i] != other[i]) {
-                return false;
-            }
-        }
-        return true;
+    pub inline fn startsWith(p_self: *const string, other: []const u8, comptime token: utilsl.strTokens) bool {
+        return utilsl.startsWith(p_self._slice(), other, token);
     }
-    pub inline fn startsWithStr(p_self: *const string, other: *string) bool {
-        return p_self.startsWith(other._slice());
+    pub inline fn startsWithStr(p_self: *const string, other: *string, comptime token: utilsl.strTokens) bool {
+        return p_self.startsWith(other._slice(), token);
     }
     pub fn endsWith(p_self: *const string, other: []const u8) bool {
         if (other.len > p_self.len) {
@@ -167,7 +159,7 @@ pub fn freeArrayList_string(alloc: std.mem.Allocator, arr: *std.ArrayList(string
 }
 
 pub fn mergePaths(alloc: std.mem.Allocator, s1: *string, s2: *string) !string {
-    const slashCount: usize = @intFromBool(s1.endsWith("/")) + @intFromBool(s2.startsWith("/"));
+    const slashCount: usize = @intFromBool(s1.endsWith("/")) + @intFromBool(s2.startsWith("/", .standardToken));
     var ret: string = undefined;
     if (slashCount == 0) {
         const merged = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ s1._slice(), s2._slice() });

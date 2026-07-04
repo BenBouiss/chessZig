@@ -1,4 +1,5 @@
 import sys, os, struct
+import json
 
 
 notAFile = 0xFEFEFEFEFEFEFEFE
@@ -92,8 +93,59 @@ def readNNUEbin(path: str):
     # print(buffers)
 
 
+# open json format result file extract the 6 piece 2 phase values into [("name", "val")]
+order = [
+    "pawnPSQT_MG",
+    "pawnPSQT_EG",
+    "knightPSQT_MG",
+    "knightPSQT_EG",
+    "bishopPSQT_MG",
+    "bishopPSQT_EG",
+    "rookPSQT_MG",
+    "rookPSQT_EG",
+    "queenPSQT_MG",
+    "queenPSQT_EG",
+    "kingPSQT_MG",
+    "kingPSQT_EG",
+]
+
+
+def print_board(name: str, l: list[int]):
+    print(f"const {name} = [_]scoreType {{", end=" ")
+    for sq in range(8):
+        row = l[sq * 8 : (sq + 1) * 8]
+        [print(f"{x}, ", end="") for x in row]
+        print("")
+    print("};")
+
+
+def openWeatherFactory(path: str):
+    assert os.path.exists(path), f"path {path} does not exist"
+    with open(path, "rb") as f:
+        d = json.load(f)
+
+    tot = len(d["uci_params"])
+    offsetName = 0
+    # for x, name in enumerate(order):
+    squares = [0] * 64
+    for x in range(tot):
+        var: str = d["uci_params"][x]["name"]
+        nbr = int(d["uci_params"][x]["value"])
+        if "_" in var and var.split("_")[-1].isnumeric():
+            # print(var)
+            n = int(var.split("_")[-1])
+            squares[n] = nbr
+            if n == 63:
+                print_board(order[offsetName], squares)
+                offsetName += 1
+                squares = [0] * 64
+        else:
+            print(f"pub var {var}: scoreType = {nbr};")
+
+
 if __name__ == "__main__":
     b = sys.argv[1]
     print(f"Found argument {b} with type {type(b)}")
     # print_bitboard(b)
-    readNNUEbin(b)
+    # readNNUEbin(b)
+    openWeatherFactory(b)

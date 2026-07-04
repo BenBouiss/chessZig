@@ -1,5 +1,3 @@
-const build_options = @import("build_options");
-
 const std = @import("std");
 
 pub const NAME = "Ben";
@@ -8,7 +6,6 @@ pub const VERSION = "0.0.1";
 pub const SEED: u64 = 42;
 pub const MAX_MATCH_STR_LENGTH: u64 = 24 + 4096 * (5 + 1);
 pub const MAX_USER_INPUT: u64 = MAX_MATCH_STR_LENGTH;
-pub const MAX_LINE_LENGTH: usize = 32;
 
 pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
 pub const EVALUTATION_TIMEOUT_ERROR_MS: u64 = 10000; // 2 sec
@@ -26,8 +23,6 @@ pub const _DEFAULT_TRACKMETRICS = "true";
 pub const DEFAULT_REPORTPROGRESS = false;
 pub const _DEFAULT_REPORTPROGRESS = "false";
 
-pub const DEFAULT_USEHASHTABLE = true;
-
 pub const ORDERING_LINE_VALUE = 99999;
 
 //https://www.chessprogramming.org/Move_Ordering
@@ -40,15 +35,12 @@ pub const KILLER_1_HEURISTIC_VALUE = 800;
 pub const MAX_HIST_HEURISTIC_VALUE = 700;
 pub const MAX_CONTINUATION_HEURISTIC_VALUE = 700;
 
-//pub const LMR_SCORE_THRESHOLD = 350; // 1 / 2
-pub const LMR_SCORE_THRESHOLD = MAX_HIST_HEURISTIC_VALUE + 1; // 3 / 4
-
 pub const DEFAULT_DEPTH: u16 = 4;
-pub const MIN_DEPTH: u16 = 1;
-pub const MAX_DEPTH: u16 = 6;
 pub const MAX_QUIESC_DEPTH: u16 = 16;
 
-pub const DEFAULT_ELO: u32 = 2500;
+pub const DEFAULT_ELO: u32 = 0;
+pub const MIN_ELO: u32 = 0;
+pub const MAX_ELO: u32 = 0;
 
 pub const _DEFAULT_FIXED_DEPTH = "false";
 pub const DEFAULT_FIXED_DEPTH = false;
@@ -60,14 +52,13 @@ pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER }
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 // 5 - 6 based on current avg ply computed of 6.8 for 5+0 timeformat
 //pub const OLD_THRESHOLD: u8 = 5;
-// >> 4 thus every multiple of 16 gets stored
 pub const OLD_THRESHOLD: u8 = 2;
 
-pub const DEFAULT_USE_PROBCUT = false;
-pub const _DEFAULT_USE_PROBCUT = "false";
+pub const DEFAULT_USE_PROBCUT = true;
+pub const _DEFAULT_USE_PROBCUT = "true";
 
-pub const DEFAULT_USE_RAZORING = true;
-pub const _DEFAULT_USE_RAZORING = "true";
+pub const DEFAULT_USE_RAZORING = false;
+pub const _DEFAULT_USE_RAZORING = "false";
 
 pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
@@ -75,9 +66,6 @@ pub const NET_PATH = "out/bin/simple-320-colM/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024_retrained-120/quantised.bin";
 //pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";
-
-pub const MIN_ELO: u32 = 1000;
-pub const MAX_ELO: u32 = 3000;
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time

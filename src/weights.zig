@@ -5,6 +5,7 @@ const typel = @import("type.zig");
 const std = @import("std");
 const mainl = @import("main.zig");
 const enginel = @import("engine.zig");
+const configl = @import("config.zig");
 
 const scoreType = typel.scoreType;
 const milliDepth = typel.milliDepth;
@@ -144,8 +145,7 @@ pub fn appendAll() !void {
     //add_param(&global_KnightVal, 0, 100, "global_KnightVal");
     //add_param(&global_RookVal, 0, 100, "global_RookVal");
     //add_param(&global_QueenVal, 0, 100, "global_QueenVal");
-
-    // 'texel'
+    modif_val();
     add_param(&global_MobilityVal[0], 0, 100, "global_MobilityVal_MG");
     add_param(&global_MobilityVal[1], 0, 100, "global_MobilityVal_EG");
 
@@ -196,6 +196,7 @@ pub fn appendAll() !void {
     add_param(&global_materialBishopPair[0], 0, 100, "global_materialBishopPair_MG");
     add_param(&global_materialBishopPair[1], 0, 100, "global_materialBishopPair_EG");
     // LMR
+    add_param(&lmr_scoreThreshold, 0, 1000, "lmr_scoreThreshold");
     add_param(&lmr_expectedCutOff, 0, 2000, "lmr_expectedCutOff");
     add_param(&lmr_notImproving, 0, 2000, "lmr_notImproving");
     add_param(&lmr_hashMoveCapture, 0, 2000, "lmr_hashMoveCapture");
@@ -234,26 +235,34 @@ pub fn appendAll() !void {
     add_param(&razoringCoefficient, 0, 1000, "razoringCoefficient");
     add_param(&IIRDepth, 0, 6, "IIRDepth");
     add_param(&LMRDepth, 0, 4, "LMRDepth");
-    const start = tunerOpts.items.len;
 
-    try add_param_1d(&global_Pawn_PSQT[0], -100, 200, "global_Pawn_PSQT_MG");
-    try add_param_1d(&global_Pawn_PSQT[1], -100, 200, "global_Pawn_PSQT_EG");
+    add_param(&SeePruningMaxDepth, 0, 10, "SeePruningMaxDepth");
+    add_param(&SeePruningQuietMargin, -400, 0, "SeePruningQuietMargin");
+    add_param(&SeePruningCaptureMargin, -400, 0, "SeePruningCaptureMargin");
 
-    try add_param_1d(&global_Knight_PSQT[0], -100, 200, "global_Knight_PSQT_MG");
-    try add_param_1d(&global_Knight_PSQT[1], -100, 200, "global_Knight_PSQT_EG");
+    add_param(&probCutMargin, 0, 500, "probCutMargin");
+    add_param(&probCutMinimalDepth, 0, 8, "probCutMinimalDepth");
 
-    try add_param_1d(&global_Bishop_PSQT[0], -100, 200, "global_Bishop_PSQT_MG");
-    try add_param_1d(&global_Bishop_PSQT[1], -100, 200, "global_Bishop_PSQT_EG");
+    //const start = tunerOpts.items.len;
 
-    try add_param_1d(&global_Rook_PSQT[0], -100, 200, "global_Rook_PSQT_MG");
-    try add_param_1d(&global_Rook_PSQT[1], -100, 200, "global_Rook_PSQT_EG");
+    //try add_param_1d(&global_Pawn_PSQT[0], -100, 200, "global_Pawn_PSQT_MG");
+    //try add_param_1d(&global_Pawn_PSQT[1], -100, 200, "global_Pawn_PSQT_EG");
 
-    try add_param_1d(&global_Queen_PSQT[0], -100, 200, "global_Queen_PSQT_MG");
-    try add_param_1d(&global_Queen_PSQT[1], -100, 200, "global_Queen_PSQT_EG");
+    //try add_param_1d(&global_Knight_PSQT[0], -100, 200, "global_Knight_PSQT_MG");
+    //try add_param_1d(&global_Knight_PSQT[1], -100, 200, "global_Knight_PSQT_EG");
 
-    try add_param_1d(&global_King_PSQT[0], -100, 200, "global_King_PSQT_MG");
-    try add_param_1d(&global_King_PSQT[1], -100, 200, "global_King_PSQT_EG");
-    _ = start;
+    //try add_param_1d(&global_Bishop_PSQT[0], -100, 200, "global_Bishop_PSQT_MG");
+    //try add_param_1d(&global_Bishop_PSQT[1], -100, 200, "global_Bishop_PSQT_EG");
+
+    //try add_param_1d(&global_Rook_PSQT[0], -100, 200, "global_Rook_PSQT_MG");
+    //try add_param_1d(&global_Rook_PSQT[1], -100, 200, "global_Rook_PSQT_EG");
+
+    //try add_param_1d(&global_Queen_PSQT[0], -100, 200, "global_Queen_PSQT_MG");
+    //try add_param_1d(&global_Queen_PSQT[1], -100, 200, "global_Queen_PSQT_EG");
+
+    //try add_param_1d(&global_King_PSQT[0], -100, 200, "global_King_PSQT_MG");
+    //try add_param_1d(&global_King_PSQT[1], -100, 200, "global_King_PSQT_EG");
+    //_ = start;
     //for (start..tunerOpts.items.len) |i| {
     //    const e = tunerOpts.items[i];
     //    std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\":{d} }}, \n", .{ e.opt.name, e.addr.*, -100, 200, 20 });
@@ -325,6 +334,7 @@ pub var global_King_PSQT: [2][64]scoreType = .{ [_]scoreType{
 
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
+pub var lmr_scoreThreshold: milliDepth = configl.MAX_HIST_HEURISTIC_VALUE + 1;
 pub var lmr_expectedCutOff: milliDepth = 969;
 pub var lmr_notImproving: milliDepth = 520;
 pub var lmr_hashMoveCapture: milliDepth = 337;
@@ -367,6 +377,14 @@ pub var razoringCoefficient: scoreType = 167;
 pub var IIRDepth: scoreType = 4; // >= 5
 pub var LMRDepth: scoreType = 3; // >= 3
 
-pub var SeePruningMaxDepth: scoreType = 6;
-pub var SeePruningQuietMargin: scoreType = -50;
-pub var SeePruningCaptureMargin: scoreType = -25;
+pub var SeePruningMaxDepth: scoreType = 5;
+pub var SeePruningQuietMargin: scoreType = -71;
+pub var SeePruningCaptureMargin: scoreType = -71;
+
+pub var probCutMargin: scoreType = 200;
+pub var probCutMinimalDepth: scoreType = 4;
+
+pub fn modif_val() void {
+    probCutMargin = 202;
+    probCutMinimalDepth = 4;
+}
