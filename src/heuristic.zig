@@ -1107,8 +1107,7 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, depth: u16, prevLineMove: IMove, comptime mva: bool) moveOrdering {
-    _ = depth;
+pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, comptime mva: bool) moveOrdering {
     var ret: moveOrdering = undefined;
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     const w: bool = p_state.whiteToMove();
@@ -1142,14 +1141,14 @@ pub inline fn plyModif(ply: u16) u16 {
 
 // hashmove + line move + 2 killer moves (?)
 
-pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
+pub fn losingCapture(p_state: *const boardl.boardState, move: IMove, threshold: scoreType) bool {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     const to = move.getTo();
     if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move)) {
         return false;
     }
-    return SEE(p_state, move) < 0;
+    return SEE_threshold(p_state, move, threshold);
 }
 pub const score = struct {
     s: scoreType = 0,

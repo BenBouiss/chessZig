@@ -55,24 +55,18 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, usePrevEval: bool, ss: *searchStack, comptime t: searchType) scoreType {
+pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, ss: *searchStack) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
 
     var _alpha = alpha;
-
     var currS = ss.getFrame(ply);
-    //const static_eval = if (usePrevEval) currS.staticEval.s else correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, p_state.whiteToMove()), ply);
-    const static_eval = if (usePrevEval) currS.staticEval.s else heuristicl.c_evaluate(p_state, p_state.whiteToMove());
+    var bestMove: IMove = .{};
+    const static_eval = correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, p_state.whiteToMove()), ply);
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     if (depth == 0 or !p_info.alive) {
         p_info.searchStat.n_nodeExplored += 1;
         return static_eval;
-    }
-
-    if (comptime t == .PV) {
-        var pv: movel.pvContainer = .{};
-        ss.getFrame(ply + 1).pv = &pv;
     }
 
     var best_value = static_eval;
@@ -92,69 +86,57 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 
     var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
     gen.fetchNext(p_state);
-    const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, .{}, depth, currS.prevLineMove, true);
+    const order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, .{}, currS.prevLineMove, true);
 
     var i: usize = 0;
     const historyBonus = heuristicl.computeHistoryBonus(depth);
+
     while (gen.pickNext(&order)) |move| : (i += 1) {
+        if (i > weightl.moveReductionAmount) {
+            break;
+        }
         var _delta = BIG_DELTA;
         if (move.isPromotion()) {
             _delta += weightl.simpleQueenScore - 200;
         }
         // delta pruning
-        if (static_eval < (_alpha - _delta)) {
+        if (static_eval < (_alpha - _delta) or heuristicl.losingCapture(p_state, move, -100)) {
             continue;
         }
-        if (heuristicl.losingCapture(p_state, move)) {
-            continue;
-        }
-
         const from = move.getFrom();
         const fPiece = p_state.getPiece(from);
-        // if move nor capture nor checking
-        // problem here where a checking sequence ie
-        // black checked -> white not checked nor capture = end of quiescence, the search might need to continue
-        //currS.playedMove = move;
-        //currS.pieceMoved = fPiece;
 
         p_state.makeMove(move);
         if (comptime configl.USE_NNUE) {
             nnuel.updateNnueOnMove(p_state, move);
         }
-        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1, false, ss, t);
+        const score = -quiescenceSearch(p_state, p_info, depth - 1, -beta, -_alpha, ply + 1, ss);
 
         _ = p_state.undoMove();
         p_state.frame = f;
 
-        if (i == 0 or score > best_value) {
+        if (score > best_value) {
             best_value = score;
-            if (comptime t == .PV) {
-                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
-            }
-        }
-        if (score >= beta) {
-            const to = move.getTo();
-            const cPiece = p_state.getCapturePiece(move);
-            historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
-            for (0..gen.moves.len) |j| {
-                const idx = order.indexes[j];
-                const _move = gen.moves.moves[idx];
-                if (j != i) {
-                    const fromP = _move.getFrom();
-                    const toP = _move.getTo();
-                    historyl.updateCaptureHistory(p_state.getPiece(fromP), p_state.getCapturePiece(_move), toP, -historyBonus);
-                }
-            }
-            p_info.searchStat.n_cutoffs += 1;
-            if (comptime t == .PV) {
-                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
-            }
-            return score;
+            bestMove = move;
         }
         if (score > _alpha) {
             _alpha = score;
-            if (comptime t == .PV) {
-                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
+
+            const to = move.getTo();
+            const cPiece = p_state.getCapturePiece(move);
+            historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
+            if (score >= beta) {
+                for (0..gen.moves.len) |j| {
+                    const idx = order.indexes[j];
+                    const _move = gen.moves.moves[idx];
+                    if (j != i) {
+                        const fromP = _move.getFrom();
+                        const toP = _move.getTo();
+                        historyl.updateCaptureHistory(p_state.getPiece(fromP), p_state.getCapturePiece(_move), toP, -historyBonus);
+                    }
+                }
+                p_info.searchStat.n_cutoffs += 1;
+                return score;
             }
         }
     }
@@ -209,36 +191,25 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
     }
-    var finalScore: scoreType = 0;
+    var finalScore: scoreType = -weightl.simpleCheckMateScore - 1;
     var bestMove: IMove = .{};
     var hashMove: IMove = .{};
     var hashType: hashl.nodeType = .ALL;
     var hashFlag: hashl.nodeType = .UPPER;
     const skipQuietMoves: bool = false;
-    var writer: hashl.hashWriter = .init(p_state.frame.key.code);
     var hashEval: scoreType = 0;
     const res = hashl.hashTable.probeMatch(p_state.frame.key.code, @intCast(_depth), p_state, @intCast(p_info.searchStat.n_nodeExplored));
-    writer = res.writer;
+    var writer = res.writer;
+    var ttHit: bool = false;
     if (res.entry) |_entry| {
         p_info.searchStat.n_hashRetrieve += 1;
+        ttHit = true;
         //https://www.chessprogramming.org/Transposition_Table#Using_the_Transposition_Table
         hashEval = _entry.evaluation;
         hashType = _entry.nodeT();
         if (comptime t == .NonPV) {
-            if (hashType == .ALL) {
+            if (hashType == .ALL or (hashType == .LOWER and hashEval >= beta) or (hashType == .UPPER and hashEval >= _alpha)) {
                 return hashEval;
-            } else if (hashType == .LOWER) {
-                if (hashEval >= beta) {
-                    return hashEval;
-                }
-                //if (!wasExtended) {
-                //    extension += 1;
-                //    extended = true;
-                //}
-            } else if (hashType == .UPPER) {
-                if (hashEval >= _alpha) {
-                    return hashEval;
-                }
             }
         } else {
             //if (hashType == .ALL and !wasExtended) {
@@ -254,7 +225,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     if (_depth == 0 or !p_info.alive) {
         p_info.searchStat.n_nodeExplored += 1;
-        return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, false, ss, t);
+        return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, alpha, beta, ply, ss);
     }
     if (comptime t == .PV) {
         var pv: movel.pvContainer = .{};
@@ -264,7 +235,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     const f: boardl.boardFrame = .copy(p_state);
     var currS = ss.getFrame(ply);
     //const static_eval = if (hashMove.isValid()) (hashEval) else (correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply));
-    const static_eval = if (hashMove.isValid()) (hashEval) else heuristicl.c_evaluate(p_state, white);
+    const static_eval = if (ttHit) (hashEval) else heuristicl.c_evaluate(p_state, white);
     const hashMoveIsCapture = hashMove.isCapture();
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
@@ -288,7 +259,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         lmrDepth += weightl.lmr_hashMoveCapture;
     }
     // never hit
-    if (hashFlag == .LOWER) {
+    if (hashType == .LOWER) {
         lmrDepth += weightl.lmr_expectedCutOff;
     }
 
@@ -348,7 +319,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             const base: scoreType = if (improving) weightl.razoringBaseImproving else weightl.razoringBaseNotImproving;
             const threshold = _alpha - (_depth * _depth * weightl.razoringCoefficient) - base;
             if (static_eval < threshold and @abs(_alpha) < weightl.simpleCheckMateScore) {
-                const val = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, true, ss, .NonPV);
+                const val = quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha, beta, ply, ss);
                 if (val < _alpha) {
                     return _alpha;
                 }
@@ -372,7 +343,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         _depth -= 1;
     }
 
-    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
+    var order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, currS.prevLineMove, false);
 
     const p_beta = beta + weightl.probCutMargin;
     if (p_features.useProbCut and _depth > weightl.probCutMinimalDepth and !chessl.isMate(beta)) {
@@ -391,7 +362,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 if (comptime configl.USE_NNUE) {
                     nnuel.updateNnueOnMove(p_state, move);
                 }
-                var score = -quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, -p_beta, -p_beta + 1, ply + 1, false, ss, .NonPV);
+                var score = -quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, -p_beta, -p_beta + 1, ply + 1, ss);
                 if (score >= p_beta) {
                     score = -searchLoop(p_state, p_info, p_features, _depth - 4, ply + 1, -p_beta, -p_beta + 1, ss, extended, .NonPV);
                 }
@@ -420,7 +391,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     while (gen.pickNext(&order)) |move| : (i += 1) {
         if (!skipQuietMoves and i == (gen.moves.len - 1) and gen.extra == .CAPTURES) {
             gen.fetchNext(p_state);
-            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, _depth, currS.prevLineMove, false);
+            order = heuristicl.eval_move_sorting_mask(p_state, &gen.moves, ply, hashMove, currS.prevLineMove, false);
             i_reset = true;
         } else if (i_reset) {
             i = 0;
@@ -507,62 +478,59 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         _ = p_state.undoMove();
         p_state.frame = f;
 
-        if (tot == 0 or finalScore < score) {
+        if ((tot == 0 and ply == 0) or finalScore < score) {
             finalScore = score;
             bestMove = move;
-            if (comptime t == .PV) {
-                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
-            }
+            //if (comptime t == .PV) {
+            //    currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
+            //}
         }
-
+        tot += 1;
         if (finalScore > _alpha) {
             _alpha = finalScore;
             hashFlag = .ALL;
-            if (comptime t == .PV) {
-                currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
-            }
             if (isQuiet) {
                 historyl.updateHistoryHeurist(white, from, to, historyBonus);
             } else {
                 historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
             }
-        }
-        if (_alpha >= beta) {
-            //hashFlag = .LOWER;
-            // save here the killer moves
-            if (isQuiet) {
-                historyl.onKillerMove(move, ply);
-                for (0..gen.moves.len) |j| {
-                    const idx = order.indexes[j];
-                    const _move = gen.moves.moves[idx];
-                    if (j != i) {
-                        const fromP = _move.getFrom();
-                        const toP = _move.getTo();
-                        historyl.updateHistoryHeurist(white, fromP, toP, -historyBonus);
+
+            if (_alpha >= beta) {
+                hashFlag = .LOWER;
+                // save here the killer moves
+                if (isQuiet) {
+                    historyl.onKillerMove(move, ply);
+                    for (0..gen.moves.len) |j| {
+                        const idx = order.indexes[j];
+                        const _move = gen.moves.moves[idx];
+                        if (j != i) {
+                            const fromP = _move.getFrom();
+                            const toP = _move.getTo();
+                            historyl.updateHistoryHeurist(white, fromP, toP, -historyBonus);
+                        }
+                    }
+                } else {
+                    // in capture mode
+                    //historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
+                    for (0..gen.moves.len) |j| {
+                        const idx = order.indexes[j];
+                        const _move = gen.moves.moves[idx];
+                        if (j != i) {
+                            const fromP = _move.getFrom();
+                            const toP = _move.getTo();
+                            historyl.updateCaptureHistory(p_state.getPiece(fromP), p_state.getCapturePiece(_move), toP, -historyBonus);
+                        }
                     }
                 }
-            } else {
-                // in capture mode
-                //historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
-                for (0..gen.moves.len) |j| {
-                    const idx = order.indexes[j];
-                    const _move = gen.moves.moves[idx];
-                    if (j != i) {
-                        const fromP = _move.getFrom();
-                        const toP = _move.getTo();
-                        historyl.updateCaptureHistory(p_state.getPiece(fromP), p_state.getCapturePiece(_move), toP, -historyBonus);
-                    }
-                }
+                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move, white);
+                writer.writeShort(s_entry);
+                p_info.searchStat.n_cutoffs += 1;
+                return _alpha;
             }
-            const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move, white);
-            writer.writeShort(s_entry);
             if (comptime t == .PV) {
                 currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
-            p_info.searchStat.n_cutoffs += 1;
-            return _alpha;
         }
-        tot += 1;
     }
     if (tot == 0) {
         if (isCheck) {

@@ -462,7 +462,7 @@ pub const engine = struct {
                 return p_self.executeBenchmarkCmd(cmdBuffer);
             },
             .PRINTPARAMS => {
-                const stepDiv: f32 = 20;
+                const stepDiv: f32 = 5;
                 std.debug.print("{{\n", .{});
                 for (0..weightl.tunerOpts.items.len) |i| {
                     const opt = weightl.tunerOpts.items[i];
