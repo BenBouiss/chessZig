@@ -61,6 +61,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     var _alpha = alpha;
 
     var currS = ss.getFrame(ply);
+    //const static_eval = if (usePrevEval) currS.staticEval.s else correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, p_state.whiteToMove()), ply);
     const static_eval = if (usePrevEval) currS.staticEval.s else heuristicl.c_evaluate(p_state, p_state.whiteToMove());
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
@@ -108,9 +109,14 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
             continue;
         }
 
+        const from = move.getFrom();
+        const fPiece = p_state.getPiece(from);
         // if move nor capture nor checking
         // problem here where a checking sequence ie
         // black checked -> white not checked nor capture = end of quiescence, the search might need to continue
+        //currS.playedMove = move;
+        //currS.pieceMoved = fPiece;
+
         p_state.makeMove(move);
         if (comptime configl.USE_NNUE) {
             nnuel.updateNnueOnMove(p_state, move);
@@ -127,9 +133,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
             }
         }
         if (score >= beta) {
-            const from = move.getFrom();
             const to = move.getTo();
-            const fPiece = p_state.getPiece(from);
             const cPiece = p_state.getCapturePiece(move);
             historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
             for (0..gen.moves.len) |j| {
@@ -162,6 +166,8 @@ pub const searchFrame = struct {
     ply: u16 = 0,
     valid: bool = false,
     prevLineMove: IMove = .{},
+    //playedMove: IMove = .{},
+    //pieceMoved: typel.e_piece = .nEmptySquare,
     pv: ?*movel.pvContainer = null,
 };
 
@@ -257,7 +263,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     const f: boardl.boardFrame = .copy(p_state);
     var currS = ss.getFrame(ply);
-    const static_eval = if (hashMove.isValid()) (hashEval) else (heuristicl.c_evaluate(p_state, white));
+    //const static_eval = if (hashMove.isValid()) (hashEval) else (correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply));
+    const static_eval = if (hashMove.isValid()) (hashEval) else heuristicl.c_evaluate(p_state, white);
     const hashMoveIsCapture = hashMove.isCapture();
     currS.staticEval = .{ .s = static_eval, .t = .STD };
 
@@ -280,6 +287,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     if (hashMoveIsCapture) {
         lmrDepth += weightl.lmr_hashMoveCapture;
     }
+    // never hit
     if (hashFlag == .LOWER) {
         lmrDepth += weightl.lmr_expectedCutOff;
     }
@@ -292,6 +300,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         const augment: u16 = if (_depth > weightl.nullMoveDepthAugmentThreshold) @intCast(weightl.nullMoveDepthAugment) else 0;
         const R: u16 = augment + @as(u16, @intCast(if (improving) weightl.nullMoveReductionImproving else weightl.nullMoveReduction));
         if (_depth > R and !isCheck and !isEndGame) {
+            //currS.playedMove = .{};
+            //currS.pieceMoved = .nWhitePawn;
             p_state.makeNullMove();
             const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -beta, 1 - beta, ss, extended, .NonPV);
             //const score = -searchLoop(p_state, p_info, p_features, _depth - R, ply + R, -_alpha - 1, -alpha, ss, extended, .NonPV);
@@ -372,6 +382,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 if (!heuristicl.SEE_threshold(p_state, move, tresh)) {
                     continue;
                 }
+
+                //const from = move.getFrom();
+                //const fPiece = p_state.getPiece(from);
+                //currS.playedMove = move;
+                //currS.pieceMoved = fPiece;
                 _ = p_state.makeMove(move);
                 if (comptime configl.USE_NNUE) {
                     nnuel.updateNnueOnMove(p_state, move);
@@ -461,7 +476,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         }
         _lmrDepth += (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
 
+        //currS.playedMove = move;
+        //currS.pieceMoved = fPiece;
         _ = p_state.makeMove(move);
+
         if (comptime configl.USE_NNUE) {
             nnuel.updateNnueOnMove(p_state, move);
         }
@@ -496,6 +514,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
             }
         }
+
         if (finalScore > _alpha) {
             _alpha = finalScore;
             hashFlag = .ALL;
@@ -509,6 +528,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             }
         }
         if (_alpha >= beta) {
+            //hashFlag = .LOWER;
             // save here the killer moves
             if (isQuiet) {
                 historyl.onKillerMove(move, ply);
@@ -551,10 +571,39 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             _alpha = weightl.simpleStalemateScore;
         }
     }
+    //if (!isCheck and (!bestMove.isCapture() or !bestMove.isValid()) and !(_alpha >= beta and _alpha <= static_eval) and !(bestMove.isValid() and _alpha >= static_eval)) {
+    //    const bonus =
+    //        std.math.clamp(@divFloor((_alpha - static_eval) * depth, 8), -256, 256);
+    //    if (ply > 1) {
+    //        const prev1 = ss.getPrevFrame(ply, 1);
+    //        const prev2 = ss.getPrevFrame(ply, 2);
+    //        update_corrhist(&historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()], bonus);
+    //    }
+    //}
     if (comptime t == .PV) {
         // .PV set to not store position that could be obtained after a possible nullmove. TODO: just filter out nullmove
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove, white);
         writer.writeShort(s_entry);
     }
     return _alpha;
+}
+pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: scoreType, ply: u16) scoreType {
+    _ = p_state;
+    _ = ply;
+    _ = ss;
+    return eval;
+    //const _eval: scoreType = eval * @divFloor(200 - p_state.frame.halfMoveClock, 200);
+    //var corr: scoreType = 0;
+    //if (ply > 1) {
+    //    const prev1 = ss.getPrevFrame(ply, 1);
+    //    const prev2 = ss.getPrevFrame(ply, 2);
+    //    corr += historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()];
+    //}
+
+    //return std.math.clamp(_eval + @divFloor(1 * corr, 512), -weightl.simpleCheckMateThreshold + 1, weightl.simpleCheckMateThreshold - 1);
+}
+pub inline fn update_corrhist(val: *scoreType, score: scoreType) void {
+    _ = val;
+    _ = score;
+    //val.* += score - @divFloor(val.* * @as(scoreType, @intCast(@abs(score))), 1024);
 }

@@ -248,7 +248,7 @@ pub const engine = struct {
     workingThreads: std.ArrayList(std.Thread),
     status: engineStatus = .{},
     input: inputChannel,
-    searcher: *schedulerl.uciSearcher,
+    searcher: schedulerl.uciSearcher,
 
     alloc: std.mem.Allocator,
     uciMode: bool = false,
@@ -276,8 +276,7 @@ pub const engine = struct {
         ret.logs = try logging.init(alloc, 16);
 
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
-        ret.searcher = try alloc.create(schedulerl.uciSearcher);
-        ret.searcher.* = .{};
+        ret.searcher = .{};
         ret.searcher.schedul = .{};
         ret.uciMode = false;
         try ret.initOptions();
@@ -551,7 +550,6 @@ pub const engine = struct {
         p_self.input.free(p_self.alloc);
         p_self.workingThreads.deinit(p_self.alloc);
         p_self.options.setOptions.deinit(p_self.alloc);
-        p_self.alloc.destroy(p_self.searcher);
         if (p_self.status.initializedInternals) {
             hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
             //hashTablel.zobristKeys.free(p_self.alloc);
@@ -937,7 +935,7 @@ fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
 pub fn parseSetOptionTypeCmd(options: *std.ArrayList(setOptionEntry), cmdBuffer: []const u8) e_engineOptions {
     for (0..options.items.len) |i| {
         const entry = options.items[i];
-        if (utilsl.startsWith(cmdBuffer, entry.name, .ignoreCase)) {
+        if (utilsl.contains(cmdBuffer, entry.name, .ignoreCase)) {
             return entry.optionType;
         }
     }

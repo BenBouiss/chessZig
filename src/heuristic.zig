@@ -59,8 +59,7 @@ pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreTy
         return nnuel.evaluate(white, &p_state.frame.nnueAccumul);
     } else {
         const ret = evaluate(p_state);
-        if (white) return ret - p_state.frame.halfMoveClock;
-        return (-ret) - p_state.frame.halfMoveClock;
+        return if (white) ret - p_state.frame.halfMoveClock else -ret - p_state.frame.halfMoveClock;
     }
 }
 

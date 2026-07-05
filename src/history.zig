@@ -24,6 +24,9 @@ pub var historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]score
 // combination of couter move heuristic and follow up history. Works via pair of move using the following index template:
 //  [nextPiece][nextTo][prevPiece][prevTo]
 pub const pieceHistory: type = [12][64]scoreType;
+
+pub var corrHist: [12][64][12][64]scoreType = std.mem.zeroes([12][64][12][64]scoreType);
+
 //pub var continuationHeuristic: [12][64]pieceHistory = std.mem.zeroes([12][64]pieceHistory);
 // fPiece cPiece toSq
 pub var captureHistory: [12][12][64]scoreType = std.mem.zeroes([12][12][64]scoreType);
@@ -34,6 +37,7 @@ pub fn _initMoveOrdering() void {
     //counterMoves = std.mem.zeroes([64][64]IMove);
     captureHistory = std.mem.zeroes([12][12][64]scoreType);
     //continuationHeuristic = std.mem.zeroes([12][64]pieceHistory);
+    corrHist = std.mem.zeroes([12][64][12][64]scoreType);
 }
 pub inline fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];

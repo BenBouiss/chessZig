@@ -242,6 +242,7 @@ pub fn appendAll() !void {
 
     add_param(&probCutMargin, 0, 500, "probCutMargin");
     add_param(&probCutMinimalDepth, 0, 8, "probCutMinimalDepth");
+    add_param(&corrHistMax, 0, 4000, "corrHistMax");
 
     //const start = tunerOpts.items.len;
 
@@ -384,7 +385,15 @@ pub var SeePruningCaptureMargin: scoreType = -71;
 pub var probCutMargin: scoreType = 200;
 pub var probCutMinimalDepth: scoreType = 4;
 
+pub var corrHistMax: scoreType = 2000;
+
+pub var corrHistDiv: scoreType = 4;
+
 pub fn modif_val() void {
-    probCutMargin = 202;
-    probCutMinimalDepth = 4;
+    //nullMoveDepthAugmentThreshold = 13;
+    //nullMoveDepthAugment = 1;
+    //nullMoveReduction = 4;
+    //nullMoveReductionImproving = 2;
+    //probCutMargin = 203;
+    //probCutMinimalDepth = 3;
 }

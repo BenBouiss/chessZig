@@ -47,29 +47,6 @@ const AGE_SHIFT = 11;
 const AGE_MASK = 0xF800;
 const MAX_AGE: u8 = 255;
 
-pub const searchEntry = struct {
-    // 16 + 16 +
-    key: subKeyType align(1) = 0,
-    evaluation: i16 align(1) = 0,
-    bestMove: movel.IMove align(1) = .{},
-    _depth: u8 = 0,
-    _age: u8 = 0,
-    val: u8 = 0,
-    pub fn init(key: subKeyType, eval: i16, bestMove: movel.IMove, depth: u8, age: u8, node: nodeType, whiteToMove: bool) searchEntry {
-        const val: u8 = @as(u8, @intFromEnum(node)) | 0x8 | (@as(u8, @intFromBool(whiteToMove)) << 2);
-        return .{ .key = key, .evaluation = eval, .bestMove = bestMove, ._depth = depth, ._age = age, .val = val };
-    }
-    pub inline fn nodeT(self: searchEntry) nodeType {
-        return @enumFromInt(self.val & NODETYPE_mask);
-    }
-    pub inline fn white(self: searchEntry) bool {
-        return (self.val & WHITE_MASK) != 0;
-    }
-    pub inline fn valid(self: searchEntry) bool {
-        return (self.val & VALID_MASK) != 0;
-    }
-};
-
 pub const Hash_entry = struct {
     // 16 + 16 +
     key: subKeyType align(1) = 0,
