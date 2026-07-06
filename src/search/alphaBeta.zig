@@ -100,7 +100,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
             _delta += weightl.simpleQueenScore - 200;
         }
         // delta pruning
-        if (static_eval < (_alpha - _delta) or heuristicl.losingCapture(p_state, move, -100)) {
+        if (static_eval < (_alpha - _delta) or heuristicl.losingCaptureT(p_state, move, -100)) {
             continue;
         }
         const from = move.getFrom();

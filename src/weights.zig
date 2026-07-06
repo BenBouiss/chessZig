@@ -335,21 +335,22 @@ pub var global_King_PSQT: [2][64]scoreType = .{ [_]scoreType{
 
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
-pub var lmr_scoreThreshold: milliDepth = configl.MAX_HIST_HEURISTIC_VALUE + 1;
-pub var lmr_expectedCutOff: milliDepth = 969;
-pub var lmr_notImproving: milliDepth = 520;
-pub var lmr_hashMoveCapture: milliDepth = 337;
-pub var lmr_baseDeficit: milliDepth = 985;
-pub var lmr_badCapture: milliDepth = 258;
-pub var lmr_oldMulti: milliDepth = 53;
+//pub var lmr_scoreThreshold: milliDepth = configl.MAX_HIST_HEURISTIC_VALUE + 1;
+pub var lmr_scoreThreshold: milliDepth = 715;
+pub var lmr_expectedCutOff: milliDepth = 952;
+pub var lmr_notImproving: milliDepth = 529;
+pub var lmr_hashMoveCapture: milliDepth = 308;
+pub var lmr_baseDeficit: milliDepth = 962;
+pub var lmr_badCapture: milliDepth = 289;
+pub var lmr_oldMulti: milliDepth = 68;
 // LMR negative (less reduction)
 pub var lmr_inCheck: milliDepth = -600; // not used since no lmr in check
 // try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
-pub var lmr_givesCheck: milliDepth = -685;
-pub var lmr_killerMove: milliDepth = -487;
-pub var lmr_threatening: milliDepth = -243;
-pub var lmr_inPvMode: milliDepth = -424;
-pub var lmr_isPromotion: milliDepth = -206;
+pub var lmr_givesCheck: milliDepth = -714;
+pub var lmr_killerMove: milliDepth = -512;
+pub var lmr_threatening: milliDepth = -200;
+pub var lmr_inPvMode: milliDepth = -409;
+pub var lmr_isPromotion: milliDepth = -207;
 
 // margins
 
@@ -390,10 +391,16 @@ pub var corrHistMax: scoreType = 2000;
 pub var corrHistDiv: scoreType = 4;
 
 pub fn modif_val() void {
-    //nullMoveDepthAugmentThreshold = 13;
-    //nullMoveDepthAugment = 1;
-    //nullMoveReduction = 4;
-    //nullMoveReductionImproving = 2;
-    //probCutMargin = 203;
-    //probCutMinimalDepth = 3;
+    lmr_scoreThreshold = 715;
+    lmr_expectedCutOff = 952;
+    lmr_notImproving = 529;
+    lmr_hashMoveCapture = 308;
+    lmr_baseDeficit = 962;
+    lmr_badCapture = 289;
+    lmr_oldMulti = 68;
+    lmr_givesCheck = -714;
+    lmr_killerMove = -512;
+    lmr_threatening = -200;
+    lmr_inPvMode = -409;
+    lmr_isPromotion = -205;
 }

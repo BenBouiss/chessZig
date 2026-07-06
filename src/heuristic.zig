@@ -1141,14 +1141,23 @@ pub inline fn plyModif(ply: u16) u16 {
 
 // hashmove + line move + 2 killer moves (?)
 
-pub fn losingCapture(p_state: *const boardl.boardState, move: IMove, threshold: scoreType) bool {
+pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     const to = move.getTo();
     if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move)) {
         return false;
     }
-    return SEE_threshold(p_state, move, threshold);
+    return SEE(p_state, move) < 0;
+}
+pub fn losingCaptureT(p_state: *const boardl.boardState, move: IMove, threshold: scoreType) bool {
+    const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
+    const safetyArea = chess.safetyArea(otherKingSq);
+    const to = move.getTo();
+    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move)) {
+        return false;
+    }
+    return !SEE_threshold(p_state, move, threshold);
 }
 pub const score = struct {
     s: scoreType = 0,
