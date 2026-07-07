@@ -481,9 +481,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if ((tot == 0 and ply == 0) or finalScore < score) {
             finalScore = score;
             bestMove = move;
-            //if (comptime t == .PV) {
-            //    currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
-            //}
         }
         tot += 1;
         if (finalScore > _alpha) {

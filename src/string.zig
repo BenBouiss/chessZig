@@ -147,6 +147,9 @@ pub const string = struct {
     pub fn split(self: *const string, alloc: std.mem.Allocator, e: u8) !std.ArrayList([]const u8) {
         return try utilsl.split(u8, alloc, self._slice(), e);
     }
+    pub inline fn splitGen(self: *const string, e: u8) utilsl.splitGenerator {
+        return utilsl.splitGenerator(u8).init(self._slice(), e);
+    }
     pub fn clearRetainingCapacity(self: *string) void {
         self.len = 0;
     }

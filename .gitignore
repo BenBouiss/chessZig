@@ -20,5 +20,6 @@ engines/tmp/*
 /test/*
 opening
 zig-pkg
+doom.run
 
 

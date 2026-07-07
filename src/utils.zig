@@ -120,7 +120,6 @@ pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
         if (count == e.len) {
             return ret;
         }
-
         if (a_e == e[@intCast(count)]) {
             if (count == 0) {
                 ret = @intCast(i);

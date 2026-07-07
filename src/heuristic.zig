@@ -946,8 +946,6 @@ pub fn getEntriesFromFile(alloc: std.mem.Allocator, path: string, nSkips: usize)
 
     for (0..tokens.items.len) |i| {
         var s = tokens.items[i];
-        var tok = try s.split(alloc, ' ');
-        defer tok.deinit(alloc);
         const outcome = try s.extractFromBounds("[", "]");
         var foutcome: f32 = 0;
         if (utilsl.contains(outcome, "0.5", .ignoreCase)) {
@@ -969,7 +967,6 @@ pub const csvHeader = struct {
         for (0..self.n_params) |i| {
             try writer.print("Delta_{d},", .{i});
         }
-
         try writer.print("Phase,Outcome,Eval", .{});
     }
 };

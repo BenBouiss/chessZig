@@ -1,13 +1,13 @@
 [engine1]
-path="engines/bin/engine_06_07_26";
-name="std";
+path="engines/bin/engine_07_07_26_1";
+name="std + twk";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 "setoption name useProbCut value true";
 
 [engine2]
-path="engines/bin/engine_06_07_26_1";
-name="std + twk";
+path="engines/bin/engine_07_07_26";
+name="std ";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 "setoption name useProbCut value true";

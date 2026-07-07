@@ -358,14 +358,14 @@ pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 pub var rfpMargin: [4]scoreType = .{ 0, 47, 185, 235 };
 pub var rfpImproving: scoreType = -1;
 
-pub var captureExtensionThresh: scoreType = 537;
+pub var captureExtensionThresh: scoreType = 526;
 
 pub const moveReductionAmount = 4;
 
 // source: https://www.chessprogramming.org/King_Safety
 pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
-pub var aspirationCoefficient: scoreType = 84;
+pub var aspirationCoefficient: scoreType = 22;
 
 pub var nullMoveDepthAugmentThreshold: scoreType = 13;
 pub var nullMoveDepthAugment: scoreType = 2;
@@ -380,7 +380,7 @@ pub var IIRDepth: scoreType = 4; // >= 5
 pub var LMRDepth: scoreType = 3; // >= 3
 
 pub var SeePruningMaxDepth: scoreType = 5;
-pub var SeePruningQuietMargin: scoreType = -71;
+pub var SeePruningQuietMargin: scoreType = -72;
 pub var SeePruningCaptureMargin: scoreType = -71;
 
 pub var probCutMargin: scoreType = 200;
@@ -390,17 +390,4 @@ pub var corrHistMax: scoreType = 2000;
 
 pub var corrHistDiv: scoreType = 4;
 
-pub fn modif_val() void {
-    lmr_scoreThreshold = 715;
-    lmr_expectedCutOff = 952;
-    lmr_notImproving = 529;
-    lmr_hashMoveCapture = 308;
-    lmr_baseDeficit = 962;
-    lmr_badCapture = 289;
-    lmr_oldMulti = 68;
-    lmr_givesCheck = -714;
-    lmr_killerMove = -512;
-    lmr_threatening = -200;
-    lmr_inPvMode = -409;
-    lmr_isPromotion = -205;
-}
+pub fn modif_val() void {}

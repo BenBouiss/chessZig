@@ -218,9 +218,29 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
     var depth: u16 = if (features.useStaticSearch) maxDepth else 1;
     var ss: alphaBetal.searchStack = .{};
     var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
+    var delta = weightl.aspirationCoefficient;
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
-        score = alphaBetal.aspirationSearchEntrypoint(p_state, p_info, depth, &features, &ss, score);
+
+        var alpha = score - delta;
+        var beta = score + delta;
+        score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, alpha, beta);
+        while ((score <= alpha or score >= beta) and p_info.alive) {
+            //
+            if (score <= alpha) {
+                beta = @divFloor(alpha + beta, 2);
+                alpha -= delta;
+            } else if (score >= beta) {
+                beta += delta;
+            }
+            delta += @divFloor(delta, 3);
+
+            score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, alpha, beta);
+        }
+        //if ((score <= alpha or score >= beta) and p_info.alive) {
+        //    score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
+        //}
+
         ss.setPrevLine(&p_info.currentBest.line);
         if (features.reportProgress) {
             sendPartial(depth, p_info);
