@@ -62,7 +62,7 @@ pub const _DEFAULT_USE_RAZORING = "false";
 
 pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
-pub const NET_PATH = "out/bin/simple-320-colM/quantised.bin";
+pub const NET_PATH = "out/bin/simple-320-colM-128/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024_retrained-120/quantised.bin";
 //pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";

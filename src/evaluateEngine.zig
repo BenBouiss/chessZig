@@ -959,6 +959,7 @@ fn timeTickUserFacingInterface(p_self: *const guiState) !void {
     chessl.print_board(&p_self.match.chessState);
     const times = try p_self.match.getGuiStr(p_self.alloc);
     defer (p_self.alloc.free(times));
+    std.debug.print("{s}\n", .{times});
     const eval = heuristicl.evaluate_debug(&p_self.match.chessState);
     std.debug.print("Current evaluation: \n", .{});
     eval.print();

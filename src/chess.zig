@@ -65,6 +65,7 @@ pub const centerBB: u64 = 0x183C3C180000;
 // round that up to 100? the match score can be ommited?
 pub const MAX_FEN_LENGTH: u8 = 120;
 pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0";
+//pub const DEFAULT_BOARD = getBoardFromFen(DEFAULT_FEN) catch unreachable;
 
 const arr_piece_str = [_]u8{ 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k', '_', '1', '2' };
 
@@ -244,7 +245,7 @@ fn getPieceFromStr(letter: u8) e_piece {
     }
     return e_piece.nEmptySquare;
 }
-pub fn getStrFromPiece(piece: e_piece) u8 {
+pub inline fn getStrFromPiece(piece: e_piece) u8 {
     return arr_piece_str[@intFromEnum(piece)];
 }
 
@@ -336,7 +337,7 @@ pub fn getBoardFromFen_enPassant(p_state: *boardl.boardState, turnToken: []const
     }
     return true;
 }
-pub fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
+pub inline fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
     std.debug.assert(turnToken.len != 0);
     const nbr = std.fmt.parseInt(u16, turnToken, 10) catch {
         return 0;

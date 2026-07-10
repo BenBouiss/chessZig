@@ -399,6 +399,10 @@ pub const Hash_table = struct {
         }
         return ret;
     }
+    pub inline fn prefetchHash(self: *Hash_table, hash: u64) void {
+        const index = self.getHashIndex(hash);
+        @prefetch(&self.entries[index], .{ .cache = .data, .locality = 0, .rw = .read });
+    }
 };
 
 pub inline fn getEntryFromMatch(key: Key, depth: u8) ?Hash_entry {

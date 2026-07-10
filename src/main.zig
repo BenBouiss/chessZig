@@ -12,6 +12,7 @@ const intrinsics = @import("intrinsics/intrinsics.zig");
 const squarel = @import("square.zig");
 const logl = @import("log.zig");
 const bookl = @import("book.zig");
+const ucil = @import("uci.zig");
 
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -24,12 +25,11 @@ pub fn freeAll(alloc: std.mem.Allocator, verbose: bool) void {
     hashl._freeHash(alloc, verbose);
 }
 
-fn initEngine(alloc: std.mem.Allocator) !enginel.engine {
-    var engine: enginel.engine = try enginel.engine.init(alloc);
-    _ = engine.executeBuffer("uci");
-    //engine.executeBuffer("debug on");
-    _ = engine.executeBuffer("isready");
-    return engine;
+fn initUciState(alloc: std.mem.Allocator) !ucil.uciState {
+    var state: ucil.uciState = try .init(alloc);
+    _ = state.executeBuffer("uci");
+    _ = state.executeBuffer("isready");
+    return state;
 }
 fn waitOnEngine(eng: *enginel.engine) !void {
     try std.Io.sleep(getGlobalIo(), .{ .nanoseconds = @intCast(configl.INFO_TICKRATE_NS * 2) }, .real);
@@ -47,48 +47,48 @@ const fenListMateOne = [_][]const u8{
 };
 
 pub fn test_decision(alloc: std.mem.Allocator) !void {
-    var eng = try initEngine(alloc);
-    defer eng.free();
+    var state = try initUciState(alloc);
+    defer state.free();
     for (0..fenListMateOne.len) |i| {
         const fenCmd = fenListMateOne[i];
-        eng.executeBuffer(fenCmd);
-        eng.executeBuffer("go depth 4");
-        try waitOnEngine(&eng);
-        const dec = getDecision(&eng);
+        state.executeBuffer(fenCmd);
+        state.executeBuffer("go depth 4");
+        try waitOnEngine(&state.eng);
+        const dec = getDecision(&state.eng);
         try std.testing.expect(dec.scoring > 8000);
     }
     std.debug.print("[TEST]: Mate in one test passed\n", .{});
 }
 pub fn test_speed(alloc: std.mem.Allocator) !void {
-    var eng = try initEngine(alloc);
-    defer eng.free();
+    var state = try initUciState(alloc);
+    defer state.free();
     //eng.executeBuffer("setoption name useQuiescence value true");
     //eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
-    eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+    state.eng.executeBuffer("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
     //eng.executeBuffer("setoption name useNullPruning value true");
-    eng.executeBuffer("go depth 7");
-    try waitOnEngine(&eng);
+    state.eng.executeBuffer("go depth 7");
+    try waitOnEngine(&state.eng);
 }
 
 pub fn test_bug2(alloc: std.mem.Allocator) !void {
     initAll(alloc, false);
-    var eng = try initEngine(alloc);
-    defer eng.free();
-    eng.executeBuffer("ucinewgame");
-    eng.executeBuffer("position startpos c2c4 g8f6 b1c3 e7e5 g1f3 b8c6 e2e4 f8b4 d2d3 e8g8 g2g3 d7d6 f1g2 c8g4 h2h3 g4f3 g2f3 f8e8 e1f1 d8e7 f3h5 c6d4 c1g5 e7e6 c3d5 f6d5 c4d5 e6d7 a2a3 h7h6 g5e3 b4c5 b2b4 c5b6 a1c1 a7a5 b4a5 a8a5 h5g4 d7b5 e3d4 b6d4 c1c7 a5a3 d1f3 b5d3 f3d3 a3d3 c7b7 d3d2 h1h2 g7g6 g4d7 e8a8 b7b1 a8d8 b1b7 d8a8 b7b1 a8d8 b1b7 d2c2 f1g1 c2e2 g1f1 e2d2 h3h4 d8a8 b7b1 h6h5 d7c6 a8d8 b1b7 d8a8 b7b1 a8d8 b1b7 d2a2 c6d7 a2a7 b7a7 d4a7 d7a4 d8b8 a4c2 b8b4 f2f4 e5f4 g3f4 a7e3 h2h3 e3f4 h3f3 f4e5 f3a3 b4c4 a3a8 g8h7 c2d3 c4c3 f1e2 e5f4 e2f3 f4d2 f3e2 d2f4 e2f3 f4e5 f3e3 c3b3 a8c8 b3a3 c8b8 h7g7 b8c8 g7f6 c8h8 e5g3 h8d8 a3b3 e3d2 g3e5 d8e8 e5d4 d3e2 b3a3 d2e1 d4e3 e2f3 a3a2 f3d1 a2g2 d1g4 h5g4 e8d8 f6e5 d8e8 e5d4 e8e7 ");
-    eng.executeBuffer("isready");
-    eng.executeBuffer("go wtime 45600 btime 48400 winc 0 binc 0");
-    try waitOnEngine(&eng);
+    var state = try initUciState(alloc);
+    defer state.free();
+    state.executeBuffer("ucinewgame");
+    state.executeBuffer("position startpos c2c4 g8f6 b1c3 e7e5 g1f3 b8c6 e2e4 f8b4 d2d3 e8g8 g2g3 d7d6 f1g2 c8g4 h2h3 g4f3 g2f3 f8e8 e1f1 d8e7 f3h5 c6d4 c1g5 e7e6 c3d5 f6d5 c4d5 e6d7 a2a3 h7h6 g5e3 b4c5 b2b4 c5b6 a1c1 a7a5 b4a5 a8a5 h5g4 d7b5 e3d4 b6d4 c1c7 a5a3 d1f3 b5d3 f3d3 a3d3 c7b7 d3d2 h1h2 g7g6 g4d7 e8a8 b7b1 a8d8 b1b7 d8a8 b7b1 a8d8 b1b7 d2c2 f1g1 c2e2 g1f1 e2d2 h3h4 d8a8 b7b1 h6h5 d7c6 a8d8 b1b7 d8a8 b7b1 a8d8 b1b7 d2a2 c6d7 a2a7 b7a7 d4a7 d7a4 d8b8 a4c2 b8b4 f2f4 e5f4 g3f4 a7e3 h2h3 e3f4 h3f3 f4e5 f3a3 b4c4 a3a8 g8h7 c2d3 c4c3 f1e2 e5f4 e2f3 f4d2 f3e2 d2f4 e2f3 f4e5 f3e3 c3b3 a8c8 b3a3 c8b8 h7g7 b8c8 g7f6 c8h8 e5g3 h8d8 a3b3 e3d2 g3e5 d8e8 e5d4 d3e2 b3a3 d2e1 d4e3 e2f3 a3a2 f3d1 a2g2 d1g4 h5g4 e8d8 f6e5 d8e8 e5d4 e8e7 ");
+    state.executeBuffer("isready");
+    state.executeBuffer("go wtime 45600 btime 48400 winc 0 binc 0");
+    try waitOnEngine(&state.eng);
 }
 
 pub fn test_bench(alloc: std.mem.Allocator, repets: usize) !void {
     initAll(alloc, false);
-    var eng = try initEngine(alloc);
-    defer _ = eng.executeBuffer("quit");
-    _ = eng.executeBuffer("setoption name searchType value zws");
+    var state = try initUciState(alloc);
+    defer _ = state.executeBuffer("quit");
+    _ = state.executeBuffer("setoption name searchType value zws");
     for (0..repets) |_| {
-        _ = eng.executeBuffer("benchmark");
-        try waitOnEngine(&eng);
+        _ = state.executeBuffer("benchmark");
+        try waitOnEngine(&state.eng);
     }
 }
 
@@ -139,10 +139,12 @@ pub fn test_test(alloc: std.mem.Allocator) !void {
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
-    initAll(GPA, false);
-    defer hashl._freeHash(GPA, false);
+    _ = GPA;
+    //initAll(GPA, false);
+    //defer hashl._freeHash(GPA, false);
+
     //try bookl.main(GPA);
-    try chessl.main(GPA);
+    //try chessl.main(GPA);
     //try logl.main(GPA);
     //try nnuel.main(GPA);
     //try heuristicl.main(GPA);

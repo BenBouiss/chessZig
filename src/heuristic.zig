@@ -1045,9 +1045,7 @@ pub fn test_save(alloc: std.mem.Allocator, logFile: *logl.logging(CSV_ENTRY_SIZE
     }
 }
 //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
-// test for first futility implem
 pub const probCutMoveCount: [6]scoreType = .{ 8, 10, 14, 20, 20, 40 };
-//pub const futilityMargin: scoreType = 400;
 pub const dFutilityMargin: scoreType = 300;
 
 // move heuristic "sections"
@@ -1131,9 +1129,6 @@ pub inline fn milliDepthToDepth(md: milliDepth) i32 {
 }
 pub inline fn lmrFDepth(md: milliDepth) milliDepth {
     return @divFloor(md, 3); // base reduction of 1/3
-}
-pub inline fn plyModif(ply: u16) u16 {
-    return @intCast(std.math.log(u16, 3, ply + 1));
 }
 
 // hashmove + line move + 2 killer moves (?)

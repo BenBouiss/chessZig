@@ -13,6 +13,7 @@ const perftl = @import("search/perft.zig");
 const historyl = @import("history.zig");
 const nnuel = @import("nnue.zig");
 const weightl = @import("weights.zig");
+const ucil = @import("uci.zig");
 
 const build_options = @import("build_options");
 
@@ -245,10 +246,10 @@ pub const logging = struct {
 
 pub const engine = struct {
     state: boardl.boardState = .{},
+
     workingThreads: std.ArrayList(std.Thread),
     status: engineStatus = .{},
-    input: inputChannel,
-    searcher: schedulerl.uciSearcher,
+    scheduler: schedulerl.scheduler = .{},
 
     alloc: std.mem.Allocator,
     uciMode: bool = false,
@@ -264,7 +265,6 @@ pub const engine = struct {
     pub fn init(alloc: std.mem.Allocator) !engine {
         var ret: engine = undefined;
         ret.alloc = alloc;
-        ret.input = try inputChannel.init(alloc);
         ret.status = .{};
         ret.id = .{};
         ret.options = .{};
@@ -276,8 +276,7 @@ pub const engine = struct {
         ret.logs = try logging.init(alloc, 16);
 
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
-        ret.searcher = .{};
-        ret.searcher.schedul = .{};
+        ret.scheduler = .{};
         ret.uciMode = false;
         try ret.initOptions();
         try ret.initInternals();
@@ -343,7 +342,7 @@ pub const engine = struct {
     pub inline fn trackMetrics(p_self: *engine) bool {
         return p_self.options.trackMetrics;
     }
-    pub fn printMetrics(p_self: *engine) void {
+    pub inline fn printMetrics(p_self: *engine) void {
         p_self.metric.printMetric();
         hashTablel.printTTStats();
     }
@@ -361,31 +360,6 @@ pub const engine = struct {
         return .{};
     }
 
-    pub fn readingThread(p_self: *engine) !void {
-        var buffer: [configl.MAX_USER_INPUT]u8 = undefined;
-        var f_reader = std.Io.File.stdin().reader(mainl.getGlobalIo(), &buffer);
-        const reader = &f_reader.interface;
-        while (p_self.status.running) {
-            const inputBuffer = try getMsgStdin(reader);
-            const msg = utilsl.trimStr(&inputBuffer);
-            _ = p_self.input.putCmd(msg);
-        }
-    }
-    pub fn executeBuffer(p_self: *engine, cmdBuffer: []const u8) bool {
-        const cmdtype = getEngineCmdType(cmdBuffer);
-        if (p_self.uciMode) {
-            const trimmedBuffer = utilsl.trimStr(cmdBuffer);
-            const status = p_self.uci_executeCmd(cmdtype, trimmedBuffer);
-            if (p_self.status.debugMode) {
-                std.debug.print("cmd {} status {}\n", .{ cmdtype, status });
-            }
-            return status;
-        } else if (cmdtype == .UCI) {
-            p_self.uciMode = true;
-            p_self.printEngineInfo();
-        }
-        return true;
-    }
     fn waitOnWorkingThreads(p_self: *engine) void {
         for (0..p_self.workingThreads.items.len) |i| {
             p_self.workingThreads.items[i].join();
@@ -393,9 +367,11 @@ pub const engine = struct {
     }
     pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
-        p_self.searcher.close() catch {};
+        p_self.scheduler.close();
         if (p_self.trackMetrics()) {
-            p_self.metric.addTimeToProcessingUs(p_self.searcher.schedul._threadPool.timeSpentSearchingUs());
+            p_self.metric.addTimeToProcessingUs(p_self.scheduler._threadPool.timeSpentSearchingUs());
+            p_self.metric.computedPlies += p_self.scheduler.computedPlies;
+            p_self.metric.nPlyCompute += p_self.scheduler.nPlyCompute;
             p_self.printMetrics();
         }
         p_self.waitOnWorkingThreads();
@@ -406,83 +382,7 @@ pub const engine = struct {
         p_self.free();
         return true;
     }
-    pub fn uci_executeCmd(p_self: *engine, cmd: e_engineCmd, cmdBuffer: []const u8) bool {
-        switch (cmd) {
-            .NOOP => {
-                return true;
-            },
-            .QUIT => {
-                return p_self.executeQuitProcedure();
-            },
-            .STOP => {
-                p_self.searcher.interrupt = true;
-                p_self.searcher.schedul.interrupt = true;
-                return true;
-            },
-            .ISREADY => {
-                return p_self.executeIsReady() catch {
-                    return false;
-                };
-            },
-            .GO => {
-                if (p_self.searcher.schedul.searching) {
-                    return false;
-                }
-                return p_self.executeGoCmd(cmdBuffer);
-            },
-            .POSITION => {
-                return p_self.executePositionCmd(cmdBuffer);
-            },
-            .UCINEWGAME => {
-                return p_self.executeUciNewGameCmd();
-            },
-            .REGISTER => {
-                return p_self.executeRegisterCmd(cmdBuffer);
-            },
-            .SETOPTION => {
-                return p_self.executeSetOptionCmd(cmdBuffer);
-            },
-            .DEBUG => {
-                const ret = p_self.executeDebugCmd(cmdBuffer);
-                if (ret) {
-                    p_self.searcher.schedul._threadPool.debugMode = p_self.status.debugMode;
-                }
-                return ret;
-            },
-            .UCI => {
-                p_self.respond("ICU");
-                return true;
-            },
-            .PONDERHIT => {
-                p_self.respond("pondering ...");
-                return true;
-            },
-            .BENCHMARK => {
-                // by default single threaded will probably just use the engine options maybe
-                return p_self.executeBenchmarkCmd(cmdBuffer);
-            },
-            .PRINTPARAMS => {
-                const stepDiv: f32 = 5;
-                std.debug.print("{{\n", .{});
-                for (0..weightl.tunerOpts.items.len) |i| {
-                    const opt = weightl.tunerOpts.items[i];
-                    //std.debug.print("{d} name = {s} val = {d} min = {d} max {d}\n", .{ i, opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max });
-                    const step = @max(@ceil(@as(f32, @floatFromInt(@max(@abs(opt.opt.info.spin.max), @abs(opt.opt.info.spin.min)))) / stepDiv), 1);
-                    if (i == weightl.tunerOpts.items.len - 1) {
-                        std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\": {d} }}\n", .{ opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max, step });
-                    } else {
-                        std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\": {d} }},\n", .{ opt.opt.name, opt.addr.*, opt.opt.info.spin.min, opt.opt.info.spin.max, step });
-                    }
-                }
-                std.debug.print("}}\n", .{});
-            },
-            .PRINT => {
-                chess.print_boardstate(&p_self.state);
-                return true;
-            },
-        }
-        return true;
-    }
+
     pub fn respond(self: *engine, msg: []const u8) void {
         if (self.status.debugMode) {
             std.debug.print("[DEBUG] respond.engine: sending msg: '{s}'\n", .{msg});
@@ -547,7 +447,6 @@ pub const engine = struct {
     }
 
     pub fn free(p_self: *engine) void {
-        p_self.input.free(p_self.alloc);
         p_self.workingThreads.deinit(p_self.alloc);
         p_self.options.setOptions.deinit(p_self.alloc);
         if (p_self.status.initializedInternals) {
@@ -750,7 +649,7 @@ pub const engine = struct {
     inline fn setCode(p_self: *engine, code: []const u8) void {
         p_self.id.code = code;
     }
-    fn executePositionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
+    pub fn executePositionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         const cmdOffset = 8;
         //* position [fen <fenstring> | startpos ]  moves <move1> .... <movei>
         // ex: position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah -
@@ -799,9 +698,9 @@ pub const engine = struct {
     }
 
     fn updateHash(p_self: *engine, hashSize: spinVarType) !bool {
-        if (p_self.searcher.schedul.searching) {
-            p_self.searcher.interrupt = true;
-            while (p_self.searcher.schedul.searching) {
+        if (p_self.scheduler.searching) {
+            p_self.scheduler.interrupt = true;
+            while (p_self.scheduler.searching) {
                 try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
             }
         }
@@ -817,6 +716,11 @@ pub const engine = struct {
         p_self.respond("readyok");
         return true;
     }
+    pub fn interruptSearch(p_self: *engine) void {
+        p_self.scheduler.searching = false;
+        p_self.scheduler.timeM.reset();
+        p_self.scheduler.handleInterrupt();
+    }
     pub fn executeGoCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer, ' ') catch {
             return false;
@@ -824,7 +728,7 @@ pub const engine = struct {
         defer tokens.deinit(p_self.alloc);
         var goArg = parseGoCmd(&tokens);
 
-        p_self.searcher.reset();
+        p_self.scheduler.reset();
 
         if (goArg.depth == 0) {
             goArg.depth = configl.DEFAULT_DEPTH;
@@ -832,8 +736,8 @@ pub const engine = struct {
         if (goArg.type == .PERFT) {
             return perftl.dispatchUciPerftCmd(p_self, goArg);
         }
-        if (!p_self.searcher.schedul._threadPool.running) {
-            p_self.searcher.schedul._threadPool.addThread(1) catch {
+        if (!p_self.scheduler._threadPool.running) {
+            p_self.scheduler._threadPool.addThread(1) catch {
                 p_self.respond("engineOp threadPoolAddThread failed crashing");
                 _ = p_self.executeQuitProcedure();
                 @panic(":)");
@@ -841,14 +745,14 @@ pub const engine = struct {
             p_self.respond("engineOp incrementalLoop .ADDTHREAD");
         }
 
-        return schedulerl.dispatchUciGoCmd(p_self, cmdBuffer, goArg);
+        return schedulerl.dispatchUciGoCmd(p_self, goArg);
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         _ = cmdBuffer;
-        if (p_self.searcher.schedul.searching) {
+        if (p_self.scheduler.searching) {
             return false;
         }
-        p_self.searcher.reset();
+        p_self.scheduler.reset();
         p_self.status.benchmarking = true;
         return benchmarkl.dispatchUciBenchmark(p_self);
     }
@@ -973,38 +877,6 @@ pub fn getCheckValFromSetOptionCmd(tokens: *std.ArrayList([]const u8), entry: se
     return utilsl.contains(s, "true", .ignoreCase);
 }
 
-fn inputThreading(p_self: *engine) void {
-    while (p_self.status.running) {
-        while (p_self.input.nonEmpty() and p_self.status.running) {
-            var sw: timel.stopWatch = .{};
-            sw.startTimeTick();
-            const cmd = p_self.input.readBuffer();
-
-            if (p_self.saveLogs and p_self.status.running) {
-                p_self.appendLogTyped(cmd.cmd[0..cmd.len], .CHANNELREAD) catch {};
-            }
-
-            _ = p_self.executeBuffer(cmd.cmd[0..cmd.len]);
-
-            if (p_self.trackMetrics()) {
-                p_self.metric.addTimeToProcessingUs(sw.timeSinceStartUs());
-            }
-        }
-
-        if (p_self.status.running) {
-            if (p_self.searcher.schedul.searching and !p_self.status.benchmarking) {
-                // check things here what scheduler is doing
-                schedulerl.waitingRoomOneShot(p_self) catch {};
-            }
-        }
-        std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real) catch unreachable;
-    }
-
-    if (p_self.status.debugMode) {
-        std.debug.print("[DEBUG] inputThreading.engine: exiting \n", .{});
-    }
-}
-
 fn entrypointReaderThreading(p_self: *engine) void {
     p_self.readingThread() catch {
         if (p_self.status.running) {
@@ -1012,16 +884,8 @@ fn entrypointReaderThreading(p_self: *engine) void {
         }
     };
 }
-fn mainThread(debugMode: bool) void {
-    var eng = engine.init(mainl.getGlobalGPA()) catch unreachable;
-    eng.status.running = true;
 
-    _ = std.Thread.spawn(.{}, entrypointReaderThreading, .{&eng}) catch unreachable;
-    eng.status.debugMode = debugMode;
-    inputThreading(&eng);
-}
-
-fn getEngineCmdType(cmd: []const u8) e_engineCmd {
+pub fn getEngineCmdType(cmd: []const u8) e_engineCmd {
     if (utilsl.startsWith(cmd, "isready", .ignoreCase)) {
         return .ISREADY;
     } else if (utilsl.startsWith(cmd, "go", .ignoreCase)) {
@@ -1054,8 +918,8 @@ fn getEngineCmdType(cmd: []const u8) e_engineCmd {
     return .NOOP;
 }
 pub fn launch_engine(debugMode: bool) !void {
-    mainThread(debugMode);
-    return;
+    _ = debugMode;
+    try ucil.launchUci(mainl.getGlobalGPA());
 }
 
 pub fn main(init: std.process.Init) anyerror!void {

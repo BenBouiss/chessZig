@@ -22,6 +22,10 @@ pub const threadInfo = struct {
     working: bool = false,
     alive: bool = false,
     searchStat: searchStatistic = .{},
+    stopWatch: timel.stopWatch = .{},
+    maxTimeMs: i64 = 0,
+    // check every 1024
+    checkTime: u64 = 0,
 };
 
 pub const threadPackageFrame = struct {
@@ -135,7 +139,7 @@ pub const threadPool = struct {
             p_self.threadInfos[i].alive = false;
         }
     }
-    pub fn waitOnFinish(p_self: *threadPool) void {
+    pub inline fn waitOnFinish(p_self: *threadPool) void {
         while (p_self.getNumberOfWorking() != 0 and p_self.isRunning()) {}
     }
     pub fn getNumberOfWorking(p_self: *const threadPool) usize {
@@ -151,9 +155,7 @@ pub const threadPool = struct {
         }
         for (0..p_self.nThread) |i| {
             p_self.packages[i] = p_pack.*;
-            p_self.threadInfos[i] = .{ .working = true, .alive = true };
-        }
-        for (0..p_self.nThread) |i| {
+            p_self.threadInfos[i] = .{ .alive = true };
             p_self.threadProps[i].searchPing = true;
             p_self.threadProps[i].status = .WORKING;
         }
@@ -200,7 +202,6 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
         if (!p_self.working) {
             std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.THREADPOOL_TICKRATE_NS) }, .real) catch unreachable;
         }
-
         if (p_self.threadProps[idx].searchPing) {
             var sw: timel.stopWatch = .{};
             sw.startTimeTick();

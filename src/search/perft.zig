@@ -38,7 +38,7 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine, config: enginel.goArgS
 
     p_engine.status.benchmarking = true;
     defer p_engine.status.benchmarking = false;
-    p_engine.searcher.schedul.searching = true;
+    p_engine.scheduler.searching = true;
 
     const feats: perftSearchFeatures = .{ .useBatched = config.useBatched };
 
@@ -69,7 +69,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, co
     var sw: timel.stopWatch = .{};
     sw.startTimeTick();
     var endCounter: usize = 0;
-    while (!p_engine.searcher.interrupt and endCounter != p_engine.options.nThreads) {
+    while (!p_engine.scheduler.interrupt and endCounter != p_engine.options.nThreads) {
         try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.INFO_TICKRATE_NS) }, .real);
         const res = threadingl.getCombinedFromPack(p_threadPack);
         const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, @as(u64, @intCast(sw.timeSinceStartMs() + 1))) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion }) catch {
@@ -85,7 +85,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, co
     if (p_engine.status.debugMode) {
         std.debug.print("[DEBUG] waitThreadFinish: exiting\n", .{});
     }
-    p_engine.searcher.schedul.searching = false;
+    p_engine.scheduler.searching = false;
     if (endCounter != p_engine.options.nThreads) {
         for (0..p_threadPack.len) |i| {
             p_threadPack.items(._tInfo)[i].alive = false;

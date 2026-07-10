@@ -210,17 +210,15 @@ pub fn appendAll() !void {
     add_param(&lmr_isPromotion, -2000, 0, "lmr_isPromotion");
 
     // margins
-    add_param(&futilityMargin[0], 0, 1500, "futilityMargin_0");
-    add_param(&futilityMargin[1], 0, 1500, "futilityMargin_1");
-    add_param(&futilityMargin[2], 0, 1500, "futilityMargin_2");
-    add_param(&futilityMargin[3], 0, 1500, "futilityMargin_3");
-
-    add_param(&rfpMargin[0], 0, 1500, "rfpMargin_0");
-    add_param(&rfpMargin[1], 0, 1500, "rfpMargin_1");
-    add_param(&rfpMargin[2], 0, 1500, "rfpMargin_2");
-    add_param(&rfpMargin[3], 0, 1500, "rfpMargin_3");
+    //add_param(&futilityMargin[0], 0, 1500, "futilityMargin_0");
+    //add_param(&futilityMargin[1], 0, 1500, "futilityMargin_1");
+    //add_param(&futilityMargin[2], 0, 1500, "futilityMargin_2");
+    //add_param(&futilityMargin[3], 0, 1500, "futilityMargin_3");
 
     add_param(&rfpImproving, -500, 0, "rfpImproving");
+    add_param(&rfpDepth, 3, 12, "rfpDepth");
+    add_param(&rfpCoeff, 25, 150, "rfpCoeff");
+    add_param(&rfpConst, 25, 150, "rfpConst");
 
     add_param(&captureExtensionThresh, 0, 1500, "captureExtensionThresh");
 
@@ -243,6 +241,10 @@ pub fn appendAll() !void {
     add_param(&probCutMargin, 0, 500, "probCutMargin");
     add_param(&probCutMinimalDepth, 0, 8, "probCutMinimalDepth");
     add_param(&corrHistMax, 0, 4000, "corrHistMax");
+
+    add_param(&futilityDepth, 5, 16, "futilityDepth");
+    add_param(&futilityCoeff, 50, 500, "futilityCoeff");
+    add_param(&futilityConst, 50, 500, "futilityConst");
 
     //const start = tunerOpts.items.len;
 
@@ -356,7 +358,10 @@ pub var lmr_isPromotion: milliDepth = -207;
 
 pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 pub var rfpMargin: [4]scoreType = .{ 0, 47, 185, 235 };
-pub var rfpImproving: scoreType = -1;
+pub var rfpImproving: scoreType = 0;
+pub var rfpDepth: scoreType = 7;
+pub var rfpCoeff: scoreType = 27; // depth * c
+pub var rfpConst: scoreType = 45;
 
 pub var captureExtensionThresh: scoreType = 571;
 
@@ -387,9 +392,22 @@ pub var probCutMargin: scoreType = 200;
 pub var probCutMinimalDepth: scoreType = 4;
 
 pub var corrHistMax: scoreType = 2000;
-
 pub var corrHistDiv: scoreType = 4;
 
+// CurEval <= Alpha - PVal[SecondPiece(Opponent) - PVal[ThirdPiece(Opponent) - 2*PosMargin + PosMargin2.
+
+pub var futilityDepth: scoreType = 14;
+pub var futilityCoeff: scoreType = 54; // depth * c
+pub var futilityConst: scoreType = 240;
+// replace the array with y = a*x + b with x = depth
+//pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
+
 pub fn modif_val() void {
-    //
+    rfpImproving = 0;
+    rfpDepth = 7;
+    rfpCoeff = 27;
+    rfpConst = 45;
+    futilityDepth = 14;
+    futilityCoeff = 54;
+    futilityConst = 240;
 }
