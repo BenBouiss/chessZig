@@ -128,17 +128,34 @@ def openWeatherFactory(path: str):
     offsetName = 0
     # for x, name in enumerate(order):
     squares = [0] * 64
+    dualVal = {}
     for x in range(tot):
         var: str = d["uci_params"][x]["name"]
         nbr = int(d["uci_params"][x]["value"])
-        if "_" in var and var.split("_")[-1].isnumeric():
-            # print(var)
-            n = int(var.split("_")[-1])
-            squares[n] = nbr
-            if n == 63:
-                print_board(order[offsetName], squares)
-                offsetName += 1
-                squares = [0] * 64
+        if "_" in var:
+            tok = var.split("_")[-1]
+            if tok.isnumeric():
+                # print(var)
+                n = int(var.split("_")[-1])
+                squares[n] = nbr
+                if n == 63:
+                    print_board(order[offsetName], squares)
+                    offsetName += 1
+                    squares = [0] * 64
+            elif tok in ["MG", "EG"]:
+                if not dualVal.get(tok):
+                    dualVal[tok] = [[0, 0], 0]
+                dualVal[tok][1] += 1
+                if tok == "MG":
+                    dualVal[tok][0][0] = nbr
+                else:
+                    dualVal[tok][0][1] = nbr
+
+                if dualVal[tok][0][1] == 2:
+                    print(
+                        f"pub var {var.split('_')[0]}: [2]scoreType = .{{ {dualVal[tok][0][0]}, {dualVal[tok][0][1]} }};"
+                    )
+
         else:
             print(f"pub var {var}: scoreType = {nbr};")
 

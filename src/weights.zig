@@ -216,7 +216,7 @@ pub fn appendAll() !void {
     //add_param(&futilityMargin[3], 0, 1500, "futilityMargin_3");
 
     add_param(&rfpImproving, -500, 0, "rfpImproving");
-    add_param(&rfpDepth, 3, 12, "rfpDepth");
+    add_param(&rfpDepth, 3, 8, "rfpDepth");
     add_param(&rfpCoeff, 25, 150, "rfpCoeff");
     add_param(&rfpConst, 25, 150, "rfpConst");
 
@@ -239,12 +239,20 @@ pub fn appendAll() !void {
     add_param(&SeePruningCaptureMargin, -400, 0, "SeePruningCaptureMargin");
 
     add_param(&probCutMargin, 0, 500, "probCutMargin");
-    add_param(&probCutMinimalDepth, 0, 8, "probCutMinimalDepth");
+    add_param(&probCutMinimalDepth, 4, 8, "probCutMinimalDepth");
     add_param(&corrHistMax, 0, 4000, "corrHistMax");
 
-    add_param(&futilityDepth, 5, 16, "futilityDepth");
+    add_param(&futilityDepth, 5, 10, "futilityDepth");
     add_param(&futilityCoeff, 50, 500, "futilityCoeff");
     add_param(&futilityConst, 50, 500, "futilityConst");
+
+    add_param(&historyDepthMax, 2, 10, "historyDepthMax");
+    add_param(&historyThreshCoeff, -1024, 0, "historyThreshCoeff");
+    add_param(&historyThreshConst, -512, 0, "historyThreshConst");
+    add_param(&historyMinExplore, 3, 24, "historyMinExplore");
+
+    add_param(&lmpMaxDepth, 1, 10, "lmpMaxDepth");
+    add_param(&lmpBase, 1, 24, "lmpBase");
 
     //const start = tunerOpts.items.len;
 
@@ -394,20 +402,25 @@ pub var probCutMinimalDepth: scoreType = 4;
 pub var corrHistMax: scoreType = 2000;
 pub var corrHistDiv: scoreType = 4;
 
+pub var lmpMaxDepth: scoreType = 4;
+pub var lmpBase: scoreType = 5;
+//pub var lmpImproving: scoreType = 4;
+
 // CurEval <= Alpha - PVal[SecondPiece(Opponent) - PVal[ThirdPiece(Opponent) - 2*PosMargin + PosMargin2.
 
 pub var futilityDepth: scoreType = 14;
 pub var futilityCoeff: scoreType = 54; // depth * c
 pub var futilityConst: scoreType = 240;
+
+pub var historyDepthMax: scoreType = 5;
+pub var historyThreshCoeff: scoreType = -512; //coeff * d + c
+pub var historyThreshConst: scoreType = -64;
+pub var historyMinExplore: scoreType = 4;
+
 // replace the array with y = a*x + b with x = depth
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 
 pub fn modif_val() void {
-    rfpImproving = 0;
-    rfpDepth = 7;
-    rfpCoeff = 27;
-    rfpConst = 45;
-    futilityDepth = 14;
-    futilityCoeff = 54;
-    futilityConst = 240;
+    rfpDepth = 3;
+    futilityDepth = 3;
 }

@@ -481,7 +481,7 @@ pub fn initZobristKeys(rng: std.Random, zob: *Zobrist_Keys) void {
 }
 pub fn fullComputeZobristKeys(p_board: *const boardl.boardState) Key {
     // for better perfs look for incremental xor key update using the previous move
-    var retKey = zobristKeys.turnKey[@intFromBool(p_board.whiteToMove())];
+    var retKey = zobristKeys.turnKey[chess.whiteBoolToInt(p_board.whiteToMove())];
 
     for (0..chess.N_SQUARES) |i| {
         const piece = p_board.getPiece(@intCast(i));

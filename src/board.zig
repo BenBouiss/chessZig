@@ -813,7 +813,16 @@ pub const boardState = struct {
     pub inline fn isEndGame(self: *const boardState) bool {
         const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
         const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
-        return (nWhiteP < 3) and (nBlackP < 3);
+        return (nWhiteP < 2) and (nBlackP < 2);
+    }
+    pub inline fn onlyPawns(self: *const boardState) bool {
+        const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
+        const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
+        return (nWhiteP == 0) and (nBlackP == 0);
+    }
+    pub inline fn onlyPawnsSide(self: *const boardState, white: bool) bool {
+        const p = if (white) (self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen)) else (self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen));
+        return (p == 0);
     }
 
     pub inline fn getKingSq(self: *const boardState, white: bool) e_square {

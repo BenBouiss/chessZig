@@ -4,6 +4,7 @@ const movel = @import("move.zig");
 const typel = @import("type.zig");
 const configl = @import("config.zig");
 const chessl = @import("chess.zig");
+const weightl = @import("weights.zig");
 
 const IMove = movel.IMove;
 const scoreType = typel.scoreType;
@@ -26,6 +27,7 @@ pub var historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]score
 pub const pieceHistory: type = [12][64]scoreType;
 
 pub var corrHist: [12][64][12][64]scoreType = std.mem.zeroes([12][64][12][64]scoreType);
+pub var lmrBase: [chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([chessl.MAX_POSSIBLE_MOVE]scoreType);
 
 //pub var continuationHeuristic: [12][64]pieceHistory = std.mem.zeroes([12][64]pieceHistory);
 // fPiece cPiece toSq
@@ -38,6 +40,9 @@ pub fn _initMoveOrdering() void {
     captureHistory = std.mem.zeroes([12][12][64]scoreType);
     //continuationHeuristic = std.mem.zeroes([12][64]pieceHistory);
     corrHist = std.mem.zeroes([12][64][12][64]scoreType);
+    for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
+        lmrBase[i] = (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
+    }
 }
 pub inline fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];

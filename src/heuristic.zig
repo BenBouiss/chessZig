@@ -1054,7 +1054,7 @@ pub const SEE_values: [13]scoreType = .{ weightl.simplePawnScore, weightl.simple
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
 pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
 
-pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove, comptime mva: bool, white: bool) scoreType {
+pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, white: bool) scoreType {
     if (move.equal(hashMove)) {
         return configl.ORDERING_LINE_VALUE + 1;
     }
@@ -1072,7 +1072,7 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
         if (chess.isKingPiece(cPiece)) {
             return configl.ORDERING_LINE_VALUE + 2;
         }
-        if (comptime mva) {
+        if (mva) {
             return historyl.captureHistory[@intFromEnum(fpiece)][@intFromEnum(cPiece)][to] + mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
             //return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
         } else {
@@ -1102,8 +1102,12 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, comptime mva: bool) moveOrdering {
+pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool) moveOrdering {
     var ret: moveOrdering = undefined;
+    _eval_move_sorting_mask(p_state, p_moves, ply, hashMove, prevLineMove, mva, &ret);
+    return ret;
+}
+pub fn _eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, ret: *moveOrdering) void {
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     const w: bool = p_state.whiteToMove();
 
@@ -1118,7 +1122,6 @@ pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const
     for (0..ret.len) |idx| {
         ret.scores[idx] = scores[ret.indexes[idx]];
     }
-    return ret;
 }
 
 pub inline fn depthToMilliDepth(d: i32) milliDepth {
@@ -1171,53 +1174,60 @@ pub const moveOrdering = struct {
     len: u8 = 0,
 };
 pub const moveGenerator = struct {
-    moves: movel.moveContainer = undefined,
     bbState: moveBBState = undefined,
     bbStateGenerated: bool = false,
     extra: moveGenl.generationModifiers = .NONE,
     idx: usize = 0,
+    moves: movel.moveContainer = undefined,
+    ordering: moveOrdering = undefined,
 
     pub fn init() moveGenerator {
         var ret: moveGenerator = .{};
         ret.moves.len = 0;
         ret.idx = 0;
         ret.extra = .NONE;
+        ret.ordering.len = 0;
         return ret;
     }
-    pub fn generateCapture(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
-        if (!p_self.bbStateGenerated) {
-            p_self.bbState = moveGenl.moveGenBB(p_state);
-            p_self.bbStateGenerated = true;
-        }
-        moveGenl.moveGenBBToMoveContainer(p_state, &p_self.bbState, &p_self.moves, .CAPTURES);
-    }
-    pub fn generateQuiet(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
-        if (!p_self.bbStateGenerated) {
-            p_self.bbState = moveGenl.moveGenBB(p_state);
-            p_self.bbStateGenerated = true;
-        }
-        moveGenl.moveGenBBToMoveContainer(p_state, &p_self.bbState, &p_self.moves, .QUIETMOVE);
-    }
-    pub fn fetchNext(p_self: *moveGenerator, p_state: *const boardl.boardState) void {
+
+    pub fn fetchNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool) void {
         p_self.idx = 0;
         p_self.moves.len = 0;
+        if (!p_self.bbStateGenerated) {
+            p_self.bbState = moveGenl.moveGenBB(state);
+            p_self.bbStateGenerated = true;
+        }
         if (p_self.extra == .NONE) {
-            p_self.generateCapture(p_state);
+            moveGenl.moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .CAPTURES);
             p_self.extra = .CAPTURES;
         } else if (p_self.extra == .CAPTURES) {
-            p_self.generateQuiet(p_state);
+            moveGenl.moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .QUIETMOVE);
             p_self.extra = .QUIETMOVE;
         } else {
             std.debug.print("[PANIC] fetchNext: found invalid extra {}\n", .{p_self.extra});
             @panic("");
         }
+        _eval_move_sorting_mask(state, &p_self.moves, ply, hashMove, prevLineMove, useMVA, &p_self.ordering);
     }
-    pub fn pickNext(p_self: *moveGenerator, order: *const moveOrdering) ?IMove {
+    pub fn pickNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool, skipQuiet: bool) ?IMove {
         // fetchNext need to be called atleast once
+        if (p_self.extra == .NONE) {
+            p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
+        }
         if (p_self.idx >= p_self.moves.len) {
+            if (p_self.extra == .CAPTURES and !skipQuiet) {
+                p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
+                if (p_self.moves.len == 0) {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+        }
+        if (skipQuiet and p_self.extra == .QUIETMOVE) {
             return null;
         }
-        const idx = order.indexes[p_self.idx];
+        const idx = p_self.ordering.indexes[p_self.idx];
         const ret: IMove = p_self.moves.moves[idx];
         p_self.idx += 1;
         return ret;
