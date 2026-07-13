@@ -1,14 +1,14 @@
 [engine1]
-path="engines/bin/engine_09_07_26";
-name="std";
+path="engines/bin/engine_13_07_26";
+name="base";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 
 [engine2]
-path="engines/bin/engine_12_07_26";
-name="std + FP / RFP + gen pickNext + SEE ordering";
+path="engines/bin/engine_13_07_26_1";
+name="std + 2-twk";
 "setoption name reportProgress value false";
-"setoption nae userazoring value false";
+"setoption name userazoring value false";
 
 [match]
 nMatch=64;
@@ -21,6 +21,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=true;
+//sprtmode=true;
 //maxSPRTMatch=1000;
 

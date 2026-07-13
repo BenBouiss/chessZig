@@ -1102,12 +1102,12 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool) moveOrdering {
-    var ret: moveOrdering = undefined;
+pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool) moveGenl.moveOrdering {
+    var ret: moveGenl.moveOrdering = undefined;
     _eval_move_sorting_mask(p_state, p_moves, ply, hashMove, prevLineMove, mva, &ret);
     return ret;
 }
-pub fn _eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, ret: *moveOrdering) void {
+pub fn _eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, ret: *moveGenl.moveOrdering) void {
     var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
     const w: bool = p_state.whiteToMove();
 
@@ -1168,71 +1168,6 @@ pub const score = struct {
     }
 };
 
-pub const moveOrdering = struct {
-    indexes: [chess.MAX_POSSIBLE_MOVE]u8 = undefined,
-    scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
-    len: u8 = 0,
-};
-pub const moveGenerator = struct {
-    bbState: moveBBState = undefined,
-    bbStateGenerated: bool = false,
-    extra: moveGenl.generationModifiers = .NONE,
-    idx: usize = 0,
-    moves: movel.moveContainer = undefined,
-    ordering: moveOrdering = undefined,
-
-    pub fn init() moveGenerator {
-        var ret: moveGenerator = .{};
-        ret.moves.len = 0;
-        ret.idx = 0;
-        ret.extra = .NONE;
-        ret.ordering.len = 0;
-        return ret;
-    }
-
-    pub fn fetchNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool) void {
-        p_self.idx = 0;
-        p_self.moves.len = 0;
-        if (!p_self.bbStateGenerated) {
-            p_self.bbState = moveGenl.moveGenBB(state);
-            p_self.bbStateGenerated = true;
-        }
-        if (p_self.extra == .NONE) {
-            moveGenl.moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .CAPTURES);
-            p_self.extra = .CAPTURES;
-        } else if (p_self.extra == .CAPTURES) {
-            moveGenl.moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .QUIETMOVE);
-            p_self.extra = .QUIETMOVE;
-        } else {
-            std.debug.print("[PANIC] fetchNext: found invalid extra {}\n", .{p_self.extra});
-            @panic("");
-        }
-        _eval_move_sorting_mask(state, &p_self.moves, ply, hashMove, prevLineMove, useMVA, &p_self.ordering);
-    }
-    pub fn pickNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool, skipQuiet: bool) ?IMove {
-        // fetchNext need to be called atleast once
-        if (p_self.extra == .NONE) {
-            p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
-        }
-        if (p_self.idx >= p_self.moves.len) {
-            if (p_self.extra == .CAPTURES and !skipQuiet) {
-                p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
-                if (p_self.moves.len == 0) {
-                    return null;
-                }
-            } else {
-                return null;
-            }
-        }
-        if (skipQuiet and p_self.extra == .QUIETMOVE) {
-            return null;
-        }
-        const idx = p_self.ordering.indexes[p_self.idx];
-        const ret: IMove = p_self.moves.moves[idx];
-        p_self.idx += 1;
-        return ret;
-    }
-};
 pub fn mat_gain(p_state: *const boardl.boardState, move: IMove) scoreType {
     if (!move.isCapture()) return 0;
     const piece = p_state.getCapturePiece(move);

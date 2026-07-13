@@ -7,14 +7,17 @@ const movel = @import("move.zig");
 const squarel = @import("square.zig");
 const boardl = @import("board.zig");
 const typel = @import("type.zig");
+const heuristicl = @import("heuristic.zig");
 
 const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
+const IMove = movel.IMove;
 
 const e_square = typel.e_square;
 const e_piece = typel.e_piece;
 const e_pieceType = typel.e_pieceType;
 const e_moveFlags = typel.e_moveFlags;
+const scoreType = typel.scoreType;
 
 const squareInfo = squarel.squareInfo;
 const boardState = boardl.boardState;
@@ -1217,3 +1220,69 @@ pub fn genTypeCountFromState(p_state: *const boardState) moveTypeCount {
     }
     return ret;
 }
+
+pub const moveOrdering = struct {
+    indexes: [chess.MAX_POSSIBLE_MOVE]u8 = undefined,
+    scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
+    len: u8 = 0,
+};
+pub const moveGenerator = struct {
+    bbState: moveBBState = undefined,
+    bbStateGenerated: bool = false,
+    extra: generationModifiers = .NONE,
+    idx: usize = 0,
+    moves: movel.moveContainer = undefined,
+    ordering: moveOrdering = undefined,
+
+    pub fn init() moveGenerator {
+        var ret: moveGenerator = .{};
+        ret.idx = 0;
+        ret.extra = .NONE;
+        ret.ordering.len = 0;
+        ret.moves.len = 0;
+        return ret;
+    }
+
+    pub fn fetchNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool) void {
+        p_self.idx = 0;
+        p_self.moves.len = 0;
+        if (!p_self.bbStateGenerated) {
+            p_self.bbState = moveGenBB(state);
+            p_self.bbStateGenerated = true;
+        }
+        if (p_self.extra == .NONE) {
+            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .CAPTURES);
+            p_self.extra = .CAPTURES;
+        } else if (p_self.extra == .CAPTURES) {
+            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .QUIETMOVE);
+            p_self.extra = .QUIETMOVE;
+        } else {
+            std.debug.print("[PANIC] fetchNext: found invalid extra {}\n", .{p_self.extra});
+            @panic("");
+        }
+        heuristicl._eval_move_sorting_mask(state, &p_self.moves, ply, hashMove, prevLineMove, useMVA, &p_self.ordering);
+    }
+    pub fn pickNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool, skipQuiet: bool) ?IMove {
+        // fetchNext need to be called atleast once
+        if (p_self.extra == .NONE) {
+            p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
+        }
+        if (p_self.idx >= p_self.moves.len) {
+            if (p_self.extra == .CAPTURES and !skipQuiet) {
+                p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
+                if (p_self.moves.len == 0) {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+        }
+        if (skipQuiet and p_self.extra == .QUIETMOVE) {
+            return null;
+        }
+        const idx = p_self.ordering.indexes[p_self.idx];
+        const ret: IMove = p_self.moves.moves[idx];
+        p_self.idx += 1;
+        return ret;
+    }
+};

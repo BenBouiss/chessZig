@@ -203,6 +203,10 @@ pub fn appendAll() !void {
     add_param(&lmr_baseDeficit, 0, 2000, "lmr_baseDeficit");
     add_param(&lmr_badCapture, 0, 2000, "lmr_badCapture");
     add_param(&lmr_oldMulti, 0, 800, "lmr_oldMulti");
+
+    add_param(&lmr_highFailScore, 100, 1024, "lmr_highFailScore");
+    add_param(&lmr_highFailCount, 2, 16, "lmr_highFailCount");
+
     add_param(&lmr_givesCheck, -2000, 0, "lmr_givesCheck");
     add_param(&lmr_killerMove, -2000, 0, "lmr_killerMove");
     add_param(&lmr_threatening, -2000, 0, "lmr_threatening");
@@ -242,7 +246,7 @@ pub fn appendAll() !void {
     add_param(&probCutMinimalDepth, 4, 8, "probCutMinimalDepth");
     add_param(&corrHistMax, 0, 4000, "corrHistMax");
 
-    add_param(&futilityDepth, 5, 10, "futilityDepth");
+    add_param(&futilityDepth, 3, 10, "futilityDepth");
     add_param(&futilityCoeff, 50, 500, "futilityCoeff");
     add_param(&futilityConst, 50, 500, "futilityConst");
 
@@ -353,6 +357,9 @@ pub var lmr_hashMoveCapture: milliDepth = 308;
 pub var lmr_baseDeficit: milliDepth = 962;
 pub var lmr_badCapture: milliDepth = 289;
 pub var lmr_oldMulti: milliDepth = 68;
+pub var lmr_highFailScore: milliDepth = 900;
+pub var lmr_highFailCount: milliDepth = 4;
+
 // LMR negative (less reduction)
 pub var lmr_inCheck: milliDepth = -600; // not used since no lmr in check
 // try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
@@ -421,6 +428,84 @@ pub var historyMinExplore: scoreType = 4;
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 
 pub fn modif_val() void {
-    rfpDepth = 3;
-    futilityDepth = 3;
+    //rfpDepth = 3;
+    //futilityDepth = 3;
+
+    //rfpImproving = 0;
+    //rfpDepth = 3;
+    //rfpCoeff = 38;
+    //rfpConst = 45;
+    //futilityDepth = 3;
+    //futilityCoeff = 88;
+    //futilityConst = 251;
+
+    //rfpImproving = -6;
+    //rfpDepth = 3;
+    //rfpCoeff = 29;
+    //rfpConst = 58;
+    //IIRDepth = 3;
+    //LMRDepth = 3;
+    //futilityDepth = 4;
+    //futilityCoeff = 66;
+    //futilityConst = 233;
+    //historyDepthMax = 4;
+    //historyThreshCoeff = -570;
+    //historyThreshConst = -61;
+    //historyMinExplore = 3;
+    //lmpMaxDepth = 4;
+    //lmpBase = 3;
+
+    //rfpImproving = -5;
+    //rfpDepth = 3;
+    //rfpCoeff = 32;
+    //rfpConst = 58;
+    //captureExtensionThresh = 576;
+    //aspirationCoefficient = 28;
+    //nullMoveDepthAugmentThreshold = 12;
+    //nullMoveDepthAugment = 1;
+    //nullMoveReduction = 3;
+    //nullMoveReductionImproving = 3;
+    //IIRDepth = 2;
+    //LMRDepth = 2;
+    //SeePruningMaxDepth = 4;
+    //SeePruningQuietMargin = -77;
+    //SeePruningCaptureMargin = -59;
+    //probCutMargin = 203;
+    //probCutMinimalDepth = 4;
+    //futilityDepth = 4;
+    //futilityCoeff = 68;
+    //futilityConst = 228;
+    //historyDepthMax = 3;
+    //historyThreshCoeff = -536;
+    //historyThreshConst = -68;
+    //historyMinExplore = 4;
+    //lmpMaxDepth = 4;
+    //lmpBase = 2;
+
+    //rfpImproving = -7;
+    //rfpDepth = 3;
+    //rfpCoeff = 33;
+    //rfpConst = 57;
+    //captureExtensionThresh = 566;
+    //aspirationCoefficient = 30;
+    //nullMoveDepthAugmentThreshold = 11;
+    //nullMoveDepthAugment = 1;
+    //nullMoveReduction = 3;
+    //nullMoveReductionImproving = 3;
+    //IIRDepth = 2;
+    //LMRDepth = 3;
+    //SeePruningMaxDepth = 4;
+    //SeePruningQuietMargin = -56;
+    //SeePruningCaptureMargin = -70;
+    //probCutMargin = 204;
+    //probCutMinimalDepth = 4;
+    //futilityDepth = 4;
+    //futilityCoeff = 58;
+    //futilityConst = 211;
+    //historyDepthMax = 4;
+    //historyThreshCoeff = -541;
+    //historyThreshConst = -84;
+    //historyMinExplore = 5;
+    //lmpMaxDepth = 4;
+    //lmpBase = 1;
 }
