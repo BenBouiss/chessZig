@@ -362,7 +362,10 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
     if (comptime !configl.USE_NNUE) {
         board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, board.getPhase());
     }
-    board.frame.key = hashl.fullComputeZobristKeys(&board);
+    const keys = hashl.fullComputeZobristKeys(&board);
+    board.frame.key = keys.key;
+    board.frame.nonPawnKey = keys.nonPawnKey;
+    board.frame.pawnKey = keys.pawnKey;
     return board;
 }
 
@@ -408,7 +411,7 @@ pub fn getEmptyMoveListFromStr(strBuffer: []const u8) movel.matchMoveContainer {
             flag |= @intFromEnum(letterPromoToFlag(cmd[4]));
         }
         const move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag);
-        _ = ret.append(move, .{ .code = EMPTY }, false);
+        _ = ret.append(move, EMPTY, false);
     }
     return ret;
 }
@@ -494,48 +497,70 @@ pub const Board_stateContainer = struct {
     }
 };
 
-pub fn updateKeyOnMove(comptime white: bool, move: IMove, promotion: bool, castle: bool, comptime capture: bool, fromPiece: e_piece, info: *const boardl.boardFrame, prevCastle: u8, prevEp: u8) u64 {
-    var code = info.key.code;
+pub fn updateKeyOnMove(move: IMove, fromPiece: e_piece, info: *const boardl.boardFrame, prevCastle: u8, prevEp: u8, comptime capture: bool, comptime white: bool) hashl.keySet {
+    var ret: hashl.keySet = .{ .key = info.key, .nonPawnKey = info.nonPawnKey, .pawnKey = info.pawnKey };
+    const offset = whiteBoolToInt(white);
     const to = move.getTo();
     const from = move.getFrom();
     var _fromPiece = fromPiece;
 
+    if (isPawnPiece(_fromPiece)) {
+        ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to];
+    } else {
+        ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to];
+    }
     // make the piece at the dest appear
-    code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to].code;
-    if (promotion) {
+    ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to];
+    if (move.isPromotion()) {
         _fromPiece = if (comptime white) .nWhitePawn else .nBlackPawn;
     }
     // removed the starting piece
-    code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from].code;
+    ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from];
+    if (isPawnPiece(_fromPiece)) {
+        ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from];
+    } else {
+        ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from];
+    }
+
     if (comptime capture) {
         // take care of the victim
         if (move.isEnpassant()) {
             const victimSq: e_square = enPassantVictimSq(from, to);
             const p: e_piece = if (comptime white) .nBlackPawn else .nWhitePawn;
-            code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)].code;
+            ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)];
+            ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)];
         } else {
-            code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to].code;
+            ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to];
+            if (isPawnPiece(info.victim)) {
+                ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to];
+            } else {
+                ret.nonPawnKey[offset ^ 1] ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to];
+            }
         }
     } else {
         // check castling
-        if (castle) {
-            const r: e_piece = if (comptime white) .nWhiteRook else .nBlackRook;
+        if (move.isCastle()) {
+            const r: u8 = if (comptime white) @intFromEnum(e_piece.nWhiteRook) else @intFromEnum(e_piece.nBlackRook);
             if (move.isQueenSideCastle()) {
-                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 2].code;
-                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1].code;
+                ret.key ^= hashl.zobristKeys.pieceKeys[r][to - 2];
+                ret.key ^= hashl.zobristKeys.pieceKeys[r][to + 1];
+                ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[r][to - 2];
+                ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[r][to + 1];
             } else {
-                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to + 1].code;
-                code ^= hashl.zobristKeys.pieceKeys[@intFromEnum(r)][to - 1].code;
+                ret.key ^= hashl.zobristKeys.pieceKeys[r][to + 1];
+                ret.key ^= hashl.zobristKeys.pieceKeys[r][to - 1];
+                ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[r][to + 1];
+                ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[r][to - 1];
             }
         }
     }
-    code ^= hashl.zobristKeys.castlingKeys[prevCastle].code;
-    code ^= hashl.zobristKeys.enPassantKeys[prevEp].code;
+    ret.key ^= hashl.zobristKeys.castlingKeys[prevCastle];
+    ret.key ^= hashl.zobristKeys.enPassantKeys[prevEp];
 
-    code ^= hashl.zobristKeys.castlingKeys[info.stat.castlingKey()].code;
-    code ^= hashl.zobristKeys.enPassantKeys[info.enPassantIdx].code;
-    code ^= hashl.zobristKeys.playKey.code;
-    return code;
+    ret.key ^= hashl.zobristKeys.castlingKeys[info.stat.castlingKey()];
+    ret.key ^= hashl.zobristKeys.enPassantKeys[info.enPassantIdx];
+    ret.key ^= hashl.zobristKeys.playKey;
+    return ret;
 }
 
 pub fn pieceArrayToBB(pieceArray: [N_SQUARES]e_piece) u64 {
@@ -646,7 +671,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
         std.debug.print("Current turn: Black\n", .{});
     }
     print_board(p_board_state);
-    std.debug.print("Zobrist key: 0x{x}\n", .{p_board_state.frame.key.code});
+    std.debug.print("Zobrist key: 0x{x} | Pawn key: 0x{x} | Non-Pawn keys: w: 0x{x}, b: 0x{x}]\n", .{ p_board_state.frame.key, p_board_state.frame.pawnKey, p_board_state.frame.nonPawnKey[@intFromEnum(typel.e_color.WHITE)], p_board_state.frame.nonPawnKey[@intFromEnum(typel.e_color.BLACK)] });
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
 
@@ -1357,7 +1382,7 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tm
         };
         if (move.isValid()) {
             tmpBoard.makeMove(move);
-            _ = ret.append(move, .{}, isPawnPiece(tmpBoard.getPiece(move.getFrom())));
+            _ = ret.append(move, 0, isPawnPiece(tmpBoard.getPiece(move.getFrom())));
         }
     }
     return ret;

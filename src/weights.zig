@@ -128,8 +128,8 @@ pub fn add_param(addr: *scoreType, min: scoreType, max: scoreType, name: []const
     const p: param_entry = .{ .addr = addr, .opt = .{ .argType = .SPIN, .optionType = .INVALID, .name = name, .info = enginel.optionInfo{ .spin = .{ .default = addr.*, .min = min, .max = max } } } };
     tunerOpts.append(mainl.getGlobalGPA(), p) catch unreachable;
 }
-pub fn add_param_1d(values: *[64]scoreType, min: scoreType, max: scoreType, name: []const u8) !void {
-    for (0..values.len) |i| {
+pub fn add_param_1d(comptime size: usize, values: *[size]scoreType, min: scoreType, max: scoreType, name: []const u8) !void {
+    for (0..size) |i| {
         const n = try std.fmt.allocPrint(mainl.getGlobalGPA(), "{s}_{d}", .{ name, i });
         try strOpts.append(mainl.getGlobalGPA(), n);
         const p: param_entry = .{ .addr = &values[i], .opt = .{ .argType = .SPIN, .optionType = .INVALID, .name = strOpts.items[strOpts.items.len - 1][0..n.len], .info = enginel.optionInfo{ .spin = .{ .default = values[i], .min = min, .max = max } } } };
@@ -218,6 +218,8 @@ pub fn appendAll() !void {
     //add_param(&futilityMargin[1], 0, 1500, "futilityMargin_1");
     //add_param(&futilityMargin[2], 0, 1500, "futilityMargin_2");
     //add_param(&futilityMargin[3], 0, 1500, "futilityMargin_3");
+    //try add_param_1d(futilityMargin.len, &futilityMargin, 0, 1500, "futilityMargin");
+    //try add_param_1d(rfpMargin.len, &rfpMargin, 0, 1500, "rfpMargin");
 
     add_param(&rfpImproving, -500, 0, "rfpImproving");
     add_param(&rfpDepth, 3, 8, "rfpDepth");
@@ -428,57 +430,5 @@ pub var historyMinExplore: scoreType = 5;
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 
 pub fn modif_val() void {
-    //rfpDepth = 3;
-    //futilityDepth = 3;
-
-    //rfpImproving = 0;
-    //rfpDepth = 3;
-    //rfpCoeff = 38;
-    //rfpConst = 45;
-    //futilityDepth = 3;
-    //futilityCoeff = 88;
-    //futilityConst = 251;
-
-    //rfpImproving = -6;
-    //rfpDepth = 3;
-    //rfpCoeff = 29;
-    //rfpConst = 58;
-    //IIRDepth = 3;
-    //LMRDepth = 3;
-    //futilityDepth = 4;
-    //futilityCoeff = 66;
-    //futilityConst = 233;
-    //historyDepthMax = 4;
-    //historyThreshCoeff = -570;
-    //historyThreshConst = -61;
-    //historyMinExplore = 3;
-    //lmpMaxDepth = 4;
-    //lmpBase = 3;
-
-    rfpImproving = -22;
-    rfpDepth = 3;
-    rfpCoeff = 36;
-    rfpConst = 52;
-    captureExtensionThresh = 659;
-    aspirationCoefficient = 21;
-    nullMoveDepthAugmentThreshold = 10;
-    nullMoveDepthAugment = 2;
-    nullMoveReduction = 3;
-    nullMoveReductionImproving = 3;
-    IIRDepth = 3;
-    LMRDepth = 3;
-    SeePruningMaxDepth = 3;
-    SeePruningQuietMargin = -18;
-    SeePruningCaptureMargin = -62;
-    probCutMargin = 231;
-    probCutMinimalDepth = 4;
-    futilityDepth = 4;
-    futilityCoeff = 77;
-    futilityConst = 245;
-    historyDepthMax = 4;
-    historyThreshCoeff = -499;
-    historyThreshConst = -138;
-    historyMinExplore = 5;
-    lmpMaxDepth = 3;
-    lmpBase = 1;
+    //
 }

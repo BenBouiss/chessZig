@@ -140,24 +140,24 @@ pub const benchmarkEntries = [_][]const u8{
 test "pseudo legal move generator" {
     for (0..benchmarkEntries.len) |i| {
         const state = try chessl.getBoardFromFen(benchmarkEntries[i]);
-        var gen: moveGenl.moveGene = .{};
+        var gen: moveGenl.typeMoveGenerator = .{};
         const count = gen.getMoveCounts(&state);
         const fmoves = moveGenl.generateLegalMoves(&state);
         _ = count.compare(moveGenl.genTypeCountFromState(&state)) catch |e| {
             switch (e) {
                 moveGenl.genError.quietMoveErr => {
                     gen.generateMove(.QUIET, &state);
-                    gen._moves.printDifference(fmoves);
+                    gen._moves.moves.printDifference(fmoves);
                 },
                 moveGenl.genError.captureMoveErr => {
                     gen.generateMove(.CAPTURE, &state);
-                    gen._moves.printDifference(fmoves);
+                    gen._moves.moves.printDifference(fmoves);
                 },
-                moveGenl.genError.evasionMoveErr => {
-                    gen.generateMove(.EVASION, &state);
-                    gen._moves.printDifference(fmoves);
-                },
-                moveGenl.genError.allMoveErr => {},
+                moveGenl.genError.allMoveErr, moveGenl.genError.evasionMoveErr => {},
+                //moveGenl.genError.evasionMoveErr => {
+                //    gen.generateMove(.EVASION, &state);
+                //    gen._moves.moves.printDifference(fmoves);
+                //},
             }
         };
     }

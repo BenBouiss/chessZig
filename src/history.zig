@@ -27,6 +27,10 @@ pub var historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]score
 pub const pieceHistory: type = [12][64]scoreType;
 
 pub var corrHist: [12][64][12][64]scoreType = std.mem.zeroes([12][64][12][64]scoreType);
+
+pub var pawnCorrHist: [2][16384]scoreType = std.mem.zeroes([2][16384]scoreType);
+pub var nonPawnCorrHist: [2][2][16384]scoreType = std.mem.zeroes([2][2][16384]scoreType);
+
 pub var lmrBase: [chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([chessl.MAX_POSSIBLE_MOVE]scoreType);
 
 //pub var continuationHeuristic: [12][64]pieceHistory = std.mem.zeroes([12][64]pieceHistory);
@@ -40,9 +44,15 @@ pub fn _initMoveOrdering() void {
     captureHistory = std.mem.zeroes([12][12][64]scoreType);
     //continuationHeuristic = std.mem.zeroes([12][64]pieceHistory);
     corrHist = std.mem.zeroes([12][64][12][64]scoreType);
+
+    pawnCorrHist = std.mem.zeroes([2][16384]scoreType);
+    nonPawnCorrHist = std.mem.zeroes([2][2][16384]scoreType);
     for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
         lmrBase[i] = (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
     }
+}
+pub inline fn pawnHashIndexToIdx(hash: u64) u64 {
+    return hash % 16384;
 }
 pub inline fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];

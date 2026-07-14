@@ -119,6 +119,13 @@ def print_board(name: str, l: list[int]):
     print("};")
 
 
+def print_misc(name: str, l: list[int]):
+    print(f"const {name} = [_]scoreType {{", end=" ")
+    [print(f"{x}, ", end="") for x in l]
+    print("")
+    print("};")
+
+
 def openWeatherFactory(path: str):
     assert os.path.exists(path), f"path {path} does not exist"
     with open(path, "rb") as f:
@@ -128,15 +135,21 @@ def openWeatherFactory(path: str):
     offsetName = 0
     # for x, name in enumerate(order):
     squares = [0] * 64
+    miscLen = []
     dualVal = {}
+    prev = ""
     for x in range(tot):
         var: str = d["uci_params"][x]["name"]
         nbr = int(d["uci_params"][x]["value"])
+        name = var.split("_")[0] if ("_" in var) else var
+        if prev != name and len(miscLen):
+            print_misc(prev, miscLen)
         if "_" in var:
             tok = var.split("_")[-1]
+            prev = var.split("_")[0]
             if tok.isnumeric():
                 # print(var)
-                n = int(var.split("_")[-1])
+                n = int(tok)
                 squares[n] = nbr
                 if n == 63:
                     print_board(order[offsetName], squares)
@@ -158,6 +171,7 @@ def openWeatherFactory(path: str):
 
         else:
             print(f"pub var {var}: scoreType = {nbr};")
+            prev = var
 
 
 if __name__ == "__main__":

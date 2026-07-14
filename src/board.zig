@@ -137,7 +137,11 @@ pub inline fn pieceToColor(piece: e_piece) e_color {
 pub const boardFrame = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
-    key: hashl.Key = .{},
+    key: hashl.Key = 0,
+    pawnKey: hashl.Key = 0,
+
+    // WHITE, BLACK
+    nonPawnKey: [2]hashl.Key = @splat(0),
     phase: usize = 0,
     lastMove: IMove = .{},
     victim: e_piece = .nEmptySquare,
@@ -479,13 +483,13 @@ pub const boardState = struct {
     pub fn makeNullMove_cst(p_self: *boardState, comptime white: bool) void {
         p_self.frame.lastMove = .{};
         p_self.frame.victim = .nEmptySquare;
-        hashl.updateKey(&p_self.frame.key, hashl.zobristKeys.playKey);
-        hashl.updateKey(&p_self.frame.key, hashl.zobristKeys.enPassantKeys[p_self.frame.enPassantIdx]);
+        p_self.frame.key ^= hashl.zobristKeys.playKey;
+        p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[p_self.frame.enPassantIdx];
 
         p_self.frame.enPassantIdx = 0;
         p_self.frame.halfMoveClock = 0;
 
-        hashl.updateKey(&p_self.frame.key, hashl.zobristKeys.enPassantKeys[0]);
+        p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[0];
 
         if (comptime useStaged) {
             chessl.onMoveStaged(p_self, !white);
@@ -598,12 +602,13 @@ pub const boardState = struct {
         }
 
         if (isCapture) {
-            p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, true, toPiece, &p_self.frame, prevCastle, prevEp);
+            const keys = chessl.updateKeyOnMove(move, toPiece, &p_self.frame, prevCastle, prevEp, true, white);
+            p_self.frame.key = keys.key;
+            p_self.frame.nonPawnKey = keys.nonPawnKey;
+            p_self.frame.pawnKey = keys.pawnKey;
             if (comptime updatePSQT and !configl.USE_NNUE) {
                 p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
             }
-
-            p_self.frame.key.code = chessl.updateKeyOnMove(white, move, comptime t == .PROMOTION, comptime t == .CASTLE, false, toPiece, &p_self.frame, prevCastle, prevEp);
         } else {
             if (comptime updatePSQT and !configl.USE_NNUE) {
                 p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
@@ -690,7 +695,11 @@ pub const boardState = struct {
             }
         }
         p_self.b.pieceArray[to] = toPiece;
-        p_self.frame.key.code = chessl.updateKeyOnMove(white, move, isPromo, false, true, toPiece, &p_self.frame, prevCastle, prevEp);
+
+        const keys = chessl.updateKeyOnMove(move, toPiece, &p_self.frame, prevCastle, prevEp, true, white);
+        p_self.frame.key = keys.key;
+        p_self.frame.nonPawnKey = keys.nonPawnKey;
+        p_self.frame.pawnKey = keys.pawnKey;
 
         if (comptime updatePSQT and !configl.USE_NNUE) {
             p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, isPromo, false, toPiece, p_self.getPhase(), &p_self.frame);
@@ -775,7 +784,11 @@ pub const boardState = struct {
             }
         }
         p_self.b.pieceArray[to] = toPiece;
-        p_self.frame.key.code = chessl.updateKeyOnMove(white, move, isPromo, isCastle, false, toPiece, &p_self.frame, prevCastle, prevEp);
+        const keys = chessl.updateKeyOnMove(move, toPiece, &p_self.frame, prevCastle, prevEp, false, white);
+
+        p_self.frame.key = keys.key;
+        p_self.frame.nonPawnKey = keys.nonPawnKey;
+        p_self.frame.pawnKey = keys.pawnKey;
 
         if (comptime updatePSQT and !configl.USE_NNUE) {
             p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, isPromo, isCastle, toPiece, p_self.getPhase(), &p_self.frame);
@@ -917,9 +930,9 @@ pub const boardState = struct {
             if (move.isCastle()) {
                 const allAttacks = chessl.getAllAttackMask(self, occ ^ chessl.sqToBitboard(kingSq), !white);
                 if (move.isKingSideCastle()) {
-                    return (allAttacks & (chessl.xToBitboard(to) | chessl.xToBitboard(to - 1))) == 0;
+                    return self.canKingSideCastleAtt(white, allAttacks);
                 }
-                return (allAttacks & (chessl.xToBitboard(to) | chessl.xToBitboard(to + 1))) == 0;
+                return self.canQueenSideCastleAtt(white, allAttacks);
             }
             return chessl._getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from), white, @enumFromInt(to)) == 0;
         }

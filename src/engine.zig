@@ -643,12 +643,6 @@ pub const engine = struct {
         return true;
     }
 
-    inline fn setName(p_self: *engine, name: []const u8) void {
-        p_self.id.name = name;
-    }
-    inline fn setCode(p_self: *engine, code: []const u8) void {
-        p_self.id.code = code;
-    }
     pub fn executePositionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         const cmdOffset = 8;
         //* position [fen <fenstring> | startpos ]  moves <move1> .... <movei>

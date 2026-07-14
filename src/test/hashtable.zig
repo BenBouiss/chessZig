@@ -16,18 +16,18 @@ test "entry retrievale" {
     const white: bool = true;
     for (0..100) |i| {
         const code1: u64 = @intCast(i);
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code1 }, 1, @intCast(2 * i), white);
+        const entry = hashl.buildEntryFromMatchResult(code1, 1, @intCast(2 * i), white);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code1, .KEEP_DEEPER));
 
         const code2 = @as(u64, @intCast(i)) + m;
-        const entry2 = hashl.buildEntryFromMatchResult(.{ .code = code2 }, 2, @intCast(3 * i), white);
+        const entry2 = hashl.buildEntryFromMatchResult(code2, 2, @intCast(3 * i), white);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry2, code2, .KEEP_DEEPER));
     }
     for (0..100) |i| {
-        const entry = hashl.getEntryFromMatch(.{ .code = @intCast(i) }, 1);
+        const entry = hashl.getEntryFromMatch(@intCast(i), 1);
         try std.testing.expect(entry.?.valid());
 
-        const entry2 = hashl.getEntryFromMatch(.{ .code = @as(u64, @intCast(i)) + m }, 1);
+        const entry2 = hashl.getEntryFromMatch(@as(u64, @intCast(i)) + m, 1);
         try std.testing.expect(entry2.?.valid());
 
         const bucket = hashl.hashTable.getBucketFromFullHashIndex(@intCast(i));
@@ -51,14 +51,14 @@ test "entry overwrite" {
     const white: bool = true;
 
     for (0..100) |i| {
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, @intCast(i), @intCast(i), white);
+        const entry = hashl.buildEntryFromMatchResult(code, @intCast(i), @intCast(i), white);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
     try std.testing.expectEqual(1, bucket.t_len());
 
-    const entry = hashl.buildEntryFromMatchResult(.{ .code = code + m }, 200, 0, white);
+    const entry = hashl.buildEntryFromMatchResult(code + m, 200, 0, white);
     try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code + m, .KEEP_DEEPER));
 
     try std.testing.expectEqual(2, bucket.t_len());
@@ -77,7 +77,7 @@ test "entry replacement" {
     const code: u64 = 42;
     const white: bool = true;
     for (0..d.len) |i| {
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, d[i], 1, white);
+        const entry = hashl.buildEntryFromMatchResult(code, d[i], 1, white);
         std.debug.assert(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
@@ -123,20 +123,21 @@ test "zobrist key consistency" {
         var algeFen = openings.items[i];
 
         _ = try chessl._algebraicLineToIMoveMatch(alloc, algeFen._slice(), &tmp);
-        try std.testing.expectEqual(hashl.fullComputeZobristKeys(&tmp).code, tmp.frame.key.code);
+        const set = hashl.fullComputeZobristKeys(&tmp);
+        try std.testing.expectEqual(set.key, tmp.frame.key);
 
         const fen = tmp.get_fen();
 
         if (map.contains(fen[0..fen.len])) {
             const k = map.get(fen[0..fen.len]).?;
-            if (k != tmp.frame.key.code) {
+            if (k != tmp.frame.key) {
                 std.debug.print("error at fen {s}\n", .{fen});
-                try std.testing.expectEqual(k, tmp.frame.key.code);
+                try std.testing.expectEqual(k, tmp.frame.key);
             }
         } else {
             //std.debug.print("put\n", .{});
             const n: *fenNode = try .init(alloc, &fen);
-            try map.put(n.val[0..n.val.len], tmp.frame.key.code);
+            try map.put(n.val[0..n.val.len], tmp.frame.key);
             keys.append(&n.node);
         }
 

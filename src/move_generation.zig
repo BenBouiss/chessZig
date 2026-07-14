@@ -1028,10 +1028,10 @@ pub const typeMoveGenerator = struct {
             if (p_self.phase == .CAPTURE and !skipQuiet) {
                 p_self.phase = .QUIET;
                 p_self.generateMove(.QUIET, state);
-                heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
                 if (p_self._moves.moves.len == 0) {
                     return null;
                 }
+                heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
             } else {
                 return null;
             }
@@ -1334,7 +1334,7 @@ pub const moveGenerator = struct {
     }
 };
 pub fn main() !void {
-    const state = try chess.getBoardFromFen("4R1K1/8/8/8/8/8/3R1k2/8 b - - 0 0");
+    const state = try chess.getBoardFromFen("r7/p1pp1QB1/qn6/3p4/4n3/7p/PPP2PPP/R3K2R b HA - 0 17");
     chess.print_boardstate(&state);
     var gen: typeMoveGenerator = .init();
     gen.generateMove(.CAPTURE, &state);

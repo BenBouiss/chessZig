@@ -259,7 +259,7 @@ pub const matchMoveContainer = struct {
             p_self.irreversible[p_self.len] = false;
         }
         p_self.moves[p_self.len] = move;
-        p_self.keyCodes[p_self.len] = key.code;
+        p_self.keyCodes[p_self.len] = key;
         p_self.len += 1;
         return true;
     }

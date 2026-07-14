@@ -11,9 +11,10 @@ const e_piece = chess.e_piece;
 const scoreType = typel.scoreType;
 const TT_strat = configl.TT_strat;
 
-pub const Key = struct {
-    code: u64 = 0,
-};
+pub const Key: type = u64;
+//pub const Key = struct {
+//    code: u64 = 0,
+//};
 
 // note: the gain in space is not visible in the debug build
 // will try to implement the chess programming version where way more stuff is stored
@@ -71,11 +72,11 @@ pub const Hash_entry = struct {
 };
 
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType, whiteToMove: bool) Hash_entry {
-    return .init(keyToUpperKey(key.code), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 6), .ALL, whiteToMove);
+    return .init(keyToUpperKey(key), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 6), .ALL, whiteToMove);
 }
 
 pub inline fn buildEntryMatchExt(key: Key, depth: u8, eval: scoreType, nodeT: nodeType, bestMove: movel.IMove, whiteToMove: bool) Hash_entry {
-    return .init(keyToUpperKey(key.code), @intCast(eval), bestMove, depth, @intCast(hashTable.gen >> 6), nodeT, whiteToMove);
+    return .init(keyToUpperKey(key), @intCast(eval), bestMove, depth, @intCast(hashTable.gen >> 6), nodeT, whiteToMove);
 }
 
 pub const getResult = struct {
@@ -406,14 +407,14 @@ pub const Hash_table = struct {
 };
 
 pub inline fn getEntryFromMatch(key: Key, depth: u8) ?Hash_entry {
-    var p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key.code);
-    return p_bucket.getEntryMatch(key.code, depth);
+    var p_bucket: *Hash_bucket = hashTable.getBucketFromFullHashIndex(key);
+    return p_bucket.getEntryMatch(key, depth);
 }
 
 pub const Zobrist_Keys = struct {
     pieceKeys: [12][64]Key = std.mem.zeroes([12][64]Key),
     turnKey: [chess.NUMBER_PLAYER]Key = std.mem.zeroes([chess.NUMBER_PLAYER]Key),
-    playKey: Key = .{},
+    playKey: Key = 0,
     castlingKeys: [16]Key = std.mem.zeroes([16]Key),
     enPassantKeys: [64]Key = std.mem.zeroes([64]Key),
     pub fn init(seed: u64) Zobrist_Keys {
@@ -462,40 +463,48 @@ pub fn initZobristKeys(rng: std.Random, zob: *Zobrist_Keys) void {
     @setEvalBranchQuota(100000);
     for (0..12) |i| {
         for (0..64) |j| {
-            zob.pieceKeys[i][j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+            zob.pieceKeys[i][j] = rng.uintAtMost(u64, chess.UNIVERSE);
         }
     }
 
-    zob.turnKey[0] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
-    zob.turnKey[1] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+    zob.turnKey[0] = rng.uintAtMost(u64, chess.UNIVERSE);
+    zob.turnKey[1] = rng.uintAtMost(u64, chess.UNIVERSE);
 
     for (0..16) |j| {
-        zob.castlingKeys[j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+        zob.castlingKeys[j] = rng.uintAtMost(u64, chess.UNIVERSE);
     }
 
     for (0..64) |j| {
-        zob.enPassantKeys[j] = .{ .code = rng.uintAtMost(u64, chess.UNIVERSE) };
+        zob.enPassantKeys[j] = rng.uintAtMost(u64, chess.UNIVERSE);
     }
     zob.playKey = zob.turnKey[0];
-    zob.playKey.code ^= zob.turnKey[1].code;
+    zob.playKey ^= zob.turnKey[1];
 }
-pub fn fullComputeZobristKeys(p_board: *const boardl.boardState) Key {
+pub const keySet = struct {
+    key: Key = 0,
+    pawnKey: Key = 0,
+    nonPawnKey: [2]Key = @splat(0),
+};
+pub fn fullComputeZobristKeys(p_board: *const boardl.boardState) keySet {
     // for better perfs look for incremental xor key update using the previous move
-    var retKey = zobristKeys.turnKey[chess.whiteBoolToInt(p_board.whiteToMove())];
+    var ret: keySet = .{};
+    ret.key = zobristKeys.turnKey[chess.whiteBoolToInt(p_board.whiteToMove())];
 
     for (0..chess.N_SQUARES) |i| {
         const piece = p_board.getPiece(@intCast(i));
+        const color = chess.e_colorFromPiece(piece);
         if (piece != .nEmptySquare) {
-            retKey.code ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i].code;
+            ret.key ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i];
+
+            ret.nonPawnKey[@intFromEnum(color)] ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i];
+        }
+        if (chess.isPawnPiece(piece)) {
+            ret.pawnKey ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i];
         }
     }
-    retKey.code ^= zobristKeys.castlingKeys[p_board.frame.stat.castlingKey()].code;
-    retKey.code ^= zobristKeys.enPassantKeys[p_board.frame.enPassantIdx].code;
-    return retKey;
-}
-
-pub inline fn updateKey(keyDst: *Key, keySrc: Key) void {
-    keyDst.code ^= keySrc.code;
+    ret.key ^= zobristKeys.castlingKeys[p_board.frame.stat.castlingKey()];
+    ret.key ^= zobristKeys.enPassantKeys[p_board.frame.enPassantIdx];
+    return ret;
 }
 
 pub fn printTTStats() void {
