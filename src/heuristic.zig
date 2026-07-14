@@ -1080,7 +1080,7 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
         }
     } else {
         //
-        if (move.isPromotion()) {
+        if (move.isPromotion() and move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
             return configl.ORDERING_PROMOTIONS;
         }
         if (move.equal(historyl.killerMoves[ply][0])) {
@@ -1121,6 +1121,12 @@ pub fn _eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *cons
 
     for (0..ret.len) |idx| {
         ret.scores[idx] = scores[ret.indexes[idx]];
+    }
+}
+pub fn evalMoveScore(p_state: *const boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, ret: *moveGenl.movesScores) void {
+    const w: bool = p_state.whiteToMove();
+    for (0..ret.moves.len) |i| {
+        ret.scores[i] = eval_move_heuristic_line(p_state, ret.moves.moves[i], ply, hashMove, prevLineMove, mva, w);
     }
 }
 

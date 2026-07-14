@@ -157,10 +157,6 @@ test "pseudo legal move generator" {
                     gen.generateMove(.EVASION, &state);
                     gen._moves.printDifference(fmoves);
                 },
-                moveGenl.genError.promoMoveErr => {
-                    gen.generateMove(.PROMO, &state);
-                    gen._moves.printDifference(fmoves);
-                },
                 moveGenl.genError.allMoveErr => {},
             }
         };

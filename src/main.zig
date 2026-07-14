@@ -13,6 +13,7 @@ const squarel = @import("square.zig");
 const logl = @import("log.zig");
 const bookl = @import("book.zig");
 const ucil = @import("uci.zig");
+const moveGenl = @import("move_generation.zig");
 
 const schedulerl = @import("search/scheduler.zig");
 const moveDecisionExt = schedulerl.moveDecisionExt;
@@ -140,6 +141,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
     _ = GPA;
+    try moveGenl.main();
     //initAll(GPA, false);
     //defer hashl._freeHash(GPA, false);
 

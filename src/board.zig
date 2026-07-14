@@ -904,7 +904,34 @@ pub const boardState = struct {
     pub inline fn getSidePieceCount(self: boardState, color: e_color) u8 {
         return chessl.popcount(self.b.c_occupiedBB[@intFromEnum(color)]);
     }
-
+    pub fn legal(self: *const boardState, move: IMove) bool {
+        //
+        const white = self.whiteToMove();
+        const from = move.getFrom();
+        const to = move.getTo();
+        const fPiece = chessl.e_pieceTo_e_pieceType(self.getPiece(from));
+        const isCapture = move.isCapture();
+        const occ = self.b.occupiedBB();
+        const kingSq = self.getKingSq(white);
+        if (fPiece == .KING) {
+            if (move.isCastle()) {
+                const allAttacks = chessl.getAllAttackMask(self, occ ^ chessl.sqToBitboard(kingSq), !white);
+                if (move.isKingSideCastle()) {
+                    return (allAttacks & (chessl.xToBitboard(to) | chessl.xToBitboard(to - 1))) == 0;
+                }
+                return (allAttacks & (chessl.xToBitboard(to) | chessl.xToBitboard(to + 1))) == 0;
+            }
+            return chessl._getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from), white, @enumFromInt(to)) == 0;
+        }
+        if (move.isEnpassant()) {
+            return chessl._getAllAttackerFromSq(self, occ ^ (chessl.xToBitboard(from) | chessl.xToBitboard(to) | chessl.sqToBitboard(chessl.enPassantVictimSq(from, to))), white, kingSq) == 0;
+        }
+        if (isCapture) {
+            // ignores the replace bit at to
+            return (chessl.slider_getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from), white, kingSq) & ~chessl.xToBitboard(to)) == 0;
+        }
+        return (chessl.slider_getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from) ^ chessl.xToBitboard(to), white, kingSq) & ~chessl.xToBitboard(to)) == 0;
+    }
     pub fn isLegal(p_self: *const boardState, white: bool) bool {
         // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
         const king_attacks = chessl.getAllAttackerFromSq(p_self, white, p_self.getKingSq(white));
@@ -920,10 +947,8 @@ pub const boardState = struct {
         return p_self.isInsufficientMaterialSide(false) and p_self.isInsufficientMaterialSide(true);
     }
     pub fn isInsufficientMaterialSide(p_self: *const boardState, white: bool) bool {
-        var color_offset: usize = 0;
-        if (!white) {
-            color_offset = chessl.N_PIECES_TYPES;
-        }
+        const color_offset: usize = if (white) 0 else (chessl.N_PIECES_TYPES);
+
         if (p_self.getPieceCount(@enumFromInt(@intFromEnum(e_piece.nWhitePawn) + color_offset)) != 0) {
             return false;
         }

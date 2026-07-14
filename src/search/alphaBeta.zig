@@ -73,7 +73,8 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         _alpha = best_value;
     }
 
-    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
+    var gen: moveGenl.moveGenerator = .init();
+    //var gen: moveGenl.typeMoveGenerator = .init();
 
     var i: usize = 0;
     const historyBonus = heuristicl.computeHistoryBonus(depth);
@@ -82,10 +83,11 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         const from = move.getFrom();
         const fPiece = p_state.getPiece(from);
         const cPiece = p_state.getCapturePiece(move);
-        if (chessl.isKingPiece(cPiece)) {
-            // pseudo legal move gen
-            return weightl.simpleCheckMateScore;
-        }
+        //if (!p_state.legal(move)) continue;
+        //if (chessl.isKingPiece(cPiece)) {
+        //    // pseudo legal move gen
+        //    return weightl.simpleCheckMateScore;
+        //}
         if (i > weightl.moveReductionAmount) {
             break;
         }
@@ -119,9 +121,8 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
             historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
             if (score >= beta) {
                 currS.failHighCount += 1;
-                for (0..gen.moves.len) |j| {
-                    const idx = gen.ordering.indexes[j];
-                    const _move = gen.moves.moves[idx];
+                for (0..gen._moves.moves.len) |j| {
+                    const _move = gen._moves.moves.moves[j];
                     if (j != i) {
                         const fromP = _move.getFrom();
                         const toP = _move.getTo();
@@ -358,11 +359,14 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
     //if (_depth >= weightl.IIRDepth and !hashMove.isValid() and !currS.followPv and (hashType == .LOWER and t == .NonPV)) {
     if (_depth >= weightl.IIRDepth and !hashMove.isValid() and !currS.followPv and (hashType == .LOWER and t == .NonPV)) {
+        //if (_depth >= weightl.IIRDepth and !hashMove.isValid() and !currS.followPv and !isAllNode) {
         _depth -= 1;
     }
 
     // staged
-    var gen: heuristicl.moveGenerator = heuristicl.moveGenerator.init();
+    var gen: moveGenl.moveGenerator = .init();
+    //var gen: moveGenl.typeMoveGenerator = .init();
+
     ss.getFrame(ply + 2).failHighCount = 0;
 
     const p_beta = _beta + weightl.probCutMargin;
@@ -373,6 +377,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 if (!heuristicl.SEE_threshold(p_state, move, tresh) or move.equal(excludedMove)) {
                     continue;
                 }
+                //if (!p_state.legal(move)) continue;
 
                 //const from = move.getFrom();
                 //const fPiece = p_state.getPiece(from);
@@ -423,10 +428,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         const isThreat = (chessl.xToBitboard(to) & safetyArea) != 0;
         const cPiece = p_state.getCapturePiece(move);
 
-        if (chessl.isKingPiece(cPiece)) {
-            // pseudo legal move gen
-            return weightl.simpleCheckMateScore;
-        }
+        //if (!p_state.legal(move)) continue;
+        //if (chessl.isKingPiece(cPiece)) {
+        //    // pseudo legal move gen
+        //    return weightl.simpleCheckMateScore;
+        //}
 
         const isPromo = move.isPromotion();
 
@@ -439,12 +445,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
         if (!isCapture) {
             if (comptime t == .NonPV) {
-                if (canFutility and !givesCheck and movesPlayed > weightl.moveReductionAmount and !isPromo) {
+                if (canFutility and !givesCheck and idx > weightl.moveReductionAmount and !isPromo) {
                     continue;
                     //if (_depth <= weightl.futilityDepth and !isCheck and (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth) < alpha) {
                     //    skipQuietMoves = true;
                 }
-                if (depth <= weightl.lmpMaxDepth and movesPlayed >= weightl.lmpBase + @divFloor(_depth * _depth, 2 - @as(scoreType, @intFromBool(improving)))) {
+                if (depth <= weightl.lmpMaxDepth and idx >= weightl.lmpBase + @divFloor(_depth * _depth, 2 - @as(scoreType, @intFromBool(improving)))) {
                     skipQuietMoves = true;
                 }
 
@@ -484,7 +490,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             if (isPromo) {
                 _lmrDepth += weightl.lmr_isPromotion;
             }
-            const scoreOrder = gen.ordering.scores[idx];
+            const scoreOrder = gen._moves.scores[idx];
             if (scoreOrder >= weightl.lmr_scoreThreshold) {
                 _lmrDepth += weightl.lmr_killerMove;
             } else if (isCapture and !isThreat and scoreOrder < 0) {
@@ -494,7 +500,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 _lmrDepth += weightl.lmr_highFailScore;
             }
             //_lmrDepth += (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(idx + 1)))));
-            _lmrDepth += historyl.lmrBase[idx];
+            _lmrDepth += historyl.lmrBase[movesPlayed];
 
             const d = _depth - 1 - @as(u16, (@intCast(@min((@max(_lmrDepth, 0)) >> 10, _depth - 1))));
             score = -searchLoop(p_state, p_info, p_features, d + extension, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, true, .NonPV);
@@ -516,13 +522,14 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         _ = p_state.undoMove();
         p_state.frame = f;
 
-        if (movesPlayed == 0 or finalScore < score) {
+        if (movesPlayed == 0 or score > finalScore) {
             finalScore = score;
             bestMove = move;
         }
         movesPlayed += 1;
         if (finalScore > _alpha) {
             _alpha = finalScore;
+            bestMove = move;
             hashFlag = .ALL;
             if (isCapture) {
                 historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
@@ -534,33 +541,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 hashFlag = .LOWER;
                 // save here the killer moves
                 if (isCapture) {
-                    // in capture mode
-                    //historyl.updateCaptureHistory(fPiece, cPiece, to, historyBonus);
-                    for (0..gen.moves.len) |j| {
-                        const i = gen.ordering.indexes[j];
-                        const _move = gen.moves.moves[i];
-                        if (j != idx) {
-                            const fromP = _move.getFrom();
-                            const toP = _move.getTo();
-                            historyl.updateCaptureHistory(p_state.getPiece(fromP), p_state.getCapturePiece(_move), toP, -historyBonus);
-                        }
-                    }
+                    updateOnBetaCut(p_state, idx, -historyBonus, &gen, white, .CAPTURE);
                 } else {
                     historyl.onKillerMove(move, ply);
-                    for (0..gen.moves.len) |j| {
-                        const i = gen.ordering.indexes[j];
-                        const _move = gen.moves.moves[i];
-                        if (j != idx) {
-                            const fromP = _move.getFrom();
-                            const toP = _move.getTo();
-                            historyl.updateHistoryHeurist(white, fromP, toP, -historyBonus);
-                        }
-                    }
+                    updateOnBetaCut(p_state, idx, -historyBonus, &gen, white, .QUIET);
                 }
-                const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, .LOWER, move, white);
-                writer.writeShort(s_entry);
                 p_info.searchStat.n_cutoffs += 1;
-                return _alpha;
+                break;
             }
             if (comptime t == .PV) {
                 currS.pv.?.onBestMove(move, ss.getFrame(ply + 1).pv);
@@ -584,11 +571,25 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     //    }
     //}
     // .PV set to not store position that could be obtained after a possible nullmove. TODO: just filter out nullmove
-    if (comptime t == .PV) {
+    if (hashFlag == .LOWER or comptime t == .PV) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove, white);
         writer.writeShort(s_entry);
     }
     return _alpha;
+}
+pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonus: scoreType, gen: *const moveGenl.moveGenerator, white: bool, comptime t: typel.e_moveGenFlag) void {
+    for (0..gen._moves.moves.len) |j| {
+        const _move = gen._moves.moves.moves[j];
+        if (j != cutoffIdx) {
+            const fromP = _move.getFrom();
+            const toP = _move.getTo();
+            if (comptime t == .CAPTURE) {
+                historyl.updateCaptureHistory(p_state.getPiece(fromP), p_state.getCapturePiece(_move), toP, bonus);
+            } else if (comptime t == .QUIET) {
+                historyl.updateHistoryHeurist(white, fromP, toP, bonus);
+            }
+        }
+    }
 }
 pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: scoreType, ply: u16) scoreType {
     _ = p_state;

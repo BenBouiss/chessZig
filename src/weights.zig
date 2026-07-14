@@ -373,56 +373,56 @@ pub var lmr_isPromotion: milliDepth = -207;
 
 pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 pub var rfpMargin: [4]scoreType = .{ 0, 47, 185, 235 };
-pub var rfpImproving: scoreType = 0;
-pub var rfpDepth: scoreType = 7;
-pub var rfpCoeff: scoreType = 27; // depth * c
-pub var rfpConst: scoreType = 45;
+pub var rfpImproving: scoreType = -22;
+pub var rfpDepth: scoreType = 3;
+pub var rfpCoeff: scoreType = 36; // depth * c
+pub var rfpConst: scoreType = 52;
 
-pub var captureExtensionThresh: scoreType = 571;
+pub var captureExtensionThresh: scoreType = 659;
 
 pub const moveReductionAmount = 4;
 
 // source: https://www.chessprogramming.org/King_Safety
 pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
-pub var aspirationCoefficient: scoreType = 30;
+pub var aspirationCoefficient: scoreType = 21;
 
-pub var nullMoveDepthAugmentThreshold: scoreType = 13;
+pub var nullMoveDepthAugmentThreshold: scoreType = 10;
 pub var nullMoveDepthAugment: scoreType = 2;
-pub var nullMoveReduction: scoreType = 4;
+pub var nullMoveReduction: scoreType = 3;
 pub var nullMoveReductionImproving: scoreType = 3;
 
 pub var razoringBaseImproving: scoreType = 60;
 pub var razoringBaseNotImproving: scoreType = 170;
 pub var razoringCoefficient: scoreType = 167;
 
-pub var IIRDepth: scoreType = 4; // >= 5
+pub var IIRDepth: scoreType = 3; // >= 5
 pub var LMRDepth: scoreType = 3; // >= 3
 
-pub var SeePruningMaxDepth: scoreType = 4;
-pub var SeePruningQuietMargin: scoreType = -84;
-pub var SeePruningCaptureMargin: scoreType = -55;
+pub var SeePruningMaxDepth: scoreType = 3;
+pub var SeePruningQuietMargin: scoreType = -18;
+pub var SeePruningCaptureMargin: scoreType = -62;
 
-pub var probCutMargin: scoreType = 200;
+pub var probCutMargin: scoreType = 231;
 pub var probCutMinimalDepth: scoreType = 4;
 
 pub var corrHistMax: scoreType = 2000;
 pub var corrHistDiv: scoreType = 4;
 
-pub var lmpMaxDepth: scoreType = 4;
-pub var lmpBase: scoreType = 5;
+pub var lmpMaxDepth: scoreType = 3;
+pub var lmpBase: scoreType = 1;
 //pub var lmpImproving: scoreType = 4;
 
 // CurEval <= Alpha - PVal[SecondPiece(Opponent) - PVal[ThirdPiece(Opponent) - 2*PosMargin + PosMargin2.
 
-pub var futilityDepth: scoreType = 14;
-pub var futilityCoeff: scoreType = 54; // depth * c
-pub var futilityConst: scoreType = 240;
+pub var futilityDepth: scoreType = 4;
+pub var futilityCoeff: scoreType = 77; // depth * c
+pub var futilityConst: scoreType = 245;
 
-pub var historyDepthMax: scoreType = 5;
-pub var historyThreshCoeff: scoreType = -512; //coeff * d + c
-pub var historyThreshConst: scoreType = -64;
-pub var historyMinExplore: scoreType = 4;
+pub var historyDepthMax: scoreType = 4;
+pub var historyThreshCoeff: scoreType = -499; //coeff * d + c
+pub var historyThreshConst: scoreType = -138;
+pub var historyMinExplore: scoreType = 5;
 
 // replace the array with y = a*x + b with x = depth
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
@@ -455,57 +455,30 @@ pub fn modif_val() void {
     //lmpMaxDepth = 4;
     //lmpBase = 3;
 
-    //rfpImproving = -5;
-    //rfpDepth = 3;
-    //rfpCoeff = 32;
-    //rfpConst = 58;
-    //captureExtensionThresh = 576;
-    //aspirationCoefficient = 28;
-    //nullMoveDepthAugmentThreshold = 12;
-    //nullMoveDepthAugment = 1;
-    //nullMoveReduction = 3;
-    //nullMoveReductionImproving = 3;
-    //IIRDepth = 2;
-    //LMRDepth = 2;
-    //SeePruningMaxDepth = 4;
-    //SeePruningQuietMargin = -77;
-    //SeePruningCaptureMargin = -59;
-    //probCutMargin = 203;
-    //probCutMinimalDepth = 4;
-    //futilityDepth = 4;
-    //futilityCoeff = 68;
-    //futilityConst = 228;
-    //historyDepthMax = 3;
-    //historyThreshCoeff = -536;
-    //historyThreshConst = -68;
-    //historyMinExplore = 4;
-    //lmpMaxDepth = 4;
-    //lmpBase = 2;
-
-    //rfpImproving = -7;
-    //rfpDepth = 3;
-    //rfpCoeff = 33;
-    //rfpConst = 57;
-    //captureExtensionThresh = 566;
-    //aspirationCoefficient = 30;
-    //nullMoveDepthAugmentThreshold = 11;
-    //nullMoveDepthAugment = 1;
-    //nullMoveReduction = 3;
-    //nullMoveReductionImproving = 3;
-    //IIRDepth = 2;
-    //LMRDepth = 3;
-    //SeePruningMaxDepth = 4;
-    //SeePruningQuietMargin = -56;
-    //SeePruningCaptureMargin = -70;
-    //probCutMargin = 204;
-    //probCutMinimalDepth = 4;
-    //futilityDepth = 4;
-    //futilityCoeff = 58;
-    //futilityConst = 211;
-    //historyDepthMax = 4;
-    //historyThreshCoeff = -541;
-    //historyThreshConst = -84;
-    //historyMinExplore = 5;
-    //lmpMaxDepth = 4;
-    //lmpBase = 1;
+    rfpImproving = -22;
+    rfpDepth = 3;
+    rfpCoeff = 36;
+    rfpConst = 52;
+    captureExtensionThresh = 659;
+    aspirationCoefficient = 21;
+    nullMoveDepthAugmentThreshold = 10;
+    nullMoveDepthAugment = 2;
+    nullMoveReduction = 3;
+    nullMoveReductionImproving = 3;
+    IIRDepth = 3;
+    LMRDepth = 3;
+    SeePruningMaxDepth = 3;
+    SeePruningQuietMargin = -18;
+    SeePruningCaptureMargin = -62;
+    probCutMargin = 231;
+    probCutMinimalDepth = 4;
+    futilityDepth = 4;
+    futilityCoeff = 77;
+    futilityConst = 245;
+    historyDepthMax = 4;
+    historyThreshCoeff = -499;
+    historyThreshConst = -138;
+    historyMinExplore = 5;
+    lmpMaxDepth = 3;
+    lmpBase = 1;
 }

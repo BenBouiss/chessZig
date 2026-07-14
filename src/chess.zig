@@ -1012,7 +1012,7 @@ pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bo
     return ret;
 }
 
-pub inline fn getAllAttackerFromSq(p_board: *const boardl.boardState, white: bool, sq: e_square) u64 {
+pub fn getAllAttackerFromSq(p_board: *const boardl.boardState, white: bool, sq: e_square) u64 {
     var ret: u64 = EMPTY;
     const bb = sqToBitboard(sq);
     const opp = p_board.b.c_occupiedBB[whiteBoolToInt(!white)];
@@ -1022,6 +1022,21 @@ pub inline fn getAllAttackerFromSq(p_board: *const boardl.boardState, white: boo
     ret |= _AllAttackPawnMask(bb, white) & (p_board.getPieceBB_t(.PAWN));
     ret |= getKingAttacks(sq) & (p_board.getPieceBB_t(.KING));
     return ret & opp;
+}
+pub fn _getAllAttackerFromSq(p_board: *const boardl.boardState, occ: u64, white: bool, sq: e_square) u64 {
+    const bb = sqToBitboard(sq);
+    var ret = knightAttacks(bb) & p_board.getPieceBB_t(.KNIGHT);
+    ret |= _AllAttackBishopMask(bb, occ) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN));
+    ret |= _AllAttackRookMask(bb, occ) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN));
+    ret |= _AllAttackPawnMask(bb, white) & (p_board.getPieceBB_t(.PAWN));
+    ret |= getKingAttacks(sq) & (p_board.getPieceBB_t(.KING));
+    return ret & p_board.b.c_occupiedBB[whiteBoolToInt(!white)] & occ;
+}
+pub fn slider_getAllAttackerFromSq(p_board: *const boardl.boardState, occ: u64, white: bool, sq: e_square) u64 {
+    const bb = sqToBitboard(sq);
+    var ret = _AllAttackBishopMask(bb, occ) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN));
+    ret |= _AllAttackRookMask(bb, occ) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN));
+    return ret & p_board.b.c_occupiedBB[whiteBoolToInt(!white)] & occ;
 }
 
 pub inline fn getCheckers(p_board: *boardl.boardState, white: bool) void {

@@ -965,8 +965,10 @@ pub inline fn southWestOne(bb: u64) u64 {
 pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
     const white: bool = p_state.whiteToMove();
     const from = move.getFrom();
+    const to = move.getTo();
     const fromBB = chess.xToBitboard(from);
     const otherKing: u8 = @intFromEnum(p_state.getKingSq(!white));
+    const otherKingBB = chess.xToBitboard(otherKing);
     var piece = p_state.getPiece(from);
     if ((p_state.frame.pinnedBB & fromBB) != 0) {
         //const to = move.getTo();
@@ -983,60 +985,95 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
     if (chess.isKingPiece(piece)) {
         if (move.isCastle()) {
             const castleSq: e_square = if (move.isQueenSideCastle()) (@enumFromInt(toSq + 1)) else (@enumFromInt(toSq - 1));
-            return (chess.getRookAttacks(p_state.b.occupiedBB() ^ fromBB, castleSq) & chess.xToBitboard(otherKing)) != 0;
+            return (chess.getRookAttacks(p_state.b.occupiedBB() ^ fromBB, castleSq) & otherKingBB) != 0;
         } else {
             return false;
         }
     }
-    const _occ = p_state.b.occupiedBB() ^ fromBB;
-    var att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), _occ) catch {
+    const occ = p_state.b.occupiedBB();
+    const _occ = occ ^ fromBB;
+    const att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), _occ) catch {
         std.debug.print("[PANIC] panic with move {s}\n", .{move.getStr()});
+        chess.print_boardstate(p_state);
         chess.sanityCheckBoardState(p_state);
         @panic("???");
     };
-    const toBB = chess.xToBitboard(toSq);
-    const proxim = chess.getKingAttacks(@enumFromInt(otherKing)) & fromBB;
-    const inB = chess.inBetweenX(from, otherKing) | proxim;
-    const nproxim = chess.getKingAttacks(@enumFromInt(otherKing)) & toBB;
-    const ninB = chess.inBetweenX(toSq, otherKing) | nproxim;
-    if ((inB & ninB) == 0) {
-        att |= chess.getAllAttackMask(p_state, _occ, white);
+    if ((att & otherKingBB) != 0) {
+        return true;
     }
-    return ((att) & chess.xToBitboard(otherKing)) != 0;
-}
-pub const moveGene = struct {
-    // generates pseudo legal moves
-    _moves: moveContainer = .{},
-    idx: u8 = 0,
 
-    pub fn next(self: *moveGene) ?movel.IMove {
-        if (self.idx == self._moves.len) {
+    return (chess.slider_getAllAttackerFromSq(p_state, occ ^ chess.xToBitboard(from) ^ chess.xToBitboard(to), white, @enumFromInt(otherKing))) != 0;
+}
+pub const typeMoveGenerator = struct {
+    // generates pseudo legal moves
+    _moves: movesScores = undefined,
+    idx: u8 = 0,
+    phase: typel.e_moveGenFlag = .NONE,
+
+    pub fn init() typeMoveGenerator {
+        var ret: typeMoveGenerator = undefined;
+        ret.idx = 0;
+        ret.phase = .NONE;
+        ret._moves.moves.len = 0;
+        return ret;
+    }
+
+    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool, skipQuiet: bool) ?movel.IMove {
+        if (p_self.phase == .NONE) {
+            p_self.phase = .CAPTURE;
+            p_self.generateMove(.CAPTURE, state);
+            heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
+        }
+        if (p_self.idx >= p_self._moves.moves.len) {
+            if (p_self.phase == .CAPTURE and !skipQuiet) {
+                p_self.phase = .QUIET;
+                p_self.generateMove(.QUIET, state);
+                heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
+                if (p_self._moves.moves.len == 0) {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+        }
+        if (skipQuiet and p_self.phase == .QUIET) {
             return null;
         }
-        self.idx += 1;
-        return self._moves[self.idx];
+        var bestScore = p_self._moves.scores[p_self.idx];
+        var ret = p_self._moves.moves.moves[p_self.idx];
+        var bestId = p_self.idx;
+        for ((p_self.idx + 1)..p_self._moves.moves.len) |i| {
+            const score = p_self._moves.scores[i];
+            if (score > bestScore) {
+                bestScore = score;
+                ret = p_self._moves.moves.moves[i];
+                bestId = @intCast(i);
+            }
+        }
+        // see Patricia
+        std.mem.swap(IMove, &p_self._moves.moves.moves[p_self.idx], &p_self._moves.moves.moves[bestId]);
+        std.mem.swap(scoreType, &p_self._moves.scores[p_self.idx], &p_self._moves.scores[bestId]);
+        p_self.idx += 1;
+        return ret;
     }
-    pub inline fn generateMove(self: *moveGene, comptime t: typel.e_moveGenFlag, p_state: *const boardState) void {
-        self._moves.len = 0;
-        generateMoveT(&self._moves, t, p_state);
+    pub inline fn generateMove(self: *typeMoveGenerator, comptime t: typel.e_moveGenFlag, p_state: *const boardState) void {
+        self.idx = 0;
+        self._moves.moves.len = 0;
+        generateMoveT(&self._moves.moves, t, p_state);
     }
-    pub inline fn generateAll(self: *moveGene, p_state: *const boardState) void {
-        self._moves.len = 0;
-        generateMoveT(&self._moves, .ALL, p_state);
+    pub inline fn generateAll(self: *typeMoveGenerator, p_state: *const boardState) void {
+        self.idx = 0;
+        self._moves.moves.len = 0;
+        generateMoveT(&self._moves.moves, .ALL, p_state);
     }
-    pub fn getMoveCounts(self: *moveGene, p_state: *const boardState) moveTypeCount {
+    pub fn getMoveCounts(self: *typeMoveGenerator, p_state: *const boardState) moveTypeCount {
         var ret: moveTypeCount = .{};
         self.generateMove(.QUIET, p_state);
-        ret.quiet = self._moves.len;
+        ret.quiet = self._moves.moves.len;
 
         self.generateMove(.CAPTURE, p_state);
-        ret.capture = self._moves.len;
+        ret.capture = self._moves.moves.len;
 
-        self.generateMove(.PROMO, p_state);
-        ret.promo = self._moves.len;
-
-        self.generateMove(.EVASION, p_state);
-        ret.evasion = self._moves.len;
         return ret;
     }
 };
@@ -1047,24 +1084,25 @@ pub fn generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, p_sta
     return _generateMoveT(out, t, false, p_state);
 }
 pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comptime white: bool, p_state: *const boardState) void {
-    const emptyOrEnemy = if (comptime t == .EVASION) (p_state.frame.checkersBB) else (~p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)]);
+    const isCheck = p_state.isChecked();
+    const _emptyOrEnemy = ~p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)];
+    const emptyOrEnemy = if (isCheck) (p_state.frame.checkersBB) else (_emptyOrEnemy);
     const occ = p_state.b.occupiedBB();
 
-    if (comptime t == .EVASION) {
-        const doubleCheck = if (p_state.isChecked()) (p_state.frame.checkersBB & (p_state.frame.checkersBB - 1) != 0) else false;
-        if (doubleCheck) {
-            return generatePieceMove(out, t, white, .KING, p_state, occ, emptyOrEnemy);
+    if (isCheck) {
+        if (p_state.frame.checkersBB & (p_state.frame.checkersBB - 1) != 0) {
+            return generatePieceMove(out, t, white, .KING, p_state, occ, _emptyOrEnemy);
         }
+        generatePieceMove(out, t, white, .KING, p_state, occ, _emptyOrEnemy);
+    } else {
+        generatePieceMove(out, t, white, .KING, p_state, occ, _emptyOrEnemy);
     }
 
     generatePieceMove(out, t, white, .PAWN, p_state, occ, emptyOrEnemy);
-    if (comptime t != .PROMO) {
-        generatePieceMove(out, t, white, .BISHOP, p_state, occ, emptyOrEnemy);
-        generatePieceMove(out, t, white, .KNIGHT, p_state, occ, emptyOrEnemy);
-        generatePieceMove(out, t, white, .ROOK, p_state, occ, emptyOrEnemy);
-        generatePieceMove(out, t, white, .QUEEN, p_state, occ, emptyOrEnemy);
-        generatePieceMove(out, t, white, .KING, p_state, occ, emptyOrEnemy);
-    }
+    generatePieceMove(out, t, white, .BISHOP, p_state, occ, emptyOrEnemy);
+    generatePieceMove(out, t, white, .KNIGHT, p_state, occ, emptyOrEnemy);
+    generatePieceMove(out, t, white, .ROOK, p_state, occ, emptyOrEnemy);
+    generatePieceMove(out, t, white, .QUEEN, p_state, occ, emptyOrEnemy);
 }
 pub fn generatePieceMove(out: *moveContainer, comptime t: typel.e_moveGenFlag, comptime white: bool, comptime p: typel.e_pieceType, p_state: *const boardState, occ: u64, emptyOrEnemy: u64) void {
     if (comptime p == .PAWN) {
@@ -1075,17 +1113,14 @@ pub fn generatePieceMove(out: *moveContainer, comptime t: typel.e_moveGenFlag, c
         const sq = if (comptime white) p_state.b.wKingSq else p_state.b.bKingSq;
         const sqX: u8 = @intFromEnum(sq);
         const att = chess.getKingAttacks(sq);
-        if (comptime t == .CAPTURE or t == .ALL or t == .EVASION) {
+        if (comptime t == .CAPTURE or t == .ALL) {
             genericStagedMovePushCapture(out, att & emptyOrEnemy & occ, @intFromEnum(sq));
         }
-        if (comptime t == .QUIET or t == .ALL or t == .EVASION) {
-            genericStagedMovePushQuiet(out, att & emptyOrEnemy & (~occ), @intFromEnum(sq));
-        }
         if (comptime t == .QUIET or t == .ALL) {
+            genericStagedMovePushQuiet(out, att & emptyOrEnemy & (~occ), @intFromEnum(sq));
             if (p_state.canKingSideCastle(white)) {
                 _ = movel.build_move_in(sqX, sqX + 2, @intFromEnum(e_moveFlags.KINGCASTLE), out);
             }
-
             if (p_state.canQueenSideCastle(white)) {
                 _ = movel.build_move_in(sqX, sqX - 2, @intFromEnum(e_moveFlags.QUEENCASTLE), out);
             }
@@ -1114,30 +1149,28 @@ pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: type
     const p = p_state.b.pieceBB[@intFromEnum(e_pieceType.PAWN)] & p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)];
     const empty = (~occ) & emptyOrEnemy;
 
-    if (comptime t == .QUIET or t == .ALL or t == .PROMO) {
+    if (comptime t == .QUIET or t == .ALL) {
         var bbProm = p & chess.maskOutPawnQuietMove(white, empty) & if (comptime white) chess.blackPawnDoubleRank else chess.whitePawnDoubleRank;
         while (bbProm != 0) {
             const sq = chess.bitscan(bbProm);
             bbProm &= bbProm - 1;
             push_promotion(sq, if (comptime white) (sq + 8) else (sq - 8), out);
         }
-        if (t != .PROMO) {
-            var bb: u64 = p & chess.maskOutPawnQuietMove(white, empty) & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
-            while (bb != 0) {
-                const sq = chess.bitscan(bb);
-                bb &= bb - 1;
-                _ = movel.build_move_in(sq, if (comptime white) (sq + 8) else (sq - 8), @intFromEnum(e_moveFlags.QUIETMOVE), out);
-            }
+        var bb: u64 = p & chess.maskOutPawnQuietMove(white, empty) & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
+        while (bb != 0) {
+            const sq = chess.bitscan(bb);
+            bb &= bb - 1;
+            _ = movel.build_move_in(sq, if (comptime white) (sq + 8) else (sq - 8), @intFromEnum(e_moveFlags.QUIETMOVE), out);
+        }
 
-            bb = p & chess.maskOutPawnDoublePush(white, empty);
-            while (bb != 0) {
-                const sq = chess.bitscan(bb);
-                bb &= bb - 1;
-                _ = movel.build_move_in(sq, if (comptime white) (sq + 16) else (sq - 16), @intFromEnum(e_moveFlags.DOUBLEPAWN), out);
-            }
+        bb = p & chess.maskOutPawnDoublePush(white, empty);
+        while (bb != 0) {
+            const sq = chess.bitscan(bb);
+            bb &= bb - 1;
+            _ = movel.build_move_in(sq, if (comptime white) (sq + 16) else (sq - 16), @intFromEnum(e_moveFlags.DOUBLEPAWN), out);
         }
     }
-    if (comptime t == .CAPTURE or t == .ALL or t == .PROMO) {
+    if (comptime t == .CAPTURE or t == .ALL) {
         var bbProm = p & if (comptime white) chess.blackPawnDoubleRank else chess.whitePawnDoubleRank;
         while (bbProm != 0) {
             const sq = chess.bitscan(bbProm);
@@ -1149,9 +1182,6 @@ pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: type
                 push_promotion_capture(sq, victim, out);
             }
         }
-        if (t == .PROMO) {
-            return;
-        }
 
         var bb: u64 = p & chess.maskOutPawnQuietMove(white, empty) & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
         while (bb != 0) {
@@ -1160,26 +1190,23 @@ pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: type
             const att = chess.getPawnAttacks(@enumFromInt(sq), white) & emptyOrEnemy & occ;
             genericStagedMovePushCapture(out, att, sq);
         }
-        if (comptime t != .EVASION) {
-            if (p_state.frame.enPassantIdx != 0) {
-                var validPs = chess.getPawnAttacks(@enumFromInt(p_state.frame.enPassantIdx), !white) & p;
-                while (validPs != 0) {
-                    const sq = chess.bitscan(validPs);
-                    validPs &= validPs - 1;
-                    _ = movel.build_move_in(sq, p_state.frame.enPassantIdx, @intFromEnum(e_moveFlags.ENPASSANT), out);
-                }
+        if (p_state.frame.enPassantIdx != 0) {
+            var validPs = chess.getPawnAttacks(@enumFromInt(p_state.frame.enPassantIdx), !white) & p;
+            while (validPs != 0) {
+                const sq = chess.bitscan(validPs);
+                validPs &= validPs - 1;
+                _ = movel.build_move_in(sq, p_state.frame.enPassantIdx, @intFromEnum(e_moveFlags.ENPASSANT), out);
             }
         }
     }
 }
-pub const genError = error{ quietMoveErr, captureMoveErr, promoMoveErr, evasionMoveErr, allMoveErr };
+pub const genError = error{ quietMoveErr, captureMoveErr, evasionMoveErr, allMoveErr };
 pub const moveTypeCount = struct {
     quiet: u8 = 0,
     capture: u8 = 0,
-    promo: u8 = 0,
     evasion: u8 = 0,
     pub fn all(self: moveTypeCount) u8 {
-        return self.quiet + self.capture + self.promo + self.evasion;
+        return self.quiet + self.capture + self.evasion;
     }
     pub fn compare(self: moveTypeCount, other: moveTypeCount) genError!bool {
         if (self.quiet != other.quiet) {
@@ -1190,10 +1217,7 @@ pub const moveTypeCount = struct {
             std.debug.print("capture move difference self {d} other {d}\n", .{ self.capture, other.capture });
             return genError.captureMoveErr;
         }
-        if (self.promo != other.promo) {
-            std.debug.print("promotion move difference self {d} other {d}\n", .{ self.promo, other.promo });
-            return genError.promoMoveErr;
-        }
+
         if (self.evasion != other.evasion) {
             std.debug.print("evasion move difference self {d} other {d}\n", .{ self.evasion, other.evasion });
             return genError.evasionMoveErr;
@@ -1211,15 +1235,17 @@ pub fn genTypeCountFromState(p_state: *const boardState) moveTypeCount {
         } else {
             ret.quiet += 1;
         }
-        if (move.isPromotion()) {
-            ret.promo += 1;
-        }
+
         if (p_state.isChecked() and chess.isKingPiece(p_state.getPiece(move.getFrom()))) {
             ret.evasion += 1;
         }
     }
     return ret;
 }
+pub const movesScores = struct {
+    moves: moveContainer = undefined,
+    scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
+};
 
 pub const moveOrdering = struct {
     indexes: [chess.MAX_POSSIBLE_MOVE]u8 = undefined,
@@ -1231,46 +1257,50 @@ pub const moveGenerator = struct {
     bbStateGenerated: bool = false,
     extra: generationModifiers = .NONE,
     idx: usize = 0,
-    moves: movel.moveContainer = undefined,
-    ordering: moveOrdering = undefined,
+    //moves: movel.moveContainer = undefined,
+    //ordering: moveOrdering = undefined,
+    _moves: movesScores = undefined,
 
     pub fn init() moveGenerator {
         var ret: moveGenerator = .{};
         ret.idx = 0;
         ret.extra = .NONE;
-        ret.ordering.len = 0;
-        ret.moves.len = 0;
+        ret._moves.moves.len = 0;
+
+        //ret.ordering.len = 0;
+        //ret.moves.len = 0;
         return ret;
     }
 
     pub fn fetchNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool) void {
         p_self.idx = 0;
-        p_self.moves.len = 0;
+        p_self._moves.moves.len = 0;
         if (!p_self.bbStateGenerated) {
             p_self.bbState = moveGenBB(state);
             p_self.bbStateGenerated = true;
         }
         if (p_self.extra == .NONE) {
-            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .CAPTURES);
+            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self._moves.moves, .CAPTURES);
             p_self.extra = .CAPTURES;
         } else if (p_self.extra == .CAPTURES) {
-            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self.moves, .QUIETMOVE);
+            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self._moves.moves, .QUIETMOVE);
             p_self.extra = .QUIETMOVE;
         } else {
             std.debug.print("[PANIC] fetchNext: found invalid extra {}\n", .{p_self.extra});
             @panic("");
         }
-        heuristicl._eval_move_sorting_mask(state, &p_self.moves, ply, hashMove, prevLineMove, useMVA, &p_self.ordering);
+        //heuristicl._eval_move_sorting_mask(state, &p_self.moves, ply, hashMove, prevLineMove, useMVA, &p_self.ordering);
+        heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
     }
     pub fn pickNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool, skipQuiet: bool) ?IMove {
         // fetchNext need to be called atleast once
         if (p_self.extra == .NONE) {
             p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
         }
-        if (p_self.idx >= p_self.moves.len) {
+        if (p_self.idx >= p_self._moves.moves.len) {
             if (p_self.extra == .CAPTURES and !skipQuiet) {
                 p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
-                if (p_self.moves.len == 0) {
+                if (p_self._moves.moves.len == 0) {
                     return null;
                 }
             } else {
@@ -1280,9 +1310,36 @@ pub const moveGenerator = struct {
         if (skipQuiet and p_self.extra == .QUIETMOVE) {
             return null;
         }
-        const idx = p_self.ordering.indexes[p_self.idx];
-        const ret: IMove = p_self.moves.moves[idx];
+
+        //const idx = p_self.ordering.indexes[p_self.idx];
+        //const ret: IMove = p_self.moves.moves[idx];
+        //p_self.idx += 1;
+        //return ret;
+        var bestScore = p_self._moves.scores[p_self.idx];
+        var ret = p_self._moves.moves.moves[p_self.idx];
+        var bestId = p_self.idx;
+        for ((p_self.idx + 1)..p_self._moves.moves.len) |i| {
+            const score = p_self._moves.scores[i];
+            if (score > bestScore) {
+                bestScore = score;
+                ret = p_self._moves.moves.moves[i];
+                bestId = @intCast(i);
+            }
+        }
+        // see Patricia
+        std.mem.swap(IMove, &p_self._moves.moves.moves[p_self.idx], &p_self._moves.moves.moves[bestId]);
+        std.mem.swap(scoreType, &p_self._moves.scores[p_self.idx], &p_self._moves.scores[bestId]);
         p_self.idx += 1;
         return ret;
     }
 };
+pub fn main() !void {
+    const state = try chess.getBoardFromFen("4R1K1/8/8/8/8/8/3R1k2/8 b - - 0 0");
+    chess.print_boardstate(&state);
+    var gen: typeMoveGenerator = .init();
+    gen.generateMove(.CAPTURE, &state);
+    gen._moves.moves.print();
+
+    gen.generateMove(.QUIET, &state);
+    gen._moves.moves.print();
+}
