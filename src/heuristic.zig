@@ -1197,8 +1197,10 @@ pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, from
     const diagPiece = (p_state.b.pieceBB[@intFromEnum(e_pieceType.BISHOP)] |
         p_state.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
 
-    const attacker = chess.getAllAttackerFromSq(p_state, !white, toSq);
-    const defender = chess.getAllAttackerFromSq(p_state, white, toSq);
+    var occ = p_state.b.occupiedBB();
+
+    const attacker = chess.getAllAttackerFromSq(p_state, occ, !white, toSq);
+    const defender = chess.getAllAttackerFromSq(p_state, occ, white, toSq);
 
     const attadef = attacker | defender;
     var fromSet = chess.sqToBitboard(fromSq);
@@ -1207,8 +1209,6 @@ pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, from
 
     const toSqInfo = squarel.squareInfo.init(toSq);
     const toSqDiags = toSqInfo.getDiagonalsBB();
-
-    var occ = p_state.b.occupiedBB();
 
     var gain: [32]scoreType = undefined;
     var d: usize = 0;
@@ -1257,9 +1257,10 @@ pub fn SEE_threshold(p_state: *const boardl.boardState, move: IMove, threshold: 
     const horizPiece = (p_state.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] | p_state.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
 
     const diagPiece = (p_state.b.pieceBB[@intFromEnum(e_pieceType.BISHOP)] | p_state.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]);
-    var occ = p_state.b.occupiedBB() ^ chess.xToBitboard(from);
+    const _occ = p_state.b.occupiedBB();
+    var occ = _occ ^ chess.xToBitboard(from);
     var white = p_state.whiteToMove();
-    var attadef = chess.getAllAttackerFromSq(p_state, !white, toSq) | chess.getAllAttackerFromSq(p_state, white, toSq);
+    var attadef = chess.getAllAttackerFromSq(p_state, _occ, !white, toSq) | chess.getAllAttackerFromSq(p_state, occ, white, toSq);
 
     while (true) {
         white = !white;

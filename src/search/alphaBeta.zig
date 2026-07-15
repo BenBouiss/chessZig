@@ -76,14 +76,14 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         _alpha = best_value;
     }
 
-    var gen: moveGenl.moveGenerator = .init();
-    //var gen: moveGenl.typeMoveGenerator = .init();
+    //var gen: moveGenl.moveGenerator = .init();
+    var gen: moveGenl.typeMoveGenerator = .init();
 
     var i: usize = 0;
     const historyBonus = heuristicl.computeHistoryBonus(depth);
 
     while (gen.pickNext(p_state, ply, .{}, currS.prevLineMove, true, true)) |move| : (i += 1) {
-        //if (!p_state.legal(move)) continue;
+        if (!p_state.legal(move)) continue;
         const from = move.getFrom();
         const fPiece = p_state.getPiece(from);
         const cPiece = p_state.getCapturePiece(move);
@@ -369,8 +369,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
 
     // staged
-    var gen: moveGenl.moveGenerator = .init();
-    //var gen: moveGenl.typeMoveGenerator = .init();
+    //var gen: moveGenl.moveGenerator = .init();
+    var gen: moveGenl.typeMoveGenerator = .init();
 
     ss.getFrame(ply + 2).failHighCount = 0;
 
@@ -379,7 +379,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if ((hashMove.isValid() and hashEval >= p_beta and hashMoveIsCapture) or (static_eval >= _beta)) {
             const tresh = p_beta - static_eval;
             while (gen.pickNext(p_state, ply, hashMove, currS.prevLineMove, false, true)) |move| {
-                //if (!p_state.legal(move)) continue;
+                if (!p_state.legal(move)) continue;
                 if (!heuristicl.SEE_threshold(p_state, move, tresh) or move.equal(excludedMove)) {
                     continue;
                 }
@@ -425,8 +425,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         if (move.equal(excludedMove)) {
             continue;
         }
-        //if (!p_state.legal(move)) continue;
-        if (!phaseReset and gen.extra == .QUIETMOVE) {
+        if (!p_state.legal(move)) continue;
+        //if (!phaseReset and gen.extra == .QUIET) {
+        if (!phaseReset and gen.phase == .QUIET) {
             phaseReset = true;
             phasePlay = 0;
         }
@@ -485,7 +486,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         var fullSearch: bool = false;
         var score: scoreType = 0;
 
-        // rewrite of search main search handling
+        // rewrite of main search handling
         // https://github.com/Adam-Kulju/Patricia/
         if (useLMR and phasePlay > weightl.moveReductionAmount) {
             var _lmrDepth = lmrDepth + fDepth;
@@ -504,7 +505,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             if (nextS.failHighCount > weightl.lmr_highFailCount) {
                 _lmrDepth += weightl.lmr_highFailScore;
             }
-            //_lmrDepth += (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(idx + 1)))));
             _lmrDepth += historyl.lmrBase[movesPlayed];
 
             const d = _depth - 1 - @as(u16, (@intCast(@min((@max(_lmrDepth, 0)) >> 10, _depth - 1))));
@@ -578,9 +578,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         update_corrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)])], bonus);
         update_corrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)])], bonus);
 
-        if (ply > 1) {
-            const prev1 = ss.getPrevFrame(ply, 1);
-            const prev2 = ss.getPrevFrame(ply, 2);
+        const prev1 = ss.getPrevFrame(ply, 1);
+        const prev2 = ss.getPrevFrame(ply, 2);
+        if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
             update_corrhist(&historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()], bonus);
         }
     }
@@ -591,7 +591,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
     return _alpha;
 }
-pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonus: scoreType, gen: *const moveGenl.moveGenerator, white: bool, comptime t: typel.e_moveGenFlag) void {
+pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonus: scoreType, gen: *const moveGenl.typeMoveGenerator, white: bool, comptime t: typel.e_moveGenFlag) void {
     for (0..gen._moves.moves.len) |j| {
         const _move = gen._moves.moves.moves[j];
         if (j != cutoffIdx) {

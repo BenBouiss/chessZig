@@ -1,13 +1,15 @@
 [engine1]
-path="engines/bin/engine_14_07_26_4";
-name="base + twk 3 ++";
+path="engines/bin/engine_15_07_26_3";
+//name="base + twk 4 (more pruning)";
+name="base + twk 7";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 //"debug on";
 
 [engine2]
-path="engines/bin/engine_14_07_26_3";
-name="base + twk 3";
+path="engines/bin/engine_15_07_26_4";
+//name="base + twk 3";
+name="base + twk 7 + extension on TT ALL";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 //"debug on";

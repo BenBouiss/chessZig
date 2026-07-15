@@ -934,10 +934,10 @@ pub const boardState = struct {
                 }
                 return self.canQueenSideCastleAtt(white, allAttacks);
             }
-            return chessl._getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from), white, @enumFromInt(to)) == 0;
+            return chessl.getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from), white, @enumFromInt(to)) == 0;
         }
         if (move.isEnpassant()) {
-            return chessl._getAllAttackerFromSq(self, occ ^ (chessl.xToBitboard(from) | chessl.xToBitboard(to) | chessl.sqToBitboard(chessl.enPassantVictimSq(from, to))), white, kingSq) == 0;
+            return chessl.getAllAttackerFromSq(self, occ ^ (chessl.xToBitboard(from) | chessl.xToBitboard(to) | chessl.sqToBitboard(chessl.enPassantVictimSq(from, to))), white, kingSq) == 0;
         }
         if (isCapture) {
             // ignores the replace bit at to
@@ -947,7 +947,7 @@ pub const boardState = struct {
     }
     pub fn isLegal(p_self: *const boardState, white: bool) bool {
         // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
-        const king_attacks = chessl.getAllAttackerFromSq(p_self, white, p_self.getKingSq(white));
+        const king_attacks = chessl.getAllAttackerFromSq(p_self, p_self.b.occupiedBB(), white, p_self.getKingSq(white));
         return king_attacks == 0;
     }
     pub inline fn isChecked(p_self: *const boardState) bool {
