@@ -1343,7 +1343,7 @@ pub fn saveTexelCsv(alloc: std.mem.Allocator) !void {
 }
 
 pub fn main(alloc: std.mem.Allocator) !void {
-    mainl.initAll(alloc, false);
+    chess.initAll(false);
     nnuel.nnueNet = try .init(alloc, configl.NET_PATH);
     //try sanityCheck();
     //try test_main();

@@ -421,7 +421,7 @@ pub fn test_viriBin(alloc: std.mem.Allocator) !void {
     try logFile.free(alloc);
 }
 pub fn main(alloc: std.mem.Allocator) !void {
-    mainl.initAll(alloc, false);
+    chessl.initAll(false);
     hashl._initOrReallocHashTable(alloc, 25, false);
     defer hashl.hashTable.free(alloc, false);
     try parsingLog_binF(alloc, 4);

@@ -850,7 +850,7 @@ fn sendOptions(p_self: *guiState, options: std.ArrayList(string), engineIndex: u
 }
 
 fn mainGuiThread(p_self: *guiState) !void {
-    mainl.initAll(p_self.alloc, p_self.status.debugMode);
+    chessl.initAll(p_self.status.debugMode);
 
     if (configl.USE_NNUE and !nnuel.nnueNet.inited) {
         nnuel.nnueNet = try .init(p_self.alloc, configl.NET_PATH);

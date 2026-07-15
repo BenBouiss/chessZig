@@ -1418,6 +1418,10 @@ fn test_inbetween() !void {
     print_bitboard(inBetween(.a8, .h1));
 }
 
+pub inline fn initAll(verbose: bool) void {
+    magicl._initMagic(&magicl.magicTable, verbose);
+}
+
 pub fn main(alloc: std.mem.Allocator) !void {
     _ = alloc;
     //mainl.initAll(alloc, true);

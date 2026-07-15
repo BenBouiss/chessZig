@@ -53,7 +53,9 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     var bestMove: IMove = .{};
     const static_eval = correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, p_state.whiteToMove()), ply);
     currS.staticEval = .{ .s = static_eval, .t = .STD };
-
+    if (p_state.isStaleMateRepetition()) {
+        return weightl.simpleStalemateScore;
+    }
     if (depth == 0) {
         p_info.searchStat.n_nodeExplored += 1;
         return static_eval;
@@ -361,7 +363,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
 
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
-    //if (_depth >= weightl.IIRDepth and !hashMove.isValid() and !currS.followPv and (hashType == .LOWER and t == .NonPV)) {
     if (_depth >= weightl.IIRDepth and !hashMove.isValid() and !currS.followPv and (hashType == .LOWER and t == .NonPV)) {
         //if (_depth >= weightl.IIRDepth and !hashMove.isValid() and !currS.followPv and !isAllNode) {
         _depth -= 1;
@@ -613,9 +614,9 @@ pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: s
     corr += historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)])];
     corr += historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)])];
 
-    if (ply > 1) {
-        const prev1 = ss.getPrevFrame(ply, 1);
-        const prev2 = ss.getPrevFrame(ply, 2);
+    const prev1 = ss.getPrevFrame(ply, 1);
+    const prev2 = ss.getPrevFrame(ply, 2);
+    if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
         corr += historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()];
     }
 

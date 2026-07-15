@@ -10,7 +10,7 @@ test "entry retrievale" {
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    mainl.initAll(arena, false);
+    chessl.initAll(false);
     hashl._initOrReallocHashTable(arena, 25, false);
     const m: u64 = (chessl.ONE << hashl.KEY_SHIFT);
     const white: bool = true;
@@ -42,7 +42,7 @@ test "entry overwrite" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
+    chessl.initAll(false);
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
 
@@ -70,7 +70,7 @@ test "entry replacement" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
+    chessl.initAll(false);
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
     const d = [_]u8{ 16, 4 };
@@ -104,7 +104,7 @@ test "zobrist key consistency" {
     //defer arena_allocator.deinit();
     //const alloc = arena_allocator.allocator();
     const alloc = std.heap.page_allocator;
-    mainl.initAll(alloc, false);
+    chessl.initAll(false);
     //std.debug.print("key_shift: {d}\n", .{hashl.KEY_SHIFT});
     //
     const path = "opening/8moves_v3.pgn";
