@@ -1,12 +1,12 @@
 const std = @import("std");
-const mainl = @import("../main.zig");
-const movel = @import("../move.zig");
-const moveGenl = @import("../move_generation.zig");
-const hashl = @import("../hashTable.zig");
-const enginel = @import("../engine.zig");
-const configl = @import("../config.zig");
-const timel = @import("../time.zig");
-const boardl = @import("../board.zig");
+const mainl = @import("main.zig");
+const movel = @import("move.zig");
+const moveGenl = @import("move_generation.zig");
+const hashl = @import("hashTable.zig");
+const enginel = @import("engine.zig");
+const configl = @import("config.zig");
+const timel = @import("time.zig");
+const boardl = @import("board.zig");
 
 const threadingl = @import("threading.zig");
 

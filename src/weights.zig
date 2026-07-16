@@ -426,6 +426,10 @@ pub var historyThreshCoeff: scoreType = -414; //coeff * d + c
 pub var historyThreshConst: scoreType = -98;
 pub var historyMinExplore: scoreType = 8;
 
+pub var singularExtensionMinDepth: scoreType = 4;
+pub var singularExtensionDeltaTTDepth: scoreType = 2;
+pub var singularExtensionDepthCoeff: scoreType = 2;
+
 // replace the array with y = a*x + b with x = depth
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 

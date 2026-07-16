@@ -10,7 +10,6 @@ const configl = @import("config.zig");
 const utilsl = @import("utils.zig");
 const mainl = @import("main.zig");
 const movel = @import("move.zig");
-const benchmarkl = @import("search/benchmark.zig");
 const ssel = @import("intrinsics/sse.zig");
 const mathl = @import("math.zig");
 
@@ -335,8 +334,8 @@ pub fn main(alloc: std.mem.Allocator) !void {
     const netPath = configl.NET_PATH;
 
     const net: network = try .init(alloc, netPath);
-    for (0..benchmarkl.benchmarkEntries.len) |i| {
-        const fen = benchmarkl.benchmarkEntries[i];
+    for (0..chessl.benchmarkEntries.len) |i| {
+        const fen = chessl.benchmarkEntries[i];
         debugTest(&net, fen);
     }
 

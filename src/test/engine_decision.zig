@@ -4,7 +4,7 @@ const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
 const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
-const perftl = @import("../search/perft.zig");
+const perftl = @import("../perft.zig");
 const enginel = @import("../engine.zig");
 
 const std = @import("std");

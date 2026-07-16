@@ -1,15 +1,15 @@
 const std = @import("std");
-const movel = @import("../move.zig");
-const heuristicl = @import("../heuristic.zig");
-const weightl = @import("../weights.zig");
-const hashl = @import("../hashTable.zig");
-const configl = @import("../config.zig");
-const boardl = @import("../board.zig");
-const typel = @import("../type.zig");
-const moveGenl = @import("../move_generation.zig");
-const historyl = @import("../history.zig");
-const chessl = @import("../chess.zig");
-const nnuel = @import("../nnue.zig");
+const movel = @import("move.zig");
+const heuristicl = @import("heuristic.zig");
+const weightl = @import("weights.zig");
+const hashl = @import("hashTable.zig");
+const configl = @import("config.zig");
+const boardl = @import("board.zig");
+const typel = @import("type.zig");
+const moveGenl = @import("move_generation.zig");
+const historyl = @import("history.zig");
+const chessl = @import("chess.zig");
+const nnuel = @import("nnue.zig");
 
 const threadingl = @import("threading.zig");
 const schedulerl = @import("scheduler.zig");
@@ -208,7 +208,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
 
     var hashEval: scoreType = 0;
     const excludedMove = threadD.excludedMove;
-    //const singularExt: bool = if (excludedMove.isValid()) true else false;
+    //const singularExt: bool = excludedMove.isValid();
     threadD.excludedMove = .{};
 
     if (_depth == 0 or schedulerl.outOfTime(p_info)) {
@@ -235,11 +235,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         hashEval = _entry.evaluation;
         hashType = _entry.nodeT();
         if (comptime t == .NonPV) {
-            if (hashType == .ALL or (hashType == .LOWER and hashEval >= _beta) or (hashType == .UPPER and hashEval >= _alpha)) {
+            if (hashType == .ALL or (hashType == .LOWER and hashEval >= _beta) or (hashType == .UPPER and hashEval <= _alpha)) {
                 return hashEval;
             }
         } else {
-            //if (hashType == .ALL) {
+            //if (hashType == .ALL and !extended) {
             //    extension += 1;
             //    extended = true;
             //}
@@ -585,10 +585,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         }
     }
     // .PV set to not store position that could be obtained after a possible nullmove. TODO: just filter out nullmove
-    if (hashFlag == .LOWER or comptime t == .PV) {
-        const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove, white);
-        writer.writeShort(s_entry);
-    }
+    //if (hashFlag == .LOWER or comptime t == .PV) {
+    const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), _alpha, hashFlag, bestMove, white);
+    writer.writeShort(s_entry);
+    //}
     return _alpha;
 }
 pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonus: scoreType, gen: *const moveGenl.typeMoveGenerator, white: bool, comptime t: typel.e_moveGenFlag) void {

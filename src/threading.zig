@@ -1,10 +1,10 @@
-const movel = @import("../move.zig");
+const movel = @import("move.zig");
 const schedulerl = @import("scheduler.zig");
-const configl = @import("../config.zig");
-const mainl = @import("../main.zig");
-const timel = @import("../time.zig");
-const lockl = @import("../lock.zig");
-const boardl = @import("../board.zig");
+const configl = @import("config.zig");
+const mainl = @import("main.zig");
+const timel = @import("time.zig");
+const lockl = @import("lock.zig");
+const boardl = @import("board.zig");
 
 const std = @import("std");
 
