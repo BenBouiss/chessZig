@@ -145,6 +145,6 @@ test "pins" {
     try std.testing.expectEqual(chessl.EMPTY, board.frame.checkersBB);
     try std.testing.expectEqual(0x7e00000000000000, board.frame.pinnedBB);
 
-    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(movel.e_moveFlags.QUIETMOVE))));
-    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(movel.e_moveFlags.QUIETMOVE))));
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(movel.e_moveFlags.QUIETMOVE)), false));
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(movel.e_moveFlags.QUIETMOVE)), false));
 }

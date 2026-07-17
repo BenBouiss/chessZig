@@ -260,6 +260,11 @@ pub fn appendAll() !void {
     add_param(&lmpMaxDepth, 3, 14, "lmpMaxDepth");
     add_param(&lmpBase, 1, 24, "lmpBase");
 
+    add_param(&moveReductionAmount, 1, 8, "moveReductionAmount");
+    add_param(&moveQsearchAmount, 1, 8, "moveQsearchAmount");
+
+    add_param(&moveGenMinSeeThreshold, -256, -32, "moveGenMinSeeThreshold");
+
     //const start = tunerOpts.items.len;
 
     //try add_param_1d(&global_Pawn_PSQT[0], -100, 200, "global_Pawn_PSQT_MG");
@@ -382,7 +387,8 @@ pub var rfpConst: scoreType = 42;
 
 pub var captureExtensionThresh: scoreType = 1111;
 
-pub const moveReductionAmount = 4;
+pub var moveReductionAmount: scoreType = 4;
+pub var moveQsearchAmount: scoreType = 4;
 
 // source: https://www.chessprogramming.org/King_Safety
 pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
@@ -429,6 +435,8 @@ pub var historyMinExplore: scoreType = 8;
 pub var singularExtensionMinDepth: scoreType = 4;
 pub var singularExtensionDeltaTTDepth: scoreType = 2;
 pub var singularExtensionDepthCoeff: scoreType = 2;
+
+pub var moveGenMinSeeThreshold: scoreType = -100;
 
 // replace the array with y = a*x + b with x = depth
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };

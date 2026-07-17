@@ -1102,27 +1102,7 @@ pub inline fn computeHistoryBonus(depth: u16) scoreType {
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
 }
-pub fn eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool) moveGenl.moveOrdering {
-    var ret: moveGenl.moveOrdering = undefined;
-    _eval_move_sorting_mask(p_state, p_moves, ply, hashMove, prevLineMove, mva, &ret);
-    return ret;
-}
-pub fn _eval_move_sorting_mask(p_state: *const boardl.boardState, p_moves: *const movel.moveContainer, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, ret: *moveGenl.moveOrdering) void {
-    var scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined;
-    const w: bool = p_state.whiteToMove();
 
-    for (0..p_moves.len) |i| {
-        ret.indexes[i] = @intCast(i);
-        scores[i] = eval_move_heuristic_line(p_state, p_moves.moves[i], ply, hashMove, prevLineMove, mva, w);
-    }
-    ret.len = p_moves.len;
-
-    std.mem.sort(u8, ret.indexes[0..p_moves.len], scores[0..p_moves.len], cmp_eval_move);
-
-    for (0..ret.len) |idx| {
-        ret.scores[idx] = scores[ret.indexes[idx]];
-    }
-}
 pub fn evalMoveScore(p_state: *const boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, ret: *moveGenl.movesScores) void {
     const w: bool = p_state.whiteToMove();
     for (0..ret.moves.len) |i| {
@@ -1146,7 +1126,7 @@ pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     const to = move.getTo();
-    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move)) {
+    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move, false)) {
         return false;
     }
     return SEE(p_state, move) < 0;
@@ -1155,7 +1135,7 @@ pub fn losingCaptureT(p_state: *const boardl.boardState, move: IMove, threshold:
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
     const safetyArea = chess.safetyArea(otherKingSq);
     const to = move.getTo();
-    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move)) {
+    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move, false)) {
         return false;
     }
     return !SEE_threshold(p_state, move, threshold);

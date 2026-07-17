@@ -8,6 +8,10 @@ const squarel = @import("square.zig");
 const boardl = @import("board.zig");
 const typel = @import("type.zig");
 const heuristicl = @import("heuristic.zig");
+const configl = @import("config.zig");
+const weightl = @import("weights.zig");
+const historyl = @import("history.zig");
+const magicl = @import("magic.zig");
 
 const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
@@ -955,7 +959,7 @@ pub inline fn southWestOne(bb: u64) u64 {
     return ((bb & chess.notAFile) >> 9);
 }
 
-pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
+pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove, isHashMove: bool) bool {
     const white: bool = p_state.whiteToMove();
     const from = move.getFrom();
     const to = move.getTo();
@@ -986,7 +990,7 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
     const occ = p_state.b.occupiedBB();
     const _occ = occ ^ fromBB;
     const att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), _occ) catch {
-        std.debug.print("[PANIC] panic with move {s}\n", .{move.getStr()});
+        std.debug.print("[PANIC] panic with move {s} is hash move {}\n", .{ move.getStr(), isHashMove });
         chess.print_boardstate(p_state);
         chess.sanityCheckBoardState(p_state);
         @panic("???");
@@ -999,7 +1003,13 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove) bool {
 }
 pub const typeMoveGenerator = struct {
     // generates pseudo legal moves
-    _moves: movesScores = undefined,
+    //_moves: movesScores = undefined,
+
+    captures: movesScores = undefined,
+    computedCapt: bool = false,
+    quiets: movesScores = undefined,
+    computedQuiet: bool = false,
+    badCaptures: movesScores = undefined,
     idx: u8 = 0,
     phase: typel.e_moveGenFlag = .NONE,
 
@@ -1007,72 +1017,148 @@ pub const typeMoveGenerator = struct {
         var ret: typeMoveGenerator = undefined;
         ret.idx = 0;
         ret.phase = .NONE;
-        ret._moves.moves.len = 0;
+        //ret._moves.moves.len = 0;
+        ret.captures.moves.len = 0;
+        ret.computedCapt = false;
+        ret.quiets.moves.len = 0;
+        ret.computedQuiet = false;
+        ret.badCaptures.moves.len = 0;
         return ret;
     }
+    pub fn reset(p_self: *typeMoveGenerator) void {
+        p_self.phase = .NONE;
+        p_self.idx = 0;
+    }
 
-    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool, skipQuiet: bool) ?movel.IMove {
+    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, seeThreshold: scoreType, skipQuiet: bool) ?struct { movel.IMove, scoreType } {
+        const white = state.whiteToMove();
         if (p_self.phase == .NONE) {
-            p_self.phase = .CAPTURE;
-            p_self.generateMove(.CAPTURE, state);
-            heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
+            p_self.phase = .TTMOVE;
+            if (hashMove.isValid() and !(hashMove.isQuietMove() and skipQuiet)) {
+                p_self.idx = 1;
+                return .{ hashMove, configl.ORDERING_LINE_VALUE + 1 };
+            }
         }
-        if (p_self.idx >= p_self._moves.moves.len) {
-            if (p_self.phase == .CAPTURE and !skipQuiet) {
-                p_self.phase = .QUIET;
-                p_self.generateMove(.QUIET, state);
-                if (p_self._moves.moves.len == 0) {
-                    return null;
+        if (p_self.phase == .TTMOVE) {
+            if (!p_self.computedCapt) {
+                p_self.generateMove(.CAPTURE, state);
+                //heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self.captures);
+                for (0..p_self.captures.moves.len) |i| {
+                    const move = p_self.captures.moves.moves[i];
+
+                    if (move.equal(prevLineMove)) {
+                        p_self.captures.scores[i] = configl.ORDERING_LINE_VALUE;
+                    } else {
+                        //p_self.captures.scores[i] = heuristicl.SEE(state, move);
+
+                        const to = move.getTo();
+                        const cPiece: u8 = if (move.isEnpassant()) (if (white) @intFromEnum(e_piece.nBlackPawn) else @intFromEnum(e_piece.nWhitePawn)) else @intFromEnum(state.getPiece(to));
+                        const fpiece: u8 = @intFromEnum(state.getFromPiece(move));
+                        p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + (heuristicl.SEE_values[cPiece] - heuristicl.SEE_values[fpiece]);
+                    }
                 }
-                heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
-            } else {
-                return null;
+            }
+            p_self.phase = .CAPTURE;
+        }
+        if (p_self.phase == .CAPTURE) {
+            while (p_self.idx < p_self.captures.moves.len) {
+                const ret = p_self.captures.getNext(p_self.idx);
+                p_self.idx += 1;
+                if (ret.@"0".equal(hashMove)) {
+                    continue;
+                }
+
+                //if (ret.@"1" > seeThreshold) {
+                //    return ret;
+                //} else {
+                //    p_self.badCaptures.scores[p_self.badCaptures.moves.len] = ret.@"1";
+                //    p_self.badCaptures.moves.append(ret.@"0");
+                //}
+                if (heuristicl.SEE_threshold(state, ret.@"0", seeThreshold)) {
+                    return ret;
+                } else {
+                    p_self.badCaptures.scores[p_self.badCaptures.moves.len] = ret.@"1";
+                    p_self.badCaptures.moves.append(ret.@"0");
+                }
             }
         }
-        if (skipQuiet and p_self.phase == .QUIET) {
-            return null;
+        if (p_self.phase == .CAPTURE) {
+            if (!p_self.computedQuiet and !skipQuiet) {
+                p_self.generateMove(.QUIET, state);
+                //heuristicl.evalMoveScore(state, ply, hashMove, capturesprevLineMove, useMVA, &p_self.quiets);
+                for (0..p_self.quiets.moves.len) |i| {
+                    const move = p_self.quiets.moves.moves[i];
+                    const to = move.getTo();
+                    const from = move.getFrom();
+
+                    if (move.equal(prevLineMove)) {
+                        p_self.quiets.scores[i] = configl.ORDERING_LINE_VALUE;
+                    } else if (move.equal(historyl.killerMoves[ply][0])) {
+                        p_self.quiets.scores[i] = configl.KILLER_0_HEURISTIC_VALUE;
+                    } else if (move.equal(historyl.killerMoves[ply][1])) {
+                        p_self.quiets.scores[i] = configl.KILLER_1_HEURISTIC_VALUE;
+                    } else if (move.isPromotion() and move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
+                        p_self.quiets.scores[i] = configl.ORDERING_PROMOTIONS;
+                    } else {
+                        p_self.quiets.scores[i] = historyl.historyHeuristic[chess.whiteBoolToInt(white)][from][to];
+                    }
+                }
+            }
+            p_self.phase = .QUIET;
         }
-        var bestScore = p_self._moves.scores[p_self.idx];
-        var ret = p_self._moves.moves.moves[p_self.idx];
-        var bestId = p_self.idx;
-        for ((p_self.idx + 1)..p_self._moves.moves.len) |i| {
-            const score = p_self._moves.scores[i];
-            if (score > bestScore) {
-                bestScore = score;
-                ret = p_self._moves.moves.moves[i];
-                bestId = @intCast(i);
+        if (p_self.phase == .QUIET and !skipQuiet) {
+            while (p_self.idx < p_self.quiets.moves.len) {
+                const ret = p_self.quiets.getNext(p_self.idx);
+                p_self.idx += 1;
+                if (ret.@"0".equal(hashMove)) {
+                    continue;
+                }
+                return ret;
+            }
+            p_self.idx = 0;
+            p_self.phase = .BADCAPTURE;
+        }
+        if (p_self.phase == .BADCAPTURE) {
+            if (p_self.idx < p_self.badCaptures.moves.len) {
+                const ret = .{ p_self.badCaptures.moves.moves[p_self.idx], p_self.badCaptures.scores[p_self.idx] };
+                p_self.idx += 1;
+                return ret;
             }
         }
-        // see Patricia
-        std.mem.swap(IMove, &p_self._moves.moves.moves[p_self.idx], &p_self._moves.moves.moves[bestId]);
-        std.mem.swap(scoreType, &p_self._moves.scores[p_self.idx], &p_self._moves.scores[bestId]);
-        p_self.idx += 1;
-        return ret;
+        return null;
     }
     pub inline fn generateMove(self: *typeMoveGenerator, comptime t: typel.e_moveGenFlag, p_state: *const boardState) void {
         self.idx = 0;
-        self._moves.moves.len = 0;
-        if (comptime t == .CAPTURE or t == .QUIET or t == .QUIET) {
-            generateMoveT(&self._moves.moves, t, p_state);
+        if (comptime t == .CAPTURE or t == .QUIET) {
+            if (comptime t == .CAPTURE) {
+                self.computedCapt = true;
+                self.captures.moves.len = 0;
+                generateMoveT(&self.captures.moves, t, p_state);
+            }
+            if (comptime t == .QUIET) {
+                self.computedQuiet = true;
+                self.quiets.moves.len = 0;
+                generateMoveT(&self.quiets.moves, t, p_state);
+            }
             return;
         }
-        if (comptime t == .CAPTURELEGAL) {
-            generateMoveT(&self._moves.moves, .CAPTURE, p_state);
-        } else if (comptime t == .QUIETLEGAL) {
-            generateMoveT(&self._moves.moves, .QUIET, p_state);
-        } else if (t == .ALLLEGAL) {
-            generateMoveT(&self._moves.moves, .ALL, p_state);
-        }
-        var skips: usize = 0;
-        for (0..self._moves.moves.len) |i| {
-            const move = self._moves.moves.moves[i];
-            if (p_state.legal(move)) {
-                self._moves.moves.moves[i - skips] = move;
-            } else {
-                skips += 1;
-            }
-        }
-        self._moves.moves.len -= @intCast(skips);
+        //if (comptime t == .CAPTURELEGAL) {
+        //    generateMoveT(&self._moves.moves, .CAPTURE, p_state);
+        //} else if (comptime t == .QUIETLEGAL) {
+        //    generateMoveT(&self._moves.moves, .QUIET, p_state);
+        //} else if (t == .ALLLEGAL) {
+        //    generateMoveT(&self._moves.moves, .ALL, p_state);
+        //}
+        //var skips: usize = 0;
+        //for (0..self._moves.moves.len) |i| {
+        //    const move = self._moves.moves.moves[i];
+        //    if (p_state.legal(move)) {
+        //        self._moves.moves.moves[i - skips] = move;
+        //    } else {
+        //        skips += 1;
+        //    }
+        //}
+        //self._moves.moves.len -= @intCast(skips);
     }
     pub inline fn generateAll(self: *typeMoveGenerator, p_state: *const boardState) void {
         self.idx = 0;
@@ -1082,10 +1168,10 @@ pub const typeMoveGenerator = struct {
     pub fn getMoveCounts(self: *typeMoveGenerator, p_state: *const boardState) moveTypeCount {
         var ret: moveTypeCount = .{};
         self.generateMove(.QUIET, p_state);
-        ret.quiet = self._moves.moves.len;
+        ret.quiet = self.quiets.moves.len;
 
         self.generateMove(.CAPTURE, p_state);
-        ret.capture = self._moves.moves.len;
+        ret.capture = self.captures.moves.len;
 
         return ret;
     }
@@ -1289,6 +1375,21 @@ pub fn genTypeCountFromState(p_state: *const boardState) moveTypeCount {
 pub const movesScores = struct {
     moves: moveContainer = undefined,
     scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
+    pub fn getNext(self: *movesScores, idx: usize) struct { movel.IMove, scoreType } {
+        var bestScore = self.scores[idx];
+        var bestId: usize = idx;
+        for (idx + 1..self.moves.len) |i| {
+            if (self.scores[i] > bestScore) {
+                bestScore = self.scores[i];
+                bestId = i;
+            }
+        }
+
+        // see Patricia
+        std.mem.swap(IMove, &self.moves.moves[idx], &self.moves.moves[bestId]);
+        std.mem.swap(scoreType, &self.scores[idx], &self.scores[bestId]);
+        return .{ self.moves.moves[idx], bestScore };
+    }
 };
 
 pub const moveOrdering = struct {
@@ -1296,102 +1397,18 @@ pub const moveOrdering = struct {
     scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
     len: u8 = 0,
 };
-pub const moveGenerator = struct {
-    bbState: moveBBState = undefined,
-    bbStateGenerated: bool = false,
-    extra: e_moveGenFlag = .NONE,
-    idx: usize = 0,
-    //moves: movel.moveContainer = undefined,
-    //ordering: moveOrdering = undefined,
-    _moves: movesScores = undefined,
 
-    pub fn init() moveGenerator {
-        var ret: moveGenerator = .{};
-        ret.idx = 0;
-        ret.extra = .NONE;
-        ret._moves.moves.len = 0;
-
-        //ret.ordering.len = 0;
-        //ret.moves.len = 0;
-        return ret;
-    }
-
-    pub fn fetchNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool) void {
-        p_self.idx = 0;
-        p_self._moves.moves.len = 0;
-        //var otherGen: typeMoveGenerator = .init();
-        if (!p_self.bbStateGenerated) {
-            p_self.bbState = moveGenBB(state);
-            p_self.bbStateGenerated = true;
-        }
-        if (p_self.extra == .NONE) {
-            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self._moves.moves, .CAPTURE);
-            p_self.extra = .CAPTURE;
-            //otherGen.generateMove(.CAPTURELEGAL, state);
-        } else if (p_self.extra == .CAPTURE) {
-            moveGenBBToMoveContainer(state, &p_self.bbState, &p_self._moves.moves, .QUIET);
-            p_self.extra = .QUIET;
-            //otherGen.generateMove(.QUIETLEGAL, state);
-        } else {
-            std.debug.print("[PANIC] fetchNext: found invalid extra {}\n", .{p_self.extra});
-            @panic("");
-        }
-        //if (otherGen._moves.moves.isDifferent(p_self._moves.moves)) {
-        //    chess.print_boardstate(state);
-        //    otherGen._moves.moves.printDifference(p_self._moves.moves);
-        //    @panic("");
-        //}
-
-        heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self._moves);
-    }
-    pub fn pickNext(p_self: *moveGenerator, state: *boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, useMVA: bool, skipQuiet: bool) ?IMove {
-        // fetchNext need to be called atleast once
-        if (p_self.extra == .NONE) {
-            p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
-        }
-        if (p_self.idx >= p_self._moves.moves.len) {
-            if (p_self.extra == .CAPTURE and !skipQuiet) {
-                p_self.fetchNext(state, ply, hashMove, prevLineMove, useMVA);
-                if (p_self._moves.moves.len == 0) {
-                    return null;
-                }
-            } else {
-                return null;
-            }
-        }
-        if (skipQuiet and p_self.extra == .QUIET) {
-            return null;
-        }
-
-        //const idx = p_self.ordering.indexes[p_self.idx];
-        //const ret: IMove = p_self.moves.moves[idx];
-        //p_self.idx += 1;
-        //return ret;
-        var bestScore = p_self._moves.scores[p_self.idx];
-        var ret = p_self._moves.moves.moves[p_self.idx];
-        var bestId = p_self.idx;
-        for ((p_self.idx + 1)..p_self._moves.moves.len) |i| {
-            const score = p_self._moves.scores[i];
-            if (score > bestScore) {
-                bestScore = score;
-                ret = p_self._moves.moves.moves[i];
-                bestId = @intCast(i);
-            }
-        }
-        // see Patricia
-        std.mem.swap(IMove, &p_self._moves.moves.moves[p_self.idx], &p_self._moves.moves.moves[bestId]);
-        std.mem.swap(scoreType, &p_self._moves.scores[p_self.idx], &p_self._moves.scores[bestId]);
-        p_self.idx += 1;
-        return ret;
-    }
-};
 pub fn main() !void {
-    const state = try chess.getBoardFromFen("r7/p1pp1QB1/qn6/3p4/4n3/7p/PPP2PPP/R3K2R b HA - 0 17");
+    //const state = try chess.getBoardFromFen("r7/p1pp1QB1/qn6/3p4/4n3/7p/PPP2PPP/R3K2R b HA - 0 17");
+
+    magicl._initMagic(&magicl.magicTable, false);
+    const state = try chess.getBoardFromFen("8/q7/8/3K4/8/8/2pN3p/8 b - - 3 113");
+
     chess.print_boardstate(&state);
     var gen: typeMoveGenerator = .init();
     gen.generateMove(.CAPTURE, &state);
-    gen._moves.moves.print();
+    gen.captures.moves.print();
 
     gen.generateMove(.QUIET, &state);
-    gen._moves.moves.print();
+    gen.quiets.moves.print();
 }

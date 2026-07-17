@@ -143,11 +143,11 @@ test "pseudo legal move generator" {
             switch (e) {
                 moveGenl.genError.quietMoveErr => {
                     gen.generateMove(.QUIET, &state);
-                    gen._moves.moves.printDifference(fmoves);
+                    gen.quiets.moves.printDifference(fmoves);
                 },
                 moveGenl.genError.captureMoveErr => {
                     gen.generateMove(.CAPTURE, &state);
-                    gen._moves.moves.printDifference(fmoves);
+                    gen.captures.moves.printDifference(fmoves);
                 },
                 moveGenl.genError.allMoveErr, moveGenl.genError.evasionMoveErr => {},
                 //moveGenl.genError.evasionMoveErr => {

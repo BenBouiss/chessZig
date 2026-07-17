@@ -251,10 +251,12 @@ pub fn sendFinal(decision: *const moveDecisionExt) void {
     respondNoEng(msg) catch unreachable;
 }
 
-pub fn respondNoEng(msg: []const u8) !void {
-    var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
-    var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
-    const interface = &writer.interface;
-    try interface.writeAll(msg);
-    try interface.flush();
+pub inline fn respondNoEng(msg: []const u8) !void {
+    try std.Io.File.stdout().writeStreamingAll(mainl.getGlobalIo(), msg);
+
+    //var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
+    //var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
+    //const interface = &writer.interface;
+    //try interface.writeAll(msg);
+    //try interface.flush();
 }

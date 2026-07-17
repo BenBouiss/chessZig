@@ -29,6 +29,8 @@ const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
 const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEPROBCUT, USERAZORING, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
+const e_goToken = enum(u8) { SEARCHMOVES, EVAL, PERFT, BATCHED, PONDER, WTIME, BTIME, WINC, BINC, MOVESTOGO, DEPTH, NODES, MATE, MOVETIME, INFINITE, VAL };
+
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
 
 pub const goArgStruct = struct {
@@ -389,21 +391,14 @@ pub const engine = struct {
 
         var msgBuffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
         const respmsg = std.fmt.bufPrint(&msgBuffer, "{s} \n", .{msg}) catch unreachable;
-        var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
-        var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
-        const interface = &writer.interface;
-        interface.writeAll(respmsg) catch |err| {
+
+        std.Io.File.stdout().writeStreamingAll(mainl.getGlobalIo(), respmsg) catch |err| {
             if (self.status.debugMode) {
                 std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
             }
             return;
         };
-        interface.flush() catch |err| {
-            if (self.status.debugMode) {
-                std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
-            }
-            return;
-        };
+
         if (self.saveLogs) {
             const _respmsg = std.fmt.allocPrint(self.alloc, "OUT: len {d} '{s}'\n", .{ respmsg.len, respmsg[0..@min(respmsg.len, respmsg.len - 1)] }) catch {
                 return;
@@ -715,11 +710,7 @@ pub const engine = struct {
         p_self.scheduler.handleInterrupt();
     }
     pub fn executeGoCmd(p_self: *engine, cmdBuffer: []const u8) bool {
-        var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer, ' ') catch {
-            return false;
-        };
-        defer tokens.deinit(p_self.alloc);
-        var goArg = parseGoCmd(&tokens);
+        var goArg = parseGoCmd(cmdBuffer);
 
         p_self.scheduler.reset();
 
@@ -814,80 +805,124 @@ pub fn printResults(fens: []const []const u8, reports: *const std.ArrayList(sche
         }
     }
 }
+fn cmdToGoToken(arg: []const u8) e_goToken {
+    if (utilsl.startsWith(arg, "searchmoves", .ignoreCase)) {
+        return .SEARCHMOVES;
+    } else if (utilsl.startsWith(arg, "eval", .ignoreCase)) {
+        return .EVAL;
+    } else if (utilsl.startsWith(arg, "perft", .ignoreCase)) {
+        return .PERFT;
+    } else if (utilsl.startsWith(arg, "batched", .ignoreCase)) {
+        return .BATCHED;
+    } else if (utilsl.startsWith(arg, "ponder", .ignoreCase)) {
+        return .PONDER;
+    } else if (utilsl.startsWith(arg, "wtime", .ignoreCase)) {
+        return .WTIME;
+    } else if (utilsl.startsWith(arg, "btime", .ignoreCase)) {
+        return .BTIME;
+    } else if (utilsl.startsWith(arg, "winc", .ignoreCase)) {
+        return .WINC;
+    } else if (utilsl.startsWith(arg, "binc", .ignoreCase)) {
+        return .BINC;
+    } else if (utilsl.startsWith(arg, "movestogo", .ignoreCase)) {
+        return .MOVESTOGO;
+    } else if (utilsl.startsWith(arg, "depth", .ignoreCase)) {
+        return .DEPTH;
+    } else if (utilsl.startsWith(arg, "nodes", .ignoreCase)) {
+        return .NODES;
+    } else if (utilsl.startsWith(arg, "mate", .ignoreCase)) {
+        return .MATE;
+    } else if (utilsl.startsWith(arg, "movetime", .ignoreCase)) {
+        return .MOVETIME;
+    } else if (utilsl.startsWith(arg, "infinite", .ignoreCase)) {
+        return .INFINITE;
+    } else {
+        return .VAL;
+    }
+}
 
-fn parseGoCmd(tokens: *std.ArrayList([]const u8)) goArgStruct {
+fn parseGoCmd(cmd: []const u8) goArgStruct {
     var goArgs: goArgStruct = .{};
-    var tokenIndex: u32 = 1;
-    while (tokenIndex < tokens.items.len) {
-        const arg = tokens.items[tokenIndex];
+    var gen = utilsl.splitGenerator(u8).init(cmd, ' ');
+    while (gen.next()) |arg| {
         if (utilsl.startsWith(arg, "searchmoves", .ignoreCase)) {
             goArgs.searchMoves = true;
-            tokenIndex -= 1;
         } else if (utilsl.startsWith(arg, "eval", .ignoreCase)) {
             goArgs.type = .EVAL;
-            tokenIndex -= 1;
         } else if (utilsl.startsWith(arg, "perft", .ignoreCase)) {
             goArgs.type = .PERFT;
-            tokenIndex -= 1;
         } else if (utilsl.startsWith(arg, "batched", .ignoreCase)) {
             goArgs.useBatched = true;
-            tokenIndex -= 1;
         } else if (utilsl.startsWith(arg, "ponder", .ignoreCase)) {
             goArgs.type = .PONDER;
-            tokenIndex -= 1;
         } else if (utilsl.startsWith(arg, "wtime", .ignoreCase)) {
-            goArgs.wtime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.wtime = std.fmt.parseInt(u32, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "btime", .ignoreCase)) {
-            goArgs.btime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.btime = std.fmt.parseInt(u32, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "winc", .ignoreCase)) {
-            goArgs.winc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.winc = std.fmt.parseInt(u32, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "binc", .ignoreCase)) {
-            goArgs.binc = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.binc = std.fmt.parseInt(u32, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "movestogo", .ignoreCase)) {
-            goArgs.movestogo = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.movestogo = std.fmt.parseInt(u32, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "depth", .ignoreCase)) {
-            goArgs.depth = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.depth = std.fmt.parseInt(u16, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "nodes", .ignoreCase)) {
-            goArgs.nodes = std.fmt.parseInt(u64, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.nodes = std.fmt.parseInt(u64, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "mate", .ignoreCase)) {
-            goArgs.mate = std.fmt.parseInt(u16, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.mate = std.fmt.parseInt(u16, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
         } else if (utilsl.startsWith(arg, "movetime", .ignoreCase)) {
-            goArgs.movetime = std.fmt.parseInt(u32, tokens.items[tokenIndex + 1], 10) catch {
-                tokenIndex += 1;
-                continue;
-            };
+            if (gen.next()) |val| {
+                goArgs.movetime = std.fmt.parseInt(u32, val, 10) catch {
+                    gen.rewind();
+                    continue;
+                };
+            }
             goArgs.wtime = goArgs.movetime;
             goArgs.btime = goArgs.movetime;
         } else if (utilsl.startsWith(arg, "infinite", .ignoreCase)) {
             goArgs.infinite = true;
-        } else {
-            tokenIndex -= 1;
         }
-        tokenIndex += 2;
     }
 
     return goArgs;

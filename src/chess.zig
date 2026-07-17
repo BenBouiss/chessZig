@@ -683,6 +683,8 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
     }
 
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
+    std.debug.print("Move history:", .{});
+    p_board_state.moveHistory.print();
 
     const eval = heuristicl.evaluate_debug(p_board_state);
     std.debug.print("Current evaluation: phase {d} piece phase {d}\n", .{ p_board_state.getPhase(), p_board_state.frame.phase });
@@ -834,6 +836,35 @@ pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
         },
     }
 }
+pub fn getRelevantMove(piece: e_piece, sq: e_square, occ: u64) !u64 {
+    switch (piece) {
+        .nWhiteKing, .nBlackKing => {
+            return getKingAttacks(sq);
+        },
+        .nWhiteBishop, .nBlackBishop => {
+            return getBishopAttacks(occ, sq);
+        },
+        .nWhiteRook, .nBlackRook => {
+            return getRookAttacks(occ, sq);
+        },
+        .nWhiteKnight, .nBlackKnight => {
+            return knightAttacks(sqToBitboard(sq));
+        },
+        .nWhitePawn => {
+            return (getPawnAttacks(sq, true) & occ) | (maskOutPawnQuietMove(true, ~occ) & sqToBitboard(sq));
+        },
+        .nBlackPawn => {
+            return (getPawnAttacks(sq, false) & occ) | (maskOutPawnQuietMove(false, ~occ) & sqToBitboard(sq));
+        },
+        .nWhiteQueen, .nBlackQueen => {
+            return getQueenAttacks(occ, sq);
+        },
+        .nWhite, .nBlack, .nEmptySquare => {
+            std.debug.print("[PANIC] getRelevantAttacks for piece {} at {d}\n", .{ piece, sq });
+            return debug_err.valueErr;
+        },
+    }
+}
 pub inline fn e_pieceTo_e_pieceType(piece: e_piece) e_pieceType {
     const _p = @intFromEnum(piece);
     return @enumFromInt(_p % N_PIECES_TYPES);
@@ -901,6 +932,12 @@ pub inline fn maskOutPawnDoublePush(comptime white: bool, empty: u64) u64 {
         return (ret >> 8) & ret & whitePawnDoubleRank;
     }
     return (ret << 8) & ret & blackPawnDoubleRank;
+}
+pub inline fn _maskOutPawnDoublePush(white: bool, empty: u64) u64 {
+    if (white) {
+        return maskOutPawnDoublePush(true, empty);
+    }
+    return maskOutPawnDoublePush(false, empty);
 }
 
 pub inline fn getSqDiag(sq: e_square) i8 {

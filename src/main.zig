@@ -45,7 +45,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     const GPA = init.gpa;
     _ = GPA;
     hashl.zobristKeys.print();
-    //try moveGenl.main();
+    try moveGenl.main();
 
     //try bookl.main(GPA);
     //try chessl.main(GPA);

@@ -160,6 +160,11 @@ pub fn splitGenerator(comptime T: type) type {
         pub fn reset(p_self: *self) void {
             p_self.idx = 0;
         }
+        pub inline fn rewind(p_self: *self) void {
+            if (p_self.idx > 0) {
+                p_self.idx -= 1;
+            }
+        }
         pub fn len(p_self: *self) usize {
             var ret: usize = 0;
             const prevIdx = p_self.idx;

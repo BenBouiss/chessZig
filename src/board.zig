@@ -1019,12 +1019,21 @@ pub const boardState = struct {
         if (!move.isValid()) {
             return false;
         }
+        const white = self.whiteToMove();
+        if (white) {
+            return self._isMovePseudoLegal(move, true);
+        }
+        return self._isMovePseudoLegal(move, false);
+    }
+    pub fn _isMovePseudoLegal(self: *const boardState, move: IMove, comptime white: bool) bool {
         const from = move.getFrom();
         const to = move.getTo();
         const fromBB = chessl.xToBitboard(from);
         const toBB = chessl.xToBitboard(to);
-        const white = self.whiteToMove();
-        if (fromBB & self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] == 0) {
+        const us = self.b.c_occupiedBB[chessl.whiteBoolToInt(white)];
+        const enemy = self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)];
+        const occ = us | enemy;
+        if (fromBB & us == 0) {
             return false;
         }
         if (move.isCapture()) {
@@ -1033,18 +1042,37 @@ pub const boardState = struct {
                     return false;
                 }
             } else {
-                if (toBB & self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)] == 0 or toBB & self.b.c_occupiedBB[chessl.whiteBoolToInt(white)] != 0) {
+                if (toBB & enemy == 0) {
                     // catches case where trying to capture own piece
                     return false;
                 }
             }
         } else {
             if (move.isCastle()) {
-                return self.frame.stat._canCastle(white);
+                if (move.isKingSideCastle()) {
+                    return self.canKingSideCastle(white);
+                } else {
+                    return self.canQueenSideCastle(white);
+                }
             }
-            if (toBB & self.b.occupiedBB() != 0) {
+            if (move.isDoublePush()) {
+                if (fromBB & chessl.maskOutPawnDoublePush(white, ~occ) == 0) {
+                    return false;
+                }
+            }
+            if (toBB & occ != 0) {
                 return false;
             }
+        }
+        const p = self.getPiece(from);
+        if (p == .nEmptySquare) {
+            return false;
+        }
+        const movesBB = chessl.getRelevantMove(p, @enumFromInt(from), occ) catch {
+            return false;
+        };
+        if ((toBB & movesBB) == 0) {
+            return false;
         }
         return true;
     }
