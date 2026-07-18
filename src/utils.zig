@@ -145,11 +145,11 @@ pub fn splitGenerator(comptime T: type) type {
             return .{ .sep = sep, .slice = a, .idx = 0 };
         }
         pub fn get(p_self: *self, idx: usize) ?[]const T {
-            var id = 0;
+            var id: usize = 0;
             var ret = p_self.next();
             while (id != idx) {
-                if (!ret) {
-                    return ret;
+                if (ret == null) {
+                    return null;
                 }
                 ret = p_self.next();
                 id += 1;

@@ -67,11 +67,11 @@ pub const uciState = struct {
                     return ret;
                 },
                 .UCI => {
-                    respond("ICU");
+                    respond("ICU\n");
                     return true;
                 },
                 .PONDERHIT => {
-                    respond("pondering ...");
+                    respond("pondering ...\n");
                     return true;
                 },
                 .BENCHMARK => {
@@ -123,18 +123,7 @@ pub fn loop(alloc: std.mem.Allocator) !void {
 }
 
 pub fn respond(msg: []const u8) void {
-    var buffer: [configl.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
-    var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
-    const interface = &writer.interface;
-    interface.writeAll(msg) catch |err| {
-        std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
-        return;
-    };
-    interface.writeAll("\n") catch |err| {
-        std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
-        return;
-    };
-    interface.flush() catch |err| {
+    std.Io.File.stdout().writeStreamingAll(mainl.getGlobalIo(), msg) catch |err| {
         std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
         return;
     };

@@ -12,6 +12,13 @@ pub const searchStatistic = struct {
     n_cutoffs: u64 = 0,
     n_hashRetrieve: u64 = 0,
     n_nodeExplored: u64 = 0,
+    n_hashMoveDone: u64 = 0,
+    pub fn add(self: *searchStatistic, other: searchStatistic) void {
+        self.n_cutoffs += other.n_cutoffs;
+        self.n_hashRetrieve += other.n_hashRetrieve;
+        self.n_nodeExplored += other.n_nodeExplored;
+        self.n_hashMoveDone += other.n_hashMoveDone;
+    }
 };
 /// Benchmark function to test the node generation speed in
 /// "real world" settings mainly computing heuristics...
@@ -50,9 +57,7 @@ pub fn getCombinedFromPack(p_array: *threadPackageArray) threadInfo {
     var ret: threadInfo = .{};
     for (0..p_array.len) |i| {
         const info = p_array.items(._tInfo)[i];
-        ret.searchStat.n_nodeExplored += info.searchStat.n_nodeExplored;
-        ret.searchStat.n_hashRetrieve += info.searchStat.n_hashRetrieve;
-        ret.searchStat.n_cutoffs += info.searchStat.n_cutoffs;
+        ret.searchStat.add(info.searchStat);
         if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
             ret.currentBest = info.currentBest;
         }
@@ -179,9 +184,7 @@ pub const threadPool = struct {
         var ret: threadInfo = .{};
         for (0..p_self.nThread) |i| {
             const info = p_self.threadInfos[i];
-            ret.searchStat.n_nodeExplored += info.searchStat.n_nodeExplored;
-            ret.searchStat.n_hashRetrieve += info.searchStat.n_hashRetrieve;
-            ret.searchStat.n_cutoffs += info.searchStat.n_cutoffs;
+            ret.searchStat.add(info.searchStat);
             if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
                 ret.currentBest = info.currentBest;
                 ret.depth = info.depth;

@@ -385,10 +385,6 @@ pub const engine = struct {
     }
 
     pub fn respond(self: *engine, msg: []const u8) void {
-        if (self.status.debugMode) {
-            std.debug.print("[DEBUG] respond.engine: sending msg: '{s}'\n", .{msg});
-        }
-
         var msgBuffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
         const respmsg = std.fmt.bufPrint(&msgBuffer, "{s} \n", .{msg}) catch unreachable;
 
@@ -401,36 +397,6 @@ pub const engine = struct {
 
         if (self.saveLogs) {
             const _respmsg = std.fmt.allocPrint(self.alloc, "OUT: len {d} '{s}'\n", .{ respmsg.len, respmsg[0..@min(respmsg.len, respmsg.len - 1)] }) catch {
-                return;
-            };
-            defer self.alloc.free(_respmsg);
-            self.appendLog(_respmsg) catch {
-                return;
-            };
-        }
-    }
-    pub fn respondNonFmt(self: *engine, msg: []const u8) void {
-        if (self.status.debugMode) {
-            std.debug.print("[DEBUG] respondNonFmt.engine: sending msg: '{s}'\n", .{msg});
-        }
-
-        var buffer: [configl.MAX_USER_INPUT]u8 = undefined; // Buffer for stdout
-        var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
-        const interface = &writer.interface;
-        interface.writeAll(msg) catch |err| {
-            if (self.status.debugMode) {
-                std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
-            }
-            return;
-        };
-        interface.flush() catch |err| {
-            if (self.status.debugMode) {
-                std.debug.print("[DEBUG] respond.engine: caught err: {}\n", .{err});
-            }
-            return;
-        };
-        if (self.saveLogs) {
-            const _respmsg = std.fmt.allocPrint(self.alloc, "OUT: len {d} '{s}'\n", .{ msg.len, msg[0..@min(msg.len, msg.len - 1)] }) catch {
                 return;
             };
             defer self.alloc.free(_respmsg);
@@ -601,9 +567,10 @@ pub const engine = struct {
             },
 
             .CLEAR_HASH => {
-                return p_self.updateHash(p_self.options.hashTableSize) catch {
-                    return false;
-                };
+                if (hashTablel.hashTable.initialized) {
+                    hashTablel.hashTable.zero();
+                }
+                return true;
             },
             .PRINT_METRIC => {
                 p_self.printMetrics();
@@ -641,15 +608,17 @@ pub const engine = struct {
         const cmdOffset = 8;
         //* position [fen <fenstring> | startpos ]  moves <move1> .... <movei>
         // ex: position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah -
+        var gen = utilsl.splitGenerator(u8).init(cmdBuffer, ' ');
+        const modifier = gen.get(1) orelse return false;
 
-        if (utilsl.contains(cmdBuffer, "startpos", .ignoreCase)) {
+        if (utilsl.startsWith(modifier, "startpos", .ignoreCase)) {
             p_self.state = chess.getBoardFromFen(chess.DEFAULT_FEN) catch {
                 return false;
             };
             chess.applyUciMoves(&p_self.state, cmdBuffer[cmdOffset..], p_self.status.debugMode) catch {
                 return false;
             };
-        } else if (utilsl.contains(cmdBuffer, "fen", .ignoreCase)) {
+        } else if (utilsl.startsWith(modifier, "fen", .ignoreCase)) {
             const fenCmdOffset = utilsl.findM(u8, cmdBuffer, "fen");
             if (fenCmdOffset == -1) {
                 return false;
@@ -663,14 +632,16 @@ pub const engine = struct {
         return true;
     }
     pub fn setFen(p_self: *engine, fen: []const u8) void {
-        p_self.state = chess.getBoardFromFen(fen) catch unreachable;
+        p_self.state = chess.getBoardFromFen(fen) catch {
+            return;
+        };
     }
 
     fn initInternals(p_self: *engine) !void {
         p_self.status.initializedInternals = true;
         magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
         p_self.refreshInternals();
-        if (configl.USE_NNUE and !nnuel.nnueNet.inited) {
+        if (!nnuel.nnueNet.inited and comptime configl.USE_NNUE) {
             nnuel.nnueNet = try .init(p_self.alloc, configl.NET_PATH);
         }
     }
@@ -686,12 +657,6 @@ pub const engine = struct {
     }
 
     fn updateHash(p_self: *engine, hashSize: spinVarType) !bool {
-        if (p_self.scheduler.searching) {
-            p_self.scheduler.interrupt = true;
-            while (p_self.scheduler.searching) {
-                try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .real);
-            }
-        }
         p_self.options.hashTableSize = hashSize;
         hashTablel._initOrReallocHashTable(p_self.alloc, @intCast(p_self.options.hashTableSize), p_self.status.debugMode);
         return true;
@@ -798,11 +763,7 @@ pub fn printResults(fens: []const []const u8, reports: *const std.ArrayList(sche
         const _time: u64 = @intCast(curr.timeTakenMs);
         const nps = 1000 * @divFloor(curr.searchStat.n_nodeExplored, _time + 1);
         const cuttoffF: f64 = 100 * @as(f64, @floatFromInt(curr.searchStat.n_cutoffs)) / @as(f64, @floatFromInt(curr.searchStat.n_nodeExplored));
-        if (curr.searchStat.n_hashRetrieve != 0) {
-            std.debug.print("{s} nps: {d} nodes: {d} cutoff {d} cutoff {d:4.1}% move {s} cp {d} retrieved: {d}\n", .{ fens[i], nps, curr.searchStat.n_nodeExplored, curr.searchStat.n_cutoffs, cuttoffF, curr.move.getStr(), curr.score, curr.searchStat.n_hashRetrieve });
-        } else {
-            std.debug.print("{s} nps: {d} nodes: {d} cutoff {d} cutoff {d:4.1}% move {s} cp {d} \n", .{ fens[i], nps, curr.searchStat.n_nodeExplored, curr.searchStat.n_cutoffs, cuttoffF, curr.move.getStr(), curr.score });
-        }
+        std.debug.print("{s} nps: {d} nodes: {d} cutoff {d} cutoff {d:4.1}% hashMove: {d} move {s} cp {d} retrieved: {d}\n", .{ fens[i], nps, curr.searchStat.n_nodeExplored, curr.searchStat.n_cutoffs, cuttoffF, curr.searchStat.n_hashMoveDone, curr.move.getStr(), curr.score, curr.searchStat.n_hashRetrieve });
     }
 }
 fn cmdToGoToken(arg: []const u8) e_goToken {
@@ -967,14 +928,6 @@ pub fn getCheckValFromSetOptionCmd(tokens: *std.ArrayList([]const u8), entry: se
         return debug_err.valueErr;
     }
     return utilsl.contains(s, "true", .ignoreCase);
-}
-
-fn entrypointReaderThreading(p_self: *engine) void {
-    p_self.readingThread() catch {
-        if (p_self.status.running) {
-            _ = p_self.executeQuitProcedure();
-        }
-    };
 }
 
 pub fn getEngineCmdType(cmd: []const u8) e_engineCmd {

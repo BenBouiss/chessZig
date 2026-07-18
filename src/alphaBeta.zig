@@ -20,6 +20,7 @@ const scoreType = typel.scoreType;
 const threadInfo = threadingl.threadInfo;
 const milliDepth = typel.milliDepth;
 const e_color = typel.e_color;
+const e_square = typel.e_square;
 
 pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack, alpha: scoreType, beta: scoreType) scoreType {
     p_info.working = true;
@@ -423,6 +424,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             continue;
         }
         if (!p_state.legal(move)) continue;
+        if (gen.phase == .TTMOVE) {
+            p_info.searchStat.n_hashMoveDone += 1;
+        }
         //if (!phaseReset and gen.extra == .QUIET) {
         if (prev != gen.phase) {
             prev = gen.phase;
@@ -443,6 +447,17 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
         const isThreat = (chessl.xToBitboard(to) & safetyArea) != 0;
         const cPiece = p_state.getCapturePiece(move);
         const isPromo = move.isPromotion();
+
+        //const badMove = movel.build_move(@intFromEnum(e_square.c8), @intFromEnum(e_square.d7), @intFromEnum(typel.e_moveFlags.QUIETMOVE));
+        //if (hashMove.equal(badMove)) {
+        //    std.debug.print("bad move is hash move \n", .{});
+        //    chessl.print_boardstate(p_state);
+        //}
+        //if (chessl.isKingPiece(cPiece)) {
+        //    chessl.print_boardstate(p_state);
+        //    std.debug.print("{s}\n", .{hashMove.getStr()});
+        //    @panic(":)");
+        //}
 
         if (!isRoot and depth <= weightl.SeePruningMaxDepth) {
             const margin = if (!isCapture) weightl.SeePruningQuietMargin else weightl.SeePruningCaptureMargin;

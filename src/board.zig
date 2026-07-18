@@ -45,6 +45,10 @@ pub const board = struct {
         return self.c_occupiedBB[0] | self.c_occupiedBB[1];
     }
 
+    pub inline fn occupiedBB_col(self: board, color: e_color) bitboard {
+        return self.c_occupiedBB[@intFromEnum(color)];
+    }
+
     pub inline fn placePiece(self: *board, piece: e_piece, sq: u8) void {
         const c = pieceToColor(piece);
         if (c == .WHITE) {
@@ -863,15 +867,15 @@ pub const boardState = struct {
 
     pub inline fn canKingSideCastleAtt(self: boardState, white: bool, attackedSquares: u64) bool {
         if (white) {
-            return self.frame.stat.canKingsideCastle(true) and chessl.canMove(.e1, .h1, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.e1, .h1)) == chessl.EMPTY);
+            return self.frame.stat.canKingsideCastle(true) and chessl.canMove(.e1, .h1, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.d1, .h1)) == chessl.EMPTY);
         }
-        return self.frame.stat.canKingsideCastle(false) and chessl.canMove(.e8, .h8, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.e8, .h8)) == chessl.EMPTY);
+        return self.frame.stat.canKingsideCastle(false) and chessl.canMove(.e8, .h8, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.d8, .h8)) == chessl.EMPTY);
     }
     pub inline fn canQueenSideCastleAtt(self: boardState, white: bool, attackedSquares: u64) bool {
         if (white) {
-            return self.frame.stat.canQueensideCastle(true) and chessl.canMove(.e1, .a1, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.e1, .b1)) == chessl.EMPTY);
+            return self.frame.stat.canQueensideCastle(true) and chessl.canMove(.e1, .a1, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.f1, .b1)) == chessl.EMPTY);
         }
-        return self.frame.stat.canQueensideCastle(false) and chessl.canMove(.e8, .a8, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.e8, .b8)) == chessl.EMPTY);
+        return self.frame.stat.canQueensideCastle(false) and chessl.canMove(.e8, .a8, self.b.occupiedBB()) and ((attackedSquares & chessl.inBetween(.f8, .b8)) == chessl.EMPTY);
     }
 
     pub inline fn getPieceCount(self: boardState, piece: e_piece) i8 {
@@ -926,8 +930,10 @@ pub const boardState = struct {
         const isCapture = move.isCapture();
         const occ = self.b.occupiedBB();
         const kingSq = self.getKingSq(white);
+        const checked = self.isChecked();
         if (fPiece == .KING) {
             if (move.isCastle()) {
+                if (checked) return false;
                 const allAttacks = chessl.getAllAttackMask(self, occ ^ chessl.sqToBitboard(kingSq), !white);
                 if (move.isKingSideCastle()) {
                     return self.canKingSideCastleAtt(white, allAttacks);
@@ -976,44 +982,6 @@ pub const boardState = struct {
         return true;
     }
 
-    pub fn isLegalFast(p_self: *const boardState, all_attack: u64, move: IMove, p_kingSq: *const squarel.squareInfo, p_checks: *const squarel.checkContainer, diagPieceBB: u64, linePieceBB: u64) bool {
-        const kingBB = chessl.sqToBitboard(p_kingSq.sq);
-        const isAttacked: bool = (kingBB & all_attack) != 0;
-        const to: e_square = @enumFromInt(move.getTo());
-        const from: e_square = @enumFromInt(move.getFrom());
-        if (from != p_kingSq.sq) {
-            if (p_checks.isDoubleCheck()) {
-                return false;
-            }
-            const pinnedBB = chessl.isPiecePinned(p_self.b.occupiedBB(), from, p_kingSq, diagPieceBB, linePieceBB);
-            if (pinnedBB != chessl.EMPTY) {
-                // piece is pinned path
-                if (p_checks.isCheck() and (pinnedBB != p_checks.squares[0].getBB())) {
-                    return false;
-                }
-                const capturedPinned = (chessl.bitscan(pinnedBB) == @intFromEnum(to));
-                return ((pinnedBB == chessl.isPiecePinned(p_self.b.occupiedBB() ^ (chessl.ONE << @intCast(@intFromEnum(from))), to, p_kingSq, diagPieceBB, linePieceBB)) or capturedPinned);
-            }
-
-            if (!isAttacked) {
-                return true;
-            }
-            //blocking or capturing as non king
-            const last_pin = chessl.isPiecePinned(p_self.b.occupiedBB(), to, p_kingSq, diagPieceBB, linePieceBB);
-            var _to = to;
-            if (move.isEnpassant()) {
-                _to = chessl.enPassantVictimSq(@intFromEnum(from), @intFromEnum(to));
-            }
-
-            return ((last_pin == p_checks.squares[0].getBB()) or (p_checks.squares[0].sq == _to));
-        }
-        const toKing = squarel.squareInfo.init(to);
-        const pinInfo = (chessl.isPiecePinned(p_self.b.occupiedBB(), from, &toKing, diagPieceBB, linePieceBB));
-        // either no pinning piece is found or the pinned piece can be captured
-        const isNotPinned = (pinInfo == chessl.EMPTY) or ((pinInfo ^ toKing.getBB()) == chessl.EMPTY);
-        const isToSecure = ((all_attack & toKing.getBB()) == 0);
-        return (isNotPinned and isToSecure);
-    }
     pub fn isMovePseudoLegal(self: *const boardState, move: IMove) bool {
         // mainly used to verify if a hash move is possible in the current board config good to check for key collision
         if (!move.isValid()) {
@@ -1036,11 +1004,21 @@ pub const boardState = struct {
         if (fromBB & us == 0) {
             return false;
         }
+        const p = self.getPiece(from);
+        if (p == .nEmptySquare) {
+            return false;
+        }
+        const pT = chessl.e_pieceTo_e_pieceType(p);
+        if (move.isPromotion() and pT != .PAWN) {
+            return false;
+        }
         if (move.isCapture()) {
             if (move.isEnpassant()) {
-                if (self.frame.enPassantIdx == 0) {
+                if (self.frame.enPassantIdx == 0 or pT != .PAWN) {
                     return false;
                 }
+                const victimSq: e_square = chessl.enPassantVictimSq(from, to);
+                return (@intFromEnum(victimSq) == self.frame.enPassantIdx);
             } else {
                 if (toBB & enemy == 0) {
                     // catches case where trying to capture own piece
@@ -1049,6 +1027,7 @@ pub const boardState = struct {
             }
         } else {
             if (move.isCastle()) {
+                if (pT != .KING) return false;
                 if (move.isKingSideCastle()) {
                     return self.canKingSideCastle(white);
                 } else {
@@ -1056,6 +1035,7 @@ pub const boardState = struct {
                 }
             }
             if (move.isDoublePush()) {
+                if (pT != .PAWN) return false;
                 if (fromBB & chessl.maskOutPawnDoublePush(white, ~occ) == 0) {
                     return false;
                 }
@@ -1064,15 +1044,21 @@ pub const boardState = struct {
                 return false;
             }
         }
-        const p = self.getPiece(from);
-        if (p == .nEmptySquare) {
-            return false;
-        }
+
         const movesBB = chessl.getRelevantMove(p, @enumFromInt(from), occ) catch {
             return false;
         };
         if ((toBB & movesBB) == 0) {
             return false;
+        }
+        const checked = self.isChecked();
+        // necessary since legal() only checks for sliders after a piece move
+        if (checked and !chessl.isKingPiece(p)) {
+            const checkers = self.frame.checkersBB & occ;
+            if (checkers & (checkers - 1) != 0) {
+                return false;
+            }
+            return (self.frame.checkersBB & toBB) != 0;
         }
         return true;
     }

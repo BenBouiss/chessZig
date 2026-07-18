@@ -238,11 +238,9 @@ pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, sco
 }
 
 pub fn sendPartial(depth: u16, p_info: *const threadingl.threadInfo) void {
-    const n_nodes: i64 = @intCast(p_info.searchStat.n_nodeExplored);
-    const n_cut = p_info.searchStat.n_cutoffs;
-    var msgBuffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
-    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} score cp {d} nodes {d} cutoff: {d} currmove {s} pv {f}\n", .{ depth, p_info.currentBest.scoring, n_nodes, n_cut, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
-    respondNoEng(utilsl.trimStr(final_info)) catch {};
+    var msgBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
+    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} score cp {d} nodes {d} cutoff: {d} hashMove: {d} currmove {s} pv {f}\n", .{ depth, p_info.currentBest.scoring, p_info.searchStat.n_nodeExplored, p_info.searchStat.n_cutoffs, p_info.searchStat.n_hashMoveDone, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
+    respondNoEng(utilsl.trimStr(final_info)) catch unreachable;
 }
 
 pub fn sendFinal(decision: *const moveDecisionExt) void {
@@ -253,10 +251,4 @@ pub fn sendFinal(decision: *const moveDecisionExt) void {
 
 pub inline fn respondNoEng(msg: []const u8) !void {
     try std.Io.File.stdout().writeStreamingAll(mainl.getGlobalIo(), msg);
-
-    //var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0); // Buffer for stdout
-    //var writer = std.Io.File.stdout().writer(mainl.getGlobalIo(), &buffer);
-    //const interface = &writer.interface;
-    //try interface.writeAll(msg);
-    //try interface.flush();
 }

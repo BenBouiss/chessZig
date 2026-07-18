@@ -7,8 +7,10 @@ const useStaged = build_options.useStaged;
 const useAVX2 = build_options.useAVX2;
 
 const typel = @import("type.zig");
+
 pub const e_piece = typel.e_piece;
 pub const e_pieceType = typel.e_pieceType;
+pub const e_color = typel.e_color;
 
 const utils = @import("utils.zig");
 const movel = @import("move.zig");
@@ -379,24 +381,7 @@ pub fn getBoardFromUciFen(uciStr: []const u8, debug: bool) !boardl.boardState {
 }
 
 pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: bool) !void {
-    const moves = getEmptyMoveListFromStr(uciStr);
-    for (0..moves.len) |i| {
-        var move = moves.moves[i];
-        fillMoveFromState(p_board, &move);
-        p_board.makeMove(move);
-        if (debug) {
-            sanityCheckBoardState(p_board);
-        }
-    }
-    if (comptime useStaged) {
-        onMoveStaged(p_board, p_board.whiteToMove());
-    }
-}
-
-pub fn getEmptyMoveListFromStr(strBuffer: []const u8) movel.matchMoveContainer {
-    var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
-    var ret: movel.matchMoveContainer = .{};
-
+    var gen = utils.splitGenerator(u8).init(uciStr, ' ');
     while (gen.next()) |cmd| {
         if (cmd.len != 4 and cmd.len != 5) {
             continue;
@@ -410,11 +395,19 @@ pub fn getEmptyMoveListFromStr(strBuffer: []const u8) movel.matchMoveContainer {
         if (cmd.len > 4 and cmd[4] != 0) {
             flag |= @intFromEnum(letterPromoToFlag(cmd[4]));
         }
-        const move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag);
-        _ = ret.append(move, EMPTY, false);
+        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag);
+        fillMoveFromState(p_board, &move);
+        p_board.makeMove(move);
+        if (debug) {
+            sanityCheckBoardState(p_board);
+        }
     }
-    return ret;
+
+    if (comptime useStaged) {
+        onMoveStaged(p_board, p_board.whiteToMove());
+    }
 }
+
 pub fn getFirstMoveFromStr(p_state: *boardl.boardState, strBuffer: []const u8) IMove {
     // /!\ this assumes that the p_state is updated for the corresponding move to "decode", not suitable for a position startpos parsing
     var gen = utils.splitGenerator(u8).init(strBuffer, ' ');
@@ -479,7 +472,7 @@ pub inline fn getColorPieceOffset(white: bool) u8 {
 pub inline fn isPieceWhite(piece: e_piece) bool {
     return @intFromEnum(piece) < N_PIECES_TYPES;
 }
-pub inline fn e_colorFromPiece(piece: e_piece) typel.e_color {
+pub inline fn e_colorFromPiece(piece: e_piece) e_color {
     if (isPieceWhite(piece)) {
         return .WHITE;
     }
@@ -635,15 +628,15 @@ pub fn sanityCheckBoardState(p_board_state: *const boardl.boardState) void {
         print_bitboard(p_board_state.b.occupiedBB());
         panic = true;
     }
-    if ((_bbfromPieceArr ^ (p_board_state.b.c_occupiedBB[0] | p_board_state.b.c_occupiedBB[1])) != EMPTY) {
+    if ((_bbfromPieceArr ^ p_board_state.b.occupiedBB()) != EMPTY) {
         std.debug.print("[DEBUG] from sanityCheckBoardState: pieces are present in the pieceArray that are not in the c_occupied's BB\n", .{});
         std.debug.print("PieceArray BB: \n", .{});
         print_bitboard(_bbfromPieceArr);
 
         std.debug.print("Occupied w: \n", .{});
-        print_bitboard(p_board_state.b.c_occupiedBB[1]);
+        print_bitboard(p_board_state.b.occupiedBB_col(.WHITE));
         std.debug.print("Occupied b: \n", .{});
-        print_bitboard(p_board_state.b.c_occupiedBB[0]);
+        print_bitboard(p_board_state.b.occupiedBB_col(.BLACK));
         panic = true;
     }
     const empty_count_g = popcount(~p_board_state.b.occupiedBB());
@@ -671,7 +664,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
         std.debug.print("Current turn: Black\n", .{});
     }
     print_board(p_board_state);
-    std.debug.print("Zobrist key: 0x{x} | Pawn key: 0x{x} | Non-Pawn keys: w: 0x{x}, b: 0x{x}]\n", .{ p_board_state.frame.key, p_board_state.frame.pawnKey, p_board_state.frame.nonPawnKey[@intFromEnum(typel.e_color.WHITE)], p_board_state.frame.nonPawnKey[@intFromEnum(typel.e_color.BLACK)] });
+    std.debug.print("Zobrist key: 0x{x} | Pawn key: 0x{x} | Non-Pawn keys: w: 0x{x}, b: 0x{x}]\n", .{ p_board_state.frame.key, p_board_state.frame.pawnKey, p_board_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)], p_board_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)] });
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
 
@@ -851,10 +844,14 @@ pub fn getRelevantMove(piece: e_piece, sq: e_square, occ: u64) !u64 {
             return knightAttacks(sqToBitboard(sq));
         },
         .nWhitePawn => {
-            return (getPawnAttacks(sq, true) & occ) | (maskOutPawnQuietMove(true, ~occ) & sqToBitboard(sq));
+            const sPush = (sqToBitboard(sq) << 8) & (~occ);
+            const dPush = (sPush << 8) & (~occ);
+            return (getPawnAttacks(sq, true) & occ) | (sPush | dPush);
         },
         .nBlackPawn => {
-            return (getPawnAttacks(sq, false) & occ) | (maskOutPawnQuietMove(false, ~occ) & sqToBitboard(sq));
+            const sPush = (sqToBitboard(sq) >> 8) & (~occ);
+            const dPush = (sPush >> 8) & (~occ);
+            return (getPawnAttacks(sq, false) & occ) | (sPush | dPush);
         },
         .nWhiteQueen, .nBlackQueen => {
             return getQueenAttacks(occ, sq);
@@ -877,7 +874,7 @@ pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_p
         return @enumFromInt(@intFromEnum(piece) - N_PIECES_TYPES);
     }
 }
-pub inline fn boolTo_e_color(whiteToMove: bool) typel.e_color {
+pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
     if (whiteToMove) return .WHITE;
     return .BLACK;
 }
@@ -886,7 +883,7 @@ pub inline fn whiteBoolToInt(w: bool) u8 {
     return @as(u8, (@intFromBool(!w)));
 }
 
-pub inline fn invert_e_color(side: typel.e_color) typel.e_color {
+pub inline fn invert_e_color(side: e_color) e_color {
     return @enumFromInt((@intFromEnum(side) ^ 1));
 }
 

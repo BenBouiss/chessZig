@@ -65,8 +65,8 @@ const DEPTH_MASK = 0x3FC;
 const DEPTH_SHIFT = 2;
 
 const NODETYPE_mask = 0x3;
-const VALID_MASK = 0x8;
 const WHITE_MASK = 0x4;
+const VALID_MASK = 0x8;
 
 const AGE_SHIFT = 11;
 const AGE_MASK = 0xF800;
@@ -145,7 +145,7 @@ pub const hashWriter = struct {
 };
 
 pub const Hash_bucket = struct {
-    entries: [configl.ITEM_PER_BUCKET]Hash_entry align(32) = undefined,
+    entries: [configl.ITEM_PER_BUCKET]Hash_entry align(32) = @splat(.{}),
 
     pub fn printSize(p_self: *const Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
@@ -314,7 +314,6 @@ pub const Hash_table = struct {
         var ret: Hash_table = undefined;
         ret.MBsize = MBsize;
 
-        //var total_size: u64 = @intCast(MBsize * 1000000);
         var total_size: u64 = @intCast(MBsize * 1024 * 1024);
         total_size = @divFloor(total_size, @sizeOf(Hash_entry) * configl.ITEM_PER_BUCKET);
 
@@ -343,6 +342,12 @@ pub const Hash_table = struct {
     pub inline fn getBucket(p_self: *Hash_table, bucketIdx: u64) *Hash_bucket {
         return &p_self.entries[bucketIdx];
     }
+    pub fn zero(p_self: *Hash_table) void {
+        for (0..p_self.entries.len) |i| {
+            p_self.entries[i] = .{};
+        }
+        p_self.gen = 0;
+    }
     pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator, verbose: bool) void {
         if (verbose) {
             std.debug.print("[FREE] Freeing the entries in the hashtable \n", .{});
@@ -361,6 +366,10 @@ pub const Hash_table = struct {
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
         return hash & self.mask;
     }
+
+    //pub inline fn getHashIndex(self: *const Hash_table, hash: u64) u64 {
+    //    return @intCast((@as(u128, @intCast(hash)) * @as(u128, @intCast(self.size))) >> 64);
+    //}
     pub inline fn getBucketFromFullHashIndex(self: *Hash_table, hash: u64) *Hash_bucket {
         const index = self.getHashIndex(hash);
         return self.getBucket(index);
@@ -496,7 +505,12 @@ pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32, ver
         std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
     }
     if (hashTable.initialized) {
-        hashTable.free(alloc, verbose);
+        if (sizeHashTable != hashTable.MBsize) {
+            hashTable.free(alloc, verbose);
+        } else {
+            hashTable.zero();
+            return;
+        }
     }
     hashTable = Hash_table.init(alloc, sizeHashTable, verbose) catch |err| {
         std.debug.print("[ERROR] _initOrReallocHashTable: memory error during alloc {}\n", .{err});
