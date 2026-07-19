@@ -5,8 +5,10 @@ const mainl = @import("main.zig");
 const timel = @import("time.zig");
 const lockl = @import("lock.zig");
 const boardl = @import("board.zig");
+const typel = @import("type.zig");
 
 const std = @import("std");
+const depthT = typel.depthT;
 
 pub const searchStatistic = struct {
     n_cutoffs: u64 = 0,
@@ -25,7 +27,7 @@ pub const searchStatistic = struct {
 pub const threadInfo = struct {
     currentBest: schedulerl.moveDecisionExt = .{},
     currentMove: schedulerl.moveDecisionExt = .{},
-    depth: u16 = 0,
+    depth: depthT = 0,
     working: bool = false,
     alive: bool = false,
     searchStat: searchStatistic = .{},
@@ -82,7 +84,7 @@ pub fn joinOnThreadPack(p_array: *threadPackageArray) void {
 
 pub const searchPackage = struct {
     chessState: boardl.boardState = undefined,
-    depth: u16 = 0,
+    depth: depthT = 0,
     features: schedulerl.searchFeatures = .{},
     scheduler: *schedulerl.scheduler = undefined,
 };

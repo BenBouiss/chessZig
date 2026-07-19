@@ -63,12 +63,12 @@ pub inline fn updateCaptureHistory(fPiece: e_piece, cPiece: e_piece, toSq: u8, b
     captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][toSq] += _bonus - @divFloor(captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][toSq] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
 }
 
-pub fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) void {
+pub inline fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) void {
     const _bonus = std.math.clamp(bonus, -configl.MAX_HIST_HEURISTIC_VALUE, configl.MAX_HIST_HEURISTIC_VALUE);
     const turnIdx: usize = @intFromEnum(chessl.boolTo_e_color(white));
     historyHeuristic[turnIdx][from][to] += _bonus - @divFloor(historyHeuristic[turnIdx][from][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
 }
-pub fn updateContinuationHeurist(heurist: *pieceHistory, piece: e_piece, to: u8, bonus: scoreType) void {
+pub inline fn updateContinuationHeurist(heurist: *pieceHistory, piece: e_piece, to: u8, bonus: scoreType) void {
     const _bonus = std.math.clamp(bonus, -configl.MAX_CONTINUATION_HEURISTIC_VALUE, configl.MAX_CONTINUATION_HEURISTIC_VALUE);
     heurist[@intFromEnum(piece)][to] += _bonus - @divFloor(heurist[@intFromEnum(piece)][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_CONTINUATION_HEURISTIC_VALUE);
 }

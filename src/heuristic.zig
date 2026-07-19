@@ -1096,7 +1096,7 @@ pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, 
 }
 
 //https://www.chessprogramming.org/History_Heuristic#Update
-pub inline fn computeHistoryBonus(depth: u16) scoreType {
+pub inline fn computeHistoryBonus(depth: typel.depthT) scoreType {
     return @intCast(30 * depth - 25);
 }
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
@@ -1113,7 +1113,7 @@ pub fn evalMoveScore(p_state: *const boardl.boardState, ply: u16, hashMove: IMov
 pub inline fn depthToMilliDepth(d: i32) milliDepth {
     return @intCast(d << 10);
 }
-pub inline fn milliDepthToDepth(md: milliDepth) i32 {
+pub inline fn milliDepthToDepth(md: milliDepth) typel.depthT {
     return @intCast(md >> 10);
 }
 pub inline fn lmrFDepth(md: milliDepth) milliDepth {

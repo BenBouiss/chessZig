@@ -144,10 +144,10 @@ pub inline fn xToBitboard(x: u8) u64 {
 pub inline fn flipSq(sq: u8) u8 {
     return sq ^ 56;
 }
-pub inline fn mate_in(depth: u16) scoreType {
+pub inline fn mate_in(depth: typel.depthT) scoreType {
     return weightl.simpleCheckMateScore - @as(scoreType, @intCast(depth));
 }
-pub inline fn mated_in(depth: u16) scoreType {
+pub inline fn mated_in(depth: typel.depthT) scoreType {
     return -(mate_in(depth));
 }
 pub inline fn isMate(score: scoreType) bool {
@@ -882,6 +882,10 @@ pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
 pub inline fn whiteBoolToInt(w: bool) u8 {
     return @as(u8, (@intFromBool(!w)));
 }
+pub inline fn cst_whiteBoolToInt(comptime w: bool) u8 {
+    if (comptime w) return @intFromEnum(e_color.WHITE);
+    return @intFromEnum(e_color.BLACK);
+}
 
 pub inline fn invert_e_color(side: e_color) e_color {
     return @enumFromInt((@intFromEnum(side) ^ 1));
@@ -1074,16 +1078,15 @@ pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bo
 pub fn getAllAttackerFromSq(p_board: *const boardl.boardState, occ: u64, white: bool, sq: e_square) u64 {
     const bb = sqToBitboard(sq);
     var ret = knightAttacks(bb) & p_board.getPieceBB_t(.KNIGHT);
-    ret |= _AllAttackBishopMask(bb, occ) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN));
-    ret |= _AllAttackRookMask(bb, occ) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN));
+    ret |= getBishopAttacks(occ, sq) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN));
+    ret |= getRookAttacks(occ, sq) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN));
     ret |= _AllAttackPawnMask(bb, white) & (p_board.getPieceBB_t(.PAWN));
     ret |= getKingAttacks(sq) & (p_board.getPieceBB_t(.KING));
     return ret & p_board.b.c_occupiedBB[whiteBoolToInt(!white)] & occ;
 }
 pub fn slider_getAllAttackerFromSq(p_board: *const boardl.boardState, occ: u64, white: bool, sq: e_square) u64 {
-    const bb = sqToBitboard(sq);
-    var ret = _AllAttackBishopMask(bb, occ) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN));
-    ret |= _AllAttackRookMask(bb, occ) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN));
+    var ret = getBishopAttacks(occ, sq) & (p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN));
+    ret |= getRookAttacks(occ, sq) & (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN));
     return ret & p_board.b.c_occupiedBB[whiteBoolToInt(!white)] & occ;
 }
 

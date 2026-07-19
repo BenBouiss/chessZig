@@ -8,7 +8,6 @@ const enginel = @import("engine.zig");
 const configl = @import("config.zig");
 
 const scoreType = typel.scoreType;
-const milliDepth = typel.milliDepth;
 const heuristicValues = heuristicl.heuristicValues;
 
 // values from https://www.chessprogramming.org/Evaluation for now
@@ -356,25 +355,25 @@ pub var global_King_PSQT: [2][64]scoreType = .{ [_]scoreType{
 
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
-//pub var lmr_scoreThreshold: milliDepth = configl.MAX_HIST_HEURISTIC_VALUE + 1;
-pub var lmr_scoreThreshold: milliDepth = 795;
-pub var lmr_expectedCutOff: milliDepth = 737;
-pub var lmr_notImproving: milliDepth = 820;
-pub var lmr_hashMoveCapture: milliDepth = 572;
-pub var lmr_baseDeficit: milliDepth = 1066;
-pub var lmr_badCapture: milliDepth = 26;
-pub var lmr_oldMulti: milliDepth = 41;
-pub var lmr_highFailScore: milliDepth = 1001;
-pub var lmr_highFailCount: milliDepth = 4;
+//pub var lmr_scoreThreshold: scoreType = configl.MAX_HIST_HEURISTIC_VALUE + 1;
+pub var lmr_scoreThreshold: scoreType = 795;
+pub var lmr_expectedCutOff: scoreType = 737;
+pub var lmr_notImproving: scoreType = 820;
+pub var lmr_hashMoveCapture: scoreType = 572;
+pub var lmr_baseDeficit: scoreType = 1066;
+pub var lmr_badCapture: scoreType = 26;
+pub var lmr_oldMulti: scoreType = 41;
+pub var lmr_highFailScore: scoreType = 1001;
+pub var lmr_highFailCount: scoreType = 4;
 
 // LMR negative (less reduction)
-pub var lmr_inCheck: milliDepth = -600; // not used since no lmr in check
+pub var lmr_inCheck: scoreType = -600; // not used since no lmr in check
 // try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
-pub var lmr_givesCheck: milliDepth = -675;
-pub var lmr_killerMove: milliDepth = -370;
-pub var lmr_threatening: milliDepth = -110;
-pub var lmr_inPvMode: milliDepth = -275;
-pub var lmr_isPromotion: milliDepth = -178;
+pub var lmr_givesCheck: scoreType = -675;
+pub var lmr_killerMove: scoreType = -370;
+pub var lmr_threatening: scoreType = -110;
+pub var lmr_inPvMode: scoreType = -275;
+pub var lmr_isPromotion: scoreType = -178;
 
 // margins
 
@@ -442,7 +441,6 @@ pub var moveGenMinSeeThreshold: scoreType = -100;
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 
 pub fn modif_val() void {
-
     //
     //lmr_scoreThreshold = 720;
     //lmr_expectedCutOff = 652;
@@ -486,4 +484,7 @@ pub fn modif_val() void {
     //moveReductionAmount = 4;
     //moveQsearchAmount = 4;
     //moveGenMinSeeThreshold = -93;
+
+    //
+
 }

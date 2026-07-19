@@ -19,10 +19,11 @@ const pvContainer = movel.pvContainer;
 const scoreType = typel.scoreType;
 const threadInfo = threadingl.threadInfo;
 const milliDepth = typel.milliDepth;
+const depthT = typel.depthT;
 const e_color = typel.e_color;
 const e_square = typel.e_square;
 
-pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, p_features: *const schedulerl.searchFeatures, ss: *searchStack, alpha: scoreType, beta: scoreType) scoreType {
+pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: depthT, p_features: *const schedulerl.searchFeatures, ss: *searchStack, alpha: scoreType, beta: scoreType) scoreType {
     p_info.working = true;
 
     var pv: pvContainer = .{};
@@ -46,7 +47,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 }
 pub const searchType = enum { NonPV, PV };
 
-pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: u16, alpha: scoreType, beta: scoreType, ply: u16, ss: *searchStack) scoreType {
+pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth: depthT, alpha: scoreType, beta: scoreType, ply: depthT, ss: *searchStack) scoreType {
     // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
 
     var _alpha = alpha;
@@ -156,7 +157,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 
 pub const searchFrame = struct {
     staticEval: heuristicl.score = .{},
-    ply: u16 = 0,
+    ply: depthT = 0,
     valid: bool = false,
     followPv: bool = false,
     prevLineMove: IMove = .{},
@@ -170,15 +171,15 @@ pub const threadData = struct {
 };
 
 // used to garanty getFrameOffset(0, 4) returns a default value
-pub const negativeOffset: u16 = 4;
+pub const negativeOffset: usize = 4;
 //index by ply
 pub const searchStack = struct {
     e: [typel.MAX_PLY + configl.MAX_QUIESC_DEPTH + negativeOffset + 1]searchFrame = @splat(.{}),
-    pub inline fn getFrame(self: *searchStack, ply: u16) *searchFrame {
-        return &self.e[ply + negativeOffset];
+    pub inline fn getFrame(self: *searchStack, ply: depthT) *searchFrame {
+        return &self.e[negativeOffset + @as(usize, @intCast(ply))];
     }
-    pub inline fn getPrevFrame(self: *searchStack, ply: u16, offset: u16) *searchFrame {
-        return &self.e[negativeOffset - offset + ply];
+    pub inline fn getPrevFrame(self: *searchStack, ply: depthT, offset: usize) *searchFrame {
+        return &self.e[negativeOffset - offset + @as(usize, @intCast(ply))];
     }
     pub fn setPrevLine(self: *searchStack, line: *const movel.line) void {
         for (0..line.len) |i| {
@@ -197,23 +198,23 @@ pub const searchStack = struct {
 };
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, depth: u16, ply: u16, alpha: scoreType, beta: scoreType, ss: *searchStack, threadD: *threadData, wasExtended: bool, cutnode: bool, comptime t: searchType) scoreType {
+pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p_features: *const schedulerl.searchFeatures, depth: depthT, ply: depthT, alpha: scoreType, beta: scoreType, ss: *searchStack, threadD: *threadData, wasExtended: bool, cutnode: bool, comptime t: searchType) scoreType {
     var _alpha = alpha;
     var _beta = beta;
     var _depth = depth;
-    var extension: u16 = 0;
+    var extension: depthT = 0;
     var extended: bool = wasExtended;
     const white: bool = p_state.whiteToMove();
     const isRoot: bool = ply == 0;
     const mate_value = chessl.mate_in(ply);
-    //const isAllNode = !(t == .PV or cutnode);
+    //const isAllNode = !(cutnode or comptime t == .PV);
     if (p_state.isStaleMateRepetition()) {
         return weightl.simpleStalemateScore;
     }
     var bestScore: scoreType = -weightl.simpleCheckMateScore - 1;
     var bestMove: IMove = .{};
     var hashMove: IMove = .{};
-    var hashDepth: u16 = 0;
+    var hashDepth: depthT = 0;
     var hashType: hashl.nodeType = .ALL;
     var hashFlag: hashl.nodeType = .UPPER;
     var skipQuietMoves: bool = false;
@@ -223,7 +224,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     //const singularExt: bool = excludedMove.isValid();
     threadD.excludedMove = .{};
 
-    if (_depth == 0 or schedulerl.outOfTime(p_info)) {
+    if (_depth <= 0 or schedulerl.outOfTime(p_info)) {
         p_info.searchStat.n_nodeExplored += 1;
         return quiescenceSearch(p_state, p_info, configl.MAX_QUIESC_DEPTH, _alpha, _beta, ply, ss);
     }
@@ -251,7 +252,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 return hashEval;
             }
         }
-        //if (hashType != .UPPER and !extended) {
+        //if (hashType == .LOWER and !extended) {
         //    extension += 1;
         //    extended = true;
         //}
@@ -310,8 +311,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     if (!isCheck and comptime t == .NonPV) {
         if (!isRoot and !p_state.onlyPawnsSide(white) and prevSS.playedMove.isValid()) {
             // see chess programming video
-            const augment: u16 = if (_depth > weightl.nullMoveDepthAugmentThreshold) @intCast(weightl.nullMoveDepthAugment) else 0;
-            const R: u16 = augment + @as(u16, @intCast(if (improving) weightl.nullMoveReductionImproving else weightl.nullMoveReduction));
+            const augment: depthT = if (_depth > weightl.nullMoveDepthAugmentThreshold) @intCast(weightl.nullMoveDepthAugment) else 0;
+            const R: depthT = augment + @as(depthT, @intCast(if (improving) weightl.nullMoveReductionImproving else weightl.nullMoveReduction));
             if (_depth > R) {
                 currS.playedMove = .{};
                 currS.pieceMoved = .nWhitePawn;
@@ -523,7 +524,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
             }
             _lmrDepth += historyl.lmrBase[phasePlay];
 
-            const d = _depth - 1 - @as(u16, (@intCast(@min((@max(_lmrDepth, 0)) >> 10, _depth - 1))));
+            const d: depthT = @max(_depth - 1 - heuristicl.milliDepthToDepth(@max(_lmrDepth, 0)), 0);
+
             score = -searchLoop(p_state, p_info, p_features, d + extension, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, true, .NonPV);
             if (score > _alpha) {
                 //fullSearch = _lmrDepth < 0;
@@ -566,7 +568,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
                 if (isCapture) {
                     updateOnBetaCut(p_state, idx, -historyBonus, &gen, white, .CAPTURE);
                 } else {
-                    historyl.onKillerMove(move, ply);
+                    historyl.onKillerMove(move, @intCast(ply));
                     updateOnBetaCut(p_state, idx, -historyBonus, &gen, white, .QUIET);
                 }
                 p_info.searchStat.n_cutoffs += 1;
@@ -623,7 +625,7 @@ pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonu
         }
     }
 }
-pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: scoreType, ply: u16) scoreType {
+pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: scoreType, ply: depthT) scoreType {
     const _eval: scoreType = @divFloor(eval * (200 - p_state.frame.halfMoveClock), 200);
     var corr: scoreType = 0;
     const offset = chessl.whiteBoolToInt(p_state.whiteToMove());

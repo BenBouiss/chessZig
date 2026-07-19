@@ -1,6 +1,6 @@
 [engine1]
-path="engines/bin/engine_18_07_26_1";
-name="base + optim + twk";
+path="engines/bin/engine_19_07_26_1";
+name="base + optim + int depth + @max(x, 0)";
 "setoption name reportProgress value false";
 "setoption name userazoring value false";
 

@@ -20,7 +20,7 @@ const MOVE_STR_MAX_LENGTH = 5;
 pub fn build_move(from: u8, to: u8, flag: u8) IMove {
     return .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
 }
-pub fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
+pub inline fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
     p_out.moves[p_out.len] = .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];

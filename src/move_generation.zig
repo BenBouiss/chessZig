@@ -817,8 +817,9 @@ pub const typeMoveGenerator = struct {
         p_self.idx = 0;
     }
 
-    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, seeThreshold: scoreType, skipQuiet: bool) ?struct { movel.IMove, scoreType } {
+    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, hashMove: IMove, prevLineMove: IMove, seeThreshold: scoreType, skipQuiet: bool) ?struct { movel.IMove, scoreType } {
         const white = state.whiteToMove();
+        const _ply: usize = @intCast(ply);
         if (p_self.phase == .NONE) {
             p_self.phase = .TTMOVE;
             if (hashMove.isValid() and !(hashMove.isQuietMove() and skipQuiet)) {
@@ -880,14 +881,15 @@ pub const typeMoveGenerator = struct {
 
                     if (move.equal(prevLineMove)) {
                         p_self.quiets.scores[i] = configl.ORDERING_LINE_VALUE;
-                    } else if (move.equal(historyl.killerMoves[ply][0])) {
+                    } else if (move.equal(historyl.killerMoves[_ply][0])) {
                         p_self.quiets.scores[i] = configl.KILLER_0_HEURISTIC_VALUE;
-                    } else if (move.equal(historyl.killerMoves[ply][1])) {
+                    } else if (move.equal(historyl.killerMoves[_ply][1])) {
                         p_self.quiets.scores[i] = configl.KILLER_1_HEURISTIC_VALUE;
                     } else if (move.isPromotion() and move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
                         p_self.quiets.scores[i] = configl.ORDERING_PROMOTIONS;
                     } else {
-                        p_self.quiets.scores[i] = historyl.historyHeuristic[chess.whiteBoolToInt(white)][from][to];
+                        const offset = chess.whiteBoolToInt(white);
+                        p_self.quiets.scores[i] = historyl.historyHeuristic[offset][from][to];
                     }
                 }
             }

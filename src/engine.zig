@@ -13,6 +13,7 @@ const historyl = @import("history.zig");
 const nnuel = @import("nnue.zig");
 const weightl = @import("weights.zig");
 const ucil = @import("uci.zig");
+const typel = @import("type.zig");
 
 const build_options = @import("build_options");
 
@@ -48,7 +49,7 @@ pub const goArgStruct = struct {
     movestogo: u32 = 0,
     movetime: u32 = 0,
     nodes: u64 = 0,
-    depth: u16 = 0,
+    depth: typel.depthT = 0,
     mate: u16 = 0,
 };
 
@@ -169,10 +170,10 @@ pub const engineIdentification = struct {
 pub const engineMetrics = struct {
     timeSearchingUs: i64 = 0,
     timeProcessingUs: i64 = 0,
-    computedPlies: u64 = 0,
+    computedPlies: i64 = 0,
     nPlyCompute: usize = 0,
     l: lockl.lock = .{},
-    pub fn addPlies(p_self: *engineMetrics, plies: u64) void {
+    pub fn addPlies(p_self: *engineMetrics, plies: typel.depthT) void {
         p_self.l.acquireLock();
         p_self.computedPlies += plies;
         p_self.nPlyCompute += 1;
@@ -853,7 +854,7 @@ fn parseGoCmd(cmd: []const u8) goArgStruct {
             }
         } else if (utilsl.startsWith(arg, "depth", .ignoreCase)) {
             if (gen.next()) |val| {
-                goArgs.depth = std.fmt.parseInt(u16, val, 10) catch {
+                goArgs.depth = std.fmt.parseInt(typel.depthT, val, 10) catch {
                     gen.rewind();
                     continue;
                 };

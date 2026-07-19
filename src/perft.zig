@@ -8,6 +8,9 @@ const configl = @import("config.zig");
 const timel = @import("time.zig");
 const boardl = @import("board.zig");
 
+const typel = @import("type.zig");
+const depthT = typel.depthT;
+
 const threadingl = @import("threading.zig");
 
 const IMove = movel.IMove;
@@ -49,7 +52,7 @@ pub fn dispatchUciPerftThreads(p_engine: *enginel.engine, config: enginel.goArgS
     };
 }
 
-fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, depth: u16, feats: perftSearchFeatures) bool {
+fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, depth: depthT, feats: perftSearchFeatures) bool {
     const _nThread: usize = p_threadPack.len;
 
     for (0.._nThread) |thread_id| {
@@ -106,7 +109,7 @@ const perftSearchFeatures = struct {
     useBatched: bool = false,
 };
 
-pub fn perftUciEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: u16, feats: perftSearchFeatures) void {
+pub fn perftUciEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: depthT, feats: perftSearchFeatures) void {
     p_info.working = true;
     defer p_info.working = false;
     defer p_info.alive = false;

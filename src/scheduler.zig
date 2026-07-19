@@ -18,6 +18,7 @@ const heuristicl = @import("heuristic.zig");
 
 const IMove = movel.IMove;
 const scoreType = typel.scoreType;
+const depthT = typel.depthT;
 
 pub const searchStatus = enum { CONTINUE, INTERRUPTED, FINISHED };
 
@@ -40,7 +41,7 @@ pub const moveDecisionExt = struct {
     move: IMove = .{},
     scoring: scoreType = 0,
     line: movel.line = .{},
-    depth: u16 = 0,
+    depth: depthT = 0,
     pub inline fn invertScore(p_self: *moveDecisionExt) void {
         p_self.scoring = -p_self.scoring;
     }
@@ -101,7 +102,7 @@ pub const scheduler = struct {
     _threadPool: threadingl.threadPool = .{},
     interrupt: bool = false,
     searching: bool = false,
-    computedPlies: u64 = 0,
+    computedPlies: i64 = 0,
     nPlyCompute: usize = 0,
 
     pub inline fn reset(self: *scheduler) void {
@@ -116,7 +117,7 @@ pub const scheduler = struct {
         p_self._threadPool.stop();
         p_self._threadPool.waitOnFinish();
     }
-    pub fn entryPointSearch(p_self: *scheduler, p_engine: *enginel.engine, state: boardl.boardState, depth: u16, features: searchFeatures) searchReport {
+    pub fn entryPointSearch(p_self: *scheduler, p_engine: *enginel.engine, state: boardl.boardState, depth: depthT, features: searchFeatures) searchReport {
         // only used in the benchmark files
         _ = p_engine;
         if (!p_self._threadPool.running) {
@@ -158,7 +159,7 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) 
 
     return true;
 }
-pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: u16) threadingl.threadInfo {
+pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: depthT) threadingl.threadInfo {
     var sched: scheduler = .{};
     sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
     sched.timeM.startSearchTick();
@@ -166,7 +167,7 @@ pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDep
     _startSearch(&sched, p_state, &info, features, maxDepth);
     return info;
 }
-pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) void {
+pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT) void {
     // everything gets "returned" via the p_info
     // launched as single threaded
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
@@ -192,8 +193,8 @@ pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *thr
     sched.computedPlies += depth;
 }
 
-pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: u16) u16 {
-    var depth: u16 = if (features.useStaticSearch) maxDepth else 1;
+pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT) depthT {
+    var depth: depthT = if (features.useStaticSearch) maxDepth else 1;
 
     var ss: alphaBetal.searchStack = .{};
     var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
@@ -224,7 +225,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
     return depth;
 }
 
-pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, score: scoreType, p_features: *const searchFeatures) bool {
+pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depthT, score: scoreType, p_features: *const searchFeatures) bool {
     if (p_features.fixedDepth and depth == maxDepth or (depth >= typel.MAX_PLY)) {
         return false;
     }
@@ -237,7 +238,7 @@ pub fn canExtendSearch(timer: *const timeManager, depth: u16, maxDepth: u16, sco
     return ((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime);
 }
 
-pub fn sendPartial(depth: u16, p_info: *const threadingl.threadInfo) void {
+pub fn sendPartial(depth: depthT, p_info: *const threadingl.threadInfo) void {
     var msgBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
     const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} score cp {d} nodes {d} cutoff: {d} hashMove: {d} currmove {s} pv {f}\n", .{ depth, p_info.currentBest.scoring, p_info.searchStat.n_nodeExplored, p_info.searchStat.n_cutoffs, p_info.searchStat.n_hashMoveDone, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
     respondNoEng(utilsl.trimStr(final_info)) catch unreachable;
