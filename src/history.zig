@@ -12,7 +12,7 @@ const e_piece = typel.e_piece;
 const e_square = typel.e_square;
 
 // indexes: ply, idx (either 1st or 2nd)
-pub var killerMoves: [64][2]IMove = undefined;
+pub var killerMoves: [typel.MAX_PLY][2]IMove = undefined;
 
 // index from, to
 //pub var counterMoves: [64][64]IMove = undefined;
@@ -24,7 +24,7 @@ pub var historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]score
 // https://www.chessprogramming.org/History_Heuristic#Continuation_History
 // combination of couter move heuristic and follow up history. Works via pair of move using the following index template:
 //  [nextPiece][nextTo][prevPiece][prevTo]
-pub const pieceHistory: type = [12][64]scoreType;
+pub const pieceHistory: type = [13][64]scoreType;
 
 pub var corrHist: [12][64][12][64]scoreType = std.mem.zeroes([12][64][12][64]scoreType);
 
@@ -33,16 +33,16 @@ pub var nonPawnCorrHist: [2][2][16384]scoreType = std.mem.zeroes([2][2][16384]sc
 
 pub var lmrBase: [chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([chessl.MAX_POSSIBLE_MOVE]scoreType);
 
-//pub var continuationHeuristic: [12][64]pieceHistory = std.mem.zeroes([12][64]pieceHistory);
+pub var continuationHeuristic: [13][64]pieceHistory = std.mem.zeroes([13][64]pieceHistory);
 // fPiece cPiece toSq
 pub var captureHistory: [12][12][64]scoreType = std.mem.zeroes([12][12][64]scoreType);
 
 pub fn _initMoveOrdering() void {
     historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
-    killerMoves = std.mem.zeroes([64][2]IMove);
+    killerMoves = std.mem.zeroes([typel.MAX_PLY][2]IMove);
     //counterMoves = std.mem.zeroes([64][64]IMove);
     captureHistory = std.mem.zeroes([12][12][64]scoreType);
-    //continuationHeuristic = std.mem.zeroes([12][64]pieceHistory);
+    continuationHeuristic = std.mem.zeroes([13][64]pieceHistory);
     corrHist = std.mem.zeroes([12][64][12][64]scoreType);
 
     pawnCorrHist = std.mem.zeroes([2][16384]scoreType);
@@ -57,18 +57,4 @@ pub inline fn pawnHashIndexToIdx(hash: u64) u64 {
 pub inline fn onKillerMove(move: IMove, ply: u16) void {
     killerMoves[ply][1] = killerMoves[ply][0];
     killerMoves[ply][0] = move;
-}
-pub inline fn updateCaptureHistory(fPiece: e_piece, cPiece: e_piece, toSq: u8, bonus: scoreType) void {
-    const _bonus = std.math.clamp(bonus, -configl.MAX_HIST_HEURISTIC_VALUE, configl.MAX_HIST_HEURISTIC_VALUE);
-    captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][toSq] += _bonus - @divFloor(captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][toSq] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
-}
-
-pub inline fn updateHistoryHeurist(white: bool, from: u8, to: u8, bonus: scoreType) void {
-    const _bonus = std.math.clamp(bonus, -configl.MAX_HIST_HEURISTIC_VALUE, configl.MAX_HIST_HEURISTIC_VALUE);
-    const turnIdx: usize = @intFromEnum(chessl.boolTo_e_color(white));
-    historyHeuristic[turnIdx][from][to] += _bonus - @divFloor(historyHeuristic[turnIdx][from][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
-}
-pub inline fn updateContinuationHeurist(heurist: *pieceHistory, piece: e_piece, to: u8, bonus: scoreType) void {
-    const _bonus = std.math.clamp(bonus, -configl.MAX_CONTINUATION_HEURISTIC_VALUE, configl.MAX_CONTINUATION_HEURISTIC_VALUE);
-    heurist[@intFromEnum(piece)][to] += _bonus - @divFloor(heurist[@intFromEnum(piece)][to] * @as(scoreType, @intCast(@abs(_bonus))), configl.MAX_CONTINUATION_HEURISTIC_VALUE);
 }

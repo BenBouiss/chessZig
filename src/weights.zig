@@ -220,6 +220,7 @@ pub fn appendAll() !void {
     //try add_param_1d(futilityMargin.len, &futilityMargin, 0, 1500, "futilityMargin");
     //try add_param_1d(rfpMargin.len, &rfpMargin, 0, 1500, "rfpMargin");
 
+    add_param(&rfpNotImproving, -500, 0, "rfpNotImproving");
     add_param(&rfpImproving, -500, 0, "rfpImproving");
     add_param(&rfpDepth, 6, 12, "rfpDepth");
     add_param(&rfpCoeff, 25, 150, "rfpCoeff");
@@ -229,14 +230,15 @@ pub fn appendAll() !void {
 
     add_param(&aspirationCoefficient, 10, 200, "aspirationCoefficient");
     add_param(&nullMoveDepthAugmentThreshold, 8, 32, "nullMoveDepthAugmentThreshold");
-    add_param(&nullMoveDepthAugment, 0, 6, "nullMoveDepthAugment");
-    add_param(&nullMoveReduction, 0, 5, "nullMoveReduction");
-    add_param(&nullMoveReductionImproving, 0, 4, "nullMoveReductionImproving");
+    add_param(&nullMoveDepthAugment, 2, 6, "nullMoveDepthAugment");
+    add_param(&nullMoveReduction, 2, 8, "nullMoveReduction");
+    add_param(&nullMoveReductionImproving, 2, 8, "nullMoveReductionImproving");
 
     add_param(&razoringBaseImproving, 0, 1000, "razoringBaseImproving");
     add_param(&razoringBaseNotImproving, 0, 1000, "razoringBaseNotImproving");
     add_param(&razoringCoefficient, 0, 1000, "razoringCoefficient");
-    add_param(&IIRDepth, 4, 8, "IIRDepth");
+    add_param(&razoringMaxDepth, 2, 12, "razoringMaxDepth");
+    add_param(&IIRDepthMin, 2, 6, "IIRDepthMin");
     add_param(&LMRDepth, 3, 8, "LMRDepth");
 
     add_param(&SeePruningMaxDepth, 3, 12, "SeePruningMaxDepth");
@@ -245,7 +247,6 @@ pub fn appendAll() !void {
 
     add_param(&probCutMargin, 0, 500, "probCutMargin");
     add_param(&probCutMinimalDepth, 4, 8, "probCutMinimalDepth");
-    add_param(&corrHistMax, 0, 4000, "corrHistMax");
 
     add_param(&futilityDepth, 6, 14, "futilityDepth");
     add_param(&futilityCoeff, 50, 500, "futilityCoeff");
@@ -263,6 +264,9 @@ pub fn appendAll() !void {
     add_param(&moveQsearchAmount, 1, 8, "moveQsearchAmount");
 
     add_param(&moveGenMinSeeThreshold, -256, -32, "moveGenMinSeeThreshold");
+
+    add_param(&corrHistMax, 0, 4000, "corrHistMax");
+    add_param(&corrHistW, 4, 128, "corrHistW");
 
     //const start = tunerOpts.items.len;
 
@@ -296,37 +300,37 @@ pub var global_RookVal: scoreType = simpleRookScore;
 pub var global_QueenVal: scoreType = simpleQueenScore;
 
 // mobility
-pub var global_MobilityVal: [2]scoreType = .{ 11, 11 };
+pub var global_MobilityVal: [2]scoreType = .{ 3, 7 };
 pub var global_KingMobilityVal: [2]scoreType = .{ 1, 0 };
-pub var global_OpenFileRookVal: [2]scoreType = .{ 12, 12 };
+pub var global_OpenFileRookVal: [2]scoreType = .{ 12, 17 };
 
 // structure
-pub var global_StructureProtectionVal: [2]scoreType = .{ 20, 12 };
-pub var global_centerProtectionVal: [2]scoreType = .{ 0, 0 };
+pub var global_StructureProtectionVal: [2]scoreType = .{ 10, 21 };
+pub var global_centerProtectionVal: [2]scoreType = .{ 1, 0 };
 
 // pawn structure
-pub var global_IsolatedPawnVal: [2]scoreType = .{ 2, 1 };
-pub var global_StackedPawnVal: [2]scoreType = .{ 12, 9 };
-pub var global_PassedPawnVal: [2]scoreType = .{ 2, 1 };
-pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 3, 0 };
-pub var global_connectionPawnVal: [2]scoreType = .{ 2, 5 };
+pub var global_IsolatedPawnVal: [2]scoreType = .{ 0, 4 };
+pub var global_StackedPawnVal: [2]scoreType = .{ 0, 11 };
+pub var global_PassedPawnVal: [2]scoreType = .{ 0, 1 };
+pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 0, 4 };
+pub var global_connectionPawnVal: [2]scoreType = .{ 6, 5 };
 
 // tempo
-pub var global_tempoChecksScore: [2]scoreType = .{ 8, 9 };
-pub var global_pieceThreatScore: [2]scoreType = .{ 32, 6 };
+pub var global_tempoChecksScore: [2]scoreType = .{ 26, 8 };
+pub var global_pieceThreatScore: [2]scoreType = .{ 40, 24 };
 pub const global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
 // safety
-pub var global_SafetyBishopVal: [2]scoreType = .{ 5, 1 };
-pub var global_SafetyKnightVal: [2]scoreType = .{ 25, 4 };
+pub var global_SafetyBishopVal: [2]scoreType = .{ 9, 1 };
+pub var global_SafetyKnightVal: [2]scoreType = .{ 14, 3 };
 pub var global_SafetyRookVal: [2]scoreType = .{ 0, 0 };
-pub var global_SafetyQueenVal: [2]scoreType = .{ 3, 36 };
+pub var global_SafetyQueenVal: [2]scoreType = .{ 4, 21 };
 
 // king
-pub var global_KingProximityVal: [2]scoreType = .{ 5, 0 };
+pub var global_KingProximityVal: [2]scoreType = .{ 6, 0 };
 
 // material
-pub var global_materialBishopPair: [2]scoreType = .{ 29, 32 };
+pub var global_materialBishopPair: [2]scoreType = .{ 49, 58 };
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = @splat(pawnScoreArr);
 pub var global_Bishop_PSQT: [2][64]scoreType = @splat(bishopScoreArr);
@@ -356,135 +360,92 @@ pub var global_King_PSQT: [2][64]scoreType = .{ [_]scoreType{
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
 //pub var lmr_scoreThreshold: scoreType = configl.MAX_HIST_HEURISTIC_VALUE + 1;
-pub var lmr_scoreThreshold: scoreType = 795;
-pub var lmr_expectedCutOff: scoreType = 737;
-pub var lmr_notImproving: scoreType = 820;
-pub var lmr_hashMoveCapture: scoreType = 572;
-pub var lmr_baseDeficit: scoreType = 1066;
-pub var lmr_badCapture: scoreType = 26;
-pub var lmr_oldMulti: scoreType = 41;
-pub var lmr_highFailScore: scoreType = 1001;
-pub var lmr_highFailCount: scoreType = 4;
+pub var lmr_scoreThreshold: scoreType = 849;
+pub var lmr_expectedCutOff: scoreType = 642;
+pub var lmr_notImproving: scoreType = 958;
+pub var lmr_hashMoveCapture: scoreType = 736;
+pub var lmr_baseDeficit: scoreType = 652;
+pub var lmr_badCapture: scoreType = 214;
+pub var lmr_oldMulti: scoreType = 48;
+pub var lmr_highFailScore: scoreType = 1012;
+pub var lmr_highFailCount: scoreType = 9;
 
 // LMR negative (less reduction)
 pub var lmr_inCheck: scoreType = -600; // not used since no lmr in check
 // try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
-pub var lmr_givesCheck: scoreType = -675;
-pub var lmr_killerMove: scoreType = -370;
-pub var lmr_threatening: scoreType = -110;
-pub var lmr_inPvMode: scoreType = -275;
-pub var lmr_isPromotion: scoreType = -178;
+pub var lmr_givesCheck: scoreType = -610;
+pub var lmr_killerMove: scoreType = -1293;
+pub var lmr_threatening: scoreType = -24;
+pub var lmr_inPvMode: scoreType = -113;
+pub var lmr_isPromotion: scoreType = -274;
 
 // margins
 
 //pub var futilityMargin [4]scoreType = .{ 16, 165, 332, 509 };
 //pub var rfpMargin: [4]scoreType = .{ 0, 47, 185, 235 };
-pub var rfpImproving: scoreType = -9;
-pub var rfpDepth: scoreType = 6;
-pub var rfpCoeff: scoreType = 69; // depth * c
-pub var rfpConst: scoreType = 42;
+pub var rfpNotImproving: scoreType = -13;
+pub var rfpImproving: scoreType = -25;
 
-pub var captureExtensionThresh: scoreType = 1111;
+pub var rfpDepth: scoreType = 9;
+pub var rfpCoeff: scoreType = 89; // depth * c
+pub var rfpConst: scoreType = 67;
 
-pub var moveReductionAmount: scoreType = 4;
-pub var moveQsearchAmount: scoreType = 4;
+pub var captureExtensionThresh: scoreType = 288;
 
-// source: https://www.chessprogramming.org/King_Safety
-pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
+pub var aspirationCoefficient: scoreType = 11;
 
-pub var aspirationCoefficient: scoreType = 17;
-
-pub var nullMoveDepthAugmentThreshold: scoreType = 18;
-pub var nullMoveDepthAugment: scoreType = 2;
-pub var nullMoveReduction: scoreType = 3;
+pub var nullMoveDepthAugmentThreshold: scoreType = 8;
+pub var nullMoveDepthAugment: scoreType = 3;
+pub var nullMoveReduction: scoreType = 4;
 pub var nullMoveReductionImproving: scoreType = 3;
 
-pub var razoringBaseImproving: scoreType = 60;
-pub var razoringBaseNotImproving: scoreType = 170;
-pub var razoringCoefficient: scoreType = 167;
+pub var razoringBaseImproving: scoreType = 136;
+pub var razoringBaseNotImproving: scoreType = 316;
+pub var razoringCoefficient: scoreType = 97;
+pub var razoringMaxDepth: scoreType = 4;
 
-pub var IIRDepth: scoreType = 6; // >= 5
+pub var IIRDepthMin: scoreType = 5; // >= 5
 pub var LMRDepth: scoreType = 3; // >= 3
 
 pub var SeePruningMaxDepth: scoreType = 3;
-pub var SeePruningQuietMargin: scoreType = -8;
-pub var SeePruningCaptureMargin: scoreType = -92;
+pub var SeePruningQuietMargin: scoreType = -38;
+pub var SeePruningCaptureMargin: scoreType = -262;
 
-pub var probCutMargin: scoreType = 267;
-pub var probCutMinimalDepth: scoreType = 7;
+pub var probCutMargin: scoreType = 373;
+pub var probCutMinimalDepth: scoreType = 5;
 
-pub var corrHistMax: scoreType = 2000;
-pub var corrHistDiv: scoreType = 4;
+pub var futilityDepth: scoreType = 8;
+pub var futilityCoeff: scoreType = 244; // depth * c
+pub var futilityConst: scoreType = 173;
 
-pub var lmpMaxDepth: scoreType = 3;
+pub var historyThreshCoeff: scoreType = -547; //coeff * d + c
+pub var historyThreshConst: scoreType = -131;
+pub var historyMinExplore: scoreType = 10;
+
+pub var lmpMaxDepth: scoreType = 4;
 pub var lmpBase: scoreType = 1;
 //pub var lmpImproving: scoreType = 4;
 
-// CurEval <= Alpha - PVal[SecondPiece(Opponent) - PVal[ThirdPiece(Opponent) - 2*PosMargin + PosMargin2.
+pub var moveReductionAmount: scoreType = 2;
+pub var moveQsearchAmount: scoreType = 1;
 
-pub var futilityDepth: scoreType = 6;
-pub var futilityCoeff: scoreType = 156; // depth * c
-pub var futilityConst: scoreType = 209;
-
-//pub var historyDepthMax: scoreType = 4;
-pub var historyThreshCoeff: scoreType = -414; //coeff * d + c
-pub var historyThreshConst: scoreType = -98;
-pub var historyMinExplore: scoreType = 8;
+pub var moveGenMinSeeThreshold: scoreType = -38;
+// source: https://www.chessprogramming.org/King_Safety
+pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
 
 pub var singularExtensionMinDepth: scoreType = 4;
 pub var singularExtensionDeltaTTDepth: scoreType = 2;
 pub var singularExtensionDepthCoeff: scoreType = 2;
 
-pub var moveGenMinSeeThreshold: scoreType = -100;
+pub var singularExtensionPVCoeff: scoreType = 1;
+pub var singularExtensionNonPVCoeff: scoreType = 2;
 
+pub var corrHistMax: scoreType = 2000;
+pub var corrHistW: scoreType = 66;
 // replace the array with y = a*x + b with x = depth
 //pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 
 pub fn modif_val() void {
-    //
-    //lmr_scoreThreshold = 720;
-    //lmr_expectedCutOff = 652;
-    //lmr_notImproving = 820;
-    //lmr_hashMoveCapture = 498;
-    //lmr_baseDeficit = 877;
-    //lmr_badCapture = 109;
-    //lmr_oldMulti = 42;
-    //lmr_highFailScore = 983;
-    //lmr_highFailCount = 3;
-    //lmr_givesCheck = -528;
-    //lmr_killerMove = -322;
-    //lmr_threatening = -231;
-    //lmr_inPvMode = -465;
-    //lmr_isPromotion = -203;
-    //rfpImproving = -17;
-    //rfpDepth = 7;
-    //rfpCoeff = 78;
-    //rfpConst = 38;
-    //captureExtensionThresh = 1064;
-    //aspirationCoefficient = 14;
-    //nullMoveDepthAugmentThreshold = 18;
-    //nullMoveDepthAugment = 1;
-    //nullMoveReduction = 3;
-    //nullMoveReductionImproving = 2;
-    //IIRDepth = 7;
-    //LMRDepth = 3;
-    //SeePruningMaxDepth = 3;
-    //SeePruningQuietMargin = -31;
-    //SeePruningCaptureMargin = -103;
-    //probCutMargin = 281;
-    //probCutMinimalDepth = 7;
-    //futilityDepth = 6;
-    //futilityCoeff = 136;
-    //futilityConst = 177;
-    //historyThreshCoeff = -437;
-    //historyThreshConst = -94;
-    //historyMinExplore = 7;
-    //lmpMaxDepth = 3;
-    //lmpBase = 1;
-    //moveReductionAmount = 4;
-    //moveQsearchAmount = 4;
-    //moveGenMinSeeThreshold = -93;
-
-    //
+    // 1
 
 }

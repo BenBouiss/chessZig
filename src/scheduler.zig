@@ -15,6 +15,7 @@ const typel = @import("type.zig");
 const chessl = @import("chess.zig");
 const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
+const historyl = @import("history.zig");
 
 const IMove = movel.IMove;
 const scoreType = typel.scoreType;
@@ -34,7 +35,6 @@ pub const searchFeatures = struct {
     fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
     useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
-    useProbCut: bool = configl.DEFAULT_USE_PROBCUT,
 };
 
 pub const moveDecisionExt = struct {
@@ -56,6 +56,7 @@ pub const moveDecisionExt = struct {
 pub const timeManager = struct {
     stopWatch: timel.stopWatch = .{},
     remainingTimeMs: i64 = 0,
+    incMs: i64 = 0,
 
     pub inline fn startSearchTick(p_self: *timeManager) void {
         p_self.stopWatch.startTimeTick();
@@ -70,19 +71,9 @@ pub const timeManager = struct {
         p_self.remainingTimeMs = 0;
         p_self.stopWatch.reset();
     }
-    pub inline fn setRemainingTimeMs(p_self: *timeManager, timeMs: i64) void {
-        p_self.remainingTimeMs = timeMs;
-    }
 
-    pub fn isOvertimeSearching(p_self: *const timeManager) bool {
-        const _remainTime: f64 = @floatFromInt(p_self.remainingTimeMs);
-        const maxTime: i64 = @intFromFloat(_remainTime * configl.SCHEDULER_MAX_TIME_FRCT);
-        return (p_self.timeSinceStartMs() > maxTime);
-    }
-    pub fn isOvertimeCritical(p_self: *const timeManager) bool {
-        const _remainTime: f64 = @floatFromInt(p_self.remainingTimeMs);
-        const maxTime: i64 = @intFromFloat(_remainTime * configl.SCHEDULER_CRITICAL_TIME_FRCT);
-        return (p_self.timeSinceStartMs() > maxTime);
+    pub inline fn isOvertimeSearching(p_self: *const timeManager) bool {
+        return (p_self.timeSinceStartMs() > @divFloor(p_self.remainingTimeMs, configl.SCHEDULER_MAX_TIME_DIV));
     }
 };
 pub fn outOfTime(p_info: *threadingl.threadInfo) bool {
@@ -90,7 +81,8 @@ pub fn outOfTime(p_info: *threadingl.threadInfo) bool {
     p_info.checkTime += 1;
     if (p_info.checkTime == 1024) {
         p_info.checkTime = 0;
-        if (p_info.stopWatch.timeSinceStartMs() >= p_info.maxTimeMs) {
+        if (p_info.stopWatch.timeSinceStartMs() >= p_info.criticalTimeMs) {
+            p_info.alive = false;
             return true;
         }
     }
@@ -116,6 +108,12 @@ pub const scheduler = struct {
     pub fn handleInterrupt(p_self: *scheduler) void {
         p_self._threadPool.stop();
         p_self._threadPool.waitOnFinish();
+    }
+    pub inline fn setRemainingTimeMs(p_self: *scheduler, timeMs: i64) void {
+        p_self.timeM.remainingTimeMs = timeMs;
+    }
+    pub inline fn setInc(p_self: *scheduler, incMs: i64) void {
+        p_self.timeM.incMs = incMs;
     }
     pub fn entryPointSearch(p_self: *scheduler, p_engine: *enginel.engine, state: boardl.boardState, depth: depthT, features: searchFeatures) searchReport {
         // only used in the benchmark files
@@ -147,9 +145,9 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) 
     p_engine.scheduler.searching = true;
     p_engine.scheduler.timeM.startSearchTick();
     if (p_engine.state.whiteToMove()) {
-        p_engine.scheduler.timeM.setRemainingTimeMs(config.wtime);
+        p_engine.scheduler.setRemainingTimeMs(config.wtime);
     } else {
-        p_engine.scheduler.timeM.setRemainingTimeMs(config.btime);
+        p_engine.scheduler.setRemainingTimeMs(config.btime);
     }
     p_engine.scheduler._threadPool.submit(&pack) catch {
         p_engine.respond("engineOp threadPoolSubmit failed crashing");
@@ -172,13 +170,13 @@ pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *thr
     // launched as single threaded
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
     p_info.working = true;
-    defer sendFinal(&p_info.currentBest);
+    defer sendFinal(p_info.currentBest.move);
     defer sched.searching = false;
     defer p_info.working = false;
 
     p_info.stopWatch = sched.timeM.stopWatch;
     p_info.checkTime = 0;
-    p_info.maxTimeMs = @intFromFloat(@as(f64, @floatFromInt(sched.timeM.remainingTimeMs)) * configl.SCHEDULER_CRITICAL_TIME_FRCT);
+    p_info.criticalTimeMs = @divFloor(sched.timeM.remainingTimeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
 
     hashl.hashTable.nextGeneration();
     const fmoves = moveGenl.generateLegalMoves(p_state);
@@ -199,6 +197,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
     var ss: alphaBetal.searchStack = .{};
     var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
     var delta = weightl.aspirationCoefficient;
+    var validDecision: IMove = .{};
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
 
@@ -218,13 +217,22 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
             score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, alpha, beta);
         }
         ss.setPrevLine(&p_info.currentBest.line);
+        if (p_info.alive) {
+            validDecision = p_info.currentBest.move;
+        } else {
+            if (validDecision.isValid()) {
+                p_info.currentBest.move = validDecision;
+            }
+            break;
+        }
         if (features.reportProgress) {
-            sendPartial(depth, p_info);
+            sendPartial(p_info);
         }
     }
     return depth;
 }
 
+//https://www.chessprogramming.org/Time_Management
 pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depthT, score: scoreType, p_features: *const searchFeatures) bool {
     if (p_features.fixedDepth and depth == maxDepth or (depth >= typel.MAX_PLY)) {
         return false;
@@ -233,20 +241,19 @@ pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depth
         return false;
     }
     const prevTime: i64 = timer.timeSinceStartMs();
-    const floatTime: f64 = @floatFromInt(timer.remainingTimeMs);
-    const maxTime: i64 = @intFromFloat(floatTime * configl.SCHEDULER_MAX_TIME_FRCT);
+    const maxTime: i64 = @divFloor(timer.remainingTimeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(timer.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
     return ((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime);
 }
 
-pub fn sendPartial(depth: depthT, p_info: *const threadingl.threadInfo) void {
+pub fn sendPartial(p_info: *const threadingl.threadInfo) void {
     var msgBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
-    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} score cp {d} nodes {d} cutoff: {d} hashMove: {d} currmove {s} pv {f}\n", .{ depth, p_info.currentBest.scoring, p_info.searchStat.n_nodeExplored, p_info.searchStat.n_cutoffs, p_info.searchStat.n_hashMoveDone, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
+    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} score cp {d} nodes {d} currmove {s} pv {f}\n", .{ p_info.depth, p_info.seldepth, p_info.currentBest.scoring, p_info.searchStat.n_nodeExplored, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
     respondNoEng(utilsl.trimStr(final_info)) catch unreachable;
 }
 
-pub fn sendFinal(decision: *const moveDecisionExt) void {
-    var buffer = std.mem.zeroes([32]u8);
-    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{utilsl.trimStr(&decision.move.getStr())}) catch unreachable;
+pub fn sendFinal(move: IMove) void {
+    var buffer = std.mem.zeroes([16]u8);
+    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{utilsl.trimStr(&move.getStr())}) catch unreachable;
     respondNoEng(msg) catch unreachable;
 }
 

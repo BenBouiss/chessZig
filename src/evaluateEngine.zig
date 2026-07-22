@@ -123,7 +123,7 @@ const matchResultContainer = struct {
             },
         }
 
-        for (0..2 - @as(usize, @intCast(chessl.whiteBoolToInt(oneEngine)))) |i| {
+        for (0..2 - @as(usize, @intFromBool(oneEngine))) |i| {
             const currEng = match.playerInv[i].engineUsed;
             p_self.items[currEng].nMatch += 1;
             p_self.items[currEng].stdTimePerTurn = 0;
@@ -892,7 +892,9 @@ fn mainGuiThread(p_self: *guiState) !void {
         };
         matchCount += 1;
         try p_self.outcomes.addOutCome(p_self.alloc, &p_self.match);
+        utilsl.clear();
         try endMatchTickUserFacingInterface(p_self);
+        chessl.print_boardstate(&p_self.match.chessState);
     }
 
     p_self.outcomes.printResults(p_self.alloc) catch {};
@@ -962,9 +964,9 @@ fn timeTickUserFacingInterface(p_self: *const guiState) !void {
     const eval = heuristicl.evaluate_debug(&p_self.match.chessState);
     std.debug.print("Current evaluation: \n", .{});
     eval.print();
+    try endMatchTickUserFacingInterface(p_self);
 }
 pub fn endMatchTickUserFacingInterface(p_self: *const guiState) !void {
-    utilsl.clear();
     for (0..p_self.config.nEngines) |i| {
         var side: u8 = 'w';
         for (p_self.match.playerInv) |p| {
@@ -977,7 +979,6 @@ pub fn endMatchTickUserFacingInterface(p_self: *const guiState) !void {
         const _outcome = outcome.combine();
         std.debug.print("({c}) {d} (w/l/d) {d}/{d}/{d} black({d}/{d}/{d}) white({d}/{d}/{d}) {s}\n", .{ side, outcome.getScore(), _outcome.win, _outcome.lose, _outcome.draw, outcome.res[0].win, outcome.res[0].lose, outcome.res[0].draw, outcome.res[1].win, outcome.res[1].lose, outcome.res[1].draw, name._slice() });
     }
-    chessl.print_boardstate(&p_self.match.chessState);
 }
 
 fn onNextTurnTrigger(p_self: *guiState) !bool {
@@ -1036,8 +1037,8 @@ pub fn launch_gui(infoPath: []const u8, alloc: std.mem.Allocator) !void {
         @panic("No valid path found\n");
     }
 
-    ret.match.playerInv[0] = try player.init(ret.alloc, settings.match.timeF, .BLACK, ret.engineInventory.len - 1);
-    ret.match.playerInv[1] = try player.init(ret.alloc, settings.match.timeF, .WHITE, 0);
+    ret.match.playerInv[@intFromEnum(e_color.BLACK)] = try player.init(ret.alloc, settings.match.timeF, .BLACK, ret.engineInventory.len - 1);
+    ret.match.playerInv[@intFromEnum(e_color.WHITE)] = try player.init(ret.alloc, settings.match.timeF, .WHITE, 0);
 
     ret.status.running = true;
     ret.status.phase = .MATCH;

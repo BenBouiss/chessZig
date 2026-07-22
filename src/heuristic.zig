@@ -1054,60 +1054,12 @@ pub const SEE_values: [13]scoreType = .{ weightl.simplePawnScore, weightl.simple
 // https://github.com/maksimKorzh/chess_programming MVA_lva table
 pub const mvv_lva: [12][12]scoreType = .{ .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 }, .{ 105, 205, 305, 405, 505, 605, 105, 205, 305, 405, 505, 605 }, .{ 104, 204, 304, 404, 504, 604, 104, 204, 304, 404, 504, 604 }, .{ 103, 203, 303, 403, 503, 603, 103, 203, 303, 403, 503, 603 }, .{ 102, 202, 302, 402, 502, 602, 102, 202, 302, 402, 502, 602 }, .{ 101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601 }, .{ 100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600 } };
 
-pub fn eval_move_heuristic_line(p_state: *const boardl.boardState, move: IMove, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, white: bool) scoreType {
-    if (move.equal(hashMove)) {
-        return configl.ORDERING_LINE_VALUE + 1;
-    }
-    if (move.equal(prevLineMove)) {
-        // previous best move at that ply
-        return configl.ORDERING_LINE_VALUE;
-    }
-    const fpiece = p_state.getFromPiece(move);
-    const from = move.getFrom();
-    const to = move.getTo();
-
-    if (move.isCapture()) {
-        const cPiece: e_piece = if (move.isEnpassant()) (if (white) .nBlackPawn else (.nWhitePawn)) else (p_state.getPiece(to));
-        // done for pseudo legal move stuff
-        if (chess.isKingPiece(cPiece)) {
-            return configl.ORDERING_LINE_VALUE + 2;
-        }
-        if (mva) {
-            return historyl.captureHistory[@intFromEnum(fpiece)][@intFromEnum(cPiece)][to] + mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
-            //return mvv_lva[@intFromEnum(fpiece)][@intFromEnum(cPiece)];
-        } else {
-            return SEE(p_state, move);
-        }
-    } else {
-        //
-        if (move.isPromotion() and move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
-            return configl.ORDERING_PROMOTIONS;
-        }
-        if (move.equal(historyl.killerMoves[ply][0])) {
-            return configl.KILLER_0_HEURISTIC_VALUE;
-        } else if (move.equal(historyl.killerMoves[ply][1])) {
-            return configl.KILLER_1_HEURISTIC_VALUE;
-        } else {
-            return historyl.historyHeuristic[chess.whiteBoolToInt(white)][from][to];
-        }
-        //return historyl.historyHeuristic[chess.whiteBoolToInt(white)][from][to] + continuations[0][@intFromEnum(fpiece)][to] + continuations[1][@intFromEnum(fpiece)][to];
-    }
-    return 0;
-}
-
 //https://www.chessprogramming.org/History_Heuristic#Update
 pub inline fn computeHistoryBonus(depth: typel.depthT) scoreType {
     return @intCast(30 * depth - 25);
 }
 pub fn cmp_eval_move(context: []const scoreType, a: u8, b: u8) bool {
     return context[a] > context[b];
-}
-
-pub fn evalMoveScore(p_state: *const boardl.boardState, ply: u16, hashMove: IMove, prevLineMove: IMove, mva: bool, ret: *moveGenl.movesScores) void {
-    const w: bool = p_state.whiteToMove();
-    for (0..ret.moves.len) |i| {
-        ret.scores[i] = eval_move_heuristic_line(p_state, ret.moves.moves[i], ply, hashMove, prevLineMove, mva, w);
-    }
 }
 
 pub inline fn depthToMilliDepth(d: i32) milliDepth {

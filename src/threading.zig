@@ -28,11 +28,13 @@ pub const threadInfo = struct {
     currentBest: schedulerl.moveDecisionExt = .{},
     currentMove: schedulerl.moveDecisionExt = .{},
     depth: depthT = 0,
+    seldepth: depthT = 0,
     working: bool = false,
     alive: bool = false,
     searchStat: searchStatistic = .{},
     stopWatch: timel.stopWatch = .{},
-    maxTimeMs: i64 = 0,
+    criticalTimeMs: i64 = 0,
+    // maxTimeMs
     // check every 1024
     checkTime: u64 = 0,
 };
@@ -199,23 +201,25 @@ pub const threadPool = struct {
 pub const threadPoolerr = error{ timedOut, alreadySearching };
 
 pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
-    p_self.threadProps[idx].status = .WAITING;
-    p_self.threadProps[idx].alive = true;
-    p_self.threadProps[idx].timeWorkingUs = 0;
-    const alive = &p_self.threadProps[idx].alive;
+    var props = &p_self.threadProps[idx];
+    props.status = .WAITING;
+    props.alive = true;
+    props.timeWorkingUs = 0;
+    const alive = &props.alive;
     while (p_self.isRunning() and alive.*) {
-        if (!p_self.working) {
-            std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.THREADPOOL_TICKRATE_NS) }, .real) catch unreachable;
-        }
-        if (p_self.threadProps[idx].searchPing) {
+        //if (!p_self.working) {
+        //    std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.THREADPOOL_TICKRATE_NS) }, .real) catch unreachable;
+        //}
+        std.atomic.spinLoopHint();
+        if (props.searchPing) {
             var sw: timel.stopWatch = .{};
             sw.startTimeTick();
-            p_self.threadProps[idx].searchPing = false;
-            p_self.threadProps[idx].status = .WORKING;
+            props.searchPing = false;
+            props.status = .WORKING;
             var pack = p_self.packages[idx];
             schedulerl._startSearch(pack.scheduler, &pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth);
-            p_self.threadProps[idx].timeWorkingUs += sw.timeSinceStartUs();
-            p_self.threadProps[idx].status = .WAITING;
+            props.timeWorkingUs += sw.timeSinceStartUs();
+            props.status = .WAITING;
         }
     }
     p_self.running = false;

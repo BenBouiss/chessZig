@@ -23,20 +23,20 @@ pub const _DEFAULT_TRACKMETRICS = "true";
 pub const DEFAULT_REPORTPROGRESS = false;
 pub const _DEFAULT_REPORTPROGRESS = "false";
 
-pub const ORDERING_LINE_VALUE = 99999;
+pub const ORDERING_LINE_VALUE = 9999;
 
 //https://www.chessprogramming.org/Move_Ordering
 //pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
 pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
 
-pub const KILLER_0_HEURISTIC_VALUE = 900;
-pub const KILLER_1_HEURISTIC_VALUE = 800;
+pub const KILLER_0_HEURISTIC_VALUE = 2048;
+pub const KILLER_1_HEURISTIC_VALUE = 2048;
 //pub const COUNTERMOVE_HEURISTIC_VALUE = 750;
-pub const MAX_HIST_HEURISTIC_VALUE = 700;
-pub const MAX_CONTINUATION_HEURISTIC_VALUE = 700;
+pub const MAX_HIST_HEURISTIC_VALUE = 1024;
+pub const MAX_CONTINUATION_HEURISTIC_VALUE = 1024;
 
 pub const DEFAULT_DEPTH: u16 = 4;
-pub const MAX_QUIESC_DEPTH: u16 = 16;
+pub const MAX_QUIESC_DEPTH: u16 = 64;
 
 pub const DEFAULT_ELO: u32 = 0;
 pub const MIN_ELO: u32 = 0;
@@ -54,11 +54,8 @@ pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 //pub const OLD_THRESHOLD: u8 = 5;
 pub const OLD_THRESHOLD: u8 = 2;
 
-pub const DEFAULT_USE_PROBCUT = true;
-pub const _DEFAULT_USE_PROBCUT = "true";
-
-pub const DEFAULT_USE_RAZORING = false;
-pub const _DEFAULT_USE_RAZORING = "false";
+pub const DEFAULT_USE_RAZORING = true;
+pub const _DEFAULT_USE_RAZORING = "true";
 
 pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
@@ -69,11 +66,13 @@ pub const NET_PATH = "out/bin/simple-320-colM-128/quantised.bin";
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
-pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
-pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
+pub const SCHEDULER_MAX_TIME_DIV: i64 = 20;
+pub const SCHEDULER_MAX_TIME_INC_DIV: i64 = 2;
+pub const SCHEDULER_CRITICAL_TIME_DIV: i64 = 3;
 
 // estimate of the time increase when increasing the depth by 1
-pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
+//pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
+pub var SCHEDULER_GROWTH_TIME_EST: i64 = 2;
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 3;

@@ -27,7 +27,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USEPROBCUT, USERAZORING, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USERAZORING, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 const e_goToken = enum(u8) { SEARCHMOVES, EVAL, PERFT, BATCHED, PONDER, WTIME, BTIME, WINC, BINC, MOVESTOGO, DEPTH, NODES, MATE, MOVETIME, INFINITE, VAL };
@@ -319,8 +319,6 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "hashS", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
 
-        try p_self.addOption(.{ .name = "useProbCut", .optionType = .USEPROBCUT, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_PROBCUT } } });
-
         try p_self.addOption(.{ .name = "useRazoring", .optionType = .USERAZORING, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RAZORING } } });
 
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
@@ -516,12 +514,6 @@ pub const engine = struct {
                 return true;
             },
 
-            .USEPROBCUT => {
-                p_self.options.searchF.useProbCut = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
-            },
-
             .USERAZORING => {
                 p_self.options.searchF.useRazoring = getCheckValFromSetOptionCmd(&tokens, entry) catch {
                     return false;
@@ -676,13 +668,10 @@ pub const engine = struct {
         p_self.scheduler.handleInterrupt();
     }
     pub fn executeGoCmd(p_self: *engine, cmdBuffer: []const u8) bool {
-        var goArg = parseGoCmd(cmdBuffer);
+        const goArg = parseGoCmd(cmdBuffer);
 
         p_self.scheduler.reset();
 
-        if (goArg.depth == 0) {
-            goArg.depth = configl.DEFAULT_DEPTH;
-        }
         if (goArg.type == .PERFT) {
             return perftl.dispatchUciPerftCmd(p_self, goArg);
         }
@@ -747,7 +736,7 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
     for (0..benchmarkEntries.len) |i| {
         p_engine.refreshInternals();
         p_engine.scheduler.searching = true;
-        sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
+        sched.setRemainingTimeMs(std.math.maxInt(i64));
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
         const res = sched.entryPointSearch(p_engine, p_engine.state, benchmarkDepth, features);
@@ -765,41 +754,6 @@ pub fn printResults(fens: []const []const u8, reports: *const std.ArrayList(sche
         const nps = 1000 * @divFloor(curr.searchStat.n_nodeExplored, _time + 1);
         const cuttoffF: f64 = 100 * @as(f64, @floatFromInt(curr.searchStat.n_cutoffs)) / @as(f64, @floatFromInt(curr.searchStat.n_nodeExplored));
         std.debug.print("{s} nps: {d} nodes: {d} cutoff {d} cutoff {d:4.1}% hashMove: {d} move {s} cp {d} retrieved: {d}\n", .{ fens[i], nps, curr.searchStat.n_nodeExplored, curr.searchStat.n_cutoffs, cuttoffF, curr.searchStat.n_hashMoveDone, curr.move.getStr(), curr.score, curr.searchStat.n_hashRetrieve });
-    }
-}
-fn cmdToGoToken(arg: []const u8) e_goToken {
-    if (utilsl.startsWith(arg, "searchmoves", .ignoreCase)) {
-        return .SEARCHMOVES;
-    } else if (utilsl.startsWith(arg, "eval", .ignoreCase)) {
-        return .EVAL;
-    } else if (utilsl.startsWith(arg, "perft", .ignoreCase)) {
-        return .PERFT;
-    } else if (utilsl.startsWith(arg, "batched", .ignoreCase)) {
-        return .BATCHED;
-    } else if (utilsl.startsWith(arg, "ponder", .ignoreCase)) {
-        return .PONDER;
-    } else if (utilsl.startsWith(arg, "wtime", .ignoreCase)) {
-        return .WTIME;
-    } else if (utilsl.startsWith(arg, "btime", .ignoreCase)) {
-        return .BTIME;
-    } else if (utilsl.startsWith(arg, "winc", .ignoreCase)) {
-        return .WINC;
-    } else if (utilsl.startsWith(arg, "binc", .ignoreCase)) {
-        return .BINC;
-    } else if (utilsl.startsWith(arg, "movestogo", .ignoreCase)) {
-        return .MOVESTOGO;
-    } else if (utilsl.startsWith(arg, "depth", .ignoreCase)) {
-        return .DEPTH;
-    } else if (utilsl.startsWith(arg, "nodes", .ignoreCase)) {
-        return .NODES;
-    } else if (utilsl.startsWith(arg, "mate", .ignoreCase)) {
-        return .MATE;
-    } else if (utilsl.startsWith(arg, "movetime", .ignoreCase)) {
-        return .MOVETIME;
-    } else if (utilsl.startsWith(arg, "infinite", .ignoreCase)) {
-        return .INFINITE;
-    } else {
-        return .VAL;
     }
 }
 

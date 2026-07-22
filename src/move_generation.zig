@@ -12,6 +12,7 @@ const configl = @import("config.zig");
 const weightl = @import("weights.zig");
 const historyl = @import("history.zig");
 const magicl = @import("magic.zig");
+const alphaBetal = @import("alphaBeta.zig");
 
 const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
@@ -817,9 +818,11 @@ pub const typeMoveGenerator = struct {
         p_self.idx = 0;
     }
 
-    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, hashMove: IMove, prevLineMove: IMove, seeThreshold: scoreType, skipQuiet: bool) ?struct { movel.IMove, scoreType } {
+    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, hashMove: IMove, seeThreshold: scoreType, skipQuiet: bool, ss: *alphaBetal.searchStack) ?struct { movel.IMove, scoreType } {
         const white = state.whiteToMove();
-        const _ply: usize = @intCast(ply);
+        const currS = ss.getFrame(ply);
+        const prevLineMove = currS.prevLineMove;
+        //const _ply: usize = @intCast(ply);
         if (p_self.phase == .NONE) {
             p_self.phase = .TTMOVE;
             if (hashMove.isValid() and !(hashMove.isQuietMove() and skipQuiet)) {
@@ -837,8 +840,6 @@ pub const typeMoveGenerator = struct {
                     if (move.equal(prevLineMove)) {
                         p_self.captures.scores[i] = configl.ORDERING_LINE_VALUE;
                     } else {
-                        //p_self.captures.scores[i] = heuristicl.SEE(state, move);
-
                         const to = move.getTo();
                         const cPiece: u8 = if (move.isEnpassant()) (if (white) @intFromEnum(e_piece.nBlackPawn) else @intFromEnum(e_piece.nWhitePawn)) else @intFromEnum(state.getPiece(to));
                         const fpiece: u8 = @intFromEnum(state.getFromPiece(move));
@@ -855,13 +856,6 @@ pub const typeMoveGenerator = struct {
                 if (ret.@"0".equal(hashMove)) {
                     continue;
                 }
-
-                //if (ret.@"1" > seeThreshold) {
-                //    return ret;
-                //} else {
-                //    p_self.badCaptures.scores[p_self.badCaptures.moves.len] = ret.@"1";
-                //    p_self.badCaptures.moves.append(ret.@"0");
-                //}
                 if (heuristicl.SEE_threshold(state, ret.@"0", seeThreshold)) {
                     return ret;
                 } else {
@@ -873,23 +867,41 @@ pub const typeMoveGenerator = struct {
         if (p_self.phase == .CAPTURE) {
             if (!p_self.computedQuiet and !skipQuiet) {
                 p_self.generateMove(.QUIET, state);
-                //heuristicl.evalMoveScore(state, ply, hashMove, capturesprevLineMove, useMVA, &p_self.quiets);
+                const prevMove = ss.getPrevFrame(ply, 1).playedMove;
+                const prevPiece = ss.getPrevFrame(ply, 1).pieceMoved;
+
+                const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
+                const prevPrevPiece = ss.getPrevFrame(ply, 2).pieceMoved;
+
+                const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
+                const prevPiece4 = ss.getPrevFrame(ply, 4).pieceMoved;
+
+                const killerMove = currS.killerMove;
                 for (0..p_self.quiets.moves.len) |i| {
                     const move = p_self.quiets.moves.moves[i];
                     const to = move.getTo();
                     const from = move.getFrom();
+                    const p: u8 = @intFromEnum(state.getPiece(from));
 
                     if (move.equal(prevLineMove)) {
                         p_self.quiets.scores[i] = configl.ORDERING_LINE_VALUE;
-                    } else if (move.equal(historyl.killerMoves[_ply][0])) {
+                    } else if (move.equal(killerMove)) {
                         p_self.quiets.scores[i] = configl.KILLER_0_HEURISTIC_VALUE;
-                    } else if (move.equal(historyl.killerMoves[_ply][1])) {
-                        p_self.quiets.scores[i] = configl.KILLER_1_HEURISTIC_VALUE;
-                    } else if (move.isPromotion() and move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
+                    } else if (move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
                         p_self.quiets.scores[i] = configl.ORDERING_PROMOTIONS;
                     } else {
                         const offset = chess.whiteBoolToInt(white);
                         p_self.quiets.scores[i] = historyl.historyHeuristic[offset][from][to];
+                        if (prevMove.isValid()) {
+                            p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][p][to];
+                        }
+                        if (prevPrevMove.isValid()) {
+                            p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][p][to];
+                        }
+
+                        if (prevMove4.isValid()) {
+                            p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][p][to];
+                        }
                     }
                 }
             }

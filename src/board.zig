@@ -507,6 +507,7 @@ pub const boardState = struct {
         } else {
             p_self._makeMove(move, false, true);
         }
+        hashl.hashTable.prefetchHash(p_self.frame.key);
     }
     pub inline fn makeMovePerft(p_self: *boardState, move: IMove) void {
         if (p_self.whiteToMove()) {
@@ -1075,7 +1076,7 @@ pub const boardState = struct {
     }
 
     pub inline fn isFiftyMoveRepetition(self: *const boardState) bool {
-        return self.frame.halfMoveClock >= 50;
+        return self.frame.halfMoveClock >= 100;
     }
     pub inline fn isStaleThreeFold(self: *const boardState) bool {
         return self.moveHistory.checkRepetitions();
