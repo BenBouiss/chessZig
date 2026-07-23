@@ -507,7 +507,6 @@ pub const boardState = struct {
         } else {
             p_self._makeMove(move, false, true);
         }
-        hashl.hashTable.prefetchHash(p_self.frame.key);
     }
     pub inline fn makeMovePerft(p_self: *boardState, move: IMove) void {
         if (p_self.whiteToMove()) {

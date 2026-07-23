@@ -27,7 +27,7 @@ const debug_err = chess.debug_err;
 
 const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
-const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, HEUR_WEIGHTS_PATH, USERAZORING, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
+const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
 const e_goToken = enum(u8) { SEARCHMOVES, EVAL, PERFT, BATCHED, PONDER, WTIME, BTIME, WINC, BINC, MOVESTOGO, DEPTH, NODES, MATE, MOVETIME, INFINITE, VAL };
@@ -158,7 +158,6 @@ pub const setOptionEntry = struct {
 
 pub const engineStatus = struct {
     running: bool = false,
-    benchmarking: bool = false,
     debugMode: bool = false,
     initializedInternals: bool = false,
 };
@@ -201,10 +200,10 @@ pub const engineMetrics = struct {
     }
 
     pub fn printMetric(p_self: *const engineMetrics) void {
-        const proc: f64 = @as(f64, @floatFromInt(p_self.timeProcessingUs)) / std.time.us_per_ms;
-        const search: f64 = @as(f64, @floatFromInt(p_self.timeSearchingUs)) / std.time.us_per_ms;
+        const proc: i64 = @divFloor(p_self.timeProcessingUs, std.time.us_per_ms);
+        const search: i64 = @divFloor(p_self.timeSearchingUs, std.time.us_per_ms);
         const avg: f64 = @as(f64, @floatFromInt(p_self.computedPlies)) / @as(f64, @floatFromInt(@max(p_self.nPlyCompute, 1)));
-        std.debug.print("Time spent processing {d} ms, time spent searching {d} ms. Average computed ply {d:.2}\n", .{ proc, search, avg });
+        std.log.info("Time spent processing {d} ms, time spent searching {d} ms. Average computed ply {d:.2}", .{ proc, search, avg });
     }
 };
 
@@ -317,9 +316,7 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "logsPath", .optionType = .LOGSPATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "engine.log" } } });
 
-        try p_self.addOption(.{ .name = "hashS", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
-
-        try p_self.addOption(.{ .name = "useRazoring", .optionType = .USERAZORING, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_USE_RAZORING } } });
+        try p_self.addOption(.{ .name = "hash", .optionType = .HASHTABLESIZE, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_HASHSIZE, .default = configl.DEFAULT_HASHTABLE_SIZE } } });
 
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
@@ -329,8 +326,6 @@ pub const engine = struct {
         try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "printMetric", .optionType = .PRINT_METRIC, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
-
-        try p_self.addOption(.{ .name = "heuristicWeightsPath", .optionType = .HEUR_WEIGHTS_PATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
 
@@ -343,6 +338,10 @@ pub const engine = struct {
         return p_self.options.trackMetrics;
     }
     pub inline fn printMetrics(p_self: *engine) void {
+        //p_self.metric.addTimeToProcessingUs(p_self.scheduler._threadPool.timeSpentSearchingUs());
+        p_self.metric.timeSearchingUs = p_self.scheduler._threadPool.timeSpentSearchingUs();
+        p_self.metric.computedPlies = p_self.scheduler.computedPlies;
+        p_self.metric.nPlyCompute = p_self.scheduler.nPlyCompute;
         p_self.metric.printMetric();
         hashTablel.printTTStats();
     }
@@ -369,9 +368,6 @@ pub const engine = struct {
         p_self.status.running = false;
         p_self.scheduler.close();
         if (p_self.trackMetrics()) {
-            p_self.metric.addTimeToProcessingUs(p_self.scheduler._threadPool.timeSpentSearchingUs());
-            p_self.metric.computedPlies += p_self.scheduler.computedPlies;
-            p_self.metric.nPlyCompute += p_self.scheduler.nPlyCompute;
             p_self.printMetrics();
         }
         p_self.waitOnWorkingThreads();
@@ -473,7 +469,7 @@ pub const engine = struct {
         if (tokens.items.len < 2) {
             return false;
         }
-        const name: e_engineOptions = parseSetOptionTypeCmd(&p_self.options.setOptions, cmdBuffer);
+        const name: e_engineOptions = parseSetOptionTypeCmd(&p_self.options.setOptions, tokens.items[2]);
         const entry = p_self.getOptionEntry(name);
 
         switch (name) {
@@ -511,13 +507,6 @@ pub const engine = struct {
                 if (p_self.status.debugMode) {
                     std.debug.print("[DEBUG] executeSetoptionCmd: new logs path '{s}' \n", .{p_self.logsPath._slice()});
                 }
-                return true;
-            },
-
-            .USERAZORING => {
-                p_self.options.searchF.useRazoring = getCheckValFromSetOptionCmd(&tokens, entry) catch {
-                    return false;
-                };
                 return true;
             },
 
@@ -568,15 +557,6 @@ pub const engine = struct {
             .PRINT_METRIC => {
                 p_self.printMetrics();
                 return true;
-            },
-            .HEUR_WEIGHTS_PATH => {
-                const path = getValueSlice(&tokens) catch {
-                    return false;
-                };
-                if (!filel.fileExists(path)) {
-                    return false;
-                }
-                return p_self.updateHeuristicWeights(path);
             },
 
             .INVALID => {
@@ -642,12 +622,6 @@ pub const engine = struct {
         historyl._initMoveOrdering();
         _ = p_self.updateHash(p_self.options.hashTableSize) catch {};
     }
-    fn updateHeuristicWeights(p_self: *engine, path: []const u8) bool {
-        heuristicl.modifyHeuristicWeight(p_self.alloc, path, p_self.status.debugMode) catch {
-            return false;
-        };
-        return true;
-    }
 
     fn updateHash(p_self: *engine, hashSize: spinVarType) !bool {
         p_self.options.hashTableSize = hashSize;
@@ -663,7 +637,6 @@ pub const engine = struct {
         return true;
     }
     pub fn interruptSearch(p_self: *engine) void {
-        p_self.scheduler.searching = false;
         p_self.scheduler.timeM.reset();
         p_self.scheduler.handleInterrupt();
     }
@@ -688,11 +661,7 @@ pub const engine = struct {
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         _ = cmdBuffer;
-        if (p_self.scheduler.searching) {
-            return false;
-        }
         p_self.scheduler.reset();
-        p_self.status.benchmarking = true;
         return dispatchUciBenchmark(p_self);
     }
 };
@@ -718,7 +687,6 @@ pub fn dispatchUciBenchmark(p_engine: *engine) bool {
     return true;
 }
 pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
-    defer p_engine.status.benchmarking = false;
     var results: std.ArrayList(schedulerl.searchReport) = std.ArrayList(schedulerl.searchReport).initCapacity(p_engine.alloc, 4) catch {
         return;
     };
@@ -735,15 +703,12 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
     features.reportProgress = true;
     for (0..benchmarkEntries.len) |i| {
         p_engine.refreshInternals();
-        p_engine.scheduler.searching = true;
         sched.setRemainingTimeMs(std.math.maxInt(i64));
         const fen = benchmarkEntries[i];
         p_engine.setFen(fen);
         const res = sched.entryPointSearch(p_engine, p_engine.state, benchmarkDepth, features);
         results.append(p_engine.alloc, res) catch unreachable;
-        p_engine.scheduler.searching = false;
     }
-    p_engine.scheduler.searching = false;
     printResults(&benchmarkEntries, &results);
     std.debug.print("============ Benchmark perft ============\nComing soon\n", .{});
 }
@@ -847,7 +812,7 @@ fn parseGoCmd(cmd: []const u8) goArgStruct {
 pub fn parseSetOptionTypeCmd(options: *std.ArrayList(setOptionEntry), cmdBuffer: []const u8) e_engineOptions {
     for (0..options.items.len) |i| {
         const entry = options.items[i];
-        if (utilsl.contains(cmdBuffer, entry.name, .ignoreCase)) {
+        if (utilsl.startsWith(cmdBuffer, entry.name, .ignoreCase)) {
             return entry.optionType;
         }
     }

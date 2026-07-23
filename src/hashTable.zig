@@ -257,6 +257,7 @@ pub const Hash_bucket = struct {
             const entry = p_self.entries[i];
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
             if ((entry.key == _hash) and white == entry.white() and p_state.isMovePseudoLegal(entry.bestMove)) {
+                //if ((entry.key == _hash) and white == entry.white()) {
                 if (entry._depth >= depth) {
                     hashTable.stat.hit += 1;
                     return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
@@ -583,4 +584,5 @@ pub fn printTTStats() void {
     std.log.info("TT: most entries in a bucket {d}", .{util});
 
     std.log.info("TT: insertions {d} hit {d} miss {d} miss insertion {d}", .{ hashTable.stat.insertion, hashTable.stat.hit, hashTable.stat.miss, hashTable.stat.missInsertion });
+    std.log.info("TT: gen {d}", .{hashTable.gen});
 }

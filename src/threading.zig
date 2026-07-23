@@ -117,7 +117,7 @@ pub const threadPool = struct {
     pub fn timeSpentSearchingUs(p_self: *threadPool) i64 {
         //
         var ret: i64 = 0;
-        for (0..p_self.nThread) |i| {
+        for (0..p_self.threadProps.len) |i| {
             ret += p_self.threadProps[i].timeWorkingUs;
         }
         return ret;
@@ -207,9 +207,6 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     props.timeWorkingUs = 0;
     const alive = &props.alive;
     while (p_self.isRunning() and alive.*) {
-        //if (!p_self.working) {
-        //    std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.THREADPOOL_TICKRATE_NS) }, .real) catch unreachable;
-        //}
         std.atomic.spinLoopHint();
         if (props.searchPing) {
             var sw: timel.stopWatch = .{};

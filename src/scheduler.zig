@@ -33,7 +33,6 @@ pub const searchReport = struct {
 pub const searchFeatures = struct {
     useStaticSearch: bool = configl.DEFAULT_STATIC_SEARCH,
     fixedDepth: bool = configl.DEFAULT_FIXED_DEPTH,
-    useRazoring: bool = configl.DEFAULT_USE_RAZORING,
     reportProgress: bool = configl.DEFAULT_REPORTPROGRESS,
 };
 
@@ -93,7 +92,6 @@ pub const scheduler = struct {
     timeM: timeManager = .{},
     _threadPool: threadingl.threadPool = .{},
     interrupt: bool = false,
-    searching: bool = false,
     computedPlies: i64 = 0,
     nPlyCompute: usize = 0,
 
@@ -142,7 +140,6 @@ pub const scheduler = struct {
 
 pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) bool {
     const pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = p_engine.options.searchF, .scheduler = &(p_engine.scheduler) };
-    p_engine.scheduler.searching = true;
     p_engine.scheduler.timeM.startSearchTick();
     if (p_engine.state.whiteToMove()) {
         p_engine.scheduler.setRemainingTimeMs(config.wtime);
@@ -159,7 +156,7 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) 
 }
 pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: depthT) threadingl.threadInfo {
     var sched: scheduler = .{};
-    sched.timeM.setRemainingTimeMs(std.math.maxInt(i64));
+    sched.setRemainingTimeMs(std.math.maxInt(i64));
     sched.timeM.startSearchTick();
     var info: threadingl.threadInfo = .{ .alive = true };
     _startSearch(&sched, p_state, &info, features, maxDepth);
@@ -171,7 +168,6 @@ pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *thr
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
     p_info.working = true;
     defer sendFinal(p_info.currentBest.move);
-    defer sched.searching = false;
     defer p_info.working = false;
 
     p_info.stopWatch = sched.timeM.stopWatch;
@@ -195,7 +191,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
     var depth: depthT = if (features.useStaticSearch) maxDepth else 1;
 
     var ss: alphaBetal.searchStack = .{};
-    var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
+    var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
     var delta = weightl.aspirationCoefficient;
     var validDecision: IMove = .{};
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
@@ -203,7 +199,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
 
         var alpha = score - delta;
         var beta = score + delta;
-        score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, alpha, beta);
+        score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta);
         while ((score <= alpha or score >= beta) and p_info.alive) {
             //
             if (score <= alpha) {
@@ -214,7 +210,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
             }
             delta += @divFloor(delta, 3);
 
-            score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &features, &ss, alpha, beta);
+            score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta);
         }
         ss.setPrevLine(&p_info.currentBest.line);
         if (p_info.alive) {

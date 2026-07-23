@@ -1,11 +1,11 @@
 [engine1]
 path="engines/bin/engine_22_07_26_2";
-name="base + 10x prediction -> 2x + fraction -> div + valid decision kept + spin lock + isCheck no eval";
+name="base";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_22_07_26_1";
-name="base + 10x prediction -> 2x + fraction -> div";
+path="engines/bin/engine_23_07_26_3";
+name="base + more futility + skipquiets + depth -> _depth + TT in qsearch + bestMove on alpha raise";
 "setoption name reportProgress value false";
 
 [match]

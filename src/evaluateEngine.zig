@@ -469,9 +469,12 @@ const guiState = struct {
             std.debug.print("[DEBUG] respond.gui(#{d}): sent msg: {s}\n", .{ engineIndex, msg });
         }
     }
-    pub fn respondAll(p_self: *guiState, msg: []const u8) !void {
+    pub fn respondAll(p_self: *guiState, msg: []const u8, delayed: bool) !void {
         for (0..p_self.engineInventory.len) |i| {
             try p_self.respond(msg, @intCast(i));
+            if (delayed) {
+                try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.EVALUTATION_GUI_WAIT_MS) }, .real);
+            }
         }
     }
 
@@ -578,7 +581,7 @@ const guiState = struct {
         p_self.saveLog() catch |err| {
             std.debug.print("[CLOSE] error while saving: {}\n", .{err});
         };
-        p_self.respondAll("quit") catch {};
+        p_self.respondAll("quit", true) catch {};
         p_self.status.running = false;
         for (0..p_self.workingThreads.items.len) |i| {
             p_self.workingThreads.items[i].join();
@@ -654,7 +657,7 @@ const guiState = struct {
     pub fn startMatch(p_self: *guiState) !void {
         p_self.match.reset();
         p_self.status.phase = .MATCH;
-        try p_self.respondAll("ucinewgame");
+        try p_self.respondAll("ucinewgame", true);
 
         var line = try p_self.match.chessState.moveHistory.getLineString(p_self.alloc);
         defer line.free(p_self.alloc);
@@ -859,9 +862,9 @@ fn mainGuiThread(p_self: *guiState) !void {
         p_self.config.match.openingDb = try bookl.openingDatabase.init(p_self.alloc, &p_self.config.match.openingBookPath, configl.SEED);
     }
 
-    try p_self.respondAll("uci");
+    try p_self.respondAll("uci", false);
     try p_self.waitAllPlayers();
-    try p_self.respondAll("isready");
+    try p_self.respondAll("isready", false);
 
     for (0..p_self.config.nEngines) |i| {
         try sendOptions(p_self, p_self.config.engineOptions[i], @intCast(i));

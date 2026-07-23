@@ -5,6 +5,7 @@ const mainl = @import("main.zig");
 const utilsl = @import("utils.zig");
 const chessl = @import("chess.zig");
 const weightl = @import("weights.zig");
+const timel = @import("time.zig");
 
 const e_uciCMD = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS };
 
@@ -42,9 +43,6 @@ pub const uciState = struct {
                     };
                 },
                 .GO => {
-                    if (state.eng.scheduler.searching) {
-                        @panic("go but still searching");
-                    }
                     return state.eng.executeGoCmd(cmdBuffer);
                 },
                 .POSITION => {
@@ -114,11 +112,14 @@ pub fn loop(alloc: std.mem.Allocator) !void {
     const reader = &f_reader.interface;
     while (state.running) {
         const inputBuffer = try enginel.getMsgStdin(reader);
+        var sw: timel.stopWatch = .{};
+        sw.startTimeTick();
         const msg = utilsl.trimStr(&inputBuffer);
         const status = state.executeBuffer(msg);
         if (state.eng.status.debugMode) {
             std.debug.print("status {} for cmd {s}\n", .{ status, msg });
         }
+        state.eng.metric.addTimeToProcessingUs(sw.timeSinceStartUs());
     }
 }
 

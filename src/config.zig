@@ -8,7 +8,7 @@ pub const MAX_MATCH_STR_LENGTH: u64 = 24 + 4096 * (5 + 1);
 pub const MAX_USER_INPUT: u64 = MAX_MATCH_STR_LENGTH;
 
 pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
-pub const EVALUTATION_TIMEOUT_ERROR_MS: u64 = 10000; // 2 sec
+pub const EVALUTATION_TIMEOUT_ERROR_MS: u64 = 10_000; // 2 sec
 
 pub const MAX_SPRT_MATCH: usize = 10_000;
 pub const MAX_THREAD: u32 = 16;
@@ -88,7 +88,6 @@ pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
 
 pub const INFO_TICKRATE_NS = INFO_TICKRATE * (std.math.pow(u64, 10, 9));
 pub const WAIT_TICKRATE_NS = 500_000;
-pub const THREADPOOL_TICKRATE_NS = 100_000;
 
 // Tuner settings
 //pub const N_POSITIONS: usize = 800000;
