@@ -124,15 +124,15 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
 }
 
 pub const searchFrame = struct {
+    pv: ?*movel.pvContainer = null,
     staticEval: heuristicl.score = .{},
     ply: depthT = 0,
-    followPv: bool = false,
+    failHighCount: u16 = 0,
     prevLineMove: IMove = .{},
     playedMove: IMove = .{},
     killerMove: IMove = .{},
     pieceMoved: typel.e_piece = .nEmptySquare,
-    pv: ?*movel.pvContainer = null,
-    failHighCount: u16 = 0,
+    followPv: bool = false,
 };
 pub const threadData = struct {
     excludedMove: IMove = .{},
@@ -149,7 +149,7 @@ pub const searchStack = struct {
     pub inline fn getPrevFrame(self: *searchStack, ply: depthT, offset: usize) *searchFrame {
         return &self.e[negativeOffset - offset + @as(usize, @intCast(ply))];
     }
-    pub fn setPrevLine(self: *searchStack, line: *const movel.line) void {
+    pub inline fn setPrevLine(self: *searchStack, line: *const movel.line) void {
         for (0..line.len) |i| {
             self.e[i + negativeOffset].prevLineMove = line.moves[i];
         }
@@ -245,14 +245,22 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
 
     const f: boardl.boardFrame = .copy(p_state);
+    const hashMoveIsCapture = hashMove.isCapture();
+
     var currS = ss.getFrame(ply);
     const nextS = ss.getFrame(ply + 1);
     const prevSS = ss.getPrevFrame(ply, 1);
-    const static_eval = if (ttHit) hashEval else correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
 
-    const hashMoveIsCapture = hashMove.isCapture();
-    currS.staticEval = .{ .s = static_eval, .t = .STD };
-    currS.followPv = if (isRoot) true else prevSS.followPv and p_state.getLastMove().equal(prevSS.prevLineMove);
+    var static_eval = typel.scoreNone;
+
+    if (isCheck) {
+        currS.staticEval = .{};
+    } else {
+        static_eval = if (ttHit) hashEval else correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
+        currS.staticEval = .{ .s = static_eval, .t = .STD };
+    }
+
+    currS.followPv = if (isRoot) true else prevSS.followPv and prevSS.playedMove.equal(prevSS.prevLineMove);
 
     const improving: bool = if (isCheck) (false) else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 2).staticEval.s) else if (ss.getPrevFrame(ply, 4).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 4).staticEval.s) else (true);
 
@@ -325,12 +333,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, p
     }
 
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
-    //if (_depth >= weightl.IIRDepthMin and !hashMove.isValid() and !currS.followPv and ((hashType == .LOWER or cutnode) and t == .NonPV)) {
     if (_depth >= weightl.IIRDepthMin and !hashMove.isValid() and !currS.followPv and !isAllNode) {
         _depth -= 1;
     }
 
-    // staged
     var gen: moveGenl.typeMoveGenerator = .init();
 
     ss.getFrame(ply + 2).failHighCount = 0;

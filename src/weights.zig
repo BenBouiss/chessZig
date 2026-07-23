@@ -447,5 +447,51 @@ pub var corrHistW: scoreType = 66;
 
 pub fn modif_val() void {
     // 1
-
+    //lmr_scoreThreshold = 791;
+    //lmr_expectedCutOff = 404;
+    //lmr_notImproving = 1058;
+    //lmr_hashMoveCapture = 843;
+    //lmr_baseDeficit = 598;
+    //lmr_badCapture = 176;
+    //lmr_oldMulti = 88;
+    //lmr_highFailScore = 1018;
+    //lmr_highFailCount = 8;
+    //lmr_givesCheck = -518;
+    //lmr_killerMove = -1207;
+    //lmr_threatening = -58;
+    //lmr_inPvMode = -165;
+    //lmr_isPromotion = -142;
+    //rfpNotImproving = -23;
+    //rfpImproving = -8;
+    //rfpDepth = 7;
+    //rfpCoeff = 89;
+    //rfpConst = 70;
+    //captureExtensionThresh = 366;
+    //aspirationCoefficient = 20;
+    //nullMoveDepthAugmentThreshold = 10;
+    //nullMoveDepthAugment = 2;
+    //nullMoveReduction = 2;
+    //nullMoveReductionImproving = 3;
+    //razoringBaseImproving = 99;
+    //razoringBaseNotImproving = 282;
+    //razoringCoefficient = 102;
+    //razoringMaxDepth = 2;
+    //IIRDepthMin = 5;
+    //LMRDepth = 3;
+    //SeePruningMaxDepth = 3;
+    //SeePruningQuietMargin = -68;
+    //SeePruningCaptureMargin = -264;
+    //probCutMargin = 368;
+    //probCutMinimalDepth = 4;
+    //futilityDepth = 8;
+    //futilityCoeff = 213;
+    //futilityConst = 199;
+    //historyThreshCoeff = -564;
+    //historyThreshConst = -84;
+    //historyMinExplore = 10;
+    //lmpMaxDepth = 3;
+    //lmpBase = 1;
+    //moveReductionAmount = 2;
+    //moveQsearchAmount = 1;
+    //moveGenMinSeeThreshold = -50;
 }

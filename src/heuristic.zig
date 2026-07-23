@@ -36,8 +36,9 @@ pub const texel_err = error{board_err};
 pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)]);
-    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)]);
+
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.occupiedBB_col(.WHITE));
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.occupiedBB_col(.BLACK));
     const white = p_state.whiteToMove();
 
     const phase: scoreType = p_state.getPhase();
@@ -1093,7 +1094,7 @@ pub fn losingCaptureT(p_state: *const boardl.boardState, move: IMove, threshold:
     return !SEE_threshold(p_state, move, threshold);
 }
 pub const score = struct {
-    s: scoreType = 0,
+    s: scoreType = typel.scoreNone,
     t: typel.e_scoreType = .NONE,
     pub inline fn isTerminal(self: score) bool {
         return self.t == .DRAW or self.t == .MATE;
