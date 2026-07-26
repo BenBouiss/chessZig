@@ -711,8 +711,7 @@ const guiState = struct {
         const p_player = p_self.getCurrentPlayer();
         const p_engine = p_self.getCurrentEngine();
         p_engine.ready = false;
-        var sw: timel.stopWatch = .{};
-        sw.startTimeTick();
+        var sw: timel.stopWatch = .init(true);
         const heartBeatUs = 10_000; // every 10 ms retry
         var timer: timel.timer = .init(heartBeatUs);
         while (!p_engine.isReady()) {

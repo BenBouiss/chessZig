@@ -157,9 +157,15 @@ pub fn build(b: *std.Build) void {
 
     // This allows the user to pass arguments to the application in the build
     // command itself, like this: `zig build run -- arg1 arg2 etc`
+
+    // zig 0.17
+    //run_cmd.addPassthruArgs();
+
+    // zig 0.16
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
+
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.

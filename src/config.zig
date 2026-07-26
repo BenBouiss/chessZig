@@ -20,17 +20,15 @@ pub const DEFAULT_HASHTABLE_SIZE = 16; // in MB
 pub const DEFAULT_TRACKMETRICS = true;
 pub const _DEFAULT_TRACKMETRICS = "true";
 
-pub const DEFAULT_REPORTPROGRESS = false;
-pub const _DEFAULT_REPORTPROGRESS = "false";
-
-pub const ORDERING_LINE_VALUE = 9999;
+pub const DEFAULT_REPORTPROGRESS = true;
+pub const _DEFAULT_REPORTPROGRESS = "true";
 
 //https://www.chessprogramming.org/Move_Ordering
-//pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
+pub const ORDERING_LINE_VALUE = 9999;
 pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
 
 pub const KILLER_0_HEURISTIC_VALUE = 2048;
-pub const KILLER_1_HEURISTIC_VALUE = 2048;
+//pub const KILLER_1_HEURISTIC_VALUE = 2048;
 //pub const COUNTERMOVE_HEURISTIC_VALUE = 750;
 pub const MAX_HIST_HEURISTIC_VALUE = 1024;
 pub const MAX_CONTINUATION_HEURISTIC_VALUE = 1024;
@@ -59,7 +57,8 @@ pub const _DEFAULT_USE_RAZORING = "true";
 
 pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
-pub const NET_PATH = "out/bin/simple-320-colM-128/quantised.bin";
+//pub const NET_PATH = "out/bin/simple-320-colM-128/quantised.bin";
+pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024_retrained-120/quantised.bin";
 //pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";

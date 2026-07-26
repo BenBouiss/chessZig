@@ -1,11 +1,7 @@
 const std = @import("std");
 
-const build_options = @import("build_options");
-
 // Testing Gigantua approach
 // massive rewrite needed probably
-const useDebug = build_options.useDebug;
-
 const LEFT_ROOKS: u64 = 0x100000000000001;
 const RIGHT_ROOKS: u64 = 0x8000000000000080;
 
@@ -78,9 +74,9 @@ pub const status = struct {
     }
     pub inline fn canCastle(self: status, comptime whiteMove: bool) bool {
         if (comptime whiteMove) {
-            return self.WCastlingK() | self.WCastlingQ();
+            return self.val & WCastlingMask != 0;
         } else {
-            return self.BCastlingK() | self.BCastlingQ();
+            return self.val & BCastlingMask != 0;
         }
     }
     pub inline fn canKingsideCastle(self: status, comptime whiteMove: bool) bool {
@@ -138,7 +134,7 @@ pub const status = struct {
     }
 
     pub inline fn castlingKey(self: status) u8 {
-        return (self.val & AllCastlingMask);
+        return (self.val);
     }
 };
 pub inline fn isLeftRook(rook: u64) bool {

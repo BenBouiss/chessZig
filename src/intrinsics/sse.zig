@@ -1,6 +1,6 @@
-const c = @cImport({
-    @cInclude("emmintrin.h");
-});
+//const c = @cImport({
+//    @cInclude("emmintrin.h");
+//});
 
 const std = @import("std");
 

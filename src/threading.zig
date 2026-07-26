@@ -209,8 +209,7 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     while (p_self.isRunning() and alive.*) {
         std.atomic.spinLoopHint();
         if (props.searchPing) {
-            var sw: timel.stopWatch = .{};
-            sw.startTimeTick();
+            var sw: timel.stopWatch = .init(true);
             props.searchPing = false;
             props.status = .WORKING;
             var pack = p_self.packages[idx];

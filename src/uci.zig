@@ -112,8 +112,7 @@ pub fn loop(alloc: std.mem.Allocator) !void {
     const reader = &f_reader.interface;
     while (state.running) {
         const inputBuffer = try enginel.getMsgStdin(reader);
-        var sw: timel.stopWatch = .{};
-        sw.startTimeTick();
+        var sw: timel.stopWatch = .init(true);
         const msg = utilsl.trimStr(&inputBuffer);
         const status = state.executeBuffer(msg);
         if (state.eng.status.debugMode) {

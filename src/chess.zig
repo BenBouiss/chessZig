@@ -18,7 +18,6 @@ const squarel = @import("square.zig");
 const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
 const intrinsicsl = @import("intrinsics/intrinsics.zig");
-const tablel = @import("moveTables.zig");
 const magicl = @import("magic.zig");
 const hashl = @import("hashTable.zig");
 const boardl = @import("board.zig");
@@ -435,10 +434,8 @@ pub inline fn isPawnPiece(piece: e_piece) bool {
     return (piece == .nWhitePawn or piece == .nBlackPawn);
 }
 pub inline fn pawnFromColor(white: bool) e_piece {
-    if (white) {
-        return .nWhitePawn;
-    }
-    return .nBlackPawn;
+    //return @enumFromInt(@intFromEnum(e_piece.nWhitePawn) + whiteBoolToInt(white) * N_PIECES_TYPES);
+    return if (white) .nWhitePawn else .nBlackPawn;
 }
 
 pub inline fn isRookPiece(piece: e_piece) bool {
@@ -454,13 +451,13 @@ pub inline fn canMove(from: e_square, to: e_square, occ: u64) bool {
 }
 
 pub inline fn inBetweenX(from: u8, to: u8) u64 {
-    return tablel.arrRectangular[from][to];
+    return moveGenl.arrRectangular[from][to];
 }
 pub inline fn inBetween(from: e_square, to: e_square) u64 {
-    return tablel.arrRectangular[@intFromEnum(from)][@intFromEnum(to)];
+    return moveGenl.arrRectangular[@intFromEnum(from)][@intFromEnum(to)];
 }
 pub inline fn safetyArea(sq: e_square) u64 {
-    return tablel.safetyArea[@intFromEnum(sq)];
+    return moveGenl.safetyArea[@intFromEnum(sq)];
 }
 
 pub inline fn getColorPieceOffset(white: bool) u8 {
@@ -547,11 +544,11 @@ pub fn updateKeyOnMove(move: IMove, fromPiece: e_piece, info: *const boardl.boar
             }
         }
     }
-    ret.key ^= hashl.zobristKeys.castlingKeys[prevCastle];
     ret.key ^= hashl.zobristKeys.enPassantKeys[prevEp];
-
-    ret.key ^= hashl.zobristKeys.castlingKeys[info.stat.castlingKey()];
     ret.key ^= hashl.zobristKeys.enPassantKeys[info.enPassantIdx];
+    ret.key ^= hashl.zobristKeys.castlingKeys[prevCastle];
+    ret.key ^= hashl.zobristKeys.castlingKeys[info.stat.castlingKey()];
+
     ret.key ^= hashl.zobristKeys.playKey;
     return ret;
 }
@@ -798,7 +795,7 @@ pub inline fn getPawnAttacksFromBB(bb: u64, comptime white: bool) u64 {
 }
 
 pub inline fn getKingAttacks(sq: e_square) u64 {
-    return tablel.cachedKingTable[@intFromEnum(sq)];
+    return moveGenl.cachedKingTable[@intFromEnum(sq)];
 }
 pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
     switch (piece) {
@@ -874,9 +871,12 @@ pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_p
         return @enumFromInt(@intFromEnum(piece) - N_PIECES_TYPES);
     }
 }
+//pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
+//    if (whiteToMove) return .WHITE;
+//    return .BLACK;
+//}
 pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
-    if (whiteToMove) return .WHITE;
-    return .BLACK;
+    return @enumFromInt(whiteBoolToInt(whiteToMove));
 }
 
 pub inline fn whiteBoolToInt(w: bool) u8 {
@@ -1069,9 +1069,9 @@ pub fn getAllAttackMask(p_board: *const boardl.boardState, occBB: u64, white: bo
         ret |= getPawnAttacksFromBB(p_board.getPieceBB(.nBlackPawn), false);
         ret |= getKingAttacks(p_board.b.bKingSq);
     }
-    ret |= knightAttacks(p_board.b.pieceBB[@intFromEnum(e_pieceType.KNIGHT)] & mask);
-    ret |= _AllAttackBishopMask((p_board.b.pieceBB[@intFromEnum(e_pieceType.BISHOP)] | p_board.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]) & mask, occBB);
-    ret |= _AllAttackRookMask((p_board.b.pieceBB[@intFromEnum(e_pieceType.ROOK)] | p_board.b.pieceBB[@intFromEnum(e_pieceType.QUEEN)]) & mask, occBB);
+    ret |= knightAttacks(p_board.getPieceBB_t(.KNIGHT) & mask);
+    ret |= _AllAttackBishopMask((p_board.getPieceBB_t(.BISHOP) | p_board.getPieceBB_t(.QUEEN)) & mask, occBB);
+    ret |= _AllAttackRookMask((p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN)) & mask, occBB);
     return ret;
 }
 
@@ -1334,8 +1334,8 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
 
     if (popcount(potentialFromBB) != 1) {
         // possibly only a pawn move
-        if (potentialFromBB & (p_state.b.pieceBB[@intFromEnum(e_pieceType.PAWN)]) != 0) {
-            potentialFromBB &= (p_state.b.pieceBB[@intFromEnum(e_pieceType.PAWN)]);
+        if (potentialFromBB & (p_state.getPieceBB_t(.PAWN)) != 0) {
+            potentialFromBB &= (p_state.getPieceBB_t(.PAWN));
         }
 
         if (popcount(potentialFromBB) != 1) {

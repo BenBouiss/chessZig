@@ -6,6 +6,12 @@ pub const stopWatch = struct {
     startTimeUs: i64 = 0,
     started: bool = false,
     savedTimeUs: i64 = 0,
+    pub fn init(comptime started: bool) stopWatch {
+        if (comptime started) {
+            return .{ .startTimeUs = std.Io.Timestamp.now(mainl.getGlobalIo(), .real).toMicroseconds(), .started = true, .savedTimeUs = 0 };
+        }
+        return .{ .startTimeUs = 0, .started = false, .savedTimeUs = 0 };
+    }
 
     pub fn print(self: *const stopWatch) void {
         std.debug.print("Started: {}, startime: {d}, saved time: {d}, started {d} us ago\n", .{ self.started, self.startTimeUs, self.savedTimeUs, self.timeSinceStartUs() });
@@ -51,15 +57,11 @@ pub const timer = struct {
         return ret;
     }
     pub fn tick(self: *timer) bool {
-        if (self.sw.timeSinceStartUs() > self.frequencyUs) {
-            self.sw.reset();
-            self.sw.startTimeTick();
+        const curr = self.sw.timeSinceStartUs();
+        if (curr > self.frequencyUs) {
+            self.sw.startTimeUs = curr;
             return true;
         }
         return false;
     }
 };
-
-pub fn main() !void {
-    //
-}

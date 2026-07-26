@@ -37,7 +37,7 @@ const _VEC_ZERO: __m512i = ssel._mm_setzero_si512();
 const _VEC_QA: __m512i = ssel._mm512_set1_epi16(QA);
 
 //https://www.chessprogramming.org/NNUE
-pub const network = struct {
+pub const network = extern struct {
     accWeights: [INPUT_SIZE][HL_SIZE]i16 align(64) = std.mem.zeroes([INPUT_SIZE][HL_SIZE]i16),
     accBiases: [HL_SIZE]i16 = @splat(0),
 
@@ -121,7 +121,7 @@ pub fn quiet_Add_Sub(accPair: *accumulatorPair, fromP: typel.e_pieceType, toP: t
         accPair.b.values[i] += (nextB[i] - prevB[i]);
     }
 }
-pub fn castling_Add_Add_Sub_Sub(accPair: *accumulatorPair, side: e_color, info: *const boardl.castleS) void {
+pub fn castling_Add_Add_Sub_Sub(accPair: *accumulatorPair, side: e_color, info: boardl.castleS) void {
     const kSub = networkIndexPair(.KING, info.kingFrom, side);
     const kAdd = networkIndexPair(.KING, info.kingTo, side);
 
@@ -285,8 +285,7 @@ pub fn _updateNnueOnMove(p_state: *boardl.boardState, white: bool, isCapture: bo
         capture_Add_Sub_Sub(accPair, fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c, chessl.e_pieceTo_e_pieceType(p_state.frame.victim), victimSq);
     } else {
         if (isCastle) {
-            const info = boardl.castleS.init(white, move.isKingSideCastle());
-            castling_Add_Add_Sub_Sub(accPair, c, &info);
+            castling_Add_Add_Sub_Sub(accPair, c, .init(white, move.isKingSideCastle()));
         } else {
             quiet_Add_Sub(accPair, fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c);
         }
@@ -301,8 +300,20 @@ pub const _network = struct {
         ret.inited = true;
         return ret;
     }
+    pub fn initCplt(comptime path: []const u8) _network {
+        var ret: _network = .{};
+        ret.inited = true;
+        const net: *network = @ptrCast(@alignCast(@constCast(@embedFile(path))));
+        ret.net = net.*;
+
+        //ret.net = @bitCast(@embedFile(path));
+        //ret.net = @bitCast(@embedFile(path));
+        //@bitCast
+        return ret;
+    }
 };
-pub var nnueNet: _network = .{};
+//pub var nnueNet: _network = .{};
+pub var nnueNet: _network = if (configl.USE_NNUE) (.initCplt(configl.NET_PATH)) else (.{});
 //pub var global_nnueAcc: accumulatorPairStack = .{};
 
 pub fn initNNUE(alloc: std.mem.Allocator, path: []const u8) !void {

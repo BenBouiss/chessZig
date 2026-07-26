@@ -65,8 +65,7 @@ fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, de
     return true;
 }
 pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, config: enginel.goArgStruct) !bool {
-    var sw: timel.stopWatch = .{};
-    sw.startTimeTick();
+    var sw: timel.stopWatch = .init(true);
     var endCounter: usize = 0;
     while (!p_engine.scheduler.interrupt and endCounter != p_engine.options.nThreads) {
         try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.INFO_TICKRATE_NS) }, .real);

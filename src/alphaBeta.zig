@@ -104,7 +104,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     var gen: moveGenl.typeMoveGenerator = .init();
     var movesPlayed: u8 = 0;
 
-    while (gen.pickNext(p_state, ply, hashMove, weightl.moveGenMinSeeThreshold, !isChecked, ss)) |res| {
+    while (gen.pickNext(p_state, ply, .{}, hashMove, weightl.moveGenMinSeeThreshold, !isChecked, ss)) |res| {
         if (@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE) and !isChecked) {
             break;
         }
@@ -200,7 +200,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     var _beta = beta;
     var _depth = depth;
     const white: bool = p_state.whiteToMove();
-    const whiteIdx: usize = @intFromEnum(chessl.boolTo_e_color(white));
+    const whiteIdx: usize = chessl.whiteBoolToInt(white);
     const isRoot: bool = ply == 0;
     const mate_value = chessl.mate_in(ply);
     const isAllNode = !(cutnode or comptime t == .PV);
@@ -290,6 +290,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     }
 
     currS.followPv = if (isRoot) true else prevSS.followPv and prevSS.playedMove.equal(prevSS.prevLineMove);
+    const prevLineMove: IMove = if (currS.followPv) currS.prevLineMove else .{};
 
     const improving: bool = if (isCheck) (false) else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 2).staticEval.s) else if (ss.getPrevFrame(ply, 4).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 4).staticEval.s) else (true);
 
@@ -371,7 +372,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     if (_depth > weightl.probCutMinimalDepth and !chessl.isMate(_beta)) {
         if ((hashMove.isValid() and hashEval >= p_beta and hashMoveIsCapture) or (static_eval >= _beta)) {
             const tresh = p_beta - static_eval;
-            while (gen.pickNext(p_state, ply, hashMove, tresh, true, ss)) |res| {
+            while (gen.pickNext(p_state, ply, prevLineMove, hashMove, tresh, true, ss)) |res| {
                 if (@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE)) {
                     break;
                 }
@@ -417,7 +418,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     var prev = gen.phase;
     const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
 
-    while (gen.pickNext(p_state, ply, hashMove, weightl.moveGenMinSeeThreshold, skipQuietMoves, ss)) |res| {
+    while (gen.pickNext(p_state, ply, prevLineMove, hashMove, weightl.moveGenMinSeeThreshold, skipQuietMoves, ss)) |res| {
         const move = res.@"0";
         const moveScore = res.@"1";
         if (move.equal(excludedMove)) continue;
@@ -621,7 +622,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 }
 pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonus: scoreType, gen: *const moveGenl.typeMoveGenerator, white: bool, comptime t: typel.e_moveGenFlag) void {
     const cont: *const moveGenl.movesScores = if (comptime t == .QUIET) &gen.quiets else &gen.captures;
-    const whiteIdx: usize = @intFromEnum(chessl.boolTo_e_color(white));
+    const whiteIdx: usize = chessl.whiteBoolToInt(white);
 
     for (0..cont.moves.len) |j| {
         const _move = cont.moves.moves[j];

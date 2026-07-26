@@ -490,11 +490,10 @@ pub const boardState = struct {
         p_self.frame.lastMove = .{};
         p_self.frame.victim = .nEmptySquare;
         p_self.frame.key ^= hashl.zobristKeys.playKey;
+
         p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[p_self.frame.enPassantIdx];
 
         p_self.frame.enPassantIdx = 0;
-        p_self.frame.halfMoveClock = 0;
-
         p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[0];
 
         if (comptime useStaged) {
@@ -604,7 +603,7 @@ pub const boardState = struct {
         } else if (chessl.isRookPiece(toPiece)) {
             p_self.frame.stat.onRookMove(chessl.xToBitboard(from), white);
         }
-        if (isCapture or t == .PROMOTION or isPawn) {
+        if (isCapture or isPawn or comptime t == .PROMOTION) {
             p_self.frame.halfMoveClock = 0;
         } else {
             p_self.frame.halfMoveClock += 1;
@@ -616,9 +615,13 @@ pub const boardState = struct {
             p_self.frame.nonPawnKey = keys.nonPawnKey;
             p_self.frame.pawnKey = keys.pawnKey;
             if (comptime updatePSQT and !configl.USE_NNUE) {
-                p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
+                p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, comptime t == .PROMOTION, false, toPiece, p_self.getPhase(), &p_self.frame);
             }
         } else {
+            const keys = chessl.updateKeyOnMove(move, toPiece, &p_self.frame, prevCastle, prevEp, false, white);
+            p_self.frame.key = keys.key;
+            p_self.frame.nonPawnKey = keys.nonPawnKey;
+            p_self.frame.pawnKey = keys.pawnKey;
             if (comptime updatePSQT and !configl.USE_NNUE) {
                 p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, comptime t == .PROMOTION, comptime t == .CASTLE, toPiece, p_self.getPhase(), &p_self.frame);
             }

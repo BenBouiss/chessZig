@@ -458,17 +458,18 @@ pub inline fn moveGenBB(p_board: *const boardState) moveBBState {
 }
 
 pub fn cst_moveGenBB(p_board: *const boardState, comptime white: bool, p_out: *moveBBState, comptime extra: e_moveGenFlag) void {
-    const EmptyOrEnemy = if (comptime extra == .ALL) (chess.UNIVERSE) else ~p_board.b.c_occupiedBB[chess.whiteBoolToInt(white)];
+    const occ = if (comptime white) p_board.b.occupiedBB_col(.WHITE) else p_board.b.occupiedBB_col(.BLACK);
+    const EmptyOrEnemy = if (comptime extra == .ALL) (chess.UNIVERSE) else ~occ;
     const slidingOcc = p_board.b.occupiedBB() ^ p_board.getPieceBB_t(.KING);
     moveGenPawnBB(p_board, white, EmptyOrEnemy, extra, p_out);
 
-    p_out.knightMoves = (chess.knightAttacks(p_board.getPieceBB_t(.KNIGHT) & p_board.b.c_occupiedBB[chess.whiteBoolToInt(white)])) & EmptyOrEnemy;
+    p_out.knightMoves = (chess.knightAttacks(p_board.getPieceBB_t(.KNIGHT) & occ)) & EmptyOrEnemy;
 
-    p_out.bishopMoves = chess._AllAttackBishopMask(p_board.getPieceBB_t(.BISHOP) & p_board.b.c_occupiedBB[chess.whiteBoolToInt(white)], slidingOcc) & EmptyOrEnemy;
+    p_out.bishopMoves = chess._AllAttackBishopMask(p_board.getPieceBB_t(.BISHOP) & occ, slidingOcc) & EmptyOrEnemy;
 
-    p_out.rookMoves = chess._AllAttackRookMask(p_board.getPieceBB_t(.ROOK) & p_board.b.c_occupiedBB[chess.whiteBoolToInt(white)], slidingOcc) & EmptyOrEnemy;
+    p_out.rookMoves = chess._AllAttackRookMask(p_board.getPieceBB_t(.ROOK) & occ, slidingOcc) & EmptyOrEnemy;
 
-    p_out.queenMoves = chess._AllAttackQueenMask(p_board.getPieceBB_t(.QUEEN) & p_board.b.c_occupiedBB[chess.whiteBoolToInt(white)], slidingOcc) & EmptyOrEnemy;
+    p_out.queenMoves = chess._AllAttackQueenMask(p_board.getPieceBB_t(.QUEEN) & occ, slidingOcc) & EmptyOrEnemy;
 
     moveGenKingBB(p_board, white, EmptyOrEnemy, p_out);
 }
@@ -818,10 +819,9 @@ pub const typeMoveGenerator = struct {
         p_self.idx = 0;
     }
 
-    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, hashMove: IMove, seeThreshold: scoreType, skipQuiet: bool, ss: *alphaBetal.searchStack) ?struct { movel.IMove, scoreType } {
+    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, prevLineMove: IMove, hashMove: IMove, seeThreshold: scoreType, skipQuiet: bool, ss: *alphaBetal.searchStack) ?struct { movel.IMove, scoreType } {
         const white = state.whiteToMove();
         const currS = ss.getFrame(ply);
-        const prevLineMove = currS.prevLineMove;
         //const _ply: usize = @intCast(ply);
         if (p_self.phase == .NONE) {
             p_self.phase = .TTMOVE;
@@ -869,14 +869,18 @@ pub const typeMoveGenerator = struct {
                 p_self.generateMove(.QUIET, state);
                 const prevMove = ss.getPrevFrame(ply, 1).playedMove;
                 const prevPiece = ss.getPrevFrame(ply, 1).pieceMoved;
+                const prevV = prevMove.isValid();
 
                 const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
                 const prevPrevPiece = ss.getPrevFrame(ply, 2).pieceMoved;
+                const prevPrevV = prevPrevMove.isValid();
 
                 const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
                 const prevPiece4 = ss.getPrevFrame(ply, 4).pieceMoved;
+                const prevV4 = prevMove4.isValid();
 
                 const killerMove = currS.killerMove;
+                const offset = chess.whiteBoolToInt(white);
                 for (0..p_self.quiets.moves.len) |i| {
                     const move = p_self.quiets.moves.moves[i];
                     const to = move.getTo();
@@ -890,16 +894,15 @@ pub const typeMoveGenerator = struct {
                     } else if (move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
                         p_self.quiets.scores[i] = configl.ORDERING_PROMOTIONS;
                     } else {
-                        const offset = chess.whiteBoolToInt(white);
                         p_self.quiets.scores[i] = historyl.historyHeuristic[offset][from][to];
-                        if (prevMove.isValid()) {
+                        if (prevV) {
                             p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][p][to];
                         }
-                        if (prevPrevMove.isValid()) {
+                        if (prevPrevV) {
                             p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][p][to];
                         }
 
-                        if (prevMove4.isValid()) {
+                        if (prevV4) {
                             p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][p][to];
                         }
                     }
@@ -985,7 +988,7 @@ pub inline fn generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag
 }
 pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comptime white: bool, p_state: *const boardState) void {
     const isCheck = p_state.isChecked();
-    const own = p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)];
+    const own = if (comptime white) p_state.b.occupiedBB_col(.WHITE) else p_state.b.occupiedBB_col(.BLACK);
     const _emptyOrEnemy = ~own;
     const occ = p_state.b.occupiedBB();
     const targets = if (comptime t == .QUIET) (if (isCheck) (p_state.frame.checkersBB & (~occ)) else (_emptyOrEnemy & (~occ))) else if (comptime t == .CAPTURE) (if (isCheck) (p_state.frame.checkersBB & occ) else (_emptyOrEnemy & occ)) else if (comptime t == .ALL) (if (isCheck) (p_state.frame.checkersBB) else (_emptyOrEnemy));
@@ -1079,7 +1082,8 @@ pub fn king_generatePieceMove(out: *moveContainer, comptime t: typel.e_moveGenFl
 }
 
 pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: typel.e_moveGenFlag, p_state: *const boardState, occ: u64, targets: u64) void {
-    const p = p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)];
+    //const p = p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)];
+    const p = p_state.getPieceBB_t(.PAWN) & if (comptime white) (p_state.b.occupiedBB_col(.WHITE)) else (p_state.b.occupiedBB_col(.BLACK));
     const realEmpty = ~occ;
     //const empty = realEmpty & emptyOrEnemy;
 
@@ -1226,4 +1230,107 @@ pub fn main() !void {
 
     gen.generateMove(.QUIET, &state);
     gen.quiets.moves.print();
+}
+
+pub const arrRectangular: [64][64]u64 = initInbetween();
+pub const cachedKingTable: [64]u64 = initKingAttacks();
+pub const safetyArea: [64]u64 = initSafetyArea();
+// https://www.chessprogramming.org/Square_Attacked_By#Obstructed
+
+// https://www.chessprogramming.org/King_Safety will be defined
+
+pub fn initKingAttacks() [64]u64 {
+    var ret: [64]u64 = @splat(0);
+    for (0..chess.N_SQUARES) |sq| {
+        ret[sq] = kingAttacks(@intCast(sq));
+    }
+    return ret;
+}
+pub fn kingAttacks(sq: i8) u64 {
+    var ret: u64 = chess.EMPTY;
+    const pos: u64 = (chess.ONE << @intCast(sq));
+
+    ret |= (pos >> 8);
+    ret |= (pos << 8);
+    if (pos & chess.notAFile != 0) {
+        ret |= (pos >> 1);
+        ret |= (pos << 7);
+        ret |= (pos >> 9);
+    }
+    if (pos & chess.notHFile != 0) {
+        ret |= (pos << 1);
+        ret |= (pos << 9);
+        ret |= (pos >> 7);
+    }
+    return ret;
+}
+
+pub fn initInbetween() [64][64]u64 {
+    @setEvalBranchQuota(100000);
+    var table: [64][64]u64 = std.mem.zeroes([64][64]u64);
+    for (0..64) |x| {
+        const fromBB = chess.ONE << @intCast(x);
+        const fromSq: squareInfo = squareInfo.init(@enumFromInt(x));
+        for (0..64) |y| {
+            if (x == y) {
+                table[x][y] = 0;
+                continue;
+            }
+            const toBB = chess.ONE << @intCast(y);
+            const toSq: squareInfo = squareInfo.init(@enumFromInt(y));
+            if (fromSq.file == toSq.file) {
+                if (x < y) {
+                    table[x][y] = northOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = southOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else if (fromSq.rank == toSq.rank) {
+                if (x < y) {
+                    table[x][y] = eastOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = westOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else if (fromSq.diagonal == toSq.diagonal) {
+                if (x < y) {
+                    table[x][y] = northEastOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = southWestOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else if (fromSq.antidiagonal == toSq.antidiagonal) {
+                if (x < y) {
+                    table[x][y] = northWestOccl(fromBB, ~toBB) ^ fromBB;
+                } else {
+                    table[x][y] = southEastOccl(fromBB, ~toBB) ^ fromBB;
+                }
+            } else {
+                table[x][y] = 0;
+                continue;
+            }
+        }
+    }
+    return table;
+}
+pub fn initSafetyArea() [64]u64 {
+    @setEvalBranchQuota(100000);
+    //const baseSq: i8 = 28;
+    var ret: [64]u64 = @splat(0);
+    const baseSq: i8 = @intFromEnum(e_square.e4);
+    const anchors = [4]squarel.e_square{ .c2, .c6, .g6, .g2 };
+    var box: u64 = chess.EMPTY;
+    box |= chess.inBetween(anchors[0], anchors[1]);
+    box |= chess.inBetween(anchors[1], anchors[2]);
+    box |= chess.inBetween(anchors[2], anchors[3]);
+    box |= chess.inBetween(anchors[3], anchors[0]);
+    box |= (chess.sqToBitboard(anchors[0]) | chess.sqToBitboard(anchors[1]) | chess.sqToBitboard(anchors[2]) | chess.sqToBitboard(anchors[3]));
+    for (0..64) |sq| {
+        // TODO quick and dirty way, 8 occl in all directions for each squares. Other solutions is moving a "square" of 3x3 around the king square and simulate the queen moves inside it
+        // in theory the clipping should not be an issue as the queen move with distance of 3 should not overlap
+        var delta: i8 = @intCast(sq);
+        delta -= baseSq;
+        const newBox = chess.genShift(box, delta);
+        ret[sq] = chess.getRookAttacksRay(newBox, @enumFromInt(sq)) | chess.getBishopAttacksRay(newBox, @enumFromInt(sq));
+
+        ret[sq] |= chess.knightAttacks(chess.xToBitboard(@intCast(sq)));
+    }
+    return ret;
 }

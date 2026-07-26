@@ -22,28 +22,6 @@ pub const simpleCheckMateScore: scoreType = 31000;
 pub const simpleCheckMateThreshold: scoreType = 30000;
 pub const simpleStalemateScore: scoreType = 0;
 
-// ============ pawn structure ============
-pub const simpleIsolatedPawnScore: scoreType = 1;
-pub const simpleStackedPawnScore: scoreType = 1;
-pub const simplePassedPawnScore: scoreType = 2;
-
-// ============ structure ============
-pub const simpleMobilityScore: scoreType = 5;
-pub const simpleKingMobilityScore: scoreType = 10;
-pub const simpleWeakCheckMateScore: scoreType = 1000;
-pub const simpleStructureProtectionScore: scoreType = 1;
-
-// ============ tempo ============
-pub const simpleTempoChecksScore: scoreType = 25;
-pub const simplePieceThreatScore: scoreType = 16;
-
-// source: https://www.chessprogramming.org/King_Safety
-// ============ safety ============
-pub const simpleSafetyBishopScore: scoreType = 20;
-pub const simpleSafetyKnightScore: scoreType = 20;
-pub const simpleSafetyRookScore: scoreType = 40;
-pub const simpleSafetyQueenScore: scoreType = 80;
-
 // ============ king ============
 pub const simpleKingProximity: scoreType = 5;
 
@@ -304,23 +282,25 @@ pub var global_MobilityVal: [2]scoreType = .{ 3, 7 };
 pub var global_KingMobilityVal: [2]scoreType = .{ 1, 0 };
 pub var global_OpenFileRookVal: [2]scoreType = .{ 12, 17 };
 
-// structure
+// ============ structure ============
 pub var global_StructureProtectionVal: [2]scoreType = .{ 10, 21 };
 pub var global_centerProtectionVal: [2]scoreType = .{ 1, 0 };
+pub const simpleWeakCheckMateScore: scoreType = 1000;
 
-// pawn structure
+// ============ pawn structure ============
 pub var global_IsolatedPawnVal: [2]scoreType = .{ 0, 4 };
 pub var global_StackedPawnVal: [2]scoreType = .{ 0, 11 };
 pub var global_PassedPawnVal: [2]scoreType = .{ 0, 1 };
 pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 0, 4 };
 pub var global_connectionPawnVal: [2]scoreType = .{ 6, 5 };
 
-// tempo
+// ============ tempo ============
 pub var global_tempoChecksScore: [2]scoreType = .{ 26, 8 };
 pub var global_pieceThreatScore: [2]scoreType = .{ 40, 24 };
 pub const global_weakCheckmate: [2]scoreType = .{ simpleWeakCheckMateScore, simpleWeakCheckMateScore };
 
-// safety
+// source: https://www.chessprogramming.org/King_Safety
+// ============ safety ============
 pub var global_SafetyBishopVal: [2]scoreType = .{ 9, 1 };
 pub var global_SafetyKnightVal: [2]scoreType = .{ 14, 3 };
 pub var global_SafetyRookVal: [2]scoreType = .{ 0, 0 };

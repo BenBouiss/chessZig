@@ -1,11 +1,9 @@
 const chessl = @import("../chess.zig");
 const utilsl = @import("../utils.zig");
-const moveTablel = @import("../moveTables.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
 const filel = @import("../file.zig");
-const mainl = @import("../main.zig");
 const moveGenl = @import("../move_generation.zig");
 
 const std = @import("std");

@@ -63,6 +63,9 @@ pub const timeManager = struct {
     pub inline fn timeSinceStartMs(p_self: *const timeManager) i64 {
         return p_self.stopWatch.timeSinceStartMs();
     }
+    pub inline fn timeSinceStartUs(p_self: *const timeManager) i64 {
+        return p_self.stopWatch.timeSinceStartUs();
+    }
     pub inline fn timeSinceStartSec(p_self: *const timeManager) i64 {
         return p_self.stopWatch.timeSinceStartSec();
     }
@@ -222,7 +225,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
             break;
         }
         if (features.reportProgress) {
-            sendPartial(p_info);
+            sendPartial(p_info, sched.timeM.timeSinceStartMs());
         }
     }
     return depth;
@@ -241,9 +244,11 @@ pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depth
     return ((prevTime * configl.SCHEDULER_GROWTH_TIME_EST) < maxTime);
 }
 
-pub fn sendPartial(p_info: *const threadingl.threadInfo) void {
+pub inline fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64) void {
     var msgBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
-    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} score cp {d} nodes {d} currmove {s} pv {f}\n", .{ p_info.depth, p_info.seldepth, p_info.currentBest.scoring, p_info.searchStat.n_nodeExplored, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
+    const nNodes: i64 = @intCast(p_info.searchStat.n_nodeExplored);
+    const nps = @divFloor(nNodes * 1000, (1 + timeSinceStartMs));
+    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} score cp {d} nodes {d} nps {d} currmove {s} pv {f}\n", .{ p_info.depth, p_info.seldepth, p_info.currentBest.scoring, nNodes, nps, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
     respondNoEng(utilsl.trimStr(final_info)) catch unreachable;
 }
 
