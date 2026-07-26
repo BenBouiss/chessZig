@@ -7,7 +7,7 @@ const typel = @import("type.zig");
 
 const build_options = @import("build_options");
 
-const e_piece = chess.e_piece;
+const e_piece = typel.e_piece;
 const scoreType = typel.scoreType;
 const TT_strat = configl.TT_strat;
 

@@ -9,7 +9,6 @@ Make and run:
 ```
 
 comptime build arguments:
-- useStaged: Staged move generation or not
 - useDebug: Performs sanityChecks at various stage of the move making / unmaking and more
 - useAvx2: (experimental) enable to change the way to get checkers / pinners bitboard during the "staged" move generation
 

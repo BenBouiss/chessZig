@@ -2,22 +2,20 @@ const std = @import("std");
 const build_options = @import("build_options");
 
 const chess = @import("chess.zig");
-const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const stringl = @import("string.zig");
 const typel = @import("type.zig");
 
 const utilsl = @import("utils.zig");
 
+const e_moveFlags = typel.e_moveFlags;
 const e_piece = chess.e_piece;
 const string = stringl.string;
 const Key = hashl.Key;
 
-pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
-
 const MOVE_STR_MAX_LENGTH = 5;
 
-pub fn build_move(from: u8, to: u8, flag: u8) IMove {
+pub inline fn build_move(from: u8, to: u8, flag: u8) IMove {
     return .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
 }
 pub inline fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
@@ -244,11 +242,11 @@ pub const matchMoveContainer = struct {
 
     pub fn print(p_self: *const matchMoveContainer) void {
         // FOR DEBUG ONLY
-        var line_str = p_self.getLineString(mainl.getGlobalGPA()) catch {
-            return;
-        };
-        defer line_str.free(mainl.getGlobalGPA());
-        std.debug.print("{s}\n", .{line_str._slice()});
+        for (0..p_self.len) |i| {
+            const move = p_self.moves[i];
+            std.debug.print("{s} ", .{move.getStr()});
+        }
+        std.debug.print("\n", .{});
         return;
     }
     pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key, pawnMove: bool) bool {

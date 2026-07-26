@@ -3,14 +3,9 @@ const std = @import("std");
 //https://stackoverflow.com/questions/76384694/how-to-do-conditional-compilation-with-zig
 const build_options = @import("build_options");
 
-const useStaged = build_options.useStaged;
 const useAVX2 = build_options.useAVX2;
 
 const typel = @import("type.zig");
-
-pub const e_piece = typel.e_piece;
-pub const e_pieceType = typel.e_pieceType;
-pub const e_color = typel.e_color;
 
 const utils = @import("utils.zig");
 const movel = @import("move.zig");
@@ -26,12 +21,15 @@ const weightl = @import("weights.zig");
 const configl = @import("config.zig");
 
 const IMove = movel.IMove;
-const e_moveFlags = movel.e_moveFlags;
 const matchMoveContainer = movel.matchMoveContainer;
-
-const e_square = squarel.e_square;
 const squareInfo = squarel.squareInfo;
 const scoreType = typel.scoreType;
+
+const e_moveFlags = typel.e_moveFlags;
+const e_piece = typel.e_piece;
+const e_pieceType = typel.e_pieceType;
+const e_color = typel.e_color;
+const e_square = squarel.e_square;
 
 pub const NUMBER_PLAYER: u8 = 2;
 pub const ROW_SIZE: u8 = 8;
@@ -251,7 +249,7 @@ pub inline fn getStrFromPiece(piece: e_piece) u8 {
 }
 
 pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
-    var ret = boardl.boardState.init();
+    var ret: boardl.boardState = .init();
     var offset: i8 = 0;
     var board_offset = N_SQUARES - 8;
     var commitedRowSize: u8 = 0;
@@ -357,9 +355,7 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
     _ = getBoardFromFen_enPassant(&board, gen.next().?);
     board.frame.halfMoveClock = @intCast(getBoardFromFen_clockMove(gen.next().?));
     board.b.turnCount = @intCast(getBoardFromFen_clockMove(gen.next().?));
-    if (comptime useStaged) {
-        onMoveStaged(&board, board.whiteToMove());
-    }
+    onMoveStaged(&board, board.whiteToMove());
     if (comptime !configl.USE_NNUE) {
         board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, board.getPhase());
     }
@@ -402,9 +398,7 @@ pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: boo
         }
     }
 
-    if (comptime useStaged) {
-        onMoveStaged(p_board, p_board.whiteToMove());
-    }
+    onMoveStaged(p_board, p_board.whiteToMove());
 }
 
 pub fn getFirstMoveFromStr(p_state: *boardl.boardState, strBuffer: []const u8) IMove {
@@ -470,22 +464,8 @@ pub inline fn isPieceWhite(piece: e_piece) bool {
     return @intFromEnum(piece) < N_PIECES_TYPES;
 }
 pub inline fn e_colorFromPiece(piece: e_piece) e_color {
-    if (isPieceWhite(piece)) {
-        return .WHITE;
-    }
-    return .BLACK;
+    return boolTo_e_color(isPieceWhite(piece));
 }
-pub const Board_stateContainer = struct {
-    array: []boardl.boardState,
-    len: usize,
-
-    pub fn free(p_self: *Board_stateContainer, alloc: std.mem.Allocator) void {
-        alloc.free(p_self.array);
-        for (0..p_self.len) |i| {
-            p_self.array[i].free(alloc);
-        }
-    }
-};
 
 pub fn updateKeyOnMove(move: IMove, fromPiece: e_piece, info: *const boardl.boardFrame, prevCastle: u8, prevEp: u8, comptime capture: bool, comptime white: bool) hashl.keySet {
     var ret: hashl.keySet = .{ .key = info.key, .nonPawnKey = info.nonPawnKey, .pawnKey = info.pawnKey };

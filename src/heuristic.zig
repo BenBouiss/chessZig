@@ -16,8 +16,8 @@ const nnuel = @import("nnue.zig");
 
 const std = @import("std");
 
-const e_piece = chess.e_piece;
-const e_pieceType = chess.e_pieceType;
+const e_piece = typel.e_piece;
+const e_pieceType = typel.e_pieceType;
 const e_color = typel.e_color;
 
 const string = stringl.string;
@@ -504,7 +504,7 @@ pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
     var ss: alphaBetal.searchStack = .{};
     const isChecked = p_board.isChecked();
     if (isChecked) return false;
-    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, configl.MAX_QUIESC_DEPTH + 2, alpha, beta, 1, isChecked, false, &ss, .NonPV);
+    const quiesc = alphaBetal.quiescenceSearch(p_board, &info, alpha, beta, 0, &ss);
     if (stat != quiesc) {
         return false;
     }

@@ -1,6 +1,5 @@
 const std = @import("std");
 const build_options = @import("build_options");
-const useStaged = build_options.useStaged;
 
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
@@ -32,14 +31,11 @@ const boardState = boardl.boardState;
 //pub const generationModifiers = enum { STD, NONE, QUIETMOVES, CAPTURES, ALL };
 
 pub inline fn generateLegalMoves(p_board: *const boardState) moveContainer {
-    if (comptime useStaged) {
-        var bbMoves = moveGenBB(p_board);
-        //bbMoves.print();
-        var moves: moveContainer = undefined;
-        moves.len = 0;
-        moveGenBBToMoveContainer(p_board, &bbMoves, &moves, .ALL);
-        return moves;
-    }
+    var bbMoves = moveGenBB(p_board);
+    var moves: moveContainer = undefined;
+    moves.len = 0;
+    moveGenBBToMoveContainer(p_board, &bbMoves, &moves, .ALL);
+    return moves;
 }
 
 pub fn moveGenBBToMoveContainer(p_board: *const boardState, p_moveBB: *moveBBState, p_out: *moveContainer, comptime extra: e_moveGenFlag) void {

@@ -73,8 +73,6 @@ pub fn freeThreadPackArray(alloc: std.mem.Allocator, p_array: *threadPackageArra
     for (0..p_array.len) |i| {
         var cell: std.ArrayList(movel.IMove) = p_array.items(.moves)[i];
         cell.deinit(alloc);
-        var state: boardl.boardState = p_array.items(.chessState)[i];
-        state.free(alloc);
     }
     p_array.deinit(alloc);
 }

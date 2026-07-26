@@ -19,12 +19,11 @@ const scoreType = typel.scoreType;
 
 const IMove = movel.IMove;
 
-const useStaged = build_options.useStaged;
 const useDebug = build_options.useDebug;
 
 pub const board = struct {
     pieceBB: [chessl.N_PIECES_TYPES]u64 = std.mem.zeroes([chessl.N_PIECES_TYPES]u64),
-    pieceArray: [chessl.N_SQUARES]chessl.e_piece = std.mem.zeroes([chessl.N_SQUARES]chessl.e_piece),
+    pieceArray: [chessl.N_SQUARES]e_piece = std.mem.zeroes([chessl.N_SQUARES]e_piece),
     c_occupiedBB: [2]u64 = std.mem.zeroes([2]u64),
     pieceCount: [chessl.N_PIECES]i8 = std.mem.zeroes([chessl.N_PIECES]i8),
     wKingSq: e_square = .a1,
@@ -49,7 +48,7 @@ pub const board = struct {
     }
 
     pub inline fn placePiece(self: *board, piece: e_piece, sq: u8) void {
-        const c = pieceToColor(piece);
+        const c = chessl.e_colorFromPiece(piece);
         if (c == .WHITE) {
             self._placePiece(piece, sq, true);
         } else {
@@ -65,7 +64,7 @@ pub const board = struct {
     }
     pub inline fn removePiece(self: *board, sq: u8) void {
         const piece = self.getPiece(sq);
-        const c = pieceToColor(piece);
+        const c = chessl.e_colorFromPiece(piece);
         if (c == .WHITE) {
             return self._removePiece(piece, sq, true);
         }
@@ -81,7 +80,7 @@ pub const board = struct {
     }
     pub inline fn movePiece(self: *board, from: u8, to: u8) void {
         const piece = self.getPiece(from);
-        const c = pieceToColor(piece);
+        const c = chessl.e_colorFromPiece(piece);
         if (c == .WHITE) {
             return self._movePiece(piece, from, to, true);
         }
@@ -131,20 +130,15 @@ pub const board = struct {
         self.invertTurn();
     }
 };
-pub inline fn pieceToColor(piece: e_piece) e_color {
-    if (@intFromEnum(piece) < chessl.N_PIECES_TYPES) {
-        return .WHITE;
-    }
-    return .BLACK;
-}
 pub const boardFrame = struct {
     pinnedBB: u64 = 0,
     checkersBB: u64 = 0,
+
     key: hashl.Key = 0,
     pawnKey: hashl.Key = 0,
-
     // WHITE, BLACK
     nonPawnKey: [2]hashl.Key = @splat(0),
+
     phase: usize = 0,
     lastMove: IMove = .{},
     victim: e_piece = .nEmptySquare,
@@ -158,63 +152,18 @@ pub const boardFrame = struct {
     }
 };
 
-pub const boardStack = struct {
-    stack: [movel.MAX_MATCH_LENGTH]boardFrame = undefined,
-    len: usize = 0,
-
-    pub inline fn push(p_self: *boardStack, frame: boardFrame) void {
-        if (comptime useDebug) {
-            if (p_self.len == movel.MAX_MATCH_LENGTH) {
-                @panic("Board stack is full, forgot to pop?");
-            }
-        }
-        p_self.stack[p_self.len] = frame;
-        p_self.len += 1;
-    }
-    pub inline fn pop(p_self: *boardStack) boardFrame {
-        if (comptime useDebug) {
-            if (p_self.len == 0) {
-                @panic("Popping from empty boardframe, forgot to push?");
-            }
-        }
-        p_self.len -= 1;
-        return p_self.stack[p_self.len];
-    }
-};
-
 pub const boardState = struct {
     b: board = .{},
     frame: boardFrame = .{},
     moveHistory: movel.matchMoveContainer = .{},
-
     pub fn init() boardState {
-        const ret: boardState = .{ .b = .init() };
-
-        return ret;
-    }
-    pub fn free(p_self: *boardState, alloc: std.mem.Allocator) void {
-        _ = alloc;
-        _ = p_self;
+        return .{ .b = .init() };
     }
     pub inline fn copy(p_self: *const boardState) boardState {
         return p_self.*;
     }
     pub inline fn whiteToMove(self: *const boardState) bool {
         return self.b._whiteToMove;
-    }
-    pub inline fn makeFrame(self: *const boardState) boardFrame {
-        return self.frame;
-    }
-
-    pub fn duplicateNTimes(self: boardState, alloc: std.mem.Allocator, n: usize) !chessl.Board_stateContainer {
-        var ret: []boardState = try alloc.alloc(boardState, n);
-        for (0..n) |i| {
-            ret[i] = self;
-            if (comptime useDebug) {
-                chessl.sanityCheckBoardState(&ret[i]);
-            }
-        }
-        return .{ .array = ret, .len = ret.len };
     }
 
     pub fn get_fen(self: *const boardState) [chessl.MAX_FEN_LENGTH]u8 {
@@ -495,10 +444,7 @@ pub const boardState = struct {
 
         p_self.frame.enPassantIdx = 0;
         p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[0];
-
-        if (comptime useStaged) {
-            chessl.onMoveStaged(p_self, !white);
-        }
+        chessl.onMoveStaged(p_self, !white);
     }
     pub inline fn makeMove(p_self: *boardState, move: IMove) void {
         if (p_self.whiteToMove()) {
@@ -531,11 +477,18 @@ pub const boardState = struct {
         //        p_self.generalMakeMove(move, white, .EP, updatePSQT);
         //    },
         //}
+        if (comptime useDebug) {
+            chessl.sanityCheckBoardState(p_self);
+        }
         if (move.isCapture()) {
             p_self.makeMoveCapture_cst(move, white, updatePSQT);
         } else {
             p_self.makeMoveQuiet_cst(move, white, updatePSQT);
         }
+        if (comptime useDebug) {
+            chessl.sanityCheckBoardState(p_self);
+        }
+        chessl.onMoveStaged(p_self, !white);
         p_self.b.nextTurn();
     }
     pub fn generalMakeMove(p_self: *boardState, move: IMove, comptime white: bool, comptime t: typel.e_moveType, comptime updatePSQT: bool) void {
@@ -550,7 +503,7 @@ pub const boardState = struct {
         const to = move.getTo();
         const from = move.getFrom();
         const isCapture = if (comptime t == .CASTLE) false else (if (comptime t != .EP) (move.isCapture()) else true);
-        var toPiece = p_self.b.getPiece(from);
+        var toPiece = p_self.getPiece(from);
         var isPawn: bool = false;
 
         const usIdx = chessl.cst_whiteBoolToInt(white);
@@ -561,7 +514,7 @@ pub const boardState = struct {
             p_self.b._removePiece(victim, @intFromEnum(victimSq), !white);
             p_self.frame.victim = victim;
         } else if (isCapture and comptime t != .CASTLE) {
-            const victim = p_self.b.getPiece(to);
+            const victim = p_self.getPiece(to);
             p_self.b._removePiece(victim, to, !white);
             p_self.frame.victim = victim;
             if (chessl.isRookPiece(victim)) {
@@ -632,14 +585,9 @@ pub const boardState = struct {
         if (comptime useDebug) {
             chessl.sanityCheckBoardState(p_self);
         }
-        if (comptime useStaged) {
-            chessl.onMoveStaged(p_self, !white);
-        }
+        chessl.onMoveStaged(p_self, !white);
     }
     pub fn makeMoveCapture_cst(p_self: *boardState, move: IMove, comptime white: bool, comptime updatePSQT: bool) void {
-        if (comptime useDebug) {
-            chessl.sanityCheckBoardState(p_self);
-        }
         const prevCastle: u8 = p_self.frame.stat.castlingKey();
         const prevEp: u8 = p_self.frame.enPassantIdx;
 
@@ -722,18 +670,8 @@ pub const boardState = struct {
         }
 
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
-        if (comptime useDebug) {
-            chessl.sanityCheckBoardState(p_self);
-        }
-        if (comptime useStaged) {
-            chessl.onMoveStaged(p_self, !white);
-        }
     }
     pub fn makeMoveQuiet_cst(p_self: *boardState, move: IMove, comptime white: bool, comptime updatePSQT: bool) void {
-        // test to reduce the makeMove load
-        if (comptime useDebug) {
-            chessl.sanityCheckBoardState(p_self);
-        }
         const prevCastle: u8 = p_self.frame.stat.castlingKey();
         const prevEp: u8 = p_self.frame.enPassantIdx;
 
@@ -811,15 +749,7 @@ pub const boardState = struct {
         if (comptime updatePSQT and !configl.USE_NNUE) {
             p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, isPromo, isCastle, toPiece, p_self.getPhase(), &p_self.frame);
         }
-
         _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
-
-        if (comptime useDebug) {
-            chessl.sanityCheckBoardState(p_self);
-        }
-        if (comptime useStaged) {
-            chessl.onMoveStaged(p_self, !white);
-        }
     }
 
     pub inline fn getLastMove(self: boardState) IMove {
@@ -847,9 +777,7 @@ pub const boardState = struct {
         return (nWhiteP < 2) and (nBlackP < 2);
     }
     pub inline fn onlyPawns(self: *const boardState) bool {
-        const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
-        const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
-        return (nWhiteP == 0) and (nBlackP == 0);
+        return ((self.getPieceBB_t(.PAWN) | self.getPieceBB_t(.KING)) ^ (self.b.occupiedBB()) == 0);
     }
     pub inline fn onlyPawnsSide(self: *const boardState, white: bool) bool {
         const p = if (white) (self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen)) else (self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen));
@@ -971,10 +899,7 @@ pub const boardState = struct {
         return king_attacks == 0;
     }
     pub inline fn isChecked(p_self: *const boardState) bool {
-        if (comptime useStaged) {
-            return p_self.frame.checkersBB != 0;
-        }
-        return p_self.isLegal(p_self.whiteToMove());
+        return p_self.frame.checkersBB != 0;
     }
     pub inline fn isInsufficientMaterial(p_self: *const boardState) bool {
         return p_self.isInsufficientMaterialSide(false) and p_self.isInsufficientMaterialSide(true);
@@ -1077,21 +1002,11 @@ pub const boardState = struct {
         return true;
     }
 
-    pub inline fn isFiftyMoveRepetition(self: *const boardState) bool {
-        return self.frame.halfMoveClock >= 100;
-    }
-    pub inline fn isStaleThreeFold(self: *const boardState) bool {
-        return self.moveHistory.checkRepetitions();
-    }
     pub fn isStaleMateRepetition(p_self: *const boardState) bool {
-        return p_self.isFiftyMoveRepetition() or p_self.isStaleThreeFold();
+        return p_self.frame.halfMoveClock >= 100 or p_self.moveHistory.checkRepetitions();
     }
 };
-pub fn isEndGame(self: board) bool {
-    const nWhiteP = self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen);
-    const nBlackP = self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen);
-    return (nWhiteP < 3) and (nBlackP < 3);
-}
+
 pub const viriGame = struct {
     b: packedBoard align(1),
     bestMove: viriPackedMove align(1),
@@ -1191,5 +1106,28 @@ pub const castleS = struct {
                 return .{ .kingFrom = .e8, .kingTo = .c8, .rookFrom = .a8, .rookTo = .d8 };
             }
         }
+    }
+};
+pub const boardStack = struct {
+    stack: [movel.MAX_MATCH_LENGTH]boardFrame = undefined,
+    len: usize = 0,
+
+    pub inline fn push(p_self: *boardStack, frame: boardFrame) void {
+        if (comptime useDebug) {
+            if (p_self.len == movel.MAX_MATCH_LENGTH) {
+                @panic("Board stack is full, forgot to pop?");
+            }
+        }
+        p_self.stack[p_self.len] = frame;
+        p_self.len += 1;
+    }
+    pub inline fn pop(p_self: *boardStack) boardFrame {
+        if (comptime useDebug) {
+            if (p_self.len == 0) {
+                @panic("Popping from empty boardframe, forgot to push?");
+            }
+        }
+        p_self.len -= 1;
+        return p_self.stack[p_self.len];
     }
 };

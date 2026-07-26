@@ -312,7 +312,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     // R = 3
     // const isEndGame = p_state.isEndGame();
     //and !p_state.onlyPawnsSide(white)
-    const hasPieces = !p_state.onlyPawnsSide(white);
+    const hasPieces = !p_state.onlyPawns();
     if (!isCheck and comptime t == .NonPV) {
         if (!isRoot and hasPieces and prevSS.playedMove.isValid()) {
             // see chess programming video
