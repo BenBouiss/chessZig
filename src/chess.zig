@@ -148,7 +148,13 @@ pub inline fn mated_in(depth: typel.depthT) scoreType {
     return -(mate_in(depth));
 }
 pub inline fn isMate(score: scoreType) bool {
-    return @abs(score) > weightl.simpleCheckMateThreshold;
+    return @abs(score) >= weightl.simpleCheckMateThreshold;
+}
+pub inline fn isMateWin(score: scoreType) bool {
+    return score >= weightl.simpleCheckMateThreshold;
+}
+pub inline fn isMateLose(score: scoreType) bool {
+    return score <= (-weightl.simpleCheckMateThreshold);
 }
 
 /// https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#Rotating
@@ -246,6 +252,9 @@ fn getPieceFromStr(letter: u8) e_piece {
 }
 pub inline fn getStrFromPiece(piece: e_piece) u8 {
     return arr_piece_str[@intFromEnum(piece)];
+}
+pub inline fn getStrFromPieceCapital(piece: e_piece) u8 {
+    return arr_piece_str[@intFromEnum(piece) % N_PIECES_TYPES];
 }
 
 pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
@@ -524,8 +533,13 @@ pub fn updateKeyOnMove(move: IMove, fromPiece: e_piece, info: *const boardl.boar
             }
         }
     }
-    ret.key ^= hashl.zobristKeys.enPassantKeys[prevEp];
-    ret.key ^= hashl.zobristKeys.enPassantKeys[info.enPassantIdx];
+    //ret.key ^= hashl.zobristKeys.enPassantKeys[prevEp];
+    //ret.key ^= hashl.zobristKeys.enPassantKeys[info.enPassantIdx];
+
+    // if going from no enP to enP or enP to no enP need to flip the key
+    if ((@intFromBool(prevEp == 0) ^ @intFromBool(info.enPassantIdx == 0)) != 0) {
+        ret.key ^= hashl.zobristKeys.enPassantKey;
+    }
     ret.key ^= hashl.zobristKeys.castlingKeys[prevCastle];
     ret.key ^= hashl.zobristKeys.castlingKeys[info.stat.castlingKey()];
 
@@ -647,14 +661,18 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.b.turnCount, p_board_state.moveHistory.len, moves.len });
+    //moves.print();
     printBoardValidity(p_board_state);
     if (p_board_state.b.turnCount > 0) {
         std.debug.print("Previous move: {s}\n", .{p_board_state.frame.lastMove.getStr()});
     }
 
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
-    std.debug.print("Move history:", .{});
-    p_board_state.moveHistory.print();
+    std.debug.print("Move history: ", .{});
+    //p_board_state.moveHistory.print();
+    p_board_state.moveHistory.printAlgebraicLineString() catch {
+        std.debug.print("caught error in printAlgebraicLineString\n", .{});
+    };
 
     const eval = heuristicl.evaluate_debug(p_board_state);
     std.debug.print("Current evaluation: phase {d} piece phase {d}\n", .{ p_board_state.getPhase(), p_board_state.frame.phase });
@@ -1198,7 +1216,7 @@ pub fn fillMoveFromState(p_state: *const boardl.boardState, move: *IMove) void {
     move.setFlag(flag);
 }
 
-pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square, isCapture: bool) u64 {
+pub fn getAllMoveMaskFromX(p_board: *const boardl.boardState, white: bool, X: e_square, isCapture: bool) u64 {
     // only used in the algebraic "decoding"
     var ret: u64 = EMPTY;
 
@@ -1225,6 +1243,91 @@ pub fn getAllMoveMaskFromX(p_board: *boardl.boardState, white: bool, X: e_square
     return ret;
 }
 
+pub const algebraicTarget = struct {
+    file: u8 = 9,
+    rank: u8 = 9,
+    piece: e_piece = .nEmptySquare,
+    promoPiece: e_piece = .nEmptySquare,
+    to: e_square = .invalid,
+    isCapture: bool = false,
+    checks: bool = false,
+    kingSideC: bool = false,
+    queenSideC: bool = false,
+    pub fn init(move: IMove, state: *const boardl.boardState) algebraicTarget {
+        if (move.isKingSideCastle()) {
+            return .{ .kingSideC = true };
+        }
+        if (move.isQueenSideCastle()) {
+            return .{ .queenSideC = true };
+        }
+        const to = move.getTo();
+        const from = move.getFrom();
+        const fromPiece = state.getPiece(from);
+        const white = state.whiteToMove();
+        const promoPiece: e_piece = if (move.isPromotion()) (flagPromotionToPiece(move.getFlag(), white)) else (.nEmptySquare);
+        const isCapture: bool = move.isCapture();
+        var potentialFromBB = getAllMoveMaskFromX(state, white, @enumFromInt(to), isCapture);
+        var ret: algebraicTarget = .{ .to = @enumFromInt(to), .isCapture = isCapture, .promoPiece = promoPiece, .checks = moveGenl.moveDeliverCheck(state, move, false) };
+        if ((potentialFromBB & (potentialFromBB - 1) != 0 or (promoPiece == .nEmptySquare) or isCapture) and !isPawnPiece(fromPiece)) {
+            // get piece
+            const pieceBB = state.getPieceBB(fromPiece);
+            potentialFromBB &= pieceBB;
+            ret.piece = fromPiece;
+        }
+        if (potentialFromBB & (potentialFromBB - 1) != 0 or (isPawnPiece(fromPiece) and isCapture)) {
+            // get file
+            const file = getSqIdxFile(from);
+            potentialFromBB &= file;
+            ret.file = file;
+        }
+        if (potentialFromBB & (potentialFromBB - 1) != 0) {
+            // get rank
+            const rank = getSqIdxRank(from);
+            potentialFromBB &= rank;
+            ret.file = rank;
+        }
+        return ret;
+    }
+    pub fn format(self: algebraicTarget, writer: *std.Io.Writer) !void {
+        if (self.kingSideC) {
+            try writer.print("O-O ", .{});
+        } else if (self.queenSideC) {
+            try writer.print("O-O-O ", .{});
+        } else {
+            //
+            // {piece}{file}{rank}{takes}{to(2)}{promotion(2)}{checks}
+            var buffer: [10]u8 = @splat(0);
+            var n: usize = 0;
+            if (self.piece != .nEmptySquare) {
+                buffer[n] = getStrFromPieceCapital(self.piece);
+                n += 1;
+            }
+            if (self.file != 9) {
+                buffer[n] = self.file + 'a';
+                n += 1;
+            }
+            if (self.rank != 9) {
+                buffer[n] = self.rank + '1';
+                n += 1;
+            }
+            if (self.isCapture) {
+                buffer[n] = 'x';
+                n += 1;
+            }
+            const toStr = strFromLERF(self.to);
+            buffer[n] = toStr[0];
+            buffer[n + 1] = toStr[1];
+            n += 2;
+            if (self.promoPiece != .nEmptySquare) {
+                buffer[n] = '=';
+                buffer[n + 1] = getStrFromPieceCapital(self.promoPiece);
+                n += 2;
+            }
+            try writer.print("{s} ", .{utils.trimStr(&buffer)});
+        }
+        return;
+    }
+};
 pub inline fn algebraicIsLetterPiece(letter: u8) bool {
     // P, B, N, R, Q, K
     return letter == 'P' or letter == 'B' or letter == 'N' or letter == 'R' or letter == 'Q' or letter == 'K';
@@ -1370,7 +1473,6 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tm
 
     var ret: matchMoveContainer = undefined;
     ret.len = 0;
-    ret.lastIrreversibleMoveIndex = 0;
     while (gen.next()) |str| {
         const offset: usize = 0;
         if (utils.contains(str, "1/2-1/2", .ignoreCase) or utils.contains(str, "1-0", .ignoreCase) or utils.contains(str, "0-1", .ignoreCase)) {
@@ -1411,7 +1513,8 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string
 pub fn test_alge(alloc: std.mem.Allocator) !void {
     //const line = "1. d4 Nf6 2. c4 g6 3. Nc3 d5 4. cxd5 Nxd5 5. e4 Nxc3 6. bxc3 Bg7 7. Nf3 c5 8. Rb1 O-O 9. Be2 cxd4 10. cxd4 Qa5+ 11. Qd2 Qxd2+ 12. Bxd2 b6 13. O-O Bb7 14. Bd3 Rd8 15. Be3 Bxd4 16. Nxd4 e5 17. Nb5 Rxd3 18. Nc7 Nc6 19. Nxa8 Bxa8 20. Rfd1 Rc3 21. Rbc1 Rxc1 22. Bxc1 Kg7 23. f3 Kf6 24. Ba3 Nd4 25. Bb2 Nc6 26. Rd5 Ke6 27. Ba3 f5 28. Rd6+ Kf7 29. exf5 gxf5 30. h4 a5 31. h5 b5 32. Rd7+ Kf6 33. Rxh7 b4 34. Rh8 bxa3 35. Rg8 Kf7 36. Rxa8 Nd4 37. Kf2 f4 38. Rxa5 Nc6 39. Rxa3 Nb4 40. Ra7+ Kg8 41. a4 Nd3+ 42. Kg1 1-0";
     //const line = "1. Nf3 d5 2. d4 Nf6 3. c4 c6 4. Nc3 dxc4 5. a4 Bf5 6. e3 e6 7. Bxc4 Bb4 8. O-O Nbd7 9. Nh4 Bg6 10. Nxg6 hxg6 11. Bd2 Qa5 12. Qb3 O-O-O 13. h3 Nb6 14. Bb5 Rhe8 15. Rfc1 Re7 16. Be1 Rdd7 17. f4 Re8 18. Be2 Kb8 19. Bf3 Rc8 20. Kh1 Rh8 21. Bg3 Ka8 22. Kg1 Nh5 23. Be1 Nf6 24. Bf2 Nbd5 25. Qc2 Bd6 26. Qb3 Nxc3 27. Qxc3 Bb4 28. Qb3 Nd5 29. Be1 Bxe1 30. Rxe1 Qd8 31. Bxd5 exd5 32. Qd1 Rd6 33. b4 g5 34. b5 Qf6 35. Qg4 gxf4 36. Qxf4 Qe7 37. bxc6 Rxc6 38. e4 Re6 39. e5 f6 40. Kh2 g5 41. exf6 Qd8 42. Qxg5 Rxf6 43. Rf1 Qb8+ 44. Kg1 Rd6 45. Rf7 Rg8 46. Qe5 Rdg6 47. Qxb8+ Kxb8 48. g4 Ra6 49. Kg2 Rb6 50. a5 Rb4 51. Re1 Rxd4 52. Rb1 Rd2+ 53. Kg3 Rd3+ 54. Kf4 b6 55. axb6 axb6 56. Rxb6+ Kc8 57. Rh6 d4 58. g5 Rd1 59. Ra7 Kb8 60. Rd7 Kc8 61. Rd5 Rf8+ 62. Rf6 Re8 63. g6 Rg1 64. Rfd6 Rh8 65. Ke5 Rxh3 66. Kf6 Rhg3 67. Kg7 Re3 68. Rxd4 Kb7 69. Rf6 Kc7 70. Rc4+ Kb7 71. Kh7 Rh3+ 72. Kg8 Rhg3 73. Rf7+ Kb6 74. g7 Rh3 75. Rcf4 Kc5 76. R7f5+ Kd6 77. Rf1 Rg2 78. R5f2 Rxf2 79. Rxf2 Ke7 80. Re2+ Kd7 81. Re5 Kd6 82. Kf7 Rf3+ 83. Ke8 Kc6 84. g8";
-    const line = "1. e4 e5 2. Nf3 Nc6 3. Bb5 Nf6 4. O-O Nxe4 5. d4 Nd6 6. Bxc6 dxc6 7. dxe5 Nf5 8. Qxd8+ Kxd8 9. Nc3 Ke8 10. Rd1 Be6 11. h3 Bb4 12. Bd2 Rd8 13. a4 Rd7 14. a5 h5 15. Bg5 h4 16. a6 b6 17. Rxd7 Bxd7 18. Kh2 Bxc3 19. bxc3 c5 20. Re1 Rh5 21. Rd1 c4 22. Rd2 c6 23. Kg1 Ne7 24. Bxh4 Nd5 25. Bg5 Nxc3 26. e6 fxe6 27. h4 Ne4 28. Rd4 Nxg5 29. hxg5 c5 30. Rxc4 Bb5 31. Re4 Ke7 32. Ne5 Rxg5 33. g4 Rxe5 34. Rxe5 Bxa6 35. Re1 Bc4 36. Ra1 a5 37. Kg2 Bd5+ 38. Kg3 e5 39. f4 Kd6 40. f5 Be4 41. Rd1+ Kc7 42. c4 a4 43. Kh4 Bc2 44. Re1 Bd3 45. Kg5 Bxc4 46. Kg6 b5 47. Kxg7 a3 48. f6 a2 49. g5 b4 50. g6 b3 51. f7 b2 52. f8=Q a1=Q 53. Qxc5+ Kd7 54. Rxa1 bxa1=Q 55. Qxc4 e4+ 56. Kf7 Qe5 57. Qa4+ Kd8 58. Qa8+ Kc7 59. Qa7+ Kc6 60. Qa6+ Kd7 61. Qb7+ Kd8 62. Qb6+ Kd7 63. g7 Qf5+ 64. Kg8 Qd5+ 65. Kh7 Qf5+ 66. Qg6 Qh3+ 67. Qh6 Qf5+ 68. Kh8 Qe5 69. Qh3+ Kc6 70. Kh7 e3 71. g8=Q e2 72. Qhe6+ Kb5 73. Qxe5+ Ka4 74. Qeb8 Ka3 75. Qbb3# 1-0";
+    //const line = "1. e4 e5 2. Nf3 Nc6 3. Bb5 Nf6 4. O-O Nxe4 5. d4 Nd6 6. Bxc6 dxc6 7. dxe5 Nf5 8. Qxd8+ Kxd8 9. Nc3 Ke8 10. Rd1 Be6 11. h3 Bb4 12. Bd2 Rd8 13. a4 Rd7 14. a5 h5 15. Bg5 h4 16. a6 b6 17. Rxd7 Bxd7 18. Kh2 Bxc3 19. bxc3 c5 20. Re1 Rh5 21. Rd1 c4 22. Rd2 c6 23. Kg1 Ne7 24. Bxh4 Nd5 25. Bg5 Nxc3 26. e6 fxe6 27. h4 Ne4 28. Rd4 Nxg5 29. hxg5 c5 30. Rxc4 Bb5 31. Re4 Ke7 32. Ne5 Rxg5 33. g4 Rxe5 34. Rxe5 Bxa6 35. Re1 Bc4 36. Ra1 a5 37. Kg2 Bd5+ 38. Kg3 e5 39. f4 Kd6 40. f5 Be4 41. Rd1+ Kc7 42. c4 a4 43. Kh4 Bc2 44. Re1 Bd3 45. Kg5 Bxc4 46. Kg6 b5 47. Kxg7 a3 48. f6 a2 49. g5 b4 50. g6 b3 51. f7 b2 52. f8=Q a1=Q 53. Qxc5+ Kd7 54. Rxa1 bxa1=Q 55. Qxc4 e4+ 56. Kf7 Qe5 57. Qa4+ Kd8 58. Qa8+ Kc7 59. Qa7+ Kc6 60. Qa6+ Kd7 61. Qb7+ Kd8 62. Qb6+ Kd7 63. g7 Qf5+ 64. Kg8 Qd5+ 65. Kh7 Qf5+ 66. Qg6 Qh3+ 67. Qh6 Qf5+ 68. Kh8 Qe5 69. Qh3+ Kc6 70. Kh7 e3 71. g8=Q e2 72. Qhe6+ Kb5 73. Qxe5+ Ka4 74. Qeb8 Ka3 75. Qbb3# 1-0";
+    const line = "1. d4 {book} Nf6 {book} 2. Bg5 {book} e6 {book} 3. e4 {book} h6 {book} 4. Bxf6 {book} Qxf6 {book} 5. Nf3 {book} d6 {book} 6. c3 {book} Nd7 {book} 7. Nbd2 {book} g6 {book} 8. g3 {book} Bg7 {book} 9. Qb3 {+0.20/12 0.172s} h5 {-0.15/13 0.137s} 10. Be2 {+0.16/12 0.220s} Bh6 {-0.06/11 0.128s} 11. O-O-O {-0.04/11 0.171s} b6 {+0.18/12 0.165s} 12. Kb1 {-0.23/12 0.141s} Bb7 {+0.32/12 0.166s} 13. Rhf1 {-0.37/12 0.186s} a6 {+0.30/12 0.201s} 14. h4 {-0.46/12 0.195s} O-O {+0.54/12 0.179s} 15. Qc4 {-0.52/12 0.111s} Rfc8 {+0.57/12 0.191s} 16. Qd3 {-0.38/12 0.125s} c5 {+0.09/11 0.166s} 17. dxc5 {-0.21/12 0.125s} Nxc5 {-0.01/13 0.181s} 18. Qxd6 {-0.50/12 0.116s} Nxe4 {+0.52/13 0.136s} 19. Qxb6 {-0.68/12 0.146s} Rab8 {+3.17/13 0.421s} 20. Qb4 {-4.56/11 0.400s} Nxd2+ {+4.13/12 0.128s} 21. Nxd2 {-3.33/10 0.102s} Qf5+ {+3.07/12 0.119s} 22. Ka1 {-3.98/12 0.119s} Bg2 {+3.88/13 0.100s} 23. Qa4 {-3.81/13 0.094s} Bxd2 {+4.25/13 0.101s} 24. Rxd2 {-3.39/13 0.088s} Bxf1 {+3.31/13 0.087s} 25. Bxf1 {-2.81/13 0.101s} Rxc3 {+3.11/13 0.085s} 26. Qd1 {-2.85/12 0.083s} Rf3 {+2.74/13 0.176s} 27. Bh3 {-2.96/13 0.120s} Qa5 {+2.73/12 0.113s} 28. Bg2 {-2.62/11 0.085s} Rc3 {+2.74/12 0.106s} 29. Be4 {-2.77/11 0.098s} Rcc8 {+2.55/12 0.084s} 30. a3 {-2.55/11 0.088s} Rd8 {+2.68/12 0.080s} 31. Rxd8+ {-2.81/11 0.097s} Qxd8 {+3.05/12 0.081s} 32. Qxd8+ {-2.79/12 0.089s} Rxd8 {+4.21/13 0.082s} 33. Ka2 {-4.05/12 0.093s} Rd2 {+4.59/16 0.089s} 34. f3 {-4.74/15 0.090s} Rg2 {+4.67/16 0.117s} 35. Kb3 {-4.58/14 0.126s} Rxg3 {+4.67/14 0.083s} 36. Ka4 {-4.77/15 0.081s} Rh3 {+4.55/15 0.073s} 37. b4 {-4.74/15 0.089s} Rxh4 {+5.17/16 0.076s} 38. Bd3 {-5.65/14 0.137s} Rf4 {+6.78/14 0.067s} 39. Bf1 {-6.77/14 0.069s} Rxf3 {+7.31/17 0.078s} 40. Bxa6 {-7.09/15 0.089s} h4 {+7.45/17 0.098s} 41. b5 {-6.85/14 0.076s} Rf4+ {+5.37/14 0.071s} 42. Ka5 {-7.08/15 0.103s} h3 {+5.58/13 0.073s} 43. b6 {-5.76/16 0.083s} Rf5+ {+5.69/16 0.085s} 44. Bb5 {-6.15/15 0.093s} h2 {+5.92/15 0.066s} 45. b7 {-6.12/14 0.105s} h1=Q {+5.86/14 0.081s} 46. b8=Q+ {-6.21/12 0.073s} Kg7 {+5.91/12 0.079s} 47. a4 {-6.18/12 0.066s} Qc6 {+5.92/13 0.073s} 48. Qd8 {-6.14/14 0.076s} Qc5 {+5.97/12 0.066s} 49. Qb6 {-6.14/11 0.064s} Qd5 {+5.87/12 0.069s} 50. Qd6 {-6.18/13 0.086s} g5 {+5.95/13 0.084s} 51. Qe7 {-5.90/12 0.060s} Rf2 {+6.03/13 0.102s} 52. Qa7 {-5.91/12 0.134s} Rd2 {+6.06/13 0.104s} 53. Qe3 {-6.02/11 0.104s} Rd4 {+5.99/11 0.067s} 54. Qc3 {-6.24/11 0.064s} Qd6 {+6.47/12 0.055s} 55. Qc1 {-6.54/12 0.066s} Qd8+ {+6.33/11 0.060s} 56. Ka6 {-6.54/11 0.087s} g4 {+6.36/12 0.060s} 57. Kb7 {-6.46/10 0.071s} f6 {+6.38/12 0.078s} 58. a5 {-6.51/9 0.053s} Qxa5 {+7.83/11 0.103s} 59. Kc6 {-8.31/10 0.067s} Qa8+ {+7.82/11 0.056s} 60. Kb6 {-8.04/10 0.060s} Qb8+ {+7.87/12 0.071s} 61. Ka6 {-8.15/10 0.084s} Qd6+ {+8.03/11 0.066s} 62. Bc6 {-8.31/10 0.072s} g3 {+8.63/12 0.078s} 63. Qh1 {-9.43/11 0.071s} Rd2 {+10.27/12 0.062s} 64. Qc1 {-13.12/11 0.112s} g2 {+14.47/13 0.051s} 65. Kb7 {-12.23/12 0.054s} Rd1 {+14.83/16 0.068s} 66. Qxd1 {-15.69/13 0.100s} Qxd1 {+15.43/13 0.059s} 67. Bxg2 {-15.46/15 0.056s} Qb3+ {+15.75/15 0.063s} 68. Kc8 {-15.46/13 0.047s} Qc2+ {+16.60/16 0.049s} 69. Kd7 {-15.78/14 0.047s} Qxg2 {+18.27/17 0.066s} 70. Kxe6 {-16.78/16 0.061s} Qe4+ {+28.13/18 0.052s} 71. Kd6 {-16.37/15 0.046s} f5 {+309.85/19 0.126s} 72. Kc7 {-24.24/16 0.084s} Qd5 {/0 0.000s} 73. Kb8 {-309.87/17 0.063s} f4 {+309.85/4 0.001s} 74. Ka7 {/0 0.000s} f3 {+309.85/2 0.000s} 75. Ka6 {/0 0.000s} Qb3 {/0 0.000s} 76. Ka7 {-309.94/9 0.007s} Qd5 {/0 0.000s} 77. Ka6 {0.00/255 0.025s, Black makes an illegal move: a1a1} 1-0";
     const moves = try algebraicLineToIMoveMatch(alloc, line);
     moves.print();
 }
@@ -1429,10 +1532,9 @@ pub inline fn initAll(verbose: bool) void {
 }
 
 pub fn main(alloc: std.mem.Allocator) !void {
-    _ = alloc;
     //mainl.initAll(alloc, true);
     //try test_avx();
-    //Jtry test_alge(alloc);
+    try test_alge(alloc);
     //try test_inbetween();
     return;
 }

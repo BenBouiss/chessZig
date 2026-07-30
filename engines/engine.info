@@ -1,15 +1,17 @@
 [engine1]
-path="engines/bin/engine_25_07_26";
-name="base + no line move when not follow";
+//path="engines/bin/engine_26_07_26";
+//name="base";
+path="engines/bin/engine_29_07_26_1";
+name="base + PV stuff + twk + singulaExt usage + no overtime thinking + twk + SE stuff + 64 enP key";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_24_07_26";
-name="base + moveGen small optim";
+path="engines/bin/engine_29_07_26";
+name="base + PV stuff + twk + singulaExt usage + no SE + no overtime thinking";
 "setoption name reportProgress value false";
 
 [match]
-nMatch=256;
+nMatch=64;
 playerSwitch=true;
 debugMode=false;
 useOpeningBook=true;

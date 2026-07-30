@@ -4,11 +4,13 @@ const movel = @import("move.zig");
 const boardl = @import("board.zig");
 const configl = @import("config.zig");
 const typel = @import("type.zig");
+const weightl = @import("weights.zig");
 
 const build_options = @import("build_options");
 
 const e_piece = typel.e_piece;
 const scoreType = typel.scoreType;
+const depthT = typel.depthT;
 const TT_strat = configl.TT_strat;
 
 pub const Key: type = u64;
@@ -40,7 +42,9 @@ pub const zobristKeys: Zobrist_Keys = .{
     },
     .playKey = 0x3ac46e22a5fe6737,
     .castlingKeys = [16]Key{ 0xefbeddfce36329f, 0xf55233a7cf17b5e7, 0x742033122af1b745, 0x31a4ee69d5e8233e, 0x9f4c6f4f46949f06, 0xca5c21aaa50f0ce5, 0x7064df4db212f057, 0x40b4a32bb6994b70, 0xd6284cec5aee5a72, 0x5214403a97de5188, 0xc0aaad48f53d491b, 0x2bb58dd45d66c7f1, 0xbfe60591ab5efe51, 0xde6353979154e4a0, 0xe8812ee6e693d632, 0x741976696c7e21ff },
-    .enPassantKeys = [64]Key{ 0xe8fad8b1b2942571, 0x8453352c4930e3ad, 0x797ba069de5f6b9a, 0x3fb1321cf40a74b3, 0x23ac0b947ea67e78, 0x387dd2c136afb197, 0x520bf9e6990627ba, 0xa0eca71b6b1c70ed, 0xf92252611ba8edf4, 0xcac7f12bd074edb4, 0xa55d0427fd4d4186, 0xc1824cae2ca17813, 0x4916de91753283a2, 0x7cc03bf07ac292c9, 0xb0bd25952daf223b, 0x96d3be2e718c3d4b, 0x144565b99f01b3bb, 0xe571b346772f5bb0, 0xb64594f3f2e2ef56, 0xb3e1b7cae732d7a8, 0xe5fec62ad9ee688a, 0x71dd9bbb04e566a1, 0x7e315b81c9123ed1, 0x3f3e24224276eaf, 0x744e9d27d1cbbf3, 0x61ba1449c56aaa13, 0x6a77bc32f873bb06, 0x1c664738552d3738, 0xa81dfec3d982188, 0xc0e16a17d293d45, 0x14b6efcf765af980, 0xb494dd6a4395bf02, 0xc071da656ff037fa, 0x2e4aa58a7b3ba593, 0xf6d38d121154f699, 0xd9e4760acb4cc0cf, 0xca2037fb3062216e, 0x39ec8557c11dfd1e, 0x85f93bc9446fc5de, 0x3264ad23b359129e, 0xe5472b51ebe93885, 0x90b4fbb391985e70, 0xebf3f03476a9e07e, 0x4f7641197fc2a00e, 0x5afff5e457513da9, 0x79f44ab4954336d7, 0xcf21ab7fd1c7596d, 0xc3aea88e648f04a3, 0x3bf179968a7c63e2, 0x393ce420e4dfaf9e, 0xa193f184316a9fbc, 0x63a12f13514cbc0, 0x689fc2677003d8fb, 0xcb53b75d04fd7352, 0x50978e77ecf5b4ed, 0x81b4e6e88a3f9c72, 0xee98c808a98b561d, 0xec17a1dc805a1a5c, 0x80e71ef45ccb8cc8, 0x46e48246685ab522, 0xc1250dfdf46cc8cc, 0x957f14ae2debc7c0, 0xf6479b3bacabc5f1, 0x92fda5484929cbc },
+    //.enPassantKeys = [64]Key{ 0xe8fad8b1b2942571, 0x8453352c4930e3ad, 0x797ba069de5f6b9a, 0x3fb1321cf40a74b3, 0x23ac0b947ea67e78, 0x387dd2c136afb197, 0x520bf9e6990627ba, 0xa0eca71b6b1c70ed, 0xf92252611ba8edf4, 0xcac7f12bd074edb4, 0xa55d0427fd4d4186, 0xc1824cae2ca17813, 0x4916de91753283a2, 0x7cc03bf07ac292c9, 0xb0bd25952daf223b, 0x96d3be2e718c3d4b, 0x144565b99f01b3bb, 0xe571b346772f5bb0, 0xb64594f3f2e2ef56, 0xb3e1b7cae732d7a8, 0xe5fec62ad9ee688a, 0x71dd9bbb04e566a1, 0x7e315b81c9123ed1, 0x3f3e24224276eaf, 0x744e9d27d1cbbf3, 0x61ba1449c56aaa13, 0x6a77bc32f873bb06, 0x1c664738552d3738, 0xa81dfec3d982188, 0xc0e16a17d293d45, 0x14b6efcf765af980, 0xb494dd6a4395bf02, 0xc071da656ff037fa, 0x2e4aa58a7b3ba593, 0xf6d38d121154f699, 0xd9e4760acb4cc0cf, 0xca2037fb3062216e, 0x39ec8557c11dfd1e, 0x85f93bc9446fc5de, 0x3264ad23b359129e, 0xe5472b51ebe93885, 0x90b4fbb391985e70, 0xebf3f03476a9e07e, 0x4f7641197fc2a00e, 0x5afff5e457513da9, 0x79f44ab4954336d7, 0xcf21ab7fd1c7596d, 0xc3aea88e648f04a3, 0x3bf179968a7c63e2, 0x393ce420e4dfaf9e, 0xa193f184316a9fbc, 0x63a12f13514cbc0, 0x689fc2677003d8fb, 0xcb53b75d04fd7352, 0x50978e77ecf5b4ed, 0x81b4e6e88a3f9c72, 0xee98c808a98b561d, 0xec17a1dc805a1a5c, 0x80e71ef45ccb8cc8, 0x46e48246685ab522, 0xc1250dfdf46cc8cc, 0x957f14ae2debc7c0, 0xf6479b3bacabc5f1, 0x92fda5484929cbc },
+    //.enPassantKeysNine = [9]Key{ 0xe8fad8b1b2942571, 0x8453352c4930e3ad, 0x797ba069de5f6b9a, 0x3fb1321cf40a74b3, 0x23ac0b947ea67e78, 0x387dd2c136afb197, 0x520bf9e6990627ba, 0xa0eca71b6b1c70ed, 0xf92252611ba8edf4 },
+    .enPassantKey = 0xe8fad8b1b2942571,
 };
 
 pub const subKeyType = u16;
@@ -94,6 +98,30 @@ pub const Hash_entry = struct {
         return (self.val & WHITE_MASK) != 0;
     }
 };
+pub fn ttEvalToEval(hashEval: scoreType, depth: depthT) scoreType {
+    if (hashEval == typel.scoreNone) {
+        return typel.scoreNone;
+    }
+    if (chess.isMateWin(hashEval)) {
+        return hashEval - depth;
+    }
+    if (chess.isMateLose(hashEval)) {
+        return hashEval + depth;
+    }
+    return hashEval;
+}
+pub fn evalToTTEval(score: scoreType, depth: depthT) scoreType {
+    if (score == typel.scoreNone) {
+        return typel.scoreNone;
+    }
+    if (chess.isMateWin(score)) {
+        return score + depth;
+    }
+    if (chess.isMateLose(score)) {
+        return score - depth;
+    }
+    return score;
+}
 
 pub inline fn buildEntryFromMatchResult(key: Key, depth: u8, eval: scoreType, whiteToMove: bool) Hash_entry {
     return .init(keyToUpperKey(key), @intCast(eval), .{}, depth, @intCast(hashTable.gen >> 6), .ALL, whiteToMove);
@@ -451,6 +479,9 @@ pub const Zobrist_Keys = struct {
     playKey: Key = 0,
     castlingKeys: [16]Key = std.mem.zeroes([16]Key),
     enPassantKeys: [64]Key = std.mem.zeroes([64]Key),
+    enPassantKeysNine: [9]Key = std.mem.zeroes([9]Key),
+
+    enPassantKey: Key = 0,
     pub fn init(seed: u64) Zobrist_Keys {
         var ret: Zobrist_Keys = .{};
         var rngIntGenerator = std.Random.DefaultPrng.init(seed);
@@ -485,12 +516,14 @@ pub const Zobrist_Keys = struct {
         }
         std.debug.print("}}\n", .{});
 
-        std.debug.print("enPassantKeys: \n", .{});
-        std.debug.print("{{", .{});
-        for (0..64) |i| {
-            std.debug.print("0x{x},", .{self.enPassantKeys[i]});
-        }
-        std.debug.print("}}\n", .{});
+        std.debug.print("enPassantKey: 0x{x}\n", .{self.enPassantKey});
+
+        //std.debug.print("enPassantKeys: \n", .{});
+        //std.debug.print("{{", .{});
+        //for (0..64) |i| {
+        //    std.debug.print("0x{x},", .{self.enPassantKeys[i]});
+        //}
+        //std.debug.print("}}\n", .{});
     }
 };
 
@@ -538,9 +571,10 @@ pub fn initZobristKeys(rng: std.Random, zob: *Zobrist_Keys) void {
         zob.castlingKeys[j] = rng.uintAtMost(u64, chess.UNIVERSE);
     }
 
-    for (0..64) |j| {
-        zob.enPassantKeys[j] = rng.uintAtMost(u64, chess.UNIVERSE);
-    }
+    zob.enPassantKey = rng.uintAtMost(u64, chess.UNIVERSE);
+    //for (0..64) |j| {
+    //    zob.enPassantKeys[j] = rng.uintAtMost(u64, chess.UNIVERSE);
+    //}
     zob.playKey = zob.turnKey[0];
     zob.playKey ^= zob.turnKey[1];
 }
@@ -567,7 +601,10 @@ pub fn fullComputeZobristKeys(p_board: *const boardl.boardState) keySet {
         }
     }
     ret.key ^= zobristKeys.castlingKeys[p_board.frame.stat.castlingKey()];
-    ret.key ^= zobristKeys.enPassantKeys[p_board.frame.enPassantIdx];
+    //ret.key ^= zobristKeys.enPassantKeys[p_board.frame.enPassantIdx];
+    if (p_board.frame.enPassantIdx != 0) {
+        ret.key ^= zobristKeys.enPassantKey;
+    }
     return ret;
 }
 

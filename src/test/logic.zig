@@ -5,6 +5,7 @@ const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
 const filel = @import("../file.zig");
 const moveGenl = @import("../move_generation.zig");
+const typel = @import("../type.zig");
 
 const std = @import("std");
 
@@ -44,12 +45,12 @@ test "SEE" {
     _ = arena;
     // source https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm#cite_note-3
     const fen = "1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - - 0 1";
-    var move = movel.build_move(@intFromEnum(squarel.e_square.e1), @intFromEnum(squarel.e_square.e5), @intFromEnum(movel.e_moveFlags.CAPTURE));
+    var move = movel.build_move(@intFromEnum(squarel.e_square.e1), @intFromEnum(squarel.e_square.e5), @intFromEnum(typel.e_moveFlags.CAPTURE));
     var state = try chessl.getBoardFromFen(fen);
     try std.testing.expectEqual(heuristicl.SEE(&state, move), 100);
 
     const fen2 = "1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - - 0 1";
-    move = movel.build_move(@intFromEnum(squarel.e_square.d3), @intFromEnum(squarel.e_square.e5), @intFromEnum(movel.e_moveFlags.CAPTURE));
+    move = movel.build_move(@intFromEnum(squarel.e_square.d3), @intFromEnum(squarel.e_square.e5), @intFromEnum(typel.e_moveFlags.CAPTURE));
     state = try chessl.getBoardFromFen(fen2);
     try std.testing.expectEqual(heuristicl.SEE(&state, move), -200);
     std.log.info("[TEST]: SEE passed\n", .{});
@@ -143,6 +144,6 @@ test "pins" {
     try std.testing.expectEqual(chessl.EMPTY, board.frame.checkersBB);
     try std.testing.expectEqual(0x7e00000000000000, board.frame.pinnedBB);
 
-    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(movel.e_moveFlags.QUIETMOVE)), false));
-    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(movel.e_moveFlags.QUIETMOVE)), false));
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(typel.e_moveFlags.QUIETMOVE)), false));
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(typel.e_moveFlags.QUIETMOVE)), false));
 }

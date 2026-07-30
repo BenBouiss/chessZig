@@ -440,10 +440,12 @@ pub const boardState = struct {
         p_self.frame.victim = .nEmptySquare;
         p_self.frame.key ^= hashl.zobristKeys.playKey;
 
-        p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[p_self.frame.enPassantIdx];
-
+        //p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[p_self.frame.enPassantIdx];
+        //p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[0];
+        if (p_self.frame.enPassantIdx != 0) {
+            p_self.frame.key ^= hashl.zobristKeys.enPassantKey;
+        }
         p_self.frame.enPassantIdx = 0;
-        p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[0];
         chessl.onMoveStaged(p_self, !white);
     }
     pub inline fn makeMove(p_self: *boardState, move: IMove) void {
@@ -873,6 +875,8 @@ pub const boardState = struct {
         const occ = self.b.occupiedBB();
         const kingSq = self.getKingSq(white);
         const checked = self.isChecked();
+
+        const enemy = self.b.c_occupiedBB[chessl.whiteBoolToInt(!white)];
         if (fPiece == .KING) {
             if (move.isCastle()) {
                 if (checked) return false;
@@ -889,6 +893,9 @@ pub const boardState = struct {
         }
         if (isCapture) {
             // ignores the replace bit at to
+            if (chessl.xToBitboard(to) & enemy == 0) {
+                return false;
+            }
             return (chessl.slider_getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from), white, kingSq) & ~chessl.xToBitboard(to)) == 0;
         }
         return (chessl.slider_getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from) ^ chessl.xToBitboard(to), white, kingSq) & ~chessl.xToBitboard(to)) == 0;
@@ -901,9 +908,35 @@ pub const boardState = struct {
     pub inline fn isChecked(p_self: *const boardState) bool {
         return p_self.frame.checkersBB != 0;
     }
-    pub inline fn isInsufficientMaterial(p_self: *const boardState) bool {
-        return p_self.isInsufficientMaterialSide(false) and p_self.isInsufficientMaterialSide(true);
+    //pub inline fn isInsufficientMaterial(p_self: *const boardState) bool {
+    //    return p_self.isInsufficientMaterialSide(false) and p_self.isInsufficientMaterialSide(true);
+    //}
+
+    pub fn isInsufficientMaterial(p_self: *const boardState) bool {
+        // TODO: implement complex heuristic at https://www.chessprogramming.org/Draw_Evaluation
+
+        const singleP = [_]e_piece{ .nWhitePawn, .nWhiteQueen, .nWhiteRook, .nBlackPawn, .nBlackQueen, .nBlackRook };
+        for (singleP) |p| {
+            if (p_self.getPieceCount(p) != 0) {
+                return false;
+            }
+        }
+        const nWBishop = p_self.getPieceCount(.nWhiteBishop);
+        const nWKnight = p_self.getPieceCount(.nWhiteKnight);
+        const nWMinor = nWBishop + nWKnight;
+
+        const nBBishop = p_self.getPieceCount(.nBlackBishop);
+        const nBKnight = p_self.getPieceCount(.nBlackKnight);
+        const nBMinor = nBBishop + nBKnight;
+        if ((nBMinor == 0 and nWBishop == 2) or (nWMinor == 0 and nBBishop == 2)) {
+            return false;
+        }
+        if ((nBMinor == 0 and nWKnight == 3) or (nWMinor == 0 and nBKnight == 3)) {
+            return false;
+        }
+        return true;
     }
+
     pub fn isInsufficientMaterialSide(p_self: *const boardState, white: bool) bool {
         const color_offset: usize = if (white) 0 else (chessl.N_PIECES_TYPES);
 
@@ -940,7 +973,7 @@ pub const boardState = struct {
         const us = self.b.c_occupiedBB[chessl.cst_whiteBoolToInt(white)];
         const enemy = self.b.c_occupiedBB[chessl.cst_whiteBoolToInt(!white)];
         const occ = us | enemy;
-        if (fromBB & us == 0) {
+        if ((fromBB & us == 0) or (toBB & us != 0)) {
             return false;
         }
         const p = self.getPiece(from);
@@ -1003,7 +1036,7 @@ pub const boardState = struct {
     }
 
     pub fn isStaleMateRepetition(p_self: *const boardState) bool {
-        return p_self.frame.halfMoveClock >= 100 or p_self.moveHistory.checkRepetitions();
+        return p_self.frame.halfMoveClock >= 100 or p_self.moveHistory.checkRepetitions(p_self.frame.halfMoveClock) or p_self.isInsufficientMaterial();
     }
 };
 

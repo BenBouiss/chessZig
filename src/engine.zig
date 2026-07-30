@@ -574,7 +574,7 @@ pub const engine = struct {
             },
         }
 
-        return true;
+        return false;
     }
 
     pub fn executePositionCmd(p_self: *engine, cmdBuffer: []const u8) bool {

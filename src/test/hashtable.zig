@@ -100,12 +100,8 @@ const fenNode = struct {
 // loop over the opening book, fill a hashMap of fen -> key
 // check that key is always same of same fen
 test "zobrist key consistency" {
-    //var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    //defer arena_allocator.deinit();
-    //const alloc = arena_allocator.allocator();
     const alloc = std.heap.page_allocator;
     chessl.initAll(false);
-    //std.debug.print("key_shift: {d}\n", .{hashl.KEY_SHIFT});
     //
     const path = "opening/8moves_v3.pgn";
     var s = try stringl.string.initFromSlice(alloc, path);
@@ -123,6 +119,8 @@ test "zobrist key consistency" {
         var algeFen = openings.items[i];
 
         _ = try chessl._algebraicLineToIMoveMatch(alloc, algeFen._slice(), &tmp);
+        //chessl.print_boardstate(&tmp);
+        //std.debug.print("line {s}\n", .{algeFen._slice()});
         const set = hashl.fullComputeZobristKeys(&tmp);
         try std.testing.expectEqual(set.key, tmp.frame.key);
 

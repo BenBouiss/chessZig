@@ -246,6 +246,10 @@ pub fn appendAll() !void {
     add_param(&corrHistMax, 0, 4000, "corrHistMax");
     add_param(&corrHistW, 4, 128, "corrHistW");
 
+    add_param(&singularExtensionMinDepth, 4, 12, "singularExtensionMinDepth");
+    add_param(&singularExtensionDeltaTTDepth, 2, 6, "singularExtensionDeltaTTDepth");
+    add_param(&singularMarginDoubleExt, 8, 128, "singularMarginDoubleExt");
+
     //const start = tunerOpts.items.len;
 
     //try add_param_1d(&global_Pawn_PSQT[0], -100, 200, "global_Pawn_PSQT_MG");
@@ -415,10 +419,7 @@ pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 
 
 pub var singularExtensionMinDepth: scoreType = 4;
 pub var singularExtensionDeltaTTDepth: scoreType = 2;
-pub var singularExtensionDepthCoeff: scoreType = 2;
-
-pub var singularExtensionPVCoeff: scoreType = 1;
-pub var singularExtensionNonPVCoeff: scoreType = 2;
+pub var singularMarginDoubleExt: scoreType = 50;
 
 pub var corrHistMax: scoreType = 2000;
 pub var corrHistW: scoreType = 66;
@@ -474,4 +475,112 @@ pub fn modif_val() void {
     //moveReductionAmount = 2;
     //moveQsearchAmount = 1;
     //moveGenMinSeeThreshold = -50;
+
+    //
+    //lmr_scoreThreshold = 873;
+    //lmr_expectedCutOff = 629;
+    //lmr_notImproving = 1068;
+    //lmr_hashMoveCapture = 1008;
+    //lmr_baseDeficit = 723;
+    //lmr_badCapture = 143;
+    //lmr_oldMulti = 187;
+    //lmr_highFailScore = 1018;
+    //lmr_highFailCount = 9;
+    //lmr_givesCheck = -761;
+    //lmr_killerMove = -1320;
+    //lmr_threatening = -66;
+    //lmr_inPvMode = -91;
+    //lmr_isPromotion = -278;
+    //rfpNotImproving = -29;
+    //rfpImproving = -7;
+    //rfpDepth = 9;
+    //rfpCoeff = 77;
+    //rfpConst = 73;
+    //captureExtensionThresh = 102;
+    //aspirationCoefficient = 13;
+    //nullMoveDepthAugmentThreshold = 9;
+    //nullMoveDepthAugment = 4;
+    //nullMoveReduction = 2;
+    //nullMoveReductionImproving = 3;
+    //razoringBaseImproving = 55;
+    //razoringBaseNotImproving = 302;
+    //razoringCoefficient = 119;
+    //razoringMaxDepth = 3;
+    //IIRDepthMin = 5;
+    //LMRDepth = 3;
+    //SeePruningMaxDepth = 3;
+    //SeePruningQuietMargin = -54;
+    //SeePruningCaptureMargin = -311;
+    //probCutMargin = 346;
+    //probCutMinimalDepth = 4;
+    //futilityDepth = 10;
+    //futilityCoeff = 234;
+    //futilityConst = 160;
+    //historyThreshCoeff = -574;
+    //historyThreshConst = -175;
+    //historyMinExplore = 12;
+    //lmpMaxDepth = 3;
+    //lmpBase = 1;
+    //moveReductionAmount = 2;
+    //moveQsearchAmount = 2;
+    //moveGenMinSeeThreshold = -39;
+    //corrHistMax = 1928;
+    //corrHistW = 73;
+    //singularExtensionMinDepth = 5;
+    //singularExtensionDeltaTTDepth = 2;
+    //singularMarginDoubleExt = 55;
+
+    //
+    lmr_scoreThreshold = 806;
+    lmr_expectedCutOff = 252;
+    lmr_notImproving = 1224;
+    lmr_hashMoveCapture = 1030;
+    lmr_baseDeficit = 662;
+    lmr_badCapture = 296;
+    lmr_oldMulti = 81;
+    lmr_highFailScore = 1011;
+    lmr_highFailCount = 10;
+    lmr_givesCheck = -738;
+    lmr_killerMove = -1075;
+    lmr_threatening = -230;
+    lmr_inPvMode = -59;
+    lmr_isPromotion = -360;
+    rfpNotImproving = -22;
+    rfpImproving = -29;
+    rfpDepth = 11;
+    rfpCoeff = 84;
+    rfpConst = 80;
+    captureExtensionThresh = 28;
+    aspirationCoefficient = 39;
+    nullMoveDepthAugmentThreshold = 8;
+    nullMoveDepthAugment = 3;
+    nullMoveReduction = 3;
+    nullMoveReductionImproving = 4;
+    razoringBaseImproving = 183;
+    razoringBaseNotImproving = 424;
+    razoringCoefficient = 193;
+    razoringMaxDepth = 3;
+    IIRDepthMin = 5;
+    LMRDepth = 3;
+    SeePruningMaxDepth = 3;
+    SeePruningQuietMargin = -118;
+    SeePruningCaptureMargin = -390;
+    probCutMargin = 317;
+    probCutMinimalDepth = 4;
+    futilityDepth = 9;
+    futilityCoeff = 179;
+    futilityConst = 233;
+    historyThreshCoeff = -633;
+    historyThreshConst = -150;
+    historyMinExplore = 12;
+    lmpMaxDepth = 3;
+    lmpBase = 1;
+    moveReductionAmount = 2;
+    moveQsearchAmount = 1;
+    moveGenMinSeeThreshold = -54;
+    corrHistMax = 1034;
+    corrHistW = 59;
+    singularExtensionMinDepth = 9;
+    singularExtensionDeltaTTDepth = 2;
+    singularMarginDoubleExt = 45;
 }

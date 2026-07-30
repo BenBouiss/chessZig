@@ -184,6 +184,11 @@ pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *thr
         p_info.currentBest.line.moves[0] = fmoves.moves[0];
         return;
     }
+    //if (p_state.isStaleMateRepetition()) {
+    //    std.debug.print("[DEBUG] already in stalemate\n", .{});
+    //    chessl.print_boardstate(p_state);
+    //    //p_state.moveHistory.printAlgebraicLineString() catch {};
+    //}
     const depth = aspirationWindow(sched, p_state, p_info, features, maxDepth);
     p_info.depth = depth;
     sched.nPlyCompute += 1;
@@ -199,7 +204,6 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
     var validDecision: IMove = .{};
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
-
         var alpha = score - delta;
         var beta = score + delta;
         score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta);
@@ -224,6 +228,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
             }
             break;
         }
+        //_ = p_info.currentBest.line.testPv(p_state);
         if (features.reportProgress) {
             sendPartial(p_info, sched.timeM.timeSinceStartMs());
         }
@@ -233,10 +238,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
 
 //https://www.chessprogramming.org/Time_Management
 pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depthT, score: scoreType, p_features: *const searchFeatures) bool {
-    if (p_features.fixedDepth and depth == maxDepth or (depth >= typel.MAX_PLY)) {
-        return false;
-    }
-    if (chessl.isMate(score) or timer.isOvertimeSearching()) {
+    if ((p_features.fixedDepth and depth == maxDepth) or (depth >= typel.MAX_PLY) or (chessl.isMate(score))) {
         return false;
     }
     const prevTime: i64 = timer.timeSinceStartMs();

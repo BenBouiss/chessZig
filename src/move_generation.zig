@@ -29,8 +29,14 @@ const squareInfo = squarel.squareInfo;
 const boardState = boardl.boardState;
 
 //pub const generationModifiers = enum { STD, NONE, QUIETMOVES, CAPTURES, ALL };
+pub const arrRectangular: [64][64]u64 = initInbetween();
+pub const cachedKingTable: [64]u64 = initKingAttacks();
+pub const safetyArea: [64]u64 = initSafetyArea();
+// https://www.chessprogramming.org/Square_Attacked_By#Obstructed
 
-pub inline fn generateLegalMoves(p_board: *const boardState) moveContainer {
+// https://www.chessprogramming.org/King_Safety will be defined
+
+pub fn generateLegalMoves(p_board: *const boardState) moveContainer {
     var bbMoves = moveGenBB(p_board);
     var moves: moveContainer = undefined;
     moves.len = 0;
@@ -1209,32 +1215,6 @@ pub const moveOrdering = struct {
     len: u8 = 0,
 };
 
-pub fn main() !void {
-    //const state = try chess.getBoardFromFen("r7/p1pp1QB1/qn6/3p4/4n3/7p/PPP2PPP/R3K2R b HA - 0 17");
-
-    magicl._initMagic(&magicl.magicTable, false);
-    //const state = try chess.getBoardFromFen("8/q7/8/3K4/8/8/2pN3p/8 b - - 3 113");
-    const state = try chess.getBoardFromFen("8/8/4b1kp/8/6r1/1p3K2/8/8 b - - 3 110");
-    const badMoveQ = movel.build_move(@intFromEnum(e_square.g4), @intFromEnum(e_square.f3), @intFromEnum(typel.e_moveFlags.QUIETMOVE));
-    const badMoveC = movel.build_move(@intFromEnum(e_square.g4), @intFromEnum(e_square.f3), @intFromEnum(typel.e_moveFlags.CAPTURE));
-    std.debug.print("{} {} \n", .{ state.isMovePseudoLegal(badMoveQ), state.isMovePseudoLegal(badMoveC) });
-
-    chess.print_boardstate(&state);
-    var gen: typeMoveGenerator = .init();
-    gen.generateMove(.CAPTURE, &state);
-    gen.captures.moves.print();
-
-    gen.generateMove(.QUIET, &state);
-    gen.quiets.moves.print();
-}
-
-pub const arrRectangular: [64][64]u64 = initInbetween();
-pub const cachedKingTable: [64]u64 = initKingAttacks();
-pub const safetyArea: [64]u64 = initSafetyArea();
-// https://www.chessprogramming.org/Square_Attacked_By#Obstructed
-
-// https://www.chessprogramming.org/King_Safety will be defined
-
 pub fn initKingAttacks() [64]u64 {
     var ret: [64]u64 = @splat(0);
     for (0..chess.N_SQUARES) |sq| {
@@ -1329,4 +1309,24 @@ pub fn initSafetyArea() [64]u64 {
         ret[sq] |= chess.knightAttacks(chess.xToBitboard(@intCast(sq)));
     }
     return ret;
+}
+pub fn main() !void {
+    //const state = try chess.getBoardFromFen("r7/p1pp1QB1/qn6/3p4/4n3/7p/PPP2PPP/R3K2R b HA - 0 17");
+
+    magicl._initMagic(&magicl.magicTable, false);
+    //const state = try chess.getBoardFromFen("8/q7/8/3K4/8/8/2pN3p/8 b - - 3 113");
+    //const state = try chess.getBoardFromFen("8/8/4b1kp/8/6r1/1p3K2/8/8 b - - 3 110");
+    const state = try chess.getBoardFromFen("r1br2k1/1pq2ppp/p1n1pn2/b7/N7/1B2PNP1/PPQB1P1P/R2R2K1 b - - 2 23");
+
+    const badMoveQ = movel.build_move(@intFromEnum(e_square.g4), @intFromEnum(e_square.f3), @intFromEnum(typel.e_moveFlags.QUIETMOVE));
+    const badMoveC = movel.build_move(@intFromEnum(e_square.g4), @intFromEnum(e_square.f3), @intFromEnum(typel.e_moveFlags.CAPTURE));
+    std.debug.print("{} {} \n", .{ state.isMovePseudoLegal(badMoveQ), state.isMovePseudoLegal(badMoveC) });
+
+    chess.print_boardstate(&state);
+    var gen: typeMoveGenerator = .init();
+    gen.generateMove(.CAPTURE, &state);
+    gen.captures.moves.print();
+
+    gen.generateMove(.QUIET, &state);
+    gen.quiets.moves.print();
 }

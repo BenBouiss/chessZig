@@ -388,9 +388,21 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
 }
 
 pub fn materialImbalance(p_state: *const boardl.boardState) scoreType {
-    const wPiece: @Vector(5, scoreType) = .{p_state.b.pieceCount[0..5]};
-    const bPiece: @Vector(5, scoreType) = .{p_state.b.pieceCount[6..11]};
-    const scores = (wPiece - bPiece) * .{ weightl.global_PawnVal, weightl.simpleBishopScore, weightl.global_KnightVal, weightl.global_RookVal, weightl.global_QueenVal };
+    const wPiece: @Vector(5, scoreType) = .{
+        p_state.b.pieceCount[0],
+        p_state.b.pieceCount[1],
+        p_state.b.pieceCount[2],
+        p_state.b.pieceCount[3],
+        p_state.b.pieceCount[4],
+    };
+    const bPiece: @Vector(5, scoreType) = .{
+        p_state.b.pieceCount[6],
+        p_state.b.pieceCount[7],
+        p_state.b.pieceCount[8],
+        p_state.b.pieceCount[9],
+        p_state.b.pieceCount[10],
+    };
+    const scores = (wPiece - bPiece) * @as(@Vector(5, scoreType), .{ weightl.global_PawnVal, weightl.simpleBishopScore, weightl.global_KnightVal, weightl.global_RookVal, weightl.global_QueenVal });
     return scores[0] + scores[1] + scores[2] + scores[3] + scores[4];
 }
 pub inline fn c_materialImbalance(p_state: *const boardl.boardState, white: bool) scoreType {
