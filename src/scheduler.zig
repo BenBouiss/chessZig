@@ -184,11 +184,6 @@ pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *thr
         p_info.currentBest.line.moves[0] = fmoves.moves[0];
         return;
     }
-    //if (p_state.isStaleMateRepetition()) {
-    //    std.debug.print("[DEBUG] already in stalemate\n", .{});
-    //    chessl.print_boardstate(p_state);
-    //    //p_state.moveHistory.printAlgebraicLineString() catch {};
-    //}
     const depth = aspirationWindow(sched, p_state, p_info, features, maxDepth);
     p_info.depth = depth;
     sched.nPlyCompute += 1;
@@ -199,25 +194,29 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
     var depth: depthT = if (features.useStaticSearch) maxDepth else 1;
 
     var ss: alphaBetal.searchStack = .{};
-    var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, -weightl.simpleCheckMateScore, weightl.simpleCheckMateScore);
+    var alpha = -weightl.simpleCheckMateScore;
+    var beta = weightl.simpleCheckMateScore;
+
+    var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta);
     var delta = weightl.aspirationCoefficient;
     var validDecision: IMove = .{};
+
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
-        var alpha = score - delta;
-        var beta = score + delta;
-        score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta);
+        var _depth = depth;
+        score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta);
         while ((score <= alpha or score >= beta) and p_info.alive) {
-            //
             if (score <= alpha) {
                 beta = @divFloor(alpha + beta, 2);
                 alpha -= delta;
+                _depth = depth;
             } else if (score >= beta) {
                 beta += delta;
+                _depth = @max(1, _depth - 1);
             }
             delta += @divFloor(delta, 3);
 
-            score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta);
+            score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta);
         }
         ss.setPrevLine(&p_info.currentBest.line);
         if (p_info.alive) {
@@ -228,9 +227,18 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
             }
             break;
         }
-        //_ = p_info.currentBest.line.testPv(p_state);
         if (features.reportProgress) {
             sendPartial(p_info, sched.timeM.timeSinceStartMs());
+        }
+        if (depth > weightl.aspirationMinDepthVar) {
+            //alpha = score - delta;
+            //beta = score + delta;
+
+            alpha = score - weightl.aspirationCoefficient;
+            beta = score + weightl.aspirationCoefficient;
+        } else {
+            alpha = -weightl.simpleCheckMateScore;
+            beta = weightl.simpleCheckMateScore;
         }
     }
     return depth;
@@ -238,7 +246,7 @@ pub fn aspirationWindow(sched: *const scheduler, p_state: *boardl.boardState, p_
 
 //https://www.chessprogramming.org/Time_Management
 pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depthT, score: scoreType, p_features: *const searchFeatures) bool {
-    if ((p_features.fixedDepth and depth == maxDepth) or (depth >= typel.MAX_PLY) or (chessl.isMate(score))) {
+    if ((p_features.fixedDepth and depth == maxDepth) or (depth >= typel.MAX_PLY) or chessl.isMate(score)) {
         return false;
     }
     const prevTime: i64 = timer.timeSinceStartMs();

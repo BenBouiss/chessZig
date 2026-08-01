@@ -252,7 +252,8 @@ pub const matchMoveContainer = struct {
         // FOR DEBUG ONLY
         for (0..p_self.len) |i| {
             const move = p_self.moves[i];
-            std.debug.print("{s} k=0x{x} ", .{ move.getStr(), p_self.keyCodes[i] });
+            //std.debug.print("{s} k=0x{x} ", .{ move.getStr(), p_self.keyCodes[i] });
+            std.debug.print("{s} ", .{move.getStr()});
         }
         std.debug.print("\n", .{});
         return;
@@ -268,8 +269,6 @@ pub const matchMoveContainer = struct {
         p_self.moves[p_self.len] = move;
         if (move.isDoublePush()) {
             p_self.keyCodes[p_self.len] = key ^ hashl.zobristKeys.enPassantKey;
-            //const enP = (move.getTo() + move.getFrom()) >> 1;
-            //p_self.keyCodes[p_self.len] = key ^ hashl.zobristKeys.enPassantKeys[enP] ^ hashl.zobristKeys.enPassantKeys[0];
         } else {
             p_self.keyCodes[p_self.len] = key;
         }

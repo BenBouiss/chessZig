@@ -533,8 +533,6 @@ pub fn updateKeyOnMove(move: IMove, fromPiece: e_piece, info: *const boardl.boar
             }
         }
     }
-    //ret.key ^= hashl.zobristKeys.enPassantKeys[prevEp];
-    //ret.key ^= hashl.zobristKeys.enPassantKeys[info.enPassantIdx];
 
     // if going from no enP to enP or enP to no enP need to flip the key
     if ((@intFromBool(prevEp == 0) ^ @intFromBool(info.enPassantIdx == 0)) != 0) {
@@ -669,7 +667,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
 
     std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
     std.debug.print("Move history: ", .{});
-    //p_board_state.moveHistory.print();
+    p_board_state.moveHistory.print();
     p_board_state.moveHistory.printAlgebraicLineString() catch {
         std.debug.print("caught error in printAlgebraicLineString\n", .{});
     };
@@ -1243,6 +1241,7 @@ pub fn getAllMoveMaskFromX(p_board: *const boardl.boardState, white: bool, X: e_
     return ret;
 }
 
+pub const outcomeFlag = enum { UNFINISHED, WHITEWIN, BLACKWIN, DRAW };
 pub const algebraicTarget = struct {
     file: u8 = 9,
     rank: u8 = 9,
@@ -1253,6 +1252,7 @@ pub const algebraicTarget = struct {
     checks: bool = false,
     kingSideC: bool = false,
     queenSideC: bool = false,
+    outcome: outcomeFlag = .UNFINISHED,
     pub fn init(move: IMove, state: *const boardl.boardState) algebraicTarget {
         if (move.isKingSideCastle()) {
             return .{ .kingSideC = true };
@@ -1286,6 +1286,20 @@ pub const algebraicTarget = struct {
             potentialFromBB &= rank;
             ret.file = rank;
         }
+        var tmp: boardl.boardState = .copy(state);
+        tmp.makeMove(move);
+        if (tmp.isStaleMateRepetition()) {
+            ret.outcome = .DRAW;
+        } else {
+            const fmoves = moveGenl.generateLegalMoves(&tmp);
+            if (fmoves.len == 0) {
+                if (tmp.isChecked()) {
+                    ret.outcome = if (tmp.whiteToMove()) .BLACKWIN else .WHITEWIN;
+                } else {
+                    ret.outcome = .DRAW;
+                }
+            }
+        }
         return ret;
     }
     pub fn format(self: algebraicTarget, writer: *std.Io.Writer) !void {
@@ -1295,7 +1309,7 @@ pub const algebraicTarget = struct {
             try writer.print("O-O-O ", .{});
         } else {
             //
-            // {piece}{file}{rank}{takes}{to(2)}{promotion(2)}{checks}
+            // {piece}{file}{rank}{takes}{to(2)}{promotion(2)}{checks} {outcome}
             var buffer: [10]u8 = @splat(0);
             var n: usize = 0;
             if (self.piece != .nEmptySquare) {
@@ -1325,6 +1339,19 @@ pub const algebraicTarget = struct {
             }
             try writer.print("{s} ", .{utils.trimStr(&buffer)});
         }
+        switch (self.outcome) {
+            .UNFINISHED => {},
+            .WHITEWIN => {
+                try writer.print("1-0", .{});
+            },
+            .BLACKWIN => {
+                try writer.print("0-1", .{});
+            },
+            .DRAW => {
+                try writer.print("1/2-1/2", .{});
+            },
+        }
+
         return;
     }
 };

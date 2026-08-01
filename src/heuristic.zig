@@ -46,7 +46,7 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
     ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, white);
     ret += evaluate_pawnStructure(p_state);
-    ret += evaluate_king(p_state, (ret[0] + ret[1]) > 0, white);
+    ret += evaluate_king(p_state, (computeTaperedV(ret, phase) + p_state.frame.psqtEval) > 0, white);
 
     return computeTaperedV(ret, phase) + p_state.frame.psqtEval;
 }
@@ -56,7 +56,7 @@ pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreTy
         return nnuel.evaluate(white, &p_state.frame.nnueAccumul);
     } else {
         const ret = evaluate(p_state);
-        return if (white) ret - p_state.frame.halfMoveClock else -ret - p_state.frame.halfMoveClock;
+        return if (white) ret else -ret;
     }
 }
 
@@ -912,6 +912,7 @@ pub const SEE_values: [13]scoreType = .{ weightl.simplePawnScore, weightl.simple
 
 //https://www.chessprogramming.org/History_Heuristic#Update
 pub inline fn computeHistoryBonus(depth: typel.depthT) scoreType {
+    //return @intCast(depth * depth);
     return @intCast(30 * depth - 25);
 }
 
@@ -924,8 +925,6 @@ pub inline fn milliDepthToDepth(md: milliDepth) typel.depthT {
 pub inline fn lmrFDepth(md: milliDepth) milliDepth {
     return @divFloor(md, 3); // base reduction of 1/3
 }
-
-// hashmove + line move + 2 killer moves (?)
 
 pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());

@@ -439,9 +439,6 @@ pub const boardState = struct {
         p_self.frame.lastMove = .{};
         p_self.frame.victim = .nEmptySquare;
         p_self.frame.key ^= hashl.zobristKeys.playKey;
-
-        //p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[p_self.frame.enPassantIdx];
-        //p_self.frame.key ^= hashl.zobristKeys.enPassantKeys[0];
         if (p_self.frame.enPassantIdx != 0) {
             p_self.frame.key ^= hashl.zobristKeys.enPassantKey;
         }

@@ -31,6 +31,7 @@ pub var corrHist: [12][64][12][64]scoreType = std.mem.zeroes([12][64][12][64]sco
 pub var pawnCorrHist: [2][16384]scoreType = std.mem.zeroes([2][16384]scoreType);
 pub var nonPawnCorrHist: [2][2][16384]scoreType = std.mem.zeroes([2][2][16384]scoreType);
 
+//pub var lmrBase: [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType);
 pub var lmrBase: [chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([chessl.MAX_POSSIBLE_MOVE]scoreType);
 
 pub var continuationHeuristic: [13][64]pieceHistory = std.mem.zeroes([13][64]pieceHistory);
@@ -47,6 +48,17 @@ pub fn _initMoveOrdering() void {
 
     pawnCorrHist = std.mem.zeroes([2][16384]scoreType);
     nonPawnCorrHist = std.mem.zeroes([2][2][16384]scoreType);
+
+    // https://int0x80.ca/posts/chess-engines/8-pvs
+    //for (1..typel.MAX_PLY) |d| {
+    //    for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
+    //        //const s: f32 = 0.77 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2.36);
+    //        const s: f32 = 0.77 + (std.math.log(f32, 10, @floatFromInt(d)) * std.math.log(f32, 10, @floatFromInt(i + 1)) / 2.36);
+    //        //std.debug.print("{d}\n", .{s});
+    //        lmrBase[d][i] = @intFromFloat(s);
+    //    }
+    //}
+    //
     for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
         lmrBase[i] = (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
     }

@@ -18,6 +18,8 @@ pub const scoreType: type = i32;
 pub const milliDepth: type = i32;
 pub const depthT: type = i16;
 
+pub const oneDepthMilliDepth: milliDepth = 1024;
+
 pub const MAX_PLY: u8 = 255;
 
 pub const totalPhase: scoreType = 24;

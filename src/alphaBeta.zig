@@ -309,18 +309,32 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
     const improving: bool = if (isCheck) (false) else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 2).staticEval.s) else if (ss.getPrevFrame(ply, 4).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 4).staticEval.s) else (true);
 
-    var lmrDepth: milliDepth = weightl.lmr_baseDeficit;
+    //const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
+    var lmrR: milliDepth = weightl.lmr_baseDeficit + heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
+    //var lmrR: milliDepth = weightl.lmr_baseDeficit;
+    //var lmrR: milliDepth = typel.oneDepthMilliDepth;
+    //var lmrR: milliDepth = typel.oneDepthMilliDepth + heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
     if (comptime t == .PV) {
-        lmrDepth += weightl.lmr_inPvMode;
+        lmrR += weightl.lmr_inPvMode;
+        //lmrR -= typel.oneDepthMilliDepth;
     }
+
+    //if (isCheck) {
+    //    //lmrR += .lmr_inCheck;
+    //    lmrR -= typel.oneDepthMilliDepth;
+    //}
+
     if (!improving) {
-        lmrDepth += weightl.lmr_notImproving;
+        lmrR += weightl.lmr_notImproving;
+        //lmrR += typel.oneDepthMilliDepth;
     }
     if (hashMoveIsCapture) {
-        lmrDepth += weightl.lmr_hashMoveCapture;
+        lmrR += weightl.lmr_hashMoveCapture;
+        //lmrR += typel.oneDepthMilliDepth;
     }
     if (cutnode) {
-        lmrDepth += weightl.lmr_expectedCutOff;
+        lmrR += weightl.lmr_expectedCutOff;
+        //lmrR += typel.oneDepthMilliDepth;
     }
 
     // const isEndGame = p_state.isEndGame();
@@ -424,8 +438,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         gen.reset();
     }
 
-    const useLMR = (_depth >= weightl.LMRDepth and !isCheck);
-
     const otherKingSq = p_state.getKingSq(!white);
     const safetyArea = chessl.safetyArea(otherKingSq);
 
@@ -433,7 +445,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     var movesPlayed: u8 = 0;
     var phasePlay: u8 = 0;
     var prev = gen.phase;
-    const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
 
     while (gen.pickNext(p_state, ply, prevLineMove, hashMove, weightl.moveGenMinSeeThreshold, skipQuietMoves, ss)) |res| {
         const move = res.@"0";
@@ -465,12 +476,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         const isThreat = (chessl.xToBitboard(to) & safetyArea) != 0;
         const cPiece = p_state.getCapturePiece(move);
         const isPromo = move.isPromotion();
-        //if (move.equal(movel.e_build_move(.e7, .c6, .CAPTURE)) and chessl.xToBitboard(to) & p_state.b.occupiedBB_col(.BLACK) != 0 and fPiece == .nBlackKnight) {
-        //if (move.isCapture() and chessl.xToBitboard(to) & p_state.b.occupiedBB_col(chessl.boolTo_e_color(white)) != 0) {
-        //    chessl.print_boardstate(p_state);
-        //    std.debug.print("move {s} is hash {}\n", .{ move.getStr(), move.equal(hashMove) });
-        //    @panic("bad move");
-        //}
+
+        const histScore: scoreType = historyl.historyHeuristic[whiteIdx][from][to];
 
         if (!isRoot) {
             if (_depth <= weightl.SeePruningMaxDepth) {
@@ -505,25 +512,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 } else if (cutnode) {
                     extension -= 1;
                 }
-                //if (score < singularBeta) {
-                //    extension += 1;
-                //} else if (hashEval >= _beta) {
-                //    extension -= 3;
-                //} else if (cutnode) {
-                //    extension -= 1;
-                //}
-
-                //if ((score + weightl.singularMarginDoubleExt) < singularBeta and comptime t == .NonPV) {
-                //    extension += 2;
-                //    extended = true;
-                //} else {
-                //    extension += 1;
-                //    extended = true;
-                //}
-                //} else if (singularBeta >= _beta) {
-                //    return singularBeta;
-                //} else if (cutnode) {
-                //    extension -= 1;
             }
         }
 
@@ -533,6 +521,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 extended = true;
             }
         } else if (comptime t == .NonPV) {
+            //} else if (!isCapture and bestScore > typel.scoreNone and comptime t == .NonPV) {
             if (canFutility and movesPlayed > weightl.moveReductionAmount) {
                 skipQuietMoves = true;
                 //if (_depth <= weightl.futilityDepth and !isCheck and (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth) < alpha) {
@@ -540,11 +529,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             }
             if (_depth <= weightl.lmpMaxDepth and movesPlayed >= weightl.lmpBase + @divFloor(_depth * _depth, 2 - @as(scoreType, @intFromBool(improving)))) {
                 skipQuietMoves = true;
+                //continue;
             }
 
             if (!isCheck and movesPlayed >= weightl.historyMinExplore) {
-                const histScore: scoreType = historyl.historyHeuristic[chessl.whiteBoolToInt(white)][from][to];
                 if (histScore < (weightl.historyThreshCoeff * _depth + weightl.historyThreshConst)) {
+                    //skipQuietMoves = true;
                     continue;
                 }
             }
@@ -561,31 +551,49 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         var fullSearch: bool = false;
         var score: scoreType = 0;
+        const newDepth: depthT = _depth - 1 + extension;
 
         // rewrite of main search handling
         // https://github.com/Adam-Kulju/Patricia/
-        if (useLMR and phasePlay > weightl.moveReductionAmount) {
-            var _lmrDepth = lmrDepth + fDepth;
+        if (!isCheck and _depth >= weightl.LMRDepth and phasePlay > weightl.moveReductionAmount) {
+            var _lmrR = lmrR;
+            //if (isCapture) {
+            //    _lmrR = @divFloor(_lmrR, 2);
+            //} else {
+            //    _lmrR -= @divFloor(histScore, weightl.lmr_histDiv);
+            //}
             if (givesCheck) {
-                _lmrDepth += weightl.lmr_givesCheck;
+                _lmrR += weightl.lmr_givesCheck;
             }
             if (isPromo) {
-                _lmrDepth += weightl.lmr_isPromotion;
+                _lmrR += weightl.lmr_isPromotion;
             }
             if (moveScore >= weightl.lmr_scoreThreshold) {
-                _lmrDepth += weightl.lmr_killerMove;
-            } else if (!isThreat and gen.phase == .BADCAPTURE) {
-                _lmrDepth += weightl.lmr_badCapture;
+                _lmrR += weightl.lmr_killerMove;
+            } else if (isCapture and !isThreat and gen.phase == .BADCAPTURE) {
+                _lmrR += weightl.lmr_badCapture;
             }
+
+            //if (move.equal(currS.killerMove)) {
+            //    //_lmrR -= typel.oneDepthMilliDepth;
+            //    _lmrR -= weightl.lmr_killerMove;
+            //}
+            //if (isCapture and !isThreat and gen.phase == .BADCAPTURE) {
+            //    _lmrR += weightl.lmr_badCapture;
+            //}
+
             if (nextS.failHighCount > weightl.lmr_highFailCount) {
-                _lmrDepth += weightl.lmr_highFailScore;
+                _lmrR += weightl.lmr_highFailScore;
+                //_lmrR += typel.oneDepthMilliDepth;
             }
-            _lmrDepth += historyl.lmrBase[movesPlayed];
+            _lmrR += historyl.lmrBase[movesPlayed];
+            //_lmrR += heuristicl.depthToMilliDepth(historyl.lmrBase[@intCast(_depth)][movesPlayed]);
 
-            const d: depthT = @max(_depth - 1 - heuristicl.milliDepthToDepth(@max(_lmrDepth, 0)), 0);
+            const d: depthT = std.math.clamp(heuristicl.milliDepthToDepth(_lmrR), 0, newDepth - 1);
 
-            score = -searchLoop(p_state, p_info, d + extension, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, true, .NonPV);
-            if (score > _alpha) {
+            score = -searchLoop(p_state, p_info, newDepth - d, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, true, .NonPV);
+
+            if (score > _alpha and d > 0) {
                 fullSearch = true;
             }
         } else {
@@ -593,12 +601,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             fullSearch = (phasePlay != 0) or comptime t == .NonPV;
         }
         if (fullSearch) {
-            score = -searchLoop(p_state, p_info, _depth - 1 + extension, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, !cutnode, .NonPV);
+            score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, !cutnode, .NonPV);
         }
         if ((phasePlay == 0 or score > _alpha) and comptime t == .PV) {
             pv.reset();
             ss.getFrame(ply + 1).pv = &pv;
-            score = -searchLoop(p_state, p_info, _depth - 1 + extension, ply + 1, -_beta, -_alpha, ss, threadD, extended, false, .PV);
+            score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_beta, -_alpha, ss, threadD, extended, false, .PV);
         }
 
         _ = p_state.undoMove();
