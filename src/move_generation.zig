@@ -835,17 +835,20 @@ pub const typeMoveGenerator = struct {
         if (p_self.phase == .TTMOVE) {
             if (!p_self.computedCapt) {
                 p_self.generateMove(.CAPTURE, state);
-                //heuristicl.evalMoveScore(state, ply, hashMove, prevLineMove, useMVA, &p_self.captures);
                 for (0..p_self.captures.moves.len) |i| {
                     const move = p_self.captures.moves.moves[i];
 
                     if (move.equal(prevLineMove)) {
                         p_self.captures.scores[i] = configl.ORDERING_LINE_VALUE;
+                        //} else if (move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMOCAPTURE)) {
+                        //    p_self.captures.scores[i] = configl.ORDERING_PROMOTIONS;
                     } else {
                         const to = move.getTo();
                         const cPiece: u8 = if (move.isEnpassant()) (if (white) @intFromEnum(e_piece.nBlackPawn) else @intFromEnum(e_piece.nWhitePawn)) else @intFromEnum(state.getPiece(to));
+                        //const cPiece: u8 = @intFromEnum(state.getPiece(to));
                         const fpiece: u8 = @intFromEnum(state.getFromPiece(move));
-                        p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + (heuristicl.SEE_values[cPiece] - heuristicl.SEE_values[fpiece]);
+                        //p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + (heuristicl.SEE_values[cPiece] * 100 - @divFloor(heuristicl.SEE_values[fpiece], 100));
+                        p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + heuristicl.SEE_values[cPiece] - heuristicl.SEE_values[fpiece];
                     }
                 }
             }
@@ -896,17 +899,20 @@ pub const typeMoveGenerator = struct {
                     } else if (move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
                         p_self.quiets.scores[i] = configl.ORDERING_PROMOTIONS;
                     } else {
-                        p_self.quiets.scores[i] = historyl.historyHeuristic[offset][from][to];
+                        // p_self.quiets.scores[i]
+                        var score = historyl.historyHeuristic[offset][from][to];
                         if (prevV) {
-                            p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][p][to];
+                            score += historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][p][to];
                         }
                         if (prevPrevV) {
-                            p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][p][to];
+                            score += historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][p][to];
                         }
 
                         if (prevV4) {
-                            p_self.quiets.scores[i] += historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][p][to];
+                            score += historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][p][to];
                         }
+                        //p_self.quiets.scores[i] = std.math.clamp(score, -configl.MAX_CONTINUATION_HEURISTIC_VALUE, configl.MAX_CONTINUATION_HEURISTIC_VALUE);
+                        p_self.quiets.scores[i] = score;
                     }
                 }
             }
@@ -1040,7 +1046,7 @@ pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comp
             genericStagedMovePushQuiet(out, att & targets, sq);
         }
     }
-    bb = p_state.getPieceBB_t(.KNIGHT) & own;
+    bb = p_state.getPieceBB_t(.KNIGHT) & own & (~p_state.frame.pinnedBB);
     while (bb != 0) {
         const sq = chess.bitscan(bb);
         bb &= bb - 1;
@@ -1087,6 +1093,7 @@ pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: type
     //const p = p_state.getPieceBB_t(.PAWN) & p_state.b.c_occupiedBB[chess.whiteBoolToInt(white)];
     const p = p_state.getPieceBB_t(.PAWN) & if (comptime white) (p_state.b.occupiedBB_col(.WHITE)) else (p_state.b.occupiedBB_col(.BLACK));
     const realEmpty = ~occ;
+    const pinned = p_state.frame.pinnedBB;
     //const empty = realEmpty & emptyOrEnemy;
 
     if (comptime t == .QUIET or t == .ALL) {
@@ -1138,7 +1145,7 @@ pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: type
             genericStagedMovePushCapture(out, att, sq);
         }
         if (p_state.frame.enPassantIdx != 0) {
-            var validPs = chess.getPawnAttacks(@enumFromInt(p_state.frame.enPassantIdx), !white) & p;
+            var validPs = chess.getPawnAttacks(@enumFromInt(p_state.frame.enPassantIdx), !white) & p & (~pinned);
             while (validPs != 0) {
                 const sq = chess.bitscan(validPs);
                 validPs &= validPs - 1;

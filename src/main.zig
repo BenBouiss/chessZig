@@ -48,10 +48,10 @@ pub fn main(init: std.process.Init) anyerror!void {
     //try moveGenl.main();
 
     //try bookl.main(GPA);
-    try chessl.main(GPA);
+    //try chessl.main(GPA);
     //try logl.main(GPA);
     //try nnuel.main(GPA);
-    //try heuristicl.main(GPA);
+    try heuristicl.main(GPA);
 
     //try test_bench(GPA, 10);
     //try test_perft(GPA);

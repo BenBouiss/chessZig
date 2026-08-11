@@ -14,9 +14,11 @@ const lockl = @import("lock.zig");
 const typel = @import("type.zig");
 const hashTablel = @import("hashTable.zig");
 const boardl = @import("board.zig");
+const weightl = @import("weights.zig");
 
 const nnuel = @import("nnue.zig");
 
+const build_options = @import("build_options");
 const stringl = @import("string.zig");
 const std = @import("std");
 
@@ -276,8 +278,9 @@ const engine_info = struct {
     _writerBuffer: [configl.MAX_USER_INPUT]u8 = undefined,
     _readerBuffer: [configl.MAX_USER_INPUT]u8 = undefined,
     l: lockl.lock = .{},
+    path: string = undefined,
 
-    pub fn init(alloc: std.mem.Allocator) !*engine_info {
+    pub fn init(alloc: std.mem.Allocator, path: []const u8) !*engine_info {
         var ret: *engine_info = try alloc.create(engine_info);
         ret.alive = false;
         ret.ready = false;
@@ -285,6 +288,17 @@ const engine_info = struct {
         ret._writerBuffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
         ret._readerBuffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
         ret.l = .{};
+        const argv: [1][]const u8 = .{path};
+        const opt: std.process.SpawnOptions = .{
+            .argv = &argv,
+            .stdin = .pipe,
+            .stdout = .pipe,
+            .stderr = .inherit,
+        };
+        ret.proc = try std.process.spawn(mainl.getGlobalIo(), opt);
+        ret.f_writer = (ret.proc.stdin.?.writer(mainl.getGlobalIo(), &ret._writerBuffer));
+        ret.f_reader = (ret.proc.stdout.?.reader(mainl.getGlobalIo(), &ret._readerBuffer));
+        ret.path = try .initFromSlice(alloc, path);
 
         return ret;
     }
@@ -294,6 +308,7 @@ const engine_info = struct {
         }
         p_self.options.deinit(alloc);
         alloc.destroy(p_self);
+        p_self.path.free(alloc);
     }
     pub fn addOption(p_self: *engine_info, alloc: std.mem.Allocator, cmdStr: []const u8) !void {
         const e = try alloc.dupe(u8, cmdStr);
@@ -304,16 +319,33 @@ const engine_info = struct {
         p_self.ready = stat;
         p_self.l.releaseLock();
     }
-    pub fn isReady(p_self: *engine_info) bool {
-        p_self.l.acquireLock();
-        const ret = p_self.ready;
-        p_self.l.releaseLock();
-        return ret;
+    pub inline fn isReady(p_self: *engine_info) bool {
+        return p_self.ready;
     }
     pub fn printInfo(p_self: *engine_info) !void {
         for (0..p_self.options.items.len) |i| {
             std.debug.print("{s}\n", .{p_self.options.items[i]});
         }
+    }
+    pub fn sendMsg(p_self: *engine_info, msg: []const u8) !void {
+        var writer = &p_self.f_writer.interface;
+        try writer.print("{s}\n", .{msg});
+        try writer.flush();
+    }
+    pub fn reset(p_self: *engine_info) void {
+        if (!p_self.alive) return;
+        p_self.proc.kill(mainl.getGlobalIo());
+        //
+        const argv: [1][]const u8 = .{p_self.path._slice()};
+        const opt: std.process.SpawnOptions = .{
+            .argv = &argv,
+            .stdin = .pipe,
+            .stdout = .pipe,
+            .stderr = .inherit,
+        };
+        p_self.proc = try std.process.spawn(mainl.getGlobalIo(), opt);
+        p_self.f_writer = (p_self.proc.stdin.?.writer(mainl.getGlobalIo(), &p_self._writerBuffer));
+        p_self.f_reader = (p_self.proc.stdout.?.reader(mainl.getGlobalIo(), &p_self._readerBuffer));
     }
 };
 
@@ -400,19 +432,7 @@ const guiState = struct {
         return ret;
     }
     pub fn addEngine(p_self: *guiState, path: []const u8) !bool {
-        const argv: [1][]const u8 = .{path};
-        const opt: std.process.SpawnOptions = .{
-            .argv = &argv,
-            .stdin = .pipe,
-            .stdout = .pipe,
-            .stderr = .inherit,
-        };
-
-        var eng: *engine_info = try engine_info.init(p_self.alloc);
-        eng.proc = try std.process.spawn(mainl.getGlobalIo(), opt);
-
-        eng.f_writer = (eng.proc.stdin.?.writer(mainl.getGlobalIo(), &eng._writerBuffer));
-        eng.f_reader = (eng.proc.stdout.?.reader(mainl.getGlobalIo(), &eng._readerBuffer));
+        const eng: *engine_info = try engine_info.init(p_self.alloc, path);
         try p_self.input.append(p_self.alloc, try .init(p_self.alloc));
 
         return p_self.engineInventory.addEngine(p_self.alloc, eng);
@@ -455,10 +475,7 @@ const guiState = struct {
 
     pub fn respond(p_self: *guiState, msg: []const u8, engineIndex: u8) !void {
         const eng: *engine_info = p_self.engineInventory.items.items[engineIndex];
-        var writer = &eng.f_writer.interface;
-
-        try writer.print("{s}\n", .{msg});
-        try writer.flush();
+        try eng.sendMsg(msg);
 
         if (p_self.config.match.saveLogs) {
             const respmsg = try std.fmt.allocPrint(p_self.alloc, "OUT(#{d}): {s} \n", .{ engineIndex, msg });
@@ -490,12 +507,9 @@ const guiState = struct {
             var w: std.Io.Writer = .fixed(&buffer);
             const n = reader.streamDelimiter(&w, '\n') catch |err| {
                 std.debug.print("[DEBUG] readingThread.gui (#{d}): caught err {}\n", .{ engineIndex, err });
+                chessl.print_boardstate(&p_self.match.chessState);
                 break;
-                //p_self.crash();
             };
-            //if (n <= 1) {
-            //    continue;
-            //}
             _ = reader.toss(1);
             const msg = buffer[0..n];
 
@@ -620,7 +634,7 @@ const guiState = struct {
                 return true;
             },
             .UCIOK => {
-                p_self.engineInventory.items.items[cmdBuffer.engine].alive = true;
+                p_self.engineInventory.items.items[cmdBuffer.engine].ready = true;
                 return true;
             },
             .ID => {
@@ -770,7 +784,7 @@ const guiState = struct {
         return self.engineInventory.items.items[p.engineUsed];
     }
     pub inline fn allPlayersConnected(self: *guiState) bool {
-        return self.engineInventory.items.items[self.match.playerInv[0].engineUsed].alive and self.engineInventory.items.items[self.match.playerInv[1].engineUsed].alive;
+        return self.engineInventory.items.items[self.match.playerInv[0].engineUsed].ready and self.engineInventory.items.items[self.match.playerInv[1].engineUsed].ready;
     }
     pub fn executeBestMove(p_self: *guiState, cmdBuffer: []const u8) err_eval!bool {
         var gen = utilsl.splitGenerator(u8).init(cmdBuffer, ' ');
@@ -826,19 +840,19 @@ const guiState = struct {
 };
 
 fn getGuiCmdType(cmd: []const u8) e_guiCmd {
-    if (utilsl.contains(cmd, "info", .ignoreCase)) {
+    if (utilsl.startsWith(cmd, "info", .ignoreCase)) {
         return .INFO;
-    } else if (utilsl.contains(cmd, "bestmove", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "bestmove", .ignoreCase)) {
         return .BESTMOVE;
-    } else if (utilsl.contains(cmd, "readyok", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "readyok", .ignoreCase)) {
         return .READYOK;
-    } else if (utilsl.contains(cmd, "uciok", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "uciok", .ignoreCase)) {
         return .UCIOK;
-    } else if (utilsl.contains(cmd, "id", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "id", .ignoreCase)) {
         return .ID;
-    } else if (utilsl.contains(cmd, "option", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "option", .ignoreCase)) {
         return .OPTION;
-    } else if (utilsl.contains(cmd, "engineop", .ignoreCase)) {
+    } else if (utilsl.startsWith(cmd, "engineop", .ignoreCase)) {
         return .NOOP;
     }
     return .NOOP;
@@ -896,6 +910,7 @@ fn mainGuiThread(p_self: *guiState) !void {
         try p_self.outcomes.addOutCome(p_self.alloc, &p_self.match);
         utilsl.clear();
         try endMatchTickUserFacingInterface(p_self);
+        //std.debug.print("[DEBUG] end match: prev board psqt val {d}\n", .{p_self.match.chessState.frame.psqtEval});
         chessl.print_boardstate(&p_self.match.chessState);
     }
 
@@ -945,6 +960,7 @@ fn matchRoutine(p_self: *guiState) !void {
             break;
         }
         if (timer.tick() or p_self.match.positionUpdated) {
+            //if (p_self.match.positionUpdated) {
             p_self.match.positionUpdated = false;
             if (p_self.config.printToScreen) {
                 try timeTickUserFacingInterface(p_self);
@@ -1519,5 +1535,9 @@ pub fn main(init: std.process.Init) !void {
     //std.debug.print("path found: {s}\n", .{path});
     //if (true)
     //    @panic("");
+
+    if (build_options.useTune) {
+        weightl.modif_val();
+    }
     try launch_gui(path, init.gpa);
 }

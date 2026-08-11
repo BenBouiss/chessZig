@@ -24,19 +24,20 @@ pub const DEFAULT_REPORTPROGRESS = true;
 pub const _DEFAULT_REPORTPROGRESS = "true";
 
 //https://www.chessprogramming.org/Move_Ordering
-pub const ORDERING_LINE_VALUE = 9999;
-//pub const ORDERING_LINE_VALUE = 32000;
+//pub const ORDERING_LINE_VALUE = 9999;
+pub const ORDERING_LINE_VALUE = 99_999_999;
 pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
 
-pub const KILLER_0_HEURISTIC_VALUE = 2048;
-//pub const KILLER_0_HEURISTIC_VALUE = 20000;
+//pub const KILLER_0_HEURISTIC_VALUE = 2048;
+pub const KILLER_0_HEURISTIC_VALUE = 1_999_999;
 //pub const KILLER_1_HEURISTIC_VALUE = 2048;
 //pub const COUNTERMOVE_HEURISTIC_VALUE = 750;
-pub const MAX_HIST_HEURISTIC_VALUE = 1024;
-pub const MAX_CONTINUATION_HEURISTIC_VALUE = 1024;
 
-//pub const MAX_HIST_HEURISTIC_VALUE = 16394;
+//pub const MAX_HIST_HEURISTIC_VALUE = 1024;
 //pub const MAX_CONTINUATION_HEURISTIC_VALUE = 1024;
+
+pub const MAX_HIST_HEURISTIC_VALUE = 16394;
+pub const MAX_CONTINUATION_HEURISTIC_VALUE = 16394;
 
 pub const MAX_QUIESC_DEPTH: u16 = 64;
 
@@ -50,7 +51,7 @@ pub const DEFAULT_FIXED_DEPTH = false;
 pub const _DEFAULT_STATIC_SEARCH = "false";
 pub const DEFAULT_STATIC_SEARCH = false;
 
-pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
+pub const TT_strat = enum { ALWAYS_REPLACE, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 // 5 - 6 based on current avg ply computed of 6.8 for 5+0 timeformat
 //pub const OLD_THRESHOLD: u8 = 5;
@@ -72,10 +73,6 @@ pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 pub const SCHEDULER_MAX_TIME_DIV: i64 = 20;
 pub const SCHEDULER_MAX_TIME_INC_DIV: i64 = 2;
 pub const SCHEDULER_CRITICAL_TIME_DIV: i64 = 3;
-
-// estimate of the time increase when increasing the depth by 1
-//pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
-pub var SCHEDULER_GROWTH_TIME_EST: i64 = 2;
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 3;

@@ -442,6 +442,7 @@ pub const engine = struct {
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
+        //std.debug.print("[DEBUG] prev board psqt val {d}\n", .{p_self.state.frame.psqtEval});
         p_self.refreshInternals();
         return true;
     }

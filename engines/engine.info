@@ -1,15 +1,17 @@
 [engine1]
-//path="engines/bin/engine_26_07_26";
-//name="base";
-path="engines/bin/engine_29_07_26_1";
+path="engines/bin/engine_01_08_26";
 name="base";
+//path="engines/bin/engine_06_08_26";
+//name="base";
+//path="engines/bin/engine_09_08_26";
+//name="base";
+//path="engines/bin/engine_09_08_26_s";
+//name="base";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_01_08_26";
-//name="base + aspiration reduce depth on beta cutoff + reset a/b on score +- aspCoef + more lmr + quadratic hist bonus ";
-name="base + aspiration reduce depth on beta cutoff + reset a/b on score +- aspCoef + heurist 3";
-
+path="engines/bin/engine_11_08_26";
+name="base + twk + lots + old psqt with integrated piece score";
 "setoption name reportProgress value false";
 
 [match]
@@ -23,6 +25,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-//sprtmode=true;
-//maxSPRTMatch=1000;
+sprtmode=true;
+maxSPRTMatch=1000;
 

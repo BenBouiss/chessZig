@@ -198,9 +198,6 @@ pub const Hash_bucket = struct {
             .ALWAYS_REPLACE => {
                 return p_self.addEntry_AR(entry);
             },
-            .ALWAYS_REPLACE_OLDEST => {
-                return p_self.addEntry_oldest(entry);
-            },
             .KEEP_DEEPER => {
                 return p_self.addEntry_deep(entry);
             },
@@ -236,36 +233,7 @@ pub const Hash_bucket = struct {
         p_self.entries[idxS] = n_entry;
         return true;
     }
-    pub fn addEntry_oldest(p_self: *Hash_bucket, n_entry: Hash_entry) bool {
-        var idxS: usize = 0;
-        var sAge: usize = 0;
-        const reqDepth = n_entry._depth;
-        // if a better n_entry exists for this hash key we exit
-        for (0..configl.ITEM_PER_BUCKET) |i| {
-            const _entry = p_self.entries[i];
-            const _age = _entry._age;
-            if (!_entry.valid() or (_age + typel.MAX_PLY) < n_entry._age) {
-                p_self.entries[i] = n_entry;
-                //p_self.len = @min(p_self.len + 1, p_self.entries.len);
-                return true;
-            }
-            if (_entry.key == n_entry.key) {
-                if (_entry._depth > reqDepth) {
-                    return false;
-                }
-                p_self.entries[i] = n_entry;
-                return true;
-            }
 
-            if (_age < sAge) {
-                idxS = i;
-                sAge = _age;
-            }
-        }
-        p_self.entries[idxS] = n_entry;
-        return true;
-        //p_self.len = @min(p_self.len + 1, p_self.entries.len);
-    }
     pub fn addEntry_AR(p_self: *Hash_bucket, entry: Hash_entry) bool {
         _ = p_self;
         _ = entry;

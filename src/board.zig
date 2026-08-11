@@ -139,7 +139,7 @@ pub const boardFrame = struct {
     // WHITE, BLACK
     nonPawnKey: [2]hashl.Key = @splat(0),
 
-    phase: usize = 0,
+    phase: scoreType = 0,
     lastMove: IMove = .{},
     victim: e_piece = .nEmptySquare,
     enPassantIdx: u8 = 0,
@@ -765,9 +765,8 @@ pub const boardState = struct {
         return self.getPiece(move.getTo());
     }
     pub inline fn getPhase(self: *const boardState) scoreType {
-        var ret: scoreType = @intCast(typel.totalPhase);
-        ret = @intCast(@max(0, ret - @as(scoreType, @intCast(self.frame.phase))));
-        return @divFloor((ret << 8) + (typel.totalPhase >> 1), typel.totalPhase);
+        const _phase = @max(0, typel.totalPhase - self.frame.phase);
+        return @divFloor(_phase * 256 + 12, typel.totalPhase);
         // ((24 - p) * 256) + (24 / 2)) / 24
     }
     pub inline fn isEndGame(self: *const boardState) bool {
@@ -920,15 +919,18 @@ pub const boardState = struct {
         }
         const nWBishop = p_self.getPieceCount(.nWhiteBishop);
         const nWKnight = p_self.getPieceCount(.nWhiteKnight);
-        const nWMinor = nWBishop + nWKnight;
+        //const nWMinor = nWBishop + nWKnight;
 
         const nBBishop = p_self.getPieceCount(.nBlackBishop);
         const nBKnight = p_self.getPieceCount(.nBlackKnight);
-        const nBMinor = nBBishop + nBKnight;
-        if ((nBMinor == 0 and nWBishop == 2) or (nWMinor == 0 and nBBishop == 2)) {
-            return false;
-        }
-        if ((nBMinor == 0 and nWKnight == 3) or (nWMinor == 0 and nBKnight == 3)) {
+        //const nBMinor = nBBishop + nBKnight;
+        //if ((nBMinor == 0 and nWBishop == 2) or (nWMinor == 0 and nBBishop == 2)) {
+        //    return false;
+        //}
+        //if ((nBMinor == 0 and nWKnight == 3) or (nWMinor == 0 and nBKnight == 3)) {
+        //    return false;
+        //}
+        if ((nWBishop >= 2 or nWKnight >= 2) or (nBBishop >= 2 or nBKnight >= 2)) {
             return false;
         }
         return true;

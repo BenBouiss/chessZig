@@ -119,14 +119,20 @@ def print_board(name: str, l: list[int]):
     print("};")
 
 
-def print_misc(name: str, l: list[int]):
-    print(f"const {name} = [_]scoreType {{", end=" ")
-    [print(f"{x}, ", end="") for x in l]
-    print("")
-    print("};")
+def print_misc(name: str, l: list[int], printInVarMode: bool):
+    if printInVarMode:
+        print(f"const {name} = [_]scoreType {{", end=" ")
+        [print(f"{x}, ", end="") for x in l]
+        print("")
+        print("};")
+    else:
+        print(f"{name} = .{{", end=" ")
+        [print(f"{x}, ", end="") for x in l]
+        print("")
+        print("};")
 
 
-def openWeatherFactory(path: str):
+def openWeatherFactory(path: str, printInVarMode: bool):
     assert os.path.exists(path), f"path {path} does not exist"
     with open(path, "rb") as f:
         d = json.load(f)
@@ -140,10 +146,10 @@ def openWeatherFactory(path: str):
     prev = ""
     for x in range(tot):
         var: str = d["uci_params"][x]["name"]
-        nbr = int(d["uci_params"][x]["value"])
+        nbr = round(d["uci_params"][x]["value"])
         name = "_".join(var.split("_")[:-1]) if ("_" in var) else var
         if prev != name and len(miscLen):
-            print_misc(prev, miscLen)
+            print_misc(prev, miscLen, printInVarMode)
         if "_" in var:
             tok = var.split("_")[-1]
             prev = "_".join(var.split("_")[:-1])
@@ -164,21 +170,38 @@ def openWeatherFactory(path: str):
                     dualVal[name][0][1] = nbr
 
                 if dualVal[name][1] == 2:
-                    print(
-                        f"pub var {name}: [2]scoreType = .{{ {dualVal[name][0][0]}, {dualVal[name][0][1]} }};"
-                    )
+                    if printInVarMode:
+                        print(
+                            f"pub var {name}: [2]scoreType = .{{ {dualVal[name][0][0]}, {dualVal[name][0][1]} }};"
+                        )
+                    else:
+                        print(
+                            f"{name} = .{{ {dualVal[name][0][0]}, {dualVal[name][0][1]} }};"
+                        )
             else:
-                print(f"pub var {var}: scoreType = {nbr};")
+                if printInVarMode:
+                    print(f"pub var {var}: scoreType = {nbr};")
+                else:
+                    print(f"{var} = {nbr};")
                 prev = var
 
         else:
-            print(f"pub var {var}: scoreType = {nbr};")
+            if printInVarMode:
+                print(f"pub var {var}: scoreType = {nbr};")
+            else:
+                print(f"{var} = {nbr};")
             prev = var
 
 
 if __name__ == "__main__":
     b = sys.argv[1]
     print(f"Found argument {b} with type {type(b)}")
+    printVarMode: bool = False
+    if len(sys.argv) > 2:
+        try:
+            printVarMode = bool(sys.argv[2])
+        except:
+            pass
     # print_bitboard(b)
     # readNNUEbin(b)
-    openWeatherFactory(b)
+    openWeatherFactory(b, printVarMode)

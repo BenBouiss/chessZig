@@ -21,7 +21,7 @@ const milliDepth = typel.milliDepth;
 const depthT = typel.depthT;
 const e_color = typel.e_color;
 
-pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: depthT, ss: *searchStack, alpha: scoreType, beta: scoreType) scoreType {
+pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: depthT, ss: *searchStack, alpha: scoreType, beta: scoreType, threadD: *threadData) scoreType {
     p_info.working = true;
 
     ss.resetPv();
@@ -31,8 +31,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     if (comptime configl.USE_NNUE) {
         p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
     }
-    var threadD: threadData = .{};
-    const score = searchLoop(p_state, p_info, depth, 0, alpha, beta, ss, &threadD, false, false, .PV);
+    const score = searchLoop(p_state, p_info, depth, 0, alpha, beta, ss, threadD, false, false, .PV);
 
     if (p_info.alive) {
         const move = pv.moves[0];
@@ -174,6 +173,27 @@ pub const searchFrame = struct {
 };
 pub const threadData = struct {
     excludedMove: IMove = .{},
+    rootMoves: [chessl.MAX_POSSIBLE_MOVE]movel.rootMoveInfo = undefined,
+    pub fn printRooMoves(self: *const threadData) void {
+        for (0..self.rootMoves.len) |i| {
+            const move = self.rootMoves[i];
+            if (!move.move.isValid()) {
+                break;
+            }
+            std.debug.print("move: {s} n: {d}\n", .{ move.move.getStr(), move.nodes });
+        }
+    }
+    pub fn findRootMove(self: *threadData, move: IMove) *movel.rootMoveInfo {
+        for (&self.rootMoves) |*moveInfo| {
+            if (moveInfo.move.equal(move)) {
+                return moveInfo;
+            }
+            if (!moveInfo.move.isValid()) {
+                break;
+            }
+        }
+        return &self.rootMoves[0];
+    }
 };
 
 // used to garanty getFrameOffset(0, 4) returns a default value
@@ -291,6 +311,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     var currS = ss.getFrame(ply);
     const nextS = ss.getFrame(ply + 1);
     const prevSS = ss.getPrevFrame(ply, 1);
+    //const prevNode = p_info.searchStat.n_nodeExplored;
 
     const f: boardl.boardFrame = .copy(p_state);
     const hashMoveIsCapture = hashMove.isCapture();
@@ -310,8 +331,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     const improving: bool = if (isCheck) (false) else if (ss.getPrevFrame(ply, 2).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 2).staticEval.s) else if (ss.getPrevFrame(ply, 4).staticEval.t != .NONE) (currS.staticEval.s > ss.getPrevFrame(ply, 4).staticEval.s) else (true);
 
     //const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
-    var lmrR: milliDepth = weightl.lmr_baseDeficit + heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
-    //var lmrR: milliDepth = weightl.lmr_baseDeficit;
+    //var lmrR: milliDepth = weightl.lmr_baseDeficit + heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
+    var lmrR: milliDepth = weightl.lmr_baseDeficit;
     //var lmrR: milliDepth = typel.oneDepthMilliDepth;
     //var lmrR: milliDepth = typel.oneDepthMilliDepth + heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
     if (comptime t == .PV) {
@@ -475,11 +496,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         const isCapture = move.isCapture();
         const isThreat = (chessl.xToBitboard(to) & safetyArea) != 0;
         const cPiece = p_state.getCapturePiece(move);
+        //const cPiece = p_state.getPiece(to);
         const isPromo = move.isPromotion();
 
         const histScore: scoreType = historyl.historyHeuristic[whiteIdx][from][to];
 
         if (!isRoot) {
+            //if (bestScore > typel.scoreNone and _depth <= weightl.SeePruningMaxDepth) {
             if (_depth <= weightl.SeePruningMaxDepth) {
                 const margin = if (isCapture) weightl.SeePruningCaptureMargin else weightl.SeePruningQuietMargin;
                 if (!heuristicl.SEE_threshold(p_state, move, _depth * margin)) {
@@ -520,8 +543,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 extension += 1;
                 extended = true;
             }
+            //} else if (bestScore > typel.scoreNone and comptime t == .NonPV) {
         } else if (comptime t == .NonPV) {
-            //} else if (!isCapture and bestScore > typel.scoreNone and comptime t == .NonPV) {
             if (canFutility and movesPlayed > weightl.moveReductionAmount) {
                 skipQuietMoves = true;
                 //if (_depth <= weightl.futilityDepth and !isCheck and (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth) < alpha) {
@@ -557,11 +580,18 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         // https://github.com/Adam-Kulju/Patricia/
         if (!isCheck and _depth >= weightl.LMRDepth and phasePlay > weightl.moveReductionAmount) {
             var _lmrR = lmrR;
+
+            //_lmrR += historyl.lmrBase[movesPlayed];
+            //const R = heuristicl.depthToMilliDepth(historyl.lmrBase[@intCast(_depth)][movesPlayed]);
+            const R = historyl.lmrBase[@intCast(@min(typel.MAX_PLY, depth))][movesPlayed];
+            //const R = historyl.lmrBase[@intCast(_depth)][movesPlayed] * 1024;
+
             //if (isCapture) {
-            //    _lmrR = @divFloor(_lmrR, 2);
+            //    _lmrR += @divFloor(R, 2);
             //} else {
-            //    _lmrR -= @divFloor(histScore, weightl.lmr_histDiv);
+            //    _lmrR += (R - heuristicl.depthToMilliDepth(@divFloor(histScore, weightl.lmr_histDiv)));
             //}
+            _lmrR += R;
             if (givesCheck) {
                 _lmrR += weightl.lmr_givesCheck;
             }
@@ -586,8 +616,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 _lmrR += weightl.lmr_highFailScore;
                 //_lmrR += typel.oneDepthMilliDepth;
             }
-            _lmrR += historyl.lmrBase[movesPlayed];
-            //_lmrR += heuristicl.depthToMilliDepth(historyl.lmrBase[@intCast(_depth)][movesPlayed]);
 
             const d: depthT = std.math.clamp(heuristicl.milliDepthToDepth(_lmrR), 0, newDepth - 1);
 
@@ -611,6 +639,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         _ = p_state.undoMove();
         p_state.frame = f;
+        //if (isRoot) {
+        //    threadD.findRootMove(move).nodes += p_info.searchStat.n_nodeExplored - prevNode;
+        //}
 
         if (movesPlayed == 0 and isRoot and comptime t == .PV) {
             currS.pv.?.add(move);
@@ -664,14 +695,14 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             std.math.clamp(@divFloor((bestScore - static_eval) * depth, 8), -256, 256);
 
         const offset = chessl.whiteBoolToInt(white);
-        update_corrhist(&historyl.pawnCorrHist[offset][historyl.pawnHashIndexToIdx(p_state.frame.pawnKey)], bonus);
-        update_corrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)])], bonus);
-        update_corrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)])], bonus);
+        updateCorrhist(&historyl.pawnCorrHist[offset][historyl.pawnHashIndexToIdx(p_state.frame.pawnKey)], bonus);
+        updateCorrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)])], bonus);
+        updateCorrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)])], bonus);
 
         const prev1 = ss.getPrevFrame(ply, 1);
         const prev2 = ss.getPrevFrame(ply, 2);
         if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
-            update_corrhist(&historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()], bonus);
+            updateCorrhist(&historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()], bonus);
         }
     }
     if (!singularExt and hashFlag == .LOWER and gen.phase == .QUIET) {
@@ -683,7 +714,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
         const prevPiece4 = ss.getPrevFrame(ply, 4).pieceMoved;
-        const malus = -(historyBonus >> 2);
+        const malus = -@divFloor(historyBonus, 4);
         for (0..gen.quiets.moves.len) |i| {
             const _move = gen.quiets.moves.moves[i];
             const to = _move.getTo();
@@ -719,8 +750,10 @@ pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonu
             const toP = _move.getTo();
             if (comptime t == .CAPTURE) {
                 const fPiece = p_state.getPiece(fromP);
-                const cPiece = p_state.getCapturePiece(_move);
-                updateHistory(&historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][toP], bonus);
+                const cPiece: u8 = @intFromEnum(p_state.getCapturePiece(_move));
+                //const to = _move.getTo();
+                //const cPiece: u8 = @intFromEnum(p_state.getPiece(to));
+                updateHistory(&historyl.captureHistory[@intFromEnum(fPiece)][cPiece][toP], bonus);
             } else if (comptime t == .QUIET) {
                 updateHistory(&historyl.historyHeuristic[whiteIdx][fromP][toP], bonus);
             }
@@ -743,8 +776,8 @@ pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: s
 
     return std.math.clamp(_eval + @divFloor(weightl.corrHistW * corr, 512), -weightl.simpleCheckMateThreshold + 1, weightl.simpleCheckMateThreshold - 1);
 }
-pub inline fn update_corrhist(val: *scoreType, bonus: scoreType) void {
-    val.* += bonus - @divFloor(val.* * @as(scoreType, @intCast(@abs(bonus))), 1024);
+pub inline fn updateCorrhist(val: *scoreType, bonus: scoreType) void {
+    val.* += bonus - @divFloor(val.* * @as(scoreType, @intCast(@abs(bonus))), weightl.corrHistMax);
 }
 
 pub inline fn updateHistory(val: *scoreType, bonus: scoreType) void {

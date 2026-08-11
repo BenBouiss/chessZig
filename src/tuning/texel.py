@@ -21,6 +21,8 @@ import constants as cst
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+import utils
+
 
 class CSVDataset(Dataset):
     def __init__(
@@ -75,14 +77,6 @@ def loadTexelWeight(
     )
     assert len(ret) == n_pos, f"expected {n_pos} positions found {len(ret)}"
     return ret
-
-
-def getFileLineNumbers(path: str) -> int:
-    assert os.path.exists(path)
-    with open(path, "rbU") as f:
-        num_lines = sum(1 for _ in f)
-    # remove the header
-    return num_lines - 1
 
 
 K = 10
@@ -179,13 +173,13 @@ def training_loop(
     # scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
     if fileSize is None:
-        size = getFileLineNumbers(opt.path)
+        size = utils.getFileLineNumbers(opt.trainingPath)
     else:
         size = fileSize
 
     print(f"[DEBUG] training_loop: {size} positions found")
     dataset = CSVDataset(
-        opt.path,
+        opt.trainingPath,
         chunksize=opt.chunksize,
         nb_samples=size,
         optimizeOutcome=opt.optimizeOutcome,
@@ -269,24 +263,26 @@ class tuneConfig:
 class trainingOptions:
     def __init__(
         self,
-        path: str,
-        pos_per_epoch: int,
-        epoch: int,
+        trainingPath: str,
+        pos_per_epoch: int = 128,
+        epoch: int = 1024,
         tuneCfg: tuneConfig = tuneConfig(),
         initialWeights: list[texelWeights] | None = None,
         lrScheduler: bool = False,
-        initialSkip: int = 0,
         chunksize: int = 32,
         validationPath: str | None = None,
+        checkpointsPath: str | None = None,
         optimizeOutcome: bool = True,
+        patience: int = 32,
+        min_delta: float = 0.0000001,
     ):
-        assert os.path.exists(path), f"file {path} not found"
-        assert path.endswith(".csv"), (
-            f"extension of {path} not supported expected .csv file"
-        )
-        self.path = path
+        assert os.path.exists(trainingPath), f"file {trainingPath} not found"
+        if not os.path.isdir(trainingPath):
+            assert trainingPath.endswith(".csv"), (
+                f"extension of {trainingPath} not supported expected .csv file"
+            )
+        self.trainingPath = trainingPath
         self.pos_per_epoch = pos_per_epoch
-        self.initialSkip = initialSkip
         self.epoch = epoch
         self.tuneCfg = tuneCfg
         self.initWeights = initialWeights
@@ -303,12 +299,7 @@ class trainingOptions:
         assert chunksize > 0
         self.chunksize = chunksize
         self.validationPath = validationPath
-
-    def setInitialWeight(self, w: list[texelWeights]) -> None:
-        assert len(w) == 2, "Weights must contain both MG and EG section"
-        w[0].assertBounds()
-        w[1].assertBounds()
-        self.initWeights = w
+        self.checkpointsPath = checkpointsPath
 
     def makeFreezeMask(self) -> torch.Tensor:
         mask = [1.0] * (cst.total_idx)

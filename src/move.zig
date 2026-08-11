@@ -588,3 +588,8 @@ pub const line = struct {
         return true;
     }
 };
+
+pub const rootMoveInfo = struct {
+    move: IMove = .{},
+    nodes: u64 = 0,
+};

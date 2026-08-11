@@ -45,6 +45,12 @@ pub const stopWatch = struct {
         p_self.startTimeUs = 0;
         p_self.savedTimeUs = 0;
     }
+    pub inline fn restart(p_self: *stopWatch) void {
+        p_self.startTimeUs = std.Io.Timestamp.now(mainl.getGlobalIo(), .real).toMicroseconds();
+    }
+    pub inline fn addUs(p_self: *stopWatch, timeUs: i64) void {
+        p_self.savedTimeUs += timeUs;
+    }
 };
 // implement to implement a sort of ping every x seconds, ms...
 // call .tick returns bool
@@ -57,9 +63,9 @@ pub const timer = struct {
         return ret;
     }
     pub fn tick(self: *timer) bool {
-        const curr = self.sw.timeSinceStartUs();
-        if (curr > self.frequencyUs) {
-            self.sw.startTimeUs = curr;
+        const delta = self.sw.timeSinceStartUs();
+        if (delta > self.frequencyUs) {
+            self.sw.addUs(delta);
             return true;
         }
         return false;
