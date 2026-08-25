@@ -1,17 +1,12 @@
 [engine1]
-path="engines/bin/engine_01_08_26";
+//path="engines/bin/engine_12_08_26";
+path="engines/bin/engine_13_08_26";
 name="base";
-//path="engines/bin/engine_06_08_26";
-//name="base";
-//path="engines/bin/engine_09_08_26";
-//name="base";
-//path="engines/bin/engine_09_08_26_s";
-//name="base";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_11_08_26";
-name="base + twk + lots + old psqt with integrated piece score";
+path="engines/bin/engine_25_08_26";
+name="base + lmrDepth in FP and more";
 "setoption name reportProgress value false";
 
 [match]

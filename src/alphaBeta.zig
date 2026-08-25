@@ -23,7 +23,6 @@ const e_color = typel.e_color;
 
 pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: depthT, ss: *searchStack, alpha: scoreType, beta: scoreType, threadD: *threadData) scoreType {
     p_info.working = true;
-
     ss.resetPv();
     var pv: movel.line = .{};
     ss.getFrame(0).pv = &pv;
@@ -46,14 +45,13 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
 pub const searchType = enum { NonPV, PV };
 
 pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha: scoreType, beta: scoreType, ply: depthT, ss: *searchStack) scoreType {
-    // first vers adapt of the pseudo code: https://www.chessprogramming.org/Quiescence_Search
     const white: bool = p_state.whiteToMove();
     if (p_state.isStaleMateRepetition()) {
-        //return weightl.simpleStalemateScore;
+        // from patricia, stalemate considered bad if currently better material wise.
         const matBalance = heuristicl.c_materialImbalance(p_state, white);
         if (matBalance > 100) {
             return -25;
-        } else if (matBalance < 100) {
+        } else {
             return 25;
         }
         return -1;
@@ -61,8 +59,6 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
 
     var _alpha = alpha;
     var currS: *searchFrame = ss.getFrame(ply);
-    //var bestMove: IMove = .{};
-    //currS.staticEval = .{ .s = static_eval, .t = .STD };
 
     p_info.searchStat.n_nodeExplored += 1;
     if (ply >= typel.MAX_PLY or schedulerl.outOfTime(p_info)) {
@@ -80,6 +76,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     var hashFlag: hashl.nodeType = .UPPER;
     var hashType: hashl.nodeType = .UPPER;
     var bestMove: IMove = .{};
+
     if (ttRes.entry) |_entry| {
         p_info.searchStat.n_hashRetrieve += 1;
         ttHit = true;
@@ -258,6 +255,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     std.debug.assert(!(t == .PV and cutnode));
 
     var bestMove: IMove = .{};
+    var bestIdx: usize = 0;
     var bestScore: scoreType = typel.scoreNone;
     var skipQuietMoves: bool = false;
 
@@ -402,12 +400,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         }
     }
 
-    var canFutility: bool = false;
     //https://www.talkchess.com/forum3/viewtopic.php?f=7&t=74403
     // https://github.com/nescitus/cpw-engine/
-    if (!isCheck and !chessl.isMate(_alpha) and _depth <= weightl.futilityDepth and (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth) <= _alpha) {
-        canFutility = true;
-    }
 
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
     if (_depth >= weightl.IIRDepthMin and !hashMove.isValid() and !currS.followPv and !isAllNode) {
@@ -476,11 +470,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         if (gen.phase == .TTMOVE) {
             p_info.searchStat.n_hashMoveDone += 1;
         }
-        //if (!phaseReset and gen.extra == .QUIET) {
         if (prev != gen.phase) {
             prev = gen.phase;
             if (gen.phase == .BADCAPTURE) {
                 // (capt + quiet) - quiet = capt
+                //phasePlay = movesPlayed - phasePlay - @intFromBool(hashMove.isValid());
+                //phasePlay = movesPlayed - phasePlay - @intFromBool(hashMove.isCapture());
                 phasePlay = movesPlayed - phasePlay;
             } else {
                 phasePlay = 0;
@@ -495,15 +490,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         const givesCheck = moveGenl.moveDeliverCheck(p_state, move, move.equal(hashMove));
         const isCapture = move.isCapture();
         const isThreat = (chessl.xToBitboard(to) & safetyArea) != 0;
-        const cPiece = p_state.getCapturePiece(move);
-        //const cPiece = p_state.getPiece(to);
+        //const cPiece = p_state.getCapturePiece(move);
+        const cPiece = p_state.getPiece(to);
         const isPromo = move.isPromotion();
 
         const histScore: scoreType = historyl.historyHeuristic[whiteIdx][from][to];
 
         if (!isRoot) {
-            //if (bestScore > typel.scoreNone and _depth <= weightl.SeePruningMaxDepth) {
-            if (_depth <= weightl.SeePruningMaxDepth) {
+            if (bestScore > typel.scoreNone and _depth <= weightl.SeePruningMaxDepth) {
+                //if (_depth <= weightl.SeePruningMaxDepth) {
                 const margin = if (isCapture) weightl.SeePruningCaptureMargin else weightl.SeePruningQuietMargin;
                 if (!heuristicl.SEE_threshold(p_state, move, _depth * margin)) {
                     continue;
@@ -511,14 +506,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             }
             // https://talkchess.com/viewtopic.php?t=55734
             // https://int0x80.ca/posts/chess-engines/13-extensions
-            //_ = singularExt;
             if (!singularExt and move.equal(hashMove) and _depth > weightl.singularExtensionMinDepth and !chessl.isMate(hashEval) and hashDepth >= (_depth - weightl.singularExtensionDeltaTTDepth) and hashType != .UPPER) {
                 const singularD: depthT = @divFloor(_depth - 1, 2);
+
                 //const singularBeta: scoreType = hashEval - _depth;
                 const singularBeta: scoreType = hashEval - 25;
-
                 threadD.excludedMove = move;
-                //const score = searchLoop(p_state, p_info, singularD, ply, singularBeta - 1, singularBeta, ss, threadD, extended, cutnode, .NonPV);
                 const score = searchLoop(p_state, p_info, singularD, ply, singularBeta - 1, singularBeta, ss, threadD, extended, cutnode, .NonPV);
                 threadD.excludedMove = .{};
 
@@ -544,7 +537,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 extended = true;
             }
             //} else if (bestScore > typel.scoreNone and comptime t == .NonPV) {
-        } else if (comptime t == .NonPV) {
+        } else if (bestScore > typel.scoreNone and comptime t == .NonPV) {
+            const lmrDepth = @max(1, depth - heuristicl.milliDepthToDepth(historyl.lmrBase[@intCast(depth)][movesPlayed]));
+            const canFutility = !isCheck and !chessl.isMate(_alpha) and _depth <= weightl.futilityDepth and (static_eval + weightl.futilityConst + weightl.futilityCoeff * lmrDepth) <= _alpha;
             if (canFutility and movesPlayed > weightl.moveReductionAmount) {
                 skipQuietMoves = true;
                 //if (_depth <= weightl.futilityDepth and !isCheck and (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth) < alpha) {
@@ -555,8 +550,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 //continue;
             }
 
-            if (!isCheck and movesPlayed >= weightl.historyMinExplore) {
-                if (histScore < (weightl.historyThreshCoeff * _depth + weightl.historyThreshConst)) {
+            if (!isCheck and movesPlayed >= weightl.historyMinExplore and lmrDepth < weightl.historyMaxDepth) {
+                //if (!isCheck and movesPlayed >= weightl.historyMinExplore and _depth < weightl.historyMaxDepth) {
+                //if (!isCheck and movesPlayed >= weightl.historyMinExplore) {
+                //if (histScore < (weightl.historyThreshCoeff * _depth + weightl.historyThreshConst)) {
+                if (histScore < (weightl.historyThreshCoeff * lmrDepth + weightl.historyThreshConst)) {
                     //skipQuietMoves = true;
                     continue;
                 }
@@ -583,7 +581,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
             //_lmrR += historyl.lmrBase[movesPlayed];
             //const R = heuristicl.depthToMilliDepth(historyl.lmrBase[@intCast(_depth)][movesPlayed]);
-            const R = historyl.lmrBase[@intCast(@min(typel.MAX_PLY, depth))][movesPlayed];
+            const R = historyl.lmrBase[@intCast(depth)][movesPlayed];
             //const R = historyl.lmrBase[@intCast(_depth)][movesPlayed] * 1024;
 
             //if (isCapture) {
@@ -591,6 +589,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             //} else {
             //    _lmrR += (R - heuristicl.depthToMilliDepth(@divFloor(histScore, weightl.lmr_histDiv)));
             //}
+
             _lmrR += R;
             if (givesCheck) {
                 _lmrR += weightl.lmr_givesCheck;
@@ -604,17 +603,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 _lmrR += weightl.lmr_badCapture;
             }
 
-            //if (move.equal(currS.killerMove)) {
-            //    //_lmrR -= typel.oneDepthMilliDepth;
-            //    _lmrR -= weightl.lmr_killerMove;
-            //}
-            //if (isCapture and !isThreat and gen.phase == .BADCAPTURE) {
-            //    _lmrR += weightl.lmr_badCapture;
-            //}
-
             if (nextS.failHighCount > weightl.lmr_highFailCount) {
                 _lmrR += weightl.lmr_highFailScore;
-                //_lmrR += typel.oneDepthMilliDepth;
             }
 
             const d: depthT = std.math.clamp(heuristicl.milliDepthToDepth(_lmrR), 0, newDepth - 1);
@@ -633,7 +623,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         }
         if ((phasePlay == 0 or score > _alpha) and comptime t == .PV) {
             pv.reset();
-            ss.getFrame(ply + 1).pv = &pv;
+            nextS.pv = &pv;
             score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_beta, -_alpha, ss, threadD, extended, false, .PV);
         }
 
@@ -650,28 +640,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         phasePlay += 1;
         if (score > bestScore) {
             bestScore = score;
+            bestIdx = idx;
             if (bestScore > _alpha) {
                 bestMove = move;
                 _alpha = bestScore;
-                if (isCapture) {
-                    updateHistory(&historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to], historyBonus);
-                } else {
-                    updateHistory(&historyl.historyHeuristic[whiteIdx][from][to], historyBonus);
-                }
                 if (comptime t == .PV) {
                     currS.pv.?.onBestMove(move, nextS.pv);
-                    //std.debug.assert(move.equal(currS.pv.?.moves[0]));
                 }
                 if (_alpha >= _beta) {
                     hashFlag = .LOWER;
-                    // save here the killer moves
-                    if (isCapture) {
-                        updateOnBetaCut(p_state, idx, -historyBonus, &gen, white, .CAPTURE);
-                    } else {
-                        currS.killerMove = move;
-                        //historyl.onKillerMove(move, @intCast(ply));
-                        updateOnBetaCut(p_state, idx, -historyBonus, &gen, white, .QUIET);
-                    }
                     p_info.searchStat.n_cutoffs += 1;
                     currS.failHighCount += 1;
                     break;
@@ -690,48 +667,95 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         }
     }
     //if (!isCheck and (!bestMove.isCapture() or !bestMove.isValid()) and (hashFlag == .LOWER and bestScore > static_eval) and (hashFlag == .UPPER and bestScore < static_eval)) {
-    if (!singularExt and !isCheck and (!bestMove.isCapture()) and !(hashFlag == .LOWER and bestScore <= static_eval) and !(!bestMove.isValid() and bestScore >= static_eval)) {
+    if (!singularExt and !isCheck and (!bestMove.isCapture() or !bestMove.isValid()) and !(hashFlag == .LOWER and bestScore <= static_eval) and !(!bestMove.isValid() and bestScore >= static_eval)) {
         const bonus =
             std.math.clamp(@divFloor((bestScore - static_eval) * depth, 8), -256, 256);
 
         const offset = chessl.whiteBoolToInt(white);
-        updateCorrhist(&historyl.pawnCorrHist[offset][historyl.pawnHashIndexToIdx(p_state.frame.pawnKey)], bonus);
-        updateCorrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)])], bonus);
-        updateCorrhist(&historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)])], bonus);
+        const pHash = historyl.pawnHashIndexToIdx(p_state.frame.pawnKey);
+        historyl.pawnCorrHist[offset][pHash] = updateCorrhist(historyl.pawnCorrHist[offset][pHash], bonus);
+
+        const npWHash = historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)]);
+        historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][npWHash] = updateCorrhist(historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][npWHash], bonus);
+
+        const npBHash = historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)]);
+        historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][npBHash] = updateCorrhist(historyl.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][npBHash], bonus);
 
         const prev1 = ss.getPrevFrame(ply, 1);
         const prev2 = ss.getPrevFrame(ply, 2);
         if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
-            updateCorrhist(&historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()], bonus);
+            historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()] = updateCorrhist(historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()], bonus);
         }
     }
-    if (!singularExt and hashFlag == .LOWER and gen.phase == .QUIET) {
-        const prevMove = ss.getPrevFrame(ply, 1).playedMove;
-        const prevPiece = ss.getPrevFrame(ply, 1).pieceMoved;
+    if (hashFlag == .LOWER) {
+        if (bestMove.isQuietMove()) {
+            currS.killerMove = bestMove;
+            const prevMove = ss.getPrevFrame(ply, 1).playedMove;
+            const prevPiece = ss.getPrevFrame(ply, 1).pieceMoved;
 
-        const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
-        const prevPrevPiece = ss.getPrevFrame(ply, 2).pieceMoved;
+            const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
+            const prevPrevPiece = ss.getPrevFrame(ply, 2).pieceMoved;
 
-        const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
-        const prevPiece4 = ss.getPrevFrame(ply, 4).pieceMoved;
-        const malus = -@divFloor(historyBonus, 4);
-        for (0..gen.quiets.moves.len) |i| {
-            const _move = gen.quiets.moves.moves[i];
-            const to = _move.getTo();
-            const piece: u8 = @intFromEnum(p_state.getPiece(_move.getFrom()));
-            updateContinuation(&historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][piece][to], malus);
-            updateContinuation(&historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][piece][to], malus);
-            updateContinuation(&historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][piece][to], malus);
+            const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
+            const prevPiece4 = ss.getPrevFrame(ply, 4).pieceMoved;
+            for (0..gen.quiets.moves.len) |i| {
+                if (i == bestIdx) {
+                    continue;
+                }
+                const malus = -@divFloor(historyBonus, 4);
+                const _move = gen.quiets.moves.moves[i];
+                const to = _move.getTo();
+                const from = _move.getFrom();
+                const piece: u8 = @intFromEnum(p_state.getPiece(from));
+                historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][piece][to] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][piece][to], malus);
+
+                historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][piece][to] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][piece][to], malus);
+                historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][piece][to] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][piece][to], malus);
+
+                historyl.historyHeuristic[whiteIdx][from][to] = updateHistory(historyl.historyHeuristic[whiteIdx][from][to], malus);
+            }
+            const bestTo = bestMove.getTo();
+            const bestFrom = bestMove.getFrom();
+            const bestPiece = @intFromEnum(p_state.getPiece(bestFrom));
+            historyl.historyHeuristic[whiteIdx][bestFrom][bestTo] = updateHistory(historyl.historyHeuristic[whiteIdx][bestFrom][bestTo], historyBonus);
+
+            historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][bestPiece][bestTo], historyBonus);
+            historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][bestPiece][bestTo], historyBonus);
+            historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][bestPiece][bestTo], historyBonus);
+        } else {
+            const from = bestMove.getFrom();
+            const to = bestMove.getTo();
+            const fPiece = @intFromEnum(p_state.getPiece(from));
+            const cPiece = @intFromEnum(p_state.getPiece(to));
+            historyl.captureHistory[fPiece][cPiece][to] = updateHistory(historyl.captureHistory[fPiece][cPiece][to], historyBonus);
         }
-        const bestTo = bestMove.getTo();
-        const bestPiece = @intFromEnum(p_state.getPiece(bestMove.getFrom()));
 
-        updateContinuation(&historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][bestPiece][bestTo], historyBonus);
-        updateContinuation(&historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][bestPiece][bestTo], historyBonus);
-        updateContinuation(&historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][bestPiece][bestTo], historyBonus);
+        for (0..gen.captures.moves.len) |i| {
+            // checking for hashMove unecessary because if beta cutoff with hash no captures generated
+            if (i == bestIdx) {
+                continue;
+            }
+            const move = gen.captures.moves.moves[i];
+            const from = move.getFrom();
+            const to = move.getTo();
+            const malus = -@divFloor(historyBonus, 4);
+            const fPiece = p_state.getPiece(from);
+            const cPiece = p_state.getPiece(to);
+            historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] = updateHistory(historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to], malus);
+        }
+    } else if (hashFlag == .ALL) {
+        const bestTo = bestMove.getTo();
+        const bestFrom = bestMove.getFrom();
+        const bestPiece = @intFromEnum(p_state.getPiece(bestFrom));
+        if (bestMove.isCapture()) {
+            const cPiece = @intFromEnum(p_state.getPiece(bestTo));
+            historyl.captureHistory[bestPiece][cPiece][bestTo] = updateHistory(historyl.captureHistory[bestPiece][cPiece][bestTo], historyBonus);
+        } else {
+            historyl.historyHeuristic[whiteIdx][bestFrom][bestTo] = updateHistory(historyl.historyHeuristic[whiteIdx][bestFrom][bestTo], historyBonus);
+        }
     }
     // .PV set to not store position that could be obtained after a possible nullmove. TODO: just filter out nullmove
-    //if (hashFlag == .LOWER or comptime t == .PV) {
+    //if (!singularExt and p_state.getLastMove().isValid()) {
     if (!singularExt) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), hashl.evalToTTEval(bestScore, ply), hashFlag, bestMove, white);
         writer.writeShort(s_entry);
@@ -739,29 +763,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     //}
     return _alpha;
 }
-pub fn updateOnBetaCut(p_state: *const boardl.boardState, cutoffIdx: usize, bonus: scoreType, gen: *const moveGenl.typeMoveGenerator, white: bool, comptime t: typel.e_moveGenFlag) void {
-    const cont: *const moveGenl.movesScores = if (comptime t == .QUIET) &gen.quiets else &gen.captures;
-    const whiteIdx: usize = chessl.whiteBoolToInt(white);
 
-    for (0..cont.moves.len) |j| {
-        const _move = cont.moves.moves[j];
-        if (j != cutoffIdx) {
-            const fromP = _move.getFrom();
-            const toP = _move.getTo();
-            if (comptime t == .CAPTURE) {
-                const fPiece = p_state.getPiece(fromP);
-                const cPiece: u8 = @intFromEnum(p_state.getCapturePiece(_move));
-                //const to = _move.getTo();
-                //const cPiece: u8 = @intFromEnum(p_state.getPiece(to));
-                updateHistory(&historyl.captureHistory[@intFromEnum(fPiece)][cPiece][toP], bonus);
-            } else if (comptime t == .QUIET) {
-                updateHistory(&historyl.historyHeuristic[whiteIdx][fromP][toP], bonus);
-            }
-        }
-    }
-}
 pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: scoreType, ply: depthT) scoreType {
-    const _eval: scoreType = @divFloor(eval * (200 - p_state.frame.halfMoveClock), 200);
     const offset = chessl.whiteBoolToInt(p_state.whiteToMove());
 
     var corr: scoreType = historyl.pawnCorrHist[offset][historyl.pawnHashIndexToIdx(p_state.frame.pawnKey)];
@@ -774,16 +777,12 @@ pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: s
         corr += historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()];
     }
 
-    return std.math.clamp(_eval + @divFloor(weightl.corrHistW * corr, 512), -weightl.simpleCheckMateThreshold + 1, weightl.simpleCheckMateThreshold - 1);
+    return std.math.clamp(eval + @divFloor(weightl.corrHistW * corr, 512), -weightl.simpleCheckMateThreshold + 1, weightl.simpleCheckMateThreshold - 1);
 }
-pub inline fn updateCorrhist(val: *scoreType, bonus: scoreType) void {
-    val.* += bonus - @divFloor(val.* * @as(scoreType, @intCast(@abs(bonus))), weightl.corrHistMax);
-}
-
-pub inline fn updateHistory(val: *scoreType, bonus: scoreType) void {
-    val.* += bonus - @divFloor(val.* * @as(scoreType, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
+pub inline fn updateCorrhist(val: scoreType, bonus: scoreType) scoreType {
+    return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), weightl.corrHistMax);
 }
 
-pub inline fn updateContinuation(val: *scoreType, bonus: scoreType) void {
-    val.* += bonus - @divFloor(val.* * @as(scoreType, @intCast(@abs(bonus))), configl.MAX_CONTINUATION_HEURISTIC_VALUE);
+pub inline fn updateHistory(val: scoreType, bonus: scoreType) scoreType {
+    return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
 }

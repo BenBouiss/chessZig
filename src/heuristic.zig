@@ -34,8 +34,8 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
 
-    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.occupiedBB_col(.WHITE));
-    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.occupiedBB_col(.BLACK));
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.occupiedBB_col(.WHITE));
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.occupiedBB_col(.BLACK));
     const white = p_state.whiteToMove();
 
     const phase: scoreType = p_state.getPhase();
@@ -45,7 +45,7 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     ret += evaluate_material(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
-    ret += evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, white);
+    ret += evaluate_tempo(p_state, white);
     ret += evaluate_pawnStructure(p_state);
     ret += evaluate_king(p_state, (computeTaperedV(ret, phase) + p_state.frame.psqtEval) > 0, white);
 
@@ -54,9 +54,11 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
 pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreType {
     if (comptime configl.USE_NNUE) {
-        return nnuel.evaluate(white, &p_state.frame.nnueAccumul);
+        const eval = nnuel.evaluate(white, &p_state.frame.nnueAccumul);
+        return @divFloor(eval * (200 - p_state.frame.halfMoveClock), 200);
     } else {
-        const ret = evaluate(p_state);
+        const eval = evaluate(p_state);
+        const ret: scoreType = @divFloor(eval * (200 - p_state.frame.halfMoveClock), 200);
         return if (white) ret else -ret;
     }
 }
@@ -101,7 +103,7 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
         .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .PawnStruct = computeTaperedV(evaluate_pawnStructure(p_state), phase),
-        .Tempo = computeTaperedV(evaluate_tempo(p_state, &allwhiteMoveBB, &allblackMoveBB, white), phase),
+        .Tempo = computeTaperedV(evaluate_tempo(p_state, white), phase),
     };
     if (configl.USE_NNUE) {
         // always from white perspective?
@@ -144,29 +146,29 @@ pub fn evaluate_PSQT(p_state: *const boardl.boardState, _phase: scoreType) score
 }
 
 pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
-    const wp = p_state.getPieceBB_t(.PAWN) & p_state.b.occupiedBB_col(.WHITE);
-    const bp = p_state.getPieceBB_t(.PAWN) & p_state.b.occupiedBB_col(.BLACK);
+    const wp = p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE);
+    const bp = p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK);
     // in an effort to have the weights all positive I swapped the diff, (nBlackIsolated - nWhiteIsolated) * (w>0) means that white is advantaged (s>0) if (nBlackIsolated > nWhiteIsolated) and black is advantaged(s<0) if (nBlackIsolated < nWhiteIsolated)
     // same for doubled as doubled and isolated are seen as negative attributes hence why I chose negative weights to penalize the respective sides.
 
-    const nWhiteIsolated: i8 = @intCast(chess.popcount(chess.isolatedPawns(wp)));
-    const nBlackIsolated: i8 = @intCast(chess.popcount(chess.isolatedPawns(bp)));
+    const nWhiteIsolated: i8 = chess.ipopcount(chess.isolatedPawns(wp));
+    const nBlackIsolated: i8 = chess.ipopcount(chess.isolatedPawns(bp));
     const isoS: scoreType = @intCast(nBlackIsolated - nWhiteIsolated);
 
-    const nWhiteDoubled: i8 = @intCast(chess.popcount(chess.stackedPawns(wp)));
-    const nBlackDoubled: i8 = @intCast(chess.popcount(chess.stackedPawns(bp)));
+    const nWhiteDoubled: i8 = chess.ipopcount(chess.stackedPawns(wp));
+    const nBlackDoubled: i8 = chess.ipopcount(chess.stackedPawns(bp));
     const doS: scoreType = @intCast(nBlackDoubled - nWhiteDoubled);
 
-    const nWhitePassed: i8 = @intCast(chess.popcount(chess.passedPawns(wp, bp)));
-    const nBlackPassed: i8 = @intCast(chess.popcount(chess.passedPawns(bp, wp)));
+    const nWhitePassed: i8 = chess.ipopcount(chess.passedPawns(wp, bp));
+    const nBlackPassed: i8 = chess.ipopcount(chess.passedPawns(bp, wp));
     const paS: scoreType = @intCast(nWhitePassed - nBlackPassed);
 
-    const nWhiteDuo: i8 = @intCast(chess.popcount(chess.duoPhalanx(wp)));
-    const nBlackDuo: i8 = @intCast(chess.popcount(chess.duoPhalanx(bp)));
+    const nWhiteDuo: i8 = chess.ipopcount(chess.duoPhalanx(wp));
+    const nBlackDuo: i8 = chess.ipopcount(chess.duoPhalanx(bp));
     const duoS: scoreType = @intCast(nWhiteDuo - nBlackDuo);
 
-    const nWhiteConn: i8 = @intCast(chess.popcount(wp & chess.getPawnAttacksFromBB(wp, true)));
-    const nBlackConn: i8 = @intCast(chess.popcount(bp & chess.getPawnAttacksFromBB(bp, false)));
+    const nWhiteConn: i8 = chess.ipopcount(wp & chess.getPawnAttacksFromBB(wp, true));
+    const nBlackConn: i8 = chess.ipopcount(bp & chess.getPawnAttacksFromBB(bp, false));
     const connectS: scoreType = @intCast(nWhiteConn - nBlackConn);
 
     return .{ (isoS * weightl.global_IsolatedPawnVal[MG]) + (doS * weightl.global_StackedPawnVal[MG]) + (paS * weightl.global_PassedPawnVal[MG]) + (duoS * weightl.global_phalanxDuoPawnVal[MG]) + (connectS * weightl.global_connectionPawnVal[MG]), (isoS * weightl.global_IsolatedPawnVal[EG]) + (doS * weightl.global_StackedPawnVal[EG]) + (paS * weightl.global_PassedPawnVal[EG]) + (duoS * weightl.global_phalanxDuoPawnVal[EG]) + (connectS * weightl.global_connectionPawnVal[EG]) };
@@ -178,29 +180,35 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     const moveB: i64 = @intCast(p_blackMoveBB.count());
     const v = @as(scoreType, @intCast(moveW - moveB));
     const moveAmountScore: scoreVect = .{ weightl.global_MobilityVal[MG] * v, weightl.global_MobilityVal[EG] * v };
-    const wkingBB = chess.sqToBitboard(p_state.b.wKingSq);
-    const bkingBB = chess.sqToBitboard(p_state.b.bKingSq);
-
-    const bAttacks = (p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
+    //const wkingBB = chess.sqToBitboard(p_state.b.wKingSq);
+    //const bkingBB = chess.sqToBitboard(p_state.b.bKingSq);
     const wAttacks = (p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
-    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks) & ~p_state.b.occupiedBB_col(.WHITE);
-    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.occupiedBB_col(.BLACK);
+    const bAttacks = (p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
 
-    const nw: scoreType = @intCast(chess.ipopcount(kingMoveW));
-    const nb: scoreType = @intCast(chess.ipopcount(kingMoveB));
-    const v2 = (nw - nb);
-    var kingMoveScore: scoreVect = .{ weightl.global_KingMobilityVal[MG] * v2, weightl.global_KingMobilityVal[EG] * v2 };
-    if (nw == 0 and (wkingBB & bAttacks) != 0) {
-        kingMoveScore -= .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
+    const wTabouAttacks = p_whiteMoveBB.getAttackedMaskTabou(chess.UNIVERSE, bAttacks);
+    const bTabouAttacks = p_blackMoveBB.getAttackedMaskTabou(chess.UNIVERSE, wAttacks);
+
+    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks) & ~p_state.occupiedBB_col(.WHITE);
+    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks) & ~p_state.occupiedBB_col(.BLACK);
+
+    var kingMoveScore: scoreVect = @splat(0);
+    if (p_state.isChecked()) {
+        if (p_state.whiteToMove()) {
+            if (kingMoveW == 0 and (wTabouAttacks & p_state.frame.checkersBB) == 0) {
+                kingMoveScore -= .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
+            }
+        } else {
+            if (kingMoveB == 0 and (bTabouAttacks & p_state.frame.checkersBB) == 0) {
+                kingMoveScore += .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
+            }
+        }
     }
-    if (nb == 0 and (bkingBB & wAttacks) != 0) {
-        kingMoveScore += .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
-    }
-    const nOpenRookW: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.occupiedBB_col(.WHITE), p_state.getPieceBB_t(.PAWN) & p_state.b.occupiedBB_col(.WHITE), true)));
-    const nOpenRookB: scoreType = @intCast(chess.popcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.b.occupiedBB_col(.BLACK), p_state.getPieceBB_t(.PAWN) & p_state.b.occupiedBB_col(.BLACK), false)));
+    const nOpenRookW: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.WHITE), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE), true)));
+    const nOpenRookB: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.BLACK), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK), false)));
     const deltaOpenRook = nOpenRookW - nOpenRookB;
     const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookVal[MG] * deltaOpenRook, weightl.global_OpenFileRookVal[EG] * deltaOpenRook };
     return moveAmountScore + kingMoveScore + pieceMobility;
+    //return moveAmountScore + pieceMobility;
 }
 pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whiteToMove: bool) scoreVect {
     _ = whiteToMove;
@@ -247,23 +255,30 @@ pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const 
 pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // structure protection,
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
-    const w_pieceProtect = p_whiteMoveBB.andFn(p_state.b.occupiedBB_col(.WHITE) ^ chess.sqToBitboard(p_state.b.wKingSq));
-    const b_pieceProtect = p_blackMoveBB.andFn(p_state.b.occupiedBB_col(.BLACK) ^ chess.sqToBitboard(p_state.b.bKingSq));
+    const w_pieceProtect = p_whiteMoveBB.andFn(p_state.occupiedBB_col(.WHITE));
+    const b_pieceProtect = p_blackMoveBB.andFn(p_state.occupiedBB_col(.BLACK));
     const s = @as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()));
 
     const w_pieceCenterProt = p_whiteMoveBB.collapse() & (chess.centerBB);
     const b_pieceCenterProt = p_blackMoveBB.collapse() & (chess.centerBB);
-    const s2 = @as(scoreType, @intCast(chess.popcount(w_pieceCenterProt))) - @as(scoreType, @intCast(chess.popcount(b_pieceCenterProt)));
-    return .{ weightl.global_StructureProtectionVal[MG] * s + weightl.global_centerProtectionVal[MG] * s2, weightl.global_StructureProtectionVal[EG] * s + weightl.global_centerProtectionVal[EG] * s2 };
-}
-pub fn evaluate_tempo(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
-    const nonPawns = ~p_state.getPieceBB_t(.PAWN);
-    //const wThreats = p_whiteMoveBB.andFn(p_state.b.occupiedBB_col(.BLACK) & nonPawns);
-    const wThreats = p_whiteMoveBB.getAttackedMask(p_state.b.occupiedBB_col(.BLACK) & nonPawns);
-    const bThreats = p_blackMoveBB.getAttackedMask(p_state.b.occupiedBB_col(.WHITE) & nonPawns);
-    const deltaThreat: scoreType = @as(scoreType, chess.popcount(wThreats)) - @as(scoreType, chess.popcount(bThreats));
+    const s2 = @as(scoreType, @intCast(chess.ipopcount(w_pieceCenterProt) - chess.ipopcount(b_pieceCenterProt)));
+    const wAttack = p_whiteMoveBB.getAttackedMask(chess.UNIVERSE);
+    const bAttack = p_blackMoveBB.getAttackedMask(chess.UNIVERSE);
+    const wHanging = p_state.occupiedBB_col(.WHITE) & (~wAttack) & (bAttack);
+    const bHanging = p_state.occupiedBB_col(.BLACK) & (~bAttack) & (wAttack);
+    const s3: scoreType = @intCast(chess.ipopcount(bHanging) - chess.ipopcount(wHanging));
 
-    var ret: scoreVect = .{ weightl.global_pieceThreatScore[MG] * deltaThreat, weightl.global_pieceThreatScore[EG] * deltaThreat };
+    const nonPawns = ~p_state.getPieceBB_t(.PAWN);
+    const wBigThreat = p_state.occupiedBB_col(.BLACK) & (wAttack) & nonPawns;
+    const bBigThreat = p_state.occupiedBB_col(.WHITE) & (bAttack) & nonPawns;
+    const deltaThreat: scoreType = @intCast(chess.ipopcount(wBigThreat) - chess.ipopcount(bBigThreat));
+    //const wRooksAtt = p_whiteMoveBB.rookMoves | p_whiteMoveBB.queenMoves
+
+    //return .{ weightl.global_StructureProtectionVal[MG] * s + weightl.global_centerProtectionVal[MG] * s2, weightl.global_StructureProtectionVal[EG] * s + weightl.global_centerProtectionVal[EG] * s2 };
+    return .{ weightl.global_StructureProtectionVal[MG] * s + weightl.global_centerProtectionVal[MG] * s2 + weightl.global_HangingVal[MG] * s3 + weightl.global_pieceThreatScore[MG] * deltaThreat, weightl.global_StructureProtectionVal[EG] * s + weightl.global_HangingVal[EG] * s3 + weightl.global_pieceThreatScore[EG] * deltaThreat };
+}
+pub fn evaluate_tempo(p_state: *const boardl.boardState, white: bool) scoreVect {
+    var ret: scoreVect = @splat(0);
     if (p_state.isChecked()) {
         if (white) {
             ret -= .{ weightl.global_tempoChecksScore[MG], weightl.global_tempoChecksScore[EG] };
@@ -577,16 +592,16 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !voi
     const wAttacks = (allwhiteMoveBB.getAttackedMask(chess.UNIVERSE));
     //const kingMoveW = allwhiteMoveBB.kingMoves & (~allblackMoveBB.getAttackedMask(chess.UNIVERSE));
     //const kingMoveB = allblackMoveBB.kingMoves & (~allwhiteMoveBB.getAttackedMask(chess.UNIVERSE));
-    const kingMoveW = allwhiteMoveBB.kingMoves & (~bAttacks) & ~p_state.b.occupiedBB_col(.WHITE);
-    const kingMoveB = allblackMoveBB.kingMoves & (~wAttacks) & ~p_state.b.occupiedBB_col(.BLACK);
+    const kingMoveW = allwhiteMoveBB.kingMoves & (~bAttacks) & ~p_state.occupiedBB_col(.WHITE);
+    const kingMoveB = allblackMoveBB.kingMoves & (~wAttacks) & ~p_state.occupiedBB_col(.BLACK);
 
     p_out.appendCoeff(.{ .wcoeff = @intCast(chess.popcount(kingMoveW)), .bcoeff = @intCast(chess.popcount(kingMoveB)) });
     std.debug.assert(idx == configl.TEXEL_KINGMOVE_COUNT_IDX);
     idx += 1;
 
     // structure protection
-    const w_pieceProtect = allwhiteMoveBB.andFn(p_state.b.occupiedBB_col(.WHITE) ^ chess.sqToBitboard(p_state.b.wKingSq));
-    const b_pieceProtect = allblackMoveBB.andFn(p_state.b.occupiedBB_col(.BLACK) ^ chess.sqToBitboard(p_state.b.bKingSq));
+    const w_pieceProtect = allwhiteMoveBB.andFn(p_state.occupiedBB_col(.WHITE) ^ chess.sqToBitboard(p_state.b.wKingSq));
+    const b_pieceProtect = allblackMoveBB.andFn(p_state.occupiedBB_col(.BLACK) ^ chess.sqToBitboard(p_state.b.bKingSq));
     p_out.appendCoeff(.{ .wcoeff = @intCast(w_pieceProtect.count()), .bcoeff = @intCast(b_pieceProtect.count()) });
     std.debug.assert(idx == configl.TEXEL_PROTECTION_COUNT_IDX);
     idx += 1;
@@ -625,8 +640,8 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !voi
     idx += 1;
 
     const nonPawns = ~p_state.getPieceBB_t(.PAWN);
-    const wThreats = allwhiteMoveBB.andFn(p_state.b.occupiedBB_col(.BLACK) & nonPawns);
-    const bThreats = allblackMoveBB.andFn(p_state.b.occupiedBB_col(.WHITE) & nonPawns);
+    const wThreats = allwhiteMoveBB.andFn(p_state.occupiedBB_col(.BLACK) & nonPawns);
+    const bThreats = allblackMoveBB.andFn(p_state.occupiedBB_col(.WHITE) & nonPawns);
 
     p_out.appendCoeff(.{ .wcoeff = @intCast(wThreats.count()), .bcoeff = @intCast(bThreats.count()) });
     std.debug.assert(idx == configl.TEXEL_PIECE_THREAT_IDX);

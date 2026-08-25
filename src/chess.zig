@@ -436,7 +436,6 @@ pub inline fn isPawnPiece(piece: e_piece) bool {
     return (piece == .nWhitePawn or piece == .nBlackPawn);
 }
 pub inline fn pawnFromColor(white: bool) e_piece {
-    //return @enumFromInt(@intFromEnum(e_piece.nWhitePawn) + whiteBoolToInt(white) * N_PIECES_TYPES);
     return if (white) .nWhitePawn else .nBlackPawn;
 }
 

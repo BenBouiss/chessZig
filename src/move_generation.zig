@@ -409,28 +409,18 @@ pub fn moveGenPawnBB(p_board: *const boardState, comptime white: bool, emptyOrEn
     if (comptime white) {
         p_out.pawnMoves |= (pBB << 8) & (~occ);
         p_out.doubleMoves |= ((p_out.pawnMoves << 8) & (~occ)) & ((pBB & chess.whitePawnDoubleRank) << 16);
-
-        p_out.pawnAttacks |= chess.getPawnAttacksFromBB(pBB, true);
-
+        p_out.pawnAttacks |= chess.getPawnAttacksFromBB(pBB, white);
         p_out.enPassantMoves |= p_out.pawnAttacks & enPassantBB & chess.whitePawnEnpassantRank;
-
         p_out.pawnAttacks &= (emptyOrEnemy & occ);
-        //p_out.pawnAttacks &= (p_board.b.c_occupiedBB[chess.whiteBoolToInt(false)]);
-
         p_out.promotionMoves |= ((p_out.pawnMoves | p_out.pawnAttacks) & chess.whitePawnPromoRank);
         p_out.pawnAttacks &= ~chess.whitePawnPromoRank;
         p_out.pawnMoves &= ~chess.whitePawnPromoRank;
     } else {
         p_out.pawnMoves |= (pBB >> 8) & (~occ);
         p_out.doubleMoves |= ((p_out.pawnMoves >> 8) & (~occ)) & ((pBB & chess.blackPawnDoubleRank) >> 16);
-
-        p_out.pawnAttacks |= chess.getPawnAttacksFromBB(pBB, false);
-
+        p_out.pawnAttacks |= chess.getPawnAttacksFromBB(pBB, white);
         p_out.enPassantMoves |= p_out.pawnAttacks & enPassantBB & chess.blackPawnEnpassantRank;
-
-        //p_out.pawnAttacks &= (p_board.b.c_occupiedBB[chess.whiteBoolToInt(true)]);
         p_out.pawnAttacks &= (emptyOrEnemy & occ);
-
         p_out.promotionMoves |= ((p_out.pawnMoves | p_out.pawnAttacks) & chess.blackPawnPromoRank);
         p_out.pawnAttacks &= ~chess.blackPawnPromoRank;
         p_out.pawnMoves &= ~chess.blackPawnPromoRank;
@@ -1022,7 +1012,7 @@ pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comp
     generatePawnt(out, white, t, p_state, occ, targets);
 
     // horiz
-    var bb = p_state.getPieceBB_t(.QUEEN) | p_state.getPieceBB_t(.ROOK) & own;
+    var bb = (p_state.getPieceBB_t(.QUEEN) | p_state.getPieceBB_t(.ROOK)) & own;
     while (bb != 0) {
         const sq = chess.bitscan(bb);
         bb &= bb - 1;
@@ -1034,7 +1024,7 @@ pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comp
             genericStagedMovePushQuiet(out, att & targets, sq);
         }
     }
-    bb = p_state.getPieceBB_t(.QUEEN) | p_state.getPieceBB_t(.BISHOP) & own;
+    bb = (p_state.getPieceBB_t(.QUEEN) | p_state.getPieceBB_t(.BISHOP)) & own;
     while (bb != 0) {
         const sq = chess.bitscan(bb);
         bb &= bb - 1;

@@ -250,7 +250,7 @@ pub const Hash_bucket = struct {
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
-            if ((entry.key == _hash) and white == entry.white() and p_state.isMovePseudoLegal(entry.bestMove)) {
+            if (entry.key == _hash and white == entry.white() and p_state.isMovePseudoLegal(entry.bestMove)) {
                 //if ((entry.key == _hash) and white == entry.white()) {
                 if (entry._depth >= depth) {
                     hashTable.stat.hit += 1;
@@ -497,12 +497,11 @@ pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32, ver
         std.debug.print("[DEBUG] _initOrReallocHashTable: Building using hash logic!\n", .{});
     }
     if (hashTable.initialized) {
-        if (sizeHashTable != hashTable.MBsize) {
-            hashTable.free(alloc, verbose);
-        } else {
+        if (sizeHashTable == hashTable.MBsize) {
             hashTable.zero();
             return;
         }
+        hashTable.free(alloc, verbose);
     }
     hashTable = Hash_table.init(alloc, sizeHashTable, verbose) catch |err| {
         std.debug.print("[ERROR] _initOrReallocHashTable: memory error during alloc {}\n", .{err});

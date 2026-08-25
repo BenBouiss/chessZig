@@ -848,14 +848,20 @@ pub const boardState = struct {
         for (1..chessl.N_PIECES_TYPES) |idx| {
             // 1: skips the king
             const pieceIdx = colorOffset + (chessl.N_PIECES_TYPES - 1) - idx;
-            const count = self.b.pieceCount[pieceIdx];
-            _n -= count;
+            _n -= self.b.pieceCount[pieceIdx];
             if (_n <= 0) {
                 return @enumFromInt(pieceIdx);
             }
         }
         // returns the king if no piece found
         return @enumFromInt(colorOffset + chessl.N_PIECES_TYPES - 1);
+    }
+    pub inline fn occupiedBB(self: boardState) u64 {
+        return self.b.c_occupiedBB[0] | self.b.c_occupiedBB[1];
+    }
+
+    pub inline fn occupiedBB_col(self: boardState, color: e_color) u64 {
+        return self.b.c_occupiedBB[@intFromEnum(color)];
     }
 
     pub inline fn getSidePieceCount(self: boardState, color: e_color) u8 {

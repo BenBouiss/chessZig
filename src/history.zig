@@ -11,9 +11,6 @@ const scoreType = typel.scoreType;
 const e_piece = typel.e_piece;
 const e_square = typel.e_square;
 
-// indexes: ply, idx (either 1st or 2nd)
-pub var killerMoves: [typel.MAX_PLY][2]IMove = undefined;
-
 // index from, to
 //pub var counterMoves: [64][64]IMove = undefined;
 
@@ -40,7 +37,6 @@ pub var captureHistory: [13][13][64]scoreType = std.mem.zeroes([13][13][64]score
 
 pub fn _initMoveOrdering() void {
     historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
-    killerMoves = std.mem.zeroes([typel.MAX_PLY][2]IMove);
     //counterMoves = std.mem.zeroes([64][64]IMove);
     captureHistory = std.mem.zeroes([13][13][64]scoreType);
     continuationHeuristic = std.mem.zeroes([13][64]pieceHistory);
@@ -57,7 +53,9 @@ pub fn _initMoveOrdering() void {
             //std.debug.print("{d}\n", .{s});
 
             // patricia version
-            //const s: f32 = 0.4 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2);
+            //const s: f32 = 1024 * (0.4 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2));
+            //lmrBase[d][i] = @as(scoreType, @intFromFloat(s));
+
             //const s: f32 = (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2);
             //lmrBase[d][i] = @as(scoreType, @intCast(@divFloor(d, 4))) + @as(scoreType, @intFromFloat(s));
             lmrBase[d][i] = @as(scoreType, @intCast(@divFloor(d * 1024, 3))) + (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
@@ -70,8 +68,4 @@ pub fn _initMoveOrdering() void {
 }
 pub inline fn pawnHashIndexToIdx(hash: u64) u64 {
     return hash % 16384;
-}
-pub inline fn onKillerMove(move: IMove, ply: u16) void {
-    killerMoves[ply][1] = killerMoves[ply][0];
-    killerMoves[ply][0] = move;
 }
