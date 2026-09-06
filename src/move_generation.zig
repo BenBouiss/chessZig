@@ -787,9 +787,9 @@ pub const typeMoveGenerator = struct {
     //_moves: movesScores = undefined,
 
     captures: movesScores = undefined,
-    computedCapt: bool = false,
+    computedCaptures: bool = false,
     quiets: movesScores = undefined,
-    computedQuiet: bool = false,
+    computedQuiets: bool = false,
     badCaptures: movesScores = undefined,
     idx: u8 = 0,
     phase: typel.e_moveGenFlag = .NONE,
@@ -800,9 +800,9 @@ pub const typeMoveGenerator = struct {
         ret.phase = .NONE;
         //ret._moves.moves.len = 0;
         ret.captures.moves.len = 0;
-        ret.computedCapt = false;
+        ret.computedCaptures = false;
         ret.quiets.moves.len = 0;
-        ret.computedQuiet = false;
+        ret.computedQuiets = false;
         ret.badCaptures.moves.len = 0;
         return ret;
     }
@@ -823,7 +823,7 @@ pub const typeMoveGenerator = struct {
             }
         }
         if (p_self.phase == .TTMOVE) {
-            if (!p_self.computedCapt) {
+            if (!p_self.computedCaptures) {
                 p_self.generateMove(.CAPTURE, state);
                 for (0..p_self.captures.moves.len) |i| {
                     const move = p_self.captures.moves.moves[i];
@@ -860,7 +860,7 @@ pub const typeMoveGenerator = struct {
             }
         }
         if (p_self.phase == .CAPTURE) {
-            if (!p_self.computedQuiet and !skipQuiet) {
+            if (!p_self.computedQuiets and !skipQuiet) {
                 p_self.generateMove(.QUIET, state);
                 const prevMove = ss.getPrevFrame(ply, 1).playedMove;
                 const prevPiece = ss.getPrevFrame(ply, 1).pieceMoved;
@@ -933,12 +933,12 @@ pub const typeMoveGenerator = struct {
         self.idx = 0;
         if (comptime t == .CAPTURE or t == .QUIET) {
             if (comptime t == .CAPTURE) {
-                self.computedCapt = true;
+                self.computedCaptures = true;
                 self.captures.moves.len = 0;
                 generateMoveT(&self.captures.moves, t, p_state);
             }
             if (comptime t == .QUIET) {
-                self.computedQuiet = true;
+                self.computedQuiets = true;
                 self.quiets.moves.len = 0;
                 generateMoveT(&self.quiets.moves, t, p_state);
             }

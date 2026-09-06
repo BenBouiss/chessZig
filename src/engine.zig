@@ -41,10 +41,10 @@ pub const goArgStruct = struct {
     useBatched: bool = false,
 
     // all times in ms
-    wtime: u32 = std.math.maxInt(u32),
-    btime: u32 = std.math.maxInt(u32),
-    winc: u32 = 0,
-    binc: u32 = 0,
+    wtime: i64 = std.math.maxInt(i64),
+    btime: i64 = std.math.maxInt(i64),
+    winc: i64 = 0,
+    binc: i64 = 0,
 
     movestogo: u32 = 0,
     movetime: u32 = 0,
@@ -82,12 +82,20 @@ pub const inputChannel = struct {
         ret.l = .{};
         return ret;
     }
+    pub fn initP(alloc: std.mem.Allocator) !*inputChannel {
+        const ret = try alloc.create(inputChannel);
+        ret.cmdBuffer = (try alloc.alloc([configl.MAX_USER_INPUT]u8, INPUTCHANNEL_LEN));
+        ret.cmdSize = (try alloc.alloc(usize, INPUTCHANNEL_LEN));
+        ret.nextIdx = 0;
+        ret.currentIdx = 0;
+        ret.l = .{};
+        return ret;
+    }
 
     pub fn nonEmpty(p_self: *inputChannel) bool {
         p_self.l.acquireLock();
         defer p_self.l.releaseLock();
-        const ret = p_self.currentIdx != p_self.nextIdx;
-        return ret;
+        return p_self.currentIdx != p_self.nextIdx;
     }
     pub fn readBuffer(p_self: *inputChannel) cmdResult {
         p_self.l.acquireLock();
@@ -99,13 +107,12 @@ pub const inputChannel = struct {
         @memcpy((ret.cmd[0..ret_len]), p_self.cmdBuffer[p_self.currentIdx][0..ret_len]);
         return ret;
     }
-    pub fn putCmd(p_self: *inputChannel, cmd: []const u8) bool {
+    pub fn putCmd(p_self: *inputChannel, cmd: []const u8) void {
         p_self.l.acquireLock();
         defer p_self.l.releaseLock();
         p_self.nextIdx = (p_self.nextIdx + 1) % INPUTCHANNEL_LEN;
         @memcpy((p_self.cmdBuffer[p_self.nextIdx][0..cmd.len]), cmd[0..cmd.len]);
         p_self.cmdSize[p_self.nextIdx] = cmd.len;
-        return true;
     }
     pub fn free(p_self: *inputChannel, alloc: std.mem.Allocator) void {
         alloc.free(p_self.cmdBuffer);
@@ -253,7 +260,7 @@ pub const engine = struct {
     scheduler: schedulerl.scheduler = .{},
 
     alloc: std.mem.Allocator,
-    uciMode: bool = false,
+    //uciMode: bool = false,
     id: engineIdentification = .{},
     options: engineOptions = .{},
     startSw: timel.stopWatch = .{},
@@ -270,16 +277,14 @@ pub const engine = struct {
         ret.id = .{};
         ret.options = .{};
         ret.logsPath = try .initFromSlice(alloc, "out/engine.log");
-        ret.startSw = .{};
-        ret.startSw.startTimeTick();
+        ret.startSw = .init(true);
         ret.metric = .{};
         ret.workingThreads = try std.ArrayList(std.Thread).initCapacity(alloc, 2);
         ret.logs = try logging.init(alloc, 16);
 
         ret.options.setOptions = try std.ArrayList(setOptionEntry).initCapacity(alloc, 4);
         ret.scheduler = .{};
-        ret.uciMode = false;
-        try ret.initOptions();
+        //ret.uciMode = false;
         try ret.initInternals();
         ret.state = try chess.getBoardFromFen(chess.DEFAULT_FEN);
 
@@ -442,7 +447,6 @@ pub const engine = struct {
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
-        //std.debug.print("[DEBUG] prev board psqt val {d}\n", .{p_self.state.frame.psqtEval});
         p_self.refreshInternals();
         return true;
     }
@@ -613,6 +617,7 @@ pub const engine = struct {
 
     fn initInternals(p_self: *engine) !void {
         p_self.status.initializedInternals = true;
+        try p_self.initOptions();
         magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
         p_self.refreshInternals();
         if (!nnuel.nnueNet.inited and comptime configl.USE_NNUE) {
@@ -684,7 +689,6 @@ pub fn dispatchUciBenchmark(p_engine: *engine) bool {
     p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
         return false;
     };
-
     return true;
 }
 pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
@@ -739,28 +743,28 @@ fn parseGoCmd(cmd: []const u8) goArgStruct {
             goArgs.type = .PONDER;
         } else if (utilsl.startsWith(arg, "wtime", .ignoreCase)) {
             if (gen.next()) |val| {
-                goArgs.wtime = std.fmt.parseInt(u32, val, 10) catch {
+                goArgs.wtime = std.fmt.parseInt(i64, val, 10) catch {
                     gen.rewind();
                     continue;
                 };
             }
         } else if (utilsl.startsWith(arg, "btime", .ignoreCase)) {
             if (gen.next()) |val| {
-                goArgs.btime = std.fmt.parseInt(u32, val, 10) catch {
+                goArgs.btime = std.fmt.parseInt(i64, val, 10) catch {
                     gen.rewind();
                     continue;
                 };
             }
         } else if (utilsl.startsWith(arg, "winc", .ignoreCase)) {
             if (gen.next()) |val| {
-                goArgs.winc = std.fmt.parseInt(u32, val, 10) catch {
+                goArgs.winc = std.fmt.parseInt(i64, val, 10) catch {
                     gen.rewind();
                     continue;
                 };
             }
         } else if (utilsl.startsWith(arg, "binc", .ignoreCase)) {
             if (gen.next()) |val| {
-                goArgs.binc = std.fmt.parseInt(u32, val, 10) catch {
+                goArgs.binc = std.fmt.parseInt(i64, val, 10) catch {
                     gen.rewind();
                     continue;
                 };
@@ -883,12 +887,11 @@ pub fn getEngineCmdType(cmd: []const u8) e_engineCmd {
     }
     return .NOOP;
 }
-pub fn launch_engine(debugMode: bool) !void {
-    _ = debugMode;
+pub fn launch_engine() !void {
     try ucil.launchUci(mainl.getGlobalGPA());
 }
 
 pub fn main(init: std.process.Init) anyerror!void {
     mainl.GLOBAL_CTX.setInit(init);
-    try launch_engine(false);
+    try launch_engine();
 }

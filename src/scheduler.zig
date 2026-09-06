@@ -76,29 +76,21 @@ pub const timeManager = struct {
         p_self.remainingTimeMs = 0;
         p_self.stopWatch.reset();
     }
-
-    pub inline fn isOvertimeSearching(p_self: *const timeManager) bool {
-        return (p_self.timeSinceStartMs() > @divFloor(p_self.remainingTimeMs, configl.SCHEDULER_MAX_TIME_DIV));
-    }
-    pub fn updateNodeSoftLimit(p_self: *timeManager, totalNodes: u64, bestMoveNodes: u64, bestMoveStability: scoreType) void {
-        // https://github.com/Adam-Kulju/Patricia/tm.h
-        const fraction: f64 = @as(f64, @floatFromInt(bestMoveNodes)) / @as(f64, @floatFromInt(totalNodes));
-        const factor: f64 = ((@as(f64, @floatFromInt(weightl.nodeFactor1)) / 100.0) - fraction) * @as(f64, @floatFromInt(weightl.nodeFactor2)) / 100.0;
-        const bmFactor = (@as(f64, @floatFromInt(weightl.tmFactor)) / 100.0) - @as(f64, @floatFromInt(bestMoveStability)) * 0.06;
-        const new = @min(@as(i64, @intFromFloat(@as(f64, @floatFromInt(p_self.originalSoftTimeLim)) * factor * bmFactor)), p_self.remainingTimeMs);
-        //std.debug.print("prev{d} next{d} fraction {d} factor {d} bmFactor {d} bestMoveStability {d}\n", .{ p_self.softTimeLimit, new, fraction, factor, bmFactor, bestMoveStability });
-        p_self.softTimeLimit = new;
-    }
 };
 pub fn outOfTime(p_info: *threadingl.threadInfo) bool {
     if (!p_info.alive) return true;
     p_info.checkTime += 1;
     if (p_info.checkTime == 1024) {
         p_info.checkTime = 0;
-        if (p_info.stopWatch.timeSinceStartMs() >= p_info.criticalTimeMs) {
-            p_info.alive = false;
-            return true;
-        }
+        return outOfTime_t(p_info);
+    }
+    return false;
+}
+
+pub fn outOfTime_t(p_info: *threadingl.threadInfo) bool {
+    if (p_info.stopWatch.timeSinceStartMs() >= p_info.criticalTimeMs) {
+        p_info.alive = false;
+        return true;
     }
     return false;
 }
@@ -155,7 +147,6 @@ pub const scheduler = struct {
 
 pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) bool {
     const pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = p_engine.options.searchF, .scheduler = &(p_engine.scheduler) };
-    p_engine.scheduler.timeM.startSearchTick();
     if (p_engine.state.whiteToMove()) {
         p_engine.scheduler.setRemainingTimeMs(config.wtime);
     } else {
@@ -172,21 +163,26 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) 
 pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: depthT) threadingl.threadInfo {
     var sched: scheduler = .{};
     sched.setRemainingTimeMs(std.math.maxInt(i64));
-    sched.timeM.startSearchTick();
     var info: threadingl.threadInfo = .{ .alive = true };
     _startSearch(&sched, p_state, &info, features, maxDepth);
     return info;
 }
 pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT) void {
-    //std.debug.print("[DEBUG] startSearch: corrHistMax {d}\n", .{weightl.corrHistMax});
     // everything gets "returned" via the p_info
     // launched as single threaded
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
     p_info.working = true;
-    defer sendFinal(p_info.currentBest.move);
     defer p_info.working = false;
+    p_info.searchStat = .{};
+    p_info.depth = 0;
+    p_info.seldepth = 0;
 
-    p_info.stopWatch = sched.timeM.stopWatch;
+    sched.timeM.originalSoftTimeLim = @divFloor(sched.timeM.remainingTimeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(sched.timeM.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
+    sched.timeM.softTimeLimit = sched.timeM.originalSoftTimeLim;
+
+    sched.timeM.stopWatch = .init(true);
+    p_info.stopWatch = .init(true);
+
     p_info.checkTime = 0;
     p_info.criticalTimeMs = @divFloor(sched.timeM.remainingTimeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
 
@@ -194,8 +190,7 @@ pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *thr
 
     const fmoves = moveGenl.generateLegalMoves(p_state);
     if (fmoves.len == 1) {
-        p_info.currentBest = .{ .depth = 1, .move = fmoves.moves[0], .scoring = heuristicl.c_evaluate(p_state, p_state.whiteToMove()), .line = .{ .len = 1 } };
-        p_info.currentBest.line.moves[0] = fmoves.moves[0];
+        sendFinal(fmoves.moves[0]) catch unreachable;
         return;
     }
     var threadD: alphaBetal.threadData = .{};
@@ -217,17 +212,16 @@ pub fn aspirationWindow(sched: *scheduler, p_state: *boardl.boardState, p_info: 
 
     var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta, threadD);
     var delta = weightl.aspirationCoefficient;
-    var validDecision: IMove = .{};
+    var validDecision: IMove = p_info.currentBest.move;
     var samePrevBestMove: scoreType = 0;
     var prevBest: IMove = .{};
-    sched.timeM.originalSoftTimeLim = @divFloor(sched.timeM.remainingTimeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(sched.timeM.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
-    sched.timeM.softTimeLimit = sched.timeM.originalSoftTimeLim;
 
     while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
         depth += 1;
         var _depth = depth;
         score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta, threadD);
-        while ((score <= alpha or score >= beta) and p_info.alive) {
+
+        while (p_info.alive and (score <= alpha or score >= beta)) {
             if (score <= alpha) {
                 beta = @divFloor(alpha + beta, 2);
                 alpha -= delta;
@@ -240,15 +234,13 @@ pub fn aspirationWindow(sched: *scheduler, p_state: *boardl.boardState, p_info: 
 
             score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta, threadD);
         }
-        ss.setPrevLine(&p_info.currentBest.line);
-        if (p_info.alive) {
-            validDecision = p_info.currentBest.move;
-        } else {
-            if (validDecision.isValid()) {
-                p_info.currentBest.move = validDecision;
-            }
+
+        if (!p_info.alive) {
             break;
         }
+        validDecision = p_info.currentBest.move;
+        ss.setPrevLine(&p_info.currentBest.line);
+
         if (prevBest.equal(validDecision)) {
             samePrevBestMove = @min(samePrevBestMove + 1, @as(usize, @intCast(weightl.bestMoveMax)));
         } else {
@@ -256,9 +248,8 @@ pub fn aspirationWindow(sched: *scheduler, p_state: *boardl.boardState, p_info: 
             prevBest = validDecision;
         }
         //threadD.printRooMoves();
-        //sched.timeM.updateNodeSoftLimit(p_info.searchStat.n_nodeExplored, threadD.findRootMove(prevBest).nodes, samePrevBestMove);
         if (features.reportProgress) {
-            sendPartial(p_info, sched.timeM.timeSinceStartMs());
+            sendPartial(p_info, sched.timeM.timeSinceStartMs(), _depth);
         }
         if (depth > weightl.aspirationMinDepthVar) {
             //alpha = score - delta;
@@ -271,6 +262,7 @@ pub fn aspirationWindow(sched: *scheduler, p_state: *boardl.boardState, p_info: 
             beta = weightl.simpleCheckMateScore;
         }
     }
+    sendFinal(validDecision) catch unreachable;
     return depth;
 }
 
@@ -283,18 +275,18 @@ pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depth
     return ((prevTime * weightl.schedulerGrowthEstim) < timer.softTimeLimit);
 }
 
-pub inline fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64) void {
+pub fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64, depth: depthT) void {
     var msgBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
     const nNodes: i64 = @intCast(p_info.searchStat.n_nodeExplored);
     const nps = @divFloor(nNodes * 1000, (1 + timeSinceStartMs));
-    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} score cp {d} nodes {d} nps {d} currmove {s} pv {f}\n", .{ p_info.depth, p_info.seldepth, p_info.currentBest.scoring, nNodes, nps, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
+    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} score cp {d} nodes {d} nps {d} currmove {s} pv {f}\n", .{ depth, p_info.seldepth, p_info.currentBest.scoring, nNodes, nps, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
     respondNoEng(utilsl.trimStr(final_info)) catch unreachable;
 }
 
-pub fn sendFinal(move: IMove) void {
+pub fn sendFinal(move: IMove) !void {
     var buffer = std.mem.zeroes([16]u8);
-    const msg = std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{utilsl.trimStr(&move.getStr())}) catch unreachable;
-    respondNoEng(msg) catch unreachable;
+    const msg = try std.fmt.bufPrint(&buffer, "bestmove {s}\n", .{utilsl.trimStr(&move.getStr())});
+    try respondNoEng(msg);
 }
 
 pub inline fn respondNoEng(msg: []const u8) !void {

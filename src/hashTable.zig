@@ -243,6 +243,7 @@ pub const Hash_bucket = struct {
     }
 
     pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, depth: u8, p_state: *const boardl.boardState, nNodes: scoreType) getResult {
+        _ = depth;
         const _hash = keyToUpperKey(hash);
         var next: usize = 0;
         const white = p_state.whiteToMove();
@@ -252,13 +253,14 @@ pub const Hash_bucket = struct {
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
             if (entry.key == _hash and white == entry.white() and p_state.isMovePseudoLegal(entry.bestMove)) {
                 //if ((entry.key == _hash) and white == entry.white()) {
-                if (entry._depth >= depth) {
-                    hashTable.stat.hit += 1;
-                    return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
-                } else {
-                    hashTable.stat.miss += 1;
-                    return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = true };
-                }
+                return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
+                //if (entry._depth >= depth) {
+                //    hashTable.stat.hit += 1;
+                //    return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
+                //} else {
+                //    hashTable.stat.miss += 1;
+                //    return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = true };
+                //}
             }
             if (!entry.valid()) {
                 hashTable.stat.miss += 1;

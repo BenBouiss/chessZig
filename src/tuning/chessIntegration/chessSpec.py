@@ -380,7 +380,7 @@ def computeSPRT(
     """
     llr = LLR(elo_0, elo_1, wins, draws, losses)
     LA = math.log(beta / (1 - alpha))
-    LB = math.log((1 - beta) / (alpha))
+    LB = math.log((1 - beta) / alpha)
     if llr > LB:
         return SPRT_result.H1
     if llr < LA:

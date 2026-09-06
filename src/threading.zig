@@ -203,8 +203,7 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     props.status = .WAITING;
     props.alive = true;
     props.timeWorkingUs = 0;
-    const alive = &props.alive;
-    while (p_self.isRunning() and alive.*) {
+    while (p_self.isRunning() and props.alive) {
         std.atomic.spinLoopHint();
         if (props.searchPing) {
             var sw: timel.stopWatch = .init(true);

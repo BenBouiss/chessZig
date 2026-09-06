@@ -53,12 +53,12 @@ pub fn _initMoveOrdering() void {
             //std.debug.print("{d}\n", .{s});
 
             // patricia version
-            //const s: f32 = 1024 * (0.4 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2));
-            //lmrBase[d][i] = @as(scoreType, @intFromFloat(s));
+            const s: f32 = 1024 * (0.4 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2));
+            lmrBase[d][i] = @as(scoreType, @intFromFloat(s));
 
             //const s: f32 = (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2);
             //lmrBase[d][i] = @as(scoreType, @intCast(@divFloor(d, 4))) + @as(scoreType, @intFromFloat(s));
-            lmrBase[d][i] = @as(scoreType, @intCast(@divFloor(d * 1024, 3))) + (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
+            //lmrBase[d][i] = @as(scoreType, @intCast(@divFloor(d * 1024, 3))) + (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
         }
     }
     //

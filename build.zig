@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
     // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
+
     // Standard optimization options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
@@ -30,6 +30,12 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "useAVX2", b.option(bool, "useAVX2", "Use avx2 for checkers bitboard generation") orelse false);
 
     build_options.addOption(bool, "useTune", b.option(bool, "useTune", "Tuning mode for spsa tuning") orelse false);
+    const windows = b.option(bool, "windows", "Target Microsoft Windows") orelse false;
+
+    //const target = b.standardTargetOptions(.{});
+    const target = b.resolveTargetQuery(.{
+        .os_tag = if (windows) .windows else null,
+    });
 
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.

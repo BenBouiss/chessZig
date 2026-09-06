@@ -39,8 +39,6 @@ pub const KILLER_0_HEURISTIC_VALUE = 1_999_999;
 pub const MAX_HIST_HEURISTIC_VALUE = 16394;
 pub const MAX_CONTINUATION_HEURISTIC_VALUE = 16394;
 
-pub const MAX_QUIESC_DEPTH: u16 = 64;
-
 pub const DEFAULT_ELO: u32 = 0;
 pub const MIN_ELO: u32 = 0;
 pub const MAX_ELO: u32 = 0;
@@ -79,7 +77,6 @@ pub const ITEM_PER_BUCKET = 3;
 
 // inactivity timers:
 pub const DEBUG_INACTIVITY_SERVING_S = 30; // 30 seconds in ns
-pub const DEBUG_INACTIVITY_SERVING_NS = DEBUG_INACTIVITY_SERVING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
 //
 
 pub const START_TICKRATE_NS = 2 * std.math.pow(u64, 10, 9); // 2 seconds in ns

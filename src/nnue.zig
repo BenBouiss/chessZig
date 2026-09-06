@@ -78,7 +78,7 @@ pub const accumulatorPair = struct {
     }
 };
 pub const accumulatorPairStack = struct {
-    items: [typel.MAX_PLY + configl.MAX_QUIESC_DEPTH]accumulatorPair = @splat(.{}),
+    items: [typel.MAX_PLY]accumulatorPair = @splat(.{}),
     len: usize = 0,
     pub fn getCurrent(self: *const accumulatorPair) *accumulatorPair {
         return self.items[self.len - 1];

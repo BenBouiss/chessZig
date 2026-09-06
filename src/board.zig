@@ -111,7 +111,7 @@ pub const board = struct {
         return self.pieceArray[sq];
     }
 
-    pub inline fn getPieceCount(self: board, piece: e_piece) e_piece {
+    pub inline fn getPieceCount(self: board, piece: e_piece) i8 {
         return self.pieceCount[@intFromEnum(piece)];
     }
 
@@ -1040,8 +1040,11 @@ pub const boardState = struct {
         return true;
     }
 
-    pub fn isStaleMateRepetition(p_self: *const boardState) bool {
-        return p_self.frame.halfMoveClock >= 100 or p_self.moveHistory.checkRepetitions(p_self.frame.halfMoveClock) or p_self.isInsufficientMaterial();
+    pub inline fn isStaleMateRepetition(p_self: *const boardState) bool {
+        return p_self.frame.halfMoveClock >= 100 or p_self.moveHistory.checkRepetitions(p_self.frame.halfMoveClock);
+    }
+    pub inline fn isStaleMate(p_self: *const boardState) bool {
+        return p_self.isStaleMateRepetition() or p_self.isInsufficientMaterial();
     }
 };
 

@@ -128,7 +128,7 @@ pub fn perftUciDepth(p_state: *boardl.boardState, p_info: *threadInfo, depth: u8
         return 1;
     }
 
-    if (p_state.isStaleMateRepetition()) {
+    if (p_state.isStaleMate()) {
         p_info.searchStat.n_nodeExplored += 1;
         return 1;
     }
@@ -189,7 +189,7 @@ pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: b
     if (depth <= 0) {
         return 1;
     }
-    if (p_state.isStaleMateRepetition()) {
+    if (p_state.isStaleMate()) {
         return 1;
     }
 

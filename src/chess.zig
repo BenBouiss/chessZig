@@ -423,7 +423,7 @@ pub fn getFirstMoveFromStr(p_state: *boardl.boardState, strBuffer: []const u8) I
             continue;
         }
         var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), 0);
-        if (cmd.len > 4 and cmd[4] != 0) {
+        if (cmd.len == 5 and cmd[4] != 0) {
             move.setFlag(@intFromEnum(letterPromoToFlag(cmd[4])));
         }
         fillMoveFromState(p_state, &move);
@@ -661,7 +661,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
         std.debug.print("Previous move: {s}\n", .{p_board_state.frame.lastMove.getStr()});
     }
 
-    std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMateRepetition()});
+    std.debug.print("Repetition stalemate status: {}\n", .{p_board_state.isStaleMate()});
     std.debug.print("Move history: ", .{});
     p_board_state.moveHistory.print();
     //p_board_state.moveHistory.printAlgebraicLineString() catch {
@@ -1238,6 +1238,7 @@ pub fn getAllMoveMaskFromX(p_board: *const boardl.boardState, white: bool, X: e_
 }
 
 pub const outcomeFlag = enum { UNFINISHED, WHITEWIN, BLACKWIN, DRAW };
+
 pub const algebraicTarget = struct {
     file: u8 = 9,
     rank: u8 = 9,
@@ -1284,7 +1285,7 @@ pub const algebraicTarget = struct {
         }
         var tmp: boardl.boardState = .copy(state);
         tmp.makeMove(move);
-        if (tmp.isStaleMateRepetition()) {
+        if (tmp.isStaleMate()) {
             ret.outcome = .DRAW;
         } else {
             const fmoves = moveGenl.generateLegalMoves(&tmp);
@@ -1361,7 +1362,7 @@ pub inline fn algebraicIsLetterFile(letter: u8) bool {
 pub inline fn algebraicIsLetterRank(letter: u8) bool {
     return letter >= '1' and letter <= '8';
 }
-pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !IMove {
+pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove {
     // exemple of match "1. d4 Nf6 2. c4 e6 3. Nf3 Bb4+ 4. Nbd2 O-O 5. a3 Bxd2+ 6. Bxd2 d6"
     // O-O: castling kingside
     // O-O-O: castling queenside
@@ -1369,32 +1370,33 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
     // capture: x
     // induces a check: + at the end (useless)
     const white = p_state.whiteToMove();
-    const isCapture = moveStr.containsE("x", .ignoreCase);
-    if (moveStr.containsE("O-O-O", .ignoreCase)) {
+    //const isCapture = moveStr.containsE("x", .ignoreCase);
+    const isCapture = utils.contains(moveStr, "x", .ignoreCase);
+    if (utils.contains(moveStr, "O-O-O", .ignoreCase)) {
         if (white) {
             return movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.c1), @intFromEnum(e_moveFlags.QUEENCASTLE));
         } else {
             return movel.build_move(@intFromEnum(e_square.e8), @intFromEnum(e_square.c8), @intFromEnum(e_moveFlags.QUEENCASTLE));
         }
-    } else if (moveStr.containsE("O-O", .ignoreCase)) {
+    } else if (utils.contains(moveStr, "O-O", .ignoreCase)) {
         if (white) {
             return movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.g1), @intFromEnum(e_moveFlags.KINGCASTLE));
         } else {
             return movel.build_move(@intFromEnum(e_square.e8), @intFromEnum(e_square.g8), @intFromEnum(e_moveFlags.KINGCASTLE));
         }
-    } else if (moveStr.containsE("-", .ignoreCase)) {
+    } else if (utils.contains(moveStr, "-", .ignoreCase)) {
         return debug_err.valueErr;
     }
     std.debug.assert(moveStr.len > 1);
     var startXPos = moveStr.len - 2;
     while (startXPos >= 0) {
-        const posSq = moveStr._slice()[startXPos .. startXPos + 2];
+        const posSq = moveStr[startXPos .. startXPos + 2];
         if (stringToLERF(posSq[0..2]) != .invalid) {
             break;
         }
         startXPos -= 1;
     }
-    const posSq = moveStr._slice()[startXPos .. startXPos + 2];
+    const posSq = moveStr[startXPos .. startXPos + 2];
     const toSq = stringToLERF(posSq[0..2]);
     const toBB = sqToBitboard(toSq);
     if (toSq == .invalid) {
@@ -1408,7 +1410,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
     }
 
     for (0..startXPos) |letterIdx| {
-        const letter = moveStr._slice()[letterIdx];
+        const letter = moveStr[letterIdx];
         if (algebraicIsLetterPiece(letter)) {
             const piece = getPieceFromStr(letter);
             potentialFromBB &= (p_state.b.pieceBB[@intFromEnum(e_pieceTo_e_pieceType(piece))]);
@@ -1445,7 +1447,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
         }
 
         if (popcount(potentialFromBB) != 1) {
-            std.debug.print("[PANIC] algebraicToIMove: potentialFromBB contains 0 or multiple possible source square for token: '{s}'\n", .{moveStr._slice()});
+            std.debug.print("[PANIC] algebraicToIMove: potentialFromBB contains 0 or multiple possible source square for token: '{s}'\n", .{moveStr});
             std.debug.print("[PANIC] algebraicToIMove: startXPos: {d} white: {}\n", .{ startXPos, p_state.whiteToMove() });
             p_state.moveHistory.print();
 
@@ -1457,11 +1459,15 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: *stringl.string) !
     var ret: IMove = movel.build_move(fromSq, @intFromEnum(toSq), 0);
 
     fillMoveFromState(p_state, &ret);
-    if (moveStr.containsE("=", .ignoreCase)) {
-        const eqIdx = moveStr.findE('=') catch {
+    if (utils.contains(moveStr, "=", .ignoreCase)) {
+        const eqIdx = utils.find(u8, moveStr, '=');
+        if (eqIdx == -1) {
             return ret;
-        };
-        const prom = moveStr._slice()[eqIdx + 1];
+        }
+        //const eqIdx = moveStr.findE('=') catch {
+        //    return ret;
+        //};
+        const prom = moveStr[@intCast(eqIdx + 1)];
         var flag = ret.getFlag();
         flag |= @intFromEnum(letterPromoToFlag(prom));
 
@@ -1491,7 +1497,7 @@ pub fn test_avx() !void {
     print_bitboard(state.frame.pinnedBB);
     print_boardstate(&state);
 }
-pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tmpBoard: *boardl.boardState) !matchMoveContainer {
+pub fn _algebraicLineToIMoveMatch(line: []const u8, tmpBoard: *boardl.boardState) !matchMoveContainer {
     var gen = utils.splitGenerator(u8).init(line, ' ');
 
     var ret: matchMoveContainer = undefined;
@@ -1505,10 +1511,10 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tm
             continue;
         }
 
-        var moveStr = try stringl.string.initFromSlice(alloc, str[offset..str.len]);
-        defer moveStr.free(alloc);
-        const move = algebraicToIMove(tmpBoard, &moveStr) catch |err| {
-            std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line, moveStr._slice() });
+        //var moveStr = try stringl.string.initFromSlice(alloc, str[offset..str.len]);
+        //defer moveStr.free(alloc);
+        const move = algebraicToIMove(tmpBoard, str[offset..]) catch |err| {
+            std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line, str });
             return err;
         };
         if (move.isValid()) {
@@ -1519,12 +1525,12 @@ pub fn _algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8, tm
     return ret;
 }
 
-pub fn algebraicLineToIMoveMatch(alloc: std.mem.Allocator, line: []const u8) !matchMoveContainer {
+pub fn algebraicLineToIMoveMatch(line: []const u8) !matchMoveContainer {
     var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
-    return _algebraicLineToIMoveMatch(alloc, line, &tmpBoard);
+    return _algebraicLineToIMoveMatch(line, &tmpBoard);
 }
-pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string) !boardl.boardState {
-    const moves = try algebraicLineToIMoveMatch(alloc, line._slice());
+pub fn algebraicLineToBoardstate(line: *const stringl.string) !boardl.boardState {
+    const moves = try algebraicLineToIMoveMatch(line._slice());
     var ret = try getBoardFromFen(DEFAULT_FEN);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
@@ -1533,9 +1539,9 @@ pub fn algebraicLineToBoardstate(alloc: std.mem.Allocator, line: *stringl.string
     }
     return ret;
 }
-pub fn test_alge(alloc: std.mem.Allocator) !void {
+pub fn test_alge() !void {
     const line = "1. d4 {book} Nf6 {book} 2. Bg5 {book} e6 {book} 3. e4 {book} h6 {book} 4. Bxf6 {book} Qxf6 {book} 5. Nf3 {book} d6 {book} 6. c3 {book} Nd7 {book} 7. Nbd2 {book} g6 {book} 8. g3 {book} Bg7 {book} 9. Qb3 {+0.20/12 0.172s} h5 {-0.15/13 0.137s} 10. Be2 {+0.16/12 0.220s} Bh6 {-0.06/11 0.128s} 11. O-O-O {-0.04/11 0.171s} b6 {+0.18/12 0.165s} 12. Kb1 {-0.23/12 0.141s} Bb7 {+0.32/12 0.166s} 13. Rhf1 {-0.37/12 0.186s} a6 {+0.30/12 0.201s} 14. h4 {-0.46/12 0.195s} O-O {+0.54/12 0.179s} 15. Qc4 {-0.52/12 0.111s} Rfc8 {+0.57/12 0.191s} 16. Qd3 {-0.38/12 0.125s} c5 {+0.09/11 0.166s} 17. dxc5 {-0.21/12 0.125s} Nxc5 {-0.01/13 0.181s} 18. Qxd6 {-0.50/12 0.116s} Nxe4 {+0.52/13 0.136s} 19. Qxb6 {-0.68/12 0.146s} Rab8 {+3.17/13 0.421s} 20. Qb4 {-4.56/11 0.400s} Nxd2+ {+4.13/12 0.128s} 21. Nxd2 {-3.33/10 0.102s} Qf5+ {+3.07/12 0.119s} 22. Ka1 {-3.98/12 0.119s} Bg2 {+3.88/13 0.100s} 23. Qa4 {-3.81/13 0.094s} Bxd2 {+4.25/13 0.101s} 24. Rxd2 {-3.39/13 0.088s} Bxf1 {+3.31/13 0.087s} 25. Bxf1 {-2.81/13 0.101s} Rxc3 {+3.11/13 0.085s} 26. Qd1 {-2.85/12 0.083s} Rf3 {+2.74/13 0.176s} 27. Bh3 {-2.96/13 0.120s} Qa5 {+2.73/12 0.113s} 28. Bg2 {-2.62/11 0.085s} Rc3 {+2.74/12 0.106s} 29. Be4 {-2.77/11 0.098s} Rcc8 {+2.55/12 0.084s} 30. a3 {-2.55/11 0.088s} Rd8 {+2.68/12 0.080s} 31. Rxd8+ {-2.81/11 0.097s} Qxd8 {+3.05/12 0.081s} 32. Qxd8+ {-2.79/12 0.089s} Rxd8 {+4.21/13 0.082s} 33. Ka2 {-4.05/12 0.093s} Rd2 {+4.59/16 0.089s} 34. f3 {-4.74/15 0.090s} Rg2 {+4.67/16 0.117s} 35. Kb3 {-4.58/14 0.126s} Rxg3 {+4.67/14 0.083s} 36. Ka4 {-4.77/15 0.081s} Rh3 {+4.55/15 0.073s} 37. b4 {-4.74/15 0.089s} Rxh4 {+5.17/16 0.076s} 38. Bd3 {-5.65/14 0.137s} Rf4 {+6.78/14 0.067s} 39. Bf1 {-6.77/14 0.069s} Rxf3 {+7.31/17 0.078s} 40. Bxa6 {-7.09/15 0.089s} h4 {+7.45/17 0.098s} 41. b5 {-6.85/14 0.076s} Rf4+ {+5.37/14 0.071s} 42. Ka5 {-7.08/15 0.103s} h3 {+5.58/13 0.073s} 43. b6 {-5.76/16 0.083s} Rf5+ {+5.69/16 0.085s} 44. Bb5 {-6.15/15 0.093s} h2 {+5.92/15 0.066s} 45. b7 {-6.12/14 0.105s} h1=Q {+5.86/14 0.081s} 46. b8=Q+ {-6.21/12 0.073s} Kg7 {+5.91/12 0.079s} 47. a4 {-6.18/12 0.066s} Qc6 {+5.92/13 0.073s} 48. Qd8 {-6.14/14 0.076s} Qc5 {+5.97/12 0.066s} 49. Qb6 {-6.14/11 0.064s} Qd5 {+5.87/12 0.069s} 50. Qd6 {-6.18/13 0.086s} g5 {+5.95/13 0.084s} 51. Qe7 {-5.90/12 0.060s} Rf2 {+6.03/13 0.102s} 52. Qa7 {-5.91/12 0.134s} Rd2 {+6.06/13 0.104s} 53. Qe3 {-6.02/11 0.104s} Rd4 {+5.99/11 0.067s} 54. Qc3 {-6.24/11 0.064s} Qd6 {+6.47/12 0.055s} 55. Qc1 {-6.54/12 0.066s} Qd8+ {+6.33/11 0.060s} 56. Ka6 {-6.54/11 0.087s} g4 {+6.36/12 0.060s} 57. Kb7 {-6.46/10 0.071s} f6 {+6.38/12 0.078s} 58. a5 {-6.51/9 0.053s} Qxa5 {+7.83/11 0.103s} 59. Kc6 {-8.31/10 0.067s} Qa8+ {+7.82/11 0.056s} 60. Kb6 {-8.04/10 0.060s} Qb8+ {+7.87/12 0.071s} 61. Ka6 {-8.15/10 0.084s} Qd6+ {+8.03/11 0.066s} 62. Bc6 {-8.31/10 0.072s} g3 {+8.63/12 0.078s} 63. Qh1 {-9.43/11 0.071s} Rd2 {+10.27/12 0.062s} 64. Qc1 {-13.12/11 0.112s} g2 {+14.47/13 0.051s} 65. Kb7 {-12.23/12 0.054s} Rd1 {+14.83/16 0.068s} 66. Qxd1 {-15.69/13 0.100s} Qxd1 {+15.43/13 0.059s} 67. Bxg2 {-15.46/15 0.056s} Qb3+ {+15.75/15 0.063s} 68. Kc8 {-15.46/13 0.047s} Qc2+ {+16.60/16 0.049s} 69. Kd7 {-15.78/14 0.047s} Qxg2 {+18.27/17 0.066s} 70. Kxe6 {-16.78/16 0.061s} Qe4+ {+28.13/18 0.052s} 71. Kd6 {-16.37/15 0.046s} f5 {+309.85/19 0.126s} 72. Kc7 {-24.24/16 0.084s} Qd5 {/0 0.000s} 73. Kb8 {-309.87/17 0.063s} f4 {+309.85/4 0.001s} 74. Ka7 {/0 0.000s} f3 {+309.85/2 0.000s} 75. Ka6 {/0 0.000s} Qb3 {/0 0.000s} 76. Ka7 {-309.94/9 0.007s} Qd5 {/0 0.000s} 77. Ka6 {0.00/255 0.025s, Black makes an illegal move: a1a1} 1-0";
-    const moves = try algebraicLineToIMoveMatch(alloc, line);
+    const moves = try algebraicLineToIMoveMatch(line);
     moves.print();
 }
 fn test_inbetween() !void {
@@ -1554,7 +1560,8 @@ pub inline fn initAll(verbose: bool) void {
 pub fn main(alloc: std.mem.Allocator) !void {
     //mainl.initAll(alloc, true);
     //try test_avx();
-    try test_alge(alloc);
+    _ = alloc;
+    try test_alge();
     //try test_inbetween();
     return;
 }

@@ -31,12 +31,11 @@ pub const globalCtx = struct {
     }
 };
 pub var GLOBAL_CTX: globalCtx = .{};
+
 pub inline fn getGlobalIo() std.Io {
-    //std.debug.assert(GLOBAL_CTX.isInit);
     return GLOBAL_CTX.io;
 }
 pub inline fn getGlobalGPA() std.mem.Allocator {
-    //std.debug.assert(GLOBAL_CTX.isInit);
     return GLOBAL_CTX.gpa;
 }
 

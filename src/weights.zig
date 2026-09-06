@@ -470,6 +470,8 @@ pub var tmBmCoeff: scoreType = 6;
 
 pub var schedulerGrowthEstim: scoreType = 2;
 
+pub const searchMoveBufferSize: usize = 64;
+
 pub fn modif_val() void {
     //
     //captureExtensionThresh = 433;

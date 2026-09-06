@@ -35,7 +35,7 @@ pub const openingDatabase = struct {
 
     rngIntGenerator: std.Random.DefaultPrng = undefined,
     seed: u64 = 42,
-    pub fn init(alloc: std.mem.Allocator, path: *string, seed: u64) !openingDatabase {
+    pub fn init(alloc: std.mem.Allocator, path: *const string, seed: u64, verbose: bool) !openingDatabase {
         // exemple of an entry
         // [Event "?"]
         //[Site "?"]
@@ -56,9 +56,11 @@ pub const openingDatabase = struct {
         ret.whiteEntries = try .initCapacity(alloc, 4);
         ret.blackEntries = try .initCapacity(alloc, 4);
         ret.initialized = true;
-        try readEntries(&ret, alloc, path);
+        try readEntries(&ret, alloc, path._slice());
         ret.setSeed(seed);
-        ret.printInfo();
+        if (verbose) {
+            ret.printInfo();
+        }
         return ret;
     }
     pub fn addEntry(p_self: *openingDatabase, alloc: std.mem.Allocator, flag: outcomeFlag, lineStr: *string) !void {
@@ -97,6 +99,24 @@ pub const openingDatabase = struct {
         p_self.drawnEntries.deinit(alloc);
         p_self.initialized = false;
     }
+    pub fn pickOne(p_self: *openingDatabase, flag: outcomeFlag) string {
+        std.debug.assert(p_self.initialized);
+        var entries: std.ArrayList(string) = undefined;
+        switch (flag) {
+            .draw => {
+                entries = p_self.drawnEntries;
+            },
+            .whiteWin => {
+                entries = p_self.whiteEntries;
+            },
+            .blackWin => {
+                entries = p_self.blackEntries;
+            },
+        }
+        var randInt = p_self.rngIntGenerator.random();
+        const randIdx = randInt.intRangeAtMost(usize, 0, entries.items.len);
+        return entries.items[randIdx];
+    }
     pub fn sample(p_self: *openingDatabase, alloc: std.mem.Allocator, size: usize, flag: outcomeFlag) !std.ArrayList(string) {
         std.debug.assert(p_self.initialized);
         var drawing: std.ArrayList(string) = undefined;
@@ -125,8 +145,8 @@ pub const openingDatabase = struct {
         std.log.info("Number of black won openings: {d}", .{p_self.blackEntries.items.len});
     }
 };
-pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: *string) !void {
-    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
+pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: []const u8) !void {
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
     defer file.close(mainl.getGlobalIo());
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
     var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
