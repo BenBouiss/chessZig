@@ -905,9 +905,6 @@ pub inline fn depthToMilliDepth(d: i32) milliDepth {
 pub inline fn milliDepthToDepth(md: milliDepth) typel.depthT {
     return @intCast(@divFloor(md, 1024));
 }
-pub inline fn lmrFDepth(md: milliDepth) milliDepth {
-    return @divFloor(md, 3); // base reduction of 1/3
-}
 
 pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
     const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
@@ -940,12 +937,6 @@ pub const score = struct {
         return .{ .s = -self.s, .t = self.t };
     }
 };
-
-pub fn mat_gain(p_state: *const boardl.boardState, move: IMove) scoreType {
-    if (!move.isCapture()) return 0;
-    const piece = p_state.getCapturePiece(move);
-    return e_pieceToHeuristic(piece);
-}
 
 pub fn SEE(p_state: *const boardl.boardState, move: IMove) scoreType {
     if (!move.isCapture()) {

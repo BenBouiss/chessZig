@@ -612,18 +612,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         if (!isChecked and _depth >= weightl.LMRDepth and movesPlayed > weightl.moveReductionAmount) {
             var _lmrR = lmrR;
 
-            //_lmrR += historyl.lmrBase[movesPlayed];
-            //const R = heuristicl.depthToMilliDepth(historyl.lmrBase[@intCast(_depth)][movesPlayed]);
             const R = historyl.lmrBase[@intCast(_depth)][movesPlayed];
-            //const R = historyl.lmrBase[@intCast(_depth)][movesPlayed] * 1024;
 
-            //if (isCapture) {
-            //    _lmrR += @divFloor(R, 2);
-            //} else {
-            //    _lmrR += (R - heuristicl.depthToMilliDepth(@divFloor(histScore, weightl.lmr_histDiv)));
-            //}
+            if (isCapture) {
+                _lmrR += @divFloor(R, 2);
+            } else {
+                _lmrR += (R - heuristicl.depthToMilliDepth(@divFloor(histScore, weightl.lmr_histDiv)));
+            }
 
-            _lmrR += R;
+            //_lmrR += R;
             if (givesCheck) {
                 _lmrR += weightl.lmr_givesCheck;
             }
@@ -697,6 +694,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             } else {
                 bestScore = weightl.simpleStalemateScore;
             }
+        } else {
+            bestScore = _alpha;
         }
     }
     //if (!isCheck and (!bestMove.isCapture() or !bestMove.isValid()) and (hashFlag == .LOWER and bestScore > static_eval) and (hashFlag == .UPPER and bestScore < static_eval)) {
