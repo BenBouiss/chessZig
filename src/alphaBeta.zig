@@ -318,12 +318,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             static_eval = correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
         }
     }
-
-    currS.followPv = if (isRoot) true else (prevSS.followPv and prevSS.playedMove.equal(prevSS.prevLineMove));
-    const prevLineMove: IMove = if (currS.followPv) currS.prevLineMove else .{};
-
-    const improving: bool = if (isCheck or isRoot) (false) else if (ss.getPrevFrame(ply, 2).staticEval.s != typel.scoreNone) (static_eval > ss.getPrevFrame(ply, 2).staticEval.s) else (static_eval > ss.getPrevFrame(ply, 4).staticEval.s);
-
     if (isCheck or singularExt) {
         currS.staticEval = .{};
     } else {
@@ -336,6 +330,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         }
         currS.staticEval = .{ .s = static_eval, .t = .STD };
     }
+
+    currS.followPv = if (isRoot) true else (prevSS.followPv and prevSS.playedMove.equal(prevSS.prevLineMove));
+    const prevLineMove: IMove = if (currS.followPv) currS.prevLineMove else .{};
+
+    const improving: bool = if (isCheck or isRoot) (false) else if (ss.getPrevFrame(ply, 2).staticEval.s != typel.scoreNone) (static_eval > ss.getPrevFrame(ply, 2).staticEval.s) else (static_eval > ss.getPrevFrame(ply, 4).staticEval.s);
 
     //const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
     //var lmrR: milliDepth = weightl.lmr_baseDeficit + heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
@@ -451,9 +450,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 }
                 var score = -quiescenceSearch(p_state, p_info, -p_beta, -p_beta + 1, ply + 1, ss);
                 if (score >= p_beta) {
-                    pv.reset();
-                    ss.getFrame(ply + 1).pv = &pv;
-                    score = -searchLoop(p_state, p_info, _depth - 4, ply + 1, -p_beta, -p_beta + 1, ss, threadD, false, t);
+                    //pv.reset();
+                    //ss.getFrame(ply + 1).pv = &pv;
+                    score = -searchLoop(p_state, p_info, _depth - 4, ply + 1, -p_beta, -p_beta + 1, ss, threadD, false, .NonPV);
                 }
                 _ = p_state.undoMove();
                 p_state.frame = f;
