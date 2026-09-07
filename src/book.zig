@@ -114,7 +114,7 @@ pub const openingDatabase = struct {
             },
         }
         var randInt = p_self.rngIntGenerator.random();
-        const randIdx = randInt.intRangeAtMost(usize, 0, entries.items.len);
+        const randIdx = randInt.intRangeAtMost(usize, 0, entries.items.len - 1);
         return entries.items[randIdx];
     }
     pub fn sample(p_self: *openingDatabase, alloc: std.mem.Allocator, size: usize, flag: outcomeFlag) !std.ArrayList(string) {
@@ -216,7 +216,7 @@ pub fn test_read(path: *string) !void {
 }
 
 pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
-    var db = try openingDatabase.init(alloc, path, 42);
+    var db = try openingDatabase.init(alloc, path, 42, false);
     defer db.free(alloc);
     db.printInfo();
     var openings: std.ArrayList(string) = .empty;
@@ -232,7 +232,7 @@ pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
     for (0..openings.items.len) |i| {
         var tmp = base.copy();
         var algeFen = openings.items[i];
-        const moves = try chessl._algebraicLineToIMoveMatch(alloc, algeFen._slice(), &tmp);
+        const moves = try chessl._algebraicLineToIMoveMatch(algeFen._slice(), &tmp);
         tmp = base.copy();
 
         for (0..moves.len) |j| {

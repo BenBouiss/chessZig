@@ -451,7 +451,7 @@ pub fn endMatchEloPrint(pool: *const poolCtx) !void {
     const res1 = pool.results.items[0].combine();
 
     const expectedWR: f32 = res1.getExpectedWinrate();
-    try interface.print("({s} vs {s}) - Elo difference {d} - LOS {d} \n", .{ e1._slice(), e2._slice(), deltaElo(expectedWR), los(res1.win, res1.lose) });
+    try interface.print("({s} vs {s}) - Elo difference {d} - LOS {d} % \n", .{ e1._slice(), e2._slice(), deltaElo(expectedWR), los(res1.win, res1.lose) * 100 });
     try interface.flush();
 }
 pub fn endMatchPrint(pool: *poolCtx, match: *matchStruct, matchId: usize) !void {
@@ -956,7 +956,7 @@ pub fn engineInfoListener(engine: *engine_info, engineIndex: usize, output: *inp
 
     var buffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
     //var listenClock: timel.stopWatch = .init(true);
-    std.debug.print("[DEBUG] readingThread.gui (#{d}): starting to listen \n", .{engineIndex});
+    //std.debug.print("[DEBUG] readingThread.gui (#{d}): starting to listen \n", .{engineIndex});
     while (engine.alive) {
         var w: std.Io.Writer = .fixed(&buffer);
         const n = reader.streamDelimiter(&w, '\n') catch |err| {
@@ -1074,7 +1074,7 @@ const poolCtx = struct {
             try endMatchEloPrint(self);
         }
         if (self.setting.match.sprt.enabled) {
-            if (self.results.sprtTag(0, self.setting.match.sprt) != .NULL or self.results.sprtTag(1, self.setting.match.sprt) != .NULL) {
+            if (self.results.sprtTag(0, self.setting.match.sprt) != .NULL and self.results.sprtTag(1, self.setting.match.sprt) != .NULL) {
                 //if (self.results.sprtTag(0, self.setting.match.sprt) != .NULL) {
                 self.blockNewSubmit = true;
             }

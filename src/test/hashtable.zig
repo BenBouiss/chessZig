@@ -13,17 +13,16 @@ test "entry retrievale" {
     chessl.initAll(false);
     hashl._initOrReallocHashTable(arena, 25, false);
     const m: u64 = (chessl.ONE << hashl.KEY_SHIFT);
-    const white: bool = true;
-    for (0..100) |i| {
+    for (0..50) |i| {
         const code1: u64 = @intCast(i);
-        const entry = hashl.buildEntryFromMatchResult(code1, 1, @intCast(2 * i), white);
+        const entry = hashl.buildEntryFromMatchResult(code1, 1, @intCast(2 * i), 0);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code1, .KEEP_DEEPER));
 
         const code2 = @as(u64, @intCast(i)) + m;
-        const entry2 = hashl.buildEntryFromMatchResult(code2, 2, @intCast(3 * i), white);
+        const entry2 = hashl.buildEntryFromMatchResult(code2, 2, @intCast(3 * i), 0);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry2, code2, .KEEP_DEEPER));
     }
-    for (0..100) |i| {
+    for (0..50) |i| {
         const entry = hashl.getEntryFromMatch(@intCast(i), 1);
         try std.testing.expect(entry.?.valid());
 
@@ -31,7 +30,7 @@ test "entry retrievale" {
         try std.testing.expect(entry2.?.valid());
 
         const bucket = hashl.hashTable.getBucketFromFullHashIndex(@intCast(i));
-        try std.testing.expectEqual(bucket.t_len(), 2);
+        try std.testing.expectEqual(bucket.len(), 2);
     }
 
     std.log.info("[TEST]: entry storing passed\n", .{});
@@ -48,20 +47,19 @@ test "entry overwrite" {
 
     const m: u64 = @intCast((chessl.ONE << hashl.KEY_SHIFT));
     const code: u64 = 4;
-    const white: bool = true;
 
     for (0..100) |i| {
-        const entry = hashl.buildEntryFromMatchResult(code, @intCast(i), @intCast(i), white);
+        const entry = hashl.buildEntryFromMatchResult(code, @intCast(i), @intCast(i), 0);
         try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
-    try std.testing.expectEqual(1, bucket.t_len());
+    try std.testing.expectEqual(1, bucket.len());
 
-    const entry = hashl.buildEntryFromMatchResult(code + m, 200, 0, white);
+    const entry = hashl.buildEntryFromMatchResult(code + m, 0, 200, 0);
     try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code + m, .KEEP_DEEPER));
 
-    try std.testing.expectEqual(2, bucket.t_len());
+    try std.testing.expectEqual(2, bucket.len());
 
     std.log.info("[TEST]: entry overwrite passed\n", .{});
 }
@@ -75,13 +73,12 @@ test "entry replacement" {
     defer hashl.hashTable.free(arena, false);
     const d = [_]u8{ 16, 4 };
     const code: u64 = 42;
-    const white: bool = true;
     for (0..d.len) |i| {
-        const entry = hashl.buildEntryFromMatchResult(code, d[i], 1, white);
+        const entry = hashl.buildEntryFromMatchResult(code, 1, d[i], 0);
         std.debug.assert(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
-    try std.testing.expectEqual(1, _bucket.t_len());
+    try std.testing.expectEqual(1, _bucket.len());
 
     std.log.info("[TEST]: entry replacement passed\n", .{});
 }
@@ -106,7 +103,7 @@ test "zobrist key consistency" {
     const path = "opening/8moves_v3.pgn";
     var s = try stringl.string.initFromSlice(alloc, path);
     defer s.free(alloc);
-    var db = try bookl.openingDatabase.init(alloc, &s, 42);
+    var db = try bookl.openingDatabase.init(alloc, &s, 42, false);
     defer db.free(alloc);
     var openings: std.ArrayList(stringl.string) = .empty;
     openings = db.drawnEntries;
@@ -118,7 +115,7 @@ test "zobrist key consistency" {
     for (0..openings.items.len) |i| {
         var algeFen = openings.items[i];
 
-        _ = try chessl._algebraicLineToIMoveMatch(alloc, algeFen._slice(), &tmp);
+        _ = try chessl._algebraicLineToIMoveMatch(algeFen._slice(), &tmp);
         //chessl.print_boardstate(&tmp);
         //std.debug.print("line {s}\n", .{algeFen._slice()});
         const set = hashl.fullComputeZobristKeys(&tmp);

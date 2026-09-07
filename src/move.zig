@@ -97,9 +97,13 @@ pub const IMove = extern struct {
     pub inline fn isCapture(self: IMove) bool {
         return (self.getFlag() & @intFromEnum(e_moveFlags.CAPTURE) != 0);
     }
+
     pub inline fn isQuietMove(self: IMove) bool {
-        return self.getFlag() == @intFromEnum(e_moveFlags.QUIETMOVE);
+        return !self.isCapture();
     }
+    //pub inline fn isQuietMove(self: IMove) bool {
+    //    return self.getFlag() == @intFromEnum(e_moveFlags.QUIETMOVE);
+    //}
 
     pub inline fn isPromotion(self: IMove) bool {
         return (self.getFlag() >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
