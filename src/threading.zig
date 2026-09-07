@@ -14,12 +14,10 @@ pub const searchStatistic = struct {
     n_cutoffs: u64 = 0,
     n_hashRetrieve: u64 = 0,
     n_nodeExplored: u64 = 0,
-    n_hashMoveDone: u64 = 0,
     pub fn add(self: *searchStatistic, other: searchStatistic) void {
         self.n_cutoffs += other.n_cutoffs;
         self.n_hashRetrieve += other.n_hashRetrieve;
         self.n_nodeExplored += other.n_nodeExplored;
-        self.n_hashMoveDone += other.n_hashMoveDone;
     }
 };
 /// Benchmark function to test the node generation speed in

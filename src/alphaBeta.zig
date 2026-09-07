@@ -369,30 +369,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
     const improving: bool = if (isChecked or isRoot) (false) else if (ss.getPrevFrame(ply, 2).staticEval.s != typel.scoreNone) (static_eval > ss.getPrevFrame(ply, 2).staticEval.s) else (static_eval > ss.getPrevFrame(ply, 4).staticEval.s);
 
-    var lmrR: milliDepth = weightl.lmr_baseDeficit;
-    if (comptime t == .PV) {
-        lmrR += weightl.lmr_inPvMode;
-        //lmrR -= typel.oneDepthMilliDepth;
-    }
-
-    //if (isCheck) {
-    //    //lmrR += .lmr_inCheck;
-    //    lmrR -= typel.oneDepthMilliDepth;
-    //}
-
-    if (!improving) {
-        lmrR += weightl.lmr_notImproving;
-        //lmrR += typel.oneDepthMilliDepth;
-    }
-    if (hashMoveIsCapture) {
-        lmrR += weightl.lmr_hashMoveCapture;
-        //lmrR += typel.oneDepthMilliDepth;
-    }
-    if (cutnode) {
-        lmrR += weightl.lmr_expectedCutOff;
-        //lmrR += typel.oneDepthMilliDepth;
-    }
-
     // const isEndGame = p_state.isEndGame();
     //and !p_state.onlyPawnsSide(white)
     if (!singularExt and !isChecked and comptime t == .NonPV) {
@@ -501,35 +477,36 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
     const historyBonus = heuristicl.computeHistoryBonus(_depth);
     var movesPlayed: u8 = 0;
-    var phasePlay: u8 = 0;
-    var prev = gen.phase;
     //var captures: [weightl.searchMoveBufferSize]IMove = undefined;
     //var nCaptures: usize = 0;
 
     //var quiets: [weightl.searchMoveBufferSize]IMove = undefined;
     //var nQuiets: usize = 0;
 
+    var lmrR: milliDepth = weightl.lmr_baseDeficit;
+    if (comptime t == .PV) {
+        lmrR += weightl.lmr_inPvMode;
+        //lmrR -= typel.oneDepthMilliDepth;
+    }
+
+    if (!improving) {
+        lmrR += weightl.lmr_notImproving;
+        //lmrR += typel.oneDepthMilliDepth;
+    }
+    if (hashMoveIsCapture) {
+        lmrR += weightl.lmr_hashMoveCapture;
+        //lmrR += typel.oneDepthMilliDepth;
+    }
+    if (cutnode) {
+        lmrR += weightl.lmr_expectedCutOff;
+        //lmrR += typel.oneDepthMilliDepth;
+    }
     while (gen.pickNext(p_state, ply, prevLineMove, hashMove, weightl.moveGenMinSeeThreshold, skipQuietMoves, ss)) |res| {
         const move = res.@"0";
         const moveScore = res.@"1";
         if (move.equal(excludedMove)) continue;
         if (!p_state.legal(move)) continue;
 
-        if (gen.phase == .TTMOVE) {
-            p_info.searchStat.n_hashMoveDone += 1;
-        }
-        if (prev != gen.phase) {
-            prev = gen.phase;
-            if (gen.phase == .BADCAPTURE) {
-                // (capt + quiet + ?(ttMoveQuiet | ttMoveCapture)) - quiet - ttMoveIsQuiet= capt
-                //phasePlay = movesPlayed - phasePlay - @intFromBool(hashMove.isValid());
-                //phasePlay = movesPlayed - phasePlay - @intFromBool(hashMove.isCapture());
-                //phasePlay = movesPlayed - phasePlay - @intFromBool(hashMove.isQuietMove());
-                phasePlay = movesPlayed - phasePlay;
-            } else {
-                phasePlay = 0;
-            }
-        }
         var extension: depthT = 0;
         //const idx = gen.idx - 1;
         const to = move.getTo();
@@ -632,7 +609,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         // rewrite of main search handling
         // https://github.com/Adam-Kulju/Patricia/
-        if (!isChecked and _depth >= weightl.LMRDepth and phasePlay > weightl.moveReductionAmount) {
+        if (!isChecked and _depth >= weightl.LMRDepth and movesPlayed > weightl.moveReductionAmount) {
             var _lmrR = lmrR;
 
             //_lmrR += historyl.lmrBase[movesPlayed];
@@ -672,12 +649,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             }
         } else {
             // ignores the first move for the full search
-            fullSearch = (phasePlay != 0) or comptime t == .NonPV;
+            fullSearch = (movesPlayed != 0) or comptime t == .NonPV;
         }
         if (fullSearch) {
             score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_alpha - 1, -_alpha, ss, threadD, !cutnode, .NonPV);
         }
-        if ((phasePlay == 0 or score > _alpha) and comptime t == .PV) {
+        if ((movesPlayed == 0 or score > _alpha) and comptime t == .PV) {
             pv.reset();
             nextS.pv = &pv;
             score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_beta, -_alpha, ss, threadD, false, .PV);
@@ -694,7 +671,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             currS.pv.?.add(move);
         }
         movesPlayed += 1;
-        phasePlay += 1;
         if (score > bestScore) {
             bestScore = score;
             //bestIdx = idx;

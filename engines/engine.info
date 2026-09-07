@@ -1,11 +1,11 @@
 [engine1]
-path="engines/bin/engine_07_09_26_2";
-name="prev + probcut nonPv + new isquietmove = !isCapture";
+path="engines/bin/engine_07_09_26_3";
+name="prev";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_07_09_26_3";
-name="prev + probcut nonPv + new isquietmove = !isCapture + TT twk";
+path="engines/bin/engine_07_09_26_4";
+name="prev + phasePlay replace by movesPlayed";
 "setoption name reportProgress value false";
 
 [match]
@@ -20,6 +20,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=false;
+sprtmode=true;
 maxSPRTMatch=1000;
 
