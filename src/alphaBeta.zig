@@ -30,7 +30,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     if (comptime configl.USE_NNUE) {
         p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
     }
-    const score = searchLoop(p_state, p_info, depth, 0, alpha, beta, ss, threadD, false, false, .PV);
+    const score = searchLoop(p_state, p_info, depth, 0, alpha, beta, ss, threadD, false, .PV);
 
     if (p_info.alive) {
         const move = pv.moves[0];
@@ -225,7 +225,7 @@ pub const searchStack = struct {
 };
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, depth: depthT, ply: depthT, alpha: scoreType, beta: scoreType, ss: *searchStack, threadD: *threadData, wasExtended: bool, cutnode: bool, comptime t: searchType) scoreType {
+pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, depth: depthT, ply: depthT, alpha: scoreType, beta: scoreType, ss: *searchStack, threadD: *threadData, cutnode: bool, comptime t: searchType) scoreType {
     const white: bool = p_state.whiteToMove();
     const isRoot: bool = ply == 0;
     if (!isRoot and p_state.isStaleMate()) {
@@ -310,19 +310,32 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     const f: boardl.boardFrame = .copy(p_state);
     const hashMoveIsCapture = hashMove.isCapture();
 
-    var static_eval = typel.scoreNone;
-
-    if (isCheck or singularExt) {
-        currS.staticEval = .{};
-    } else {
-        static_eval = if (ttHit) hashEval else correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
-        currS.staticEval = .{ .s = static_eval, .t = .STD };
+    var static_eval: scoreType = typel.scoreNone;
+    if (!isCheck) {
+        if (singularExt) {
+            static_eval = currS.staticEval.s;
+        } else {
+            static_eval = correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
+        }
     }
 
     currS.followPv = if (isRoot) true else (prevSS.followPv and prevSS.playedMove.equal(prevSS.prevLineMove));
     const prevLineMove: IMove = if (currS.followPv) currS.prevLineMove else .{};
 
     const improving: bool = if (isCheck or isRoot) (false) else if (ss.getPrevFrame(ply, 2).staticEval.s != typel.scoreNone) (static_eval > ss.getPrevFrame(ply, 2).staticEval.s) else (static_eval > ss.getPrevFrame(ply, 4).staticEval.s);
+
+    if (isCheck or singularExt) {
+        currS.staticEval = .{};
+    } else {
+        // only consider the tt entry if useful
+        // https://github.com/Adam-Kulju/Patricia/
+        if (ttHit) {
+            if (hashType == .ALL or (hashType == .UPPER and hashEval < static_eval) or (hashType == .LOWER and hashEval > static_eval)) {
+                static_eval = hashEval;
+            }
+        }
+        currS.staticEval = .{ .s = static_eval, .t = .STD };
+    }
 
     //const fDepth = heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
     //var lmrR: milliDepth = weightl.lmr_baseDeficit + heuristicl.lmrFDepth(heuristicl.depthToMilliDepth(_depth));
@@ -354,7 +367,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
     // const isEndGame = p_state.isEndGame();
     //and !p_state.onlyPawnsSide(white)
-    const hasPieces = !p_state.onlyPawns();
     if (!singularExt and !isCheck and comptime t == .NonPV) {
         if (_depth <= weightl.rfpDepth) {
             const margin: scoreType = if (improving) weightl.rfpImproving else weightl.rfpNotImproving;
@@ -377,6 +389,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         // null move prunning here
         // R = 3
+        const hasPieces = !p_state.onlyPawns();
         if (!isRoot and hasPieces and prevSS.playedMove.isValid()) {
             // see chess programming video
             const augment: depthT = if (_depth > weightl.nullMoveDepthAugmentThreshold) @intCast(weightl.nullMoveDepthAugment) else 0;
@@ -385,7 +398,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 currS.playedMove = .{};
                 p_state.makeNullMove();
                 // -b, 1 - b or -alpha-1, -alpha
-                var score = -searchLoop(p_state, p_info, _depth - R, ply + 1, -_beta, 1 - _beta, ss, threadD, wasExtended, !cutnode, .NonPV);
+                var score = -searchLoop(p_state, p_info, _depth - R, ply + 1, -_beta, 1 - _beta, ss, threadD, !cutnode, .NonPV);
                 p_state.undoNullMove();
                 p_state.frame = f;
 
@@ -440,7 +453,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 if (score >= p_beta) {
                     pv.reset();
                     ss.getFrame(ply + 1).pv = &pv;
-                    score = -searchLoop(p_state, p_info, _depth - 4, ply + 1, -p_beta, -p_beta + 1, ss, threadD, wasExtended, false, t);
+                    score = -searchLoop(p_state, p_info, _depth - 4, ply + 1, -p_beta, -p_beta + 1, ss, threadD, false, t);
                 }
                 _ = p_state.undoMove();
                 p_state.frame = f;
@@ -491,7 +504,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             }
         }
         var extension: depthT = 0;
-        var extended: bool = wasExtended;
         //const idx = gen.idx - 1;
         const to = move.getTo();
         const from = move.getFrom();
@@ -505,49 +517,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         const histScore: scoreType = historyl.historyHeuristic[whiteIdx][from][to];
 
-        if (!isRoot) {
-            if (bestScore > typel.scoreNone and _depth <= weightl.SeePruningMaxDepth) {
-                //if (_depth <= weightl.SeePruningMaxDepth) {
-                const margin = if (isCapture) weightl.SeePruningCaptureMargin else weightl.SeePruningQuietMargin;
-                if (!heuristicl.SEE_threshold(p_state, move, _depth * margin)) {
-                    continue;
-                }
-            }
-            // https://talkchess.com/viewtopic.php?t=55734
-            // https://int0x80.ca/posts/chess-engines/13-extensions
-            if (!singularExt and move.equal(hashMove) and _depth > weightl.singularExtensionMinDepth and !chessl.isMate(hashEval) and hashDepth >= (_depth - weightl.singularExtensionDeltaTTDepth) and hashType != .UPPER) {
-                const singularD: depthT = @divFloor(_depth - 1, 2);
-
-                //const singularBeta: scoreType = hashEval - _depth;
-                const singularBeta: scoreType = hashEval - 25;
-                threadD.excludedMove = move;
-                const score = searchLoop(p_state, p_info, singularD, ply, singularBeta - 1, singularBeta, ss, threadD, extended, cutnode, .NonPV);
-                threadD.excludedMove = .{};
-
-                if (score < singularBeta) {
-                    if ((score + weightl.singularMarginDoubleExt) < singularBeta and comptime t == .NonPV) {
-                        extension += 2;
-                        extended = true;
-                    } else {
-                        extension += 1;
-                        extended = true;
-                    }
-                } else if (singularBeta >= _beta) {
-                    return singularBeta;
-                } else if (cutnode) {
-                    extension -= 1;
-                }
-            }
-        }
-
         if (isCapture) {
             //if (nCaptures < weightl.searchMoveBufferSize) {
             //    captures[nCaptures] = move;
             //    nCaptures += 1;
             //}
-            if (!wasExtended and to == p_state.getLastMove().getTo() and historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] > weightl.captureExtensionThresh and comptime t == .PV) {
+            if (to == p_state.getLastMove().getTo() and historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] > weightl.captureExtensionThresh and comptime t == .PV) {
                 extension += 1;
-                extended = true;
             }
             //} else if (bestScore > typel.scoreNone and comptime t == .NonPV) {
         } else {
@@ -577,6 +553,39 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                         //skipQuietMoves = true;
                         continue;
                     }
+                }
+            }
+        }
+
+        if (!isRoot) {
+            if (bestScore > typel.scoreNone and _depth <= weightl.SeePruningMaxDepth) {
+                //if (_depth <= weightl.SeePruningMaxDepth) {
+                const margin = if (isCapture) weightl.SeePruningCaptureMargin else weightl.SeePruningQuietMargin;
+                if (!heuristicl.SEE_threshold(p_state, move, _depth * margin)) {
+                    continue;
+                }
+            }
+            // https://talkchess.com/viewtopic.php?t=55734
+            // https://int0x80.ca/posts/chess-engines/13-extensions
+            if (!singularExt and move.equal(hashMove) and _depth > weightl.singularExtensionMinDepth and !chessl.isMate(hashEval) and hashDepth >= (_depth - weightl.singularExtensionDeltaTTDepth) and hashType != .UPPER) {
+                const singularD: depthT = @divFloor(_depth - 1, 2);
+
+                //const singularBeta: scoreType = hashEval - _depth;
+                const singularBeta: scoreType = hashEval - 25;
+                threadD.excludedMove = move;
+                const score = searchLoop(p_state, p_info, singularD, ply, singularBeta - 1, singularBeta, ss, threadD, cutnode, .NonPV);
+                threadD.excludedMove = .{};
+
+                if (score < singularBeta) {
+                    if ((score + weightl.singularMarginDoubleExt) < singularBeta and comptime t == .NonPV) {
+                        extension += 2;
+                    } else {
+                        extension += 1;
+                    }
+                } else if (singularBeta >= _beta) {
+                    return singularBeta;
+                } else if (cutnode) {
+                    extension -= 1;
                 }
             }
         }
@@ -629,7 +638,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
             const d: depthT = std.math.clamp(heuristicl.milliDepthToDepth(_lmrR), 0, newDepth - 1);
 
-            score = -searchLoop(p_state, p_info, newDepth - d, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, true, .NonPV);
+            score = -searchLoop(p_state, p_info, newDepth - d, ply + 1, -_alpha - 1, -_alpha, ss, threadD, true, .NonPV);
 
             if (score > _alpha and d > 0) {
                 fullSearch = true;
@@ -639,12 +648,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             fullSearch = (phasePlay != 0) or comptime t == .NonPV;
         }
         if (fullSearch) {
-            score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_alpha - 1, -_alpha, ss, threadD, extended, !cutnode, .NonPV);
+            score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_alpha - 1, -_alpha, ss, threadD, !cutnode, .NonPV);
         }
         if ((phasePlay == 0 or score > _alpha) and comptime t == .PV) {
             pv.reset();
             nextS.pv = &pv;
-            score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_beta, -_alpha, ss, threadD, extended, false, .PV);
+            score = -searchLoop(p_state, p_info, newDepth, ply + 1, -_beta, -_alpha, ss, threadD, false, .PV);
         }
 
         _ = p_state.undoMove();

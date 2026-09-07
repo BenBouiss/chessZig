@@ -775,7 +775,7 @@ pub const boardState = struct {
         return (nWhiteP < 2) and (nBlackP < 2);
     }
     pub inline fn onlyPawns(self: *const boardState) bool {
-        return ((self.getPieceBB_t(.PAWN) | self.getPieceBB_t(.KING)) ^ (self.b.occupiedBB()) == 0);
+        return (self.getPieceBB_t(.PAWN) | self.getPieceBB_t(.KING)) == self.b.occupiedBB();
     }
     pub inline fn onlyPawnsSide(self: *const boardState, white: bool) bool {
         const p = if (white) (self.getPieceCount(.nWhiteBishop) + self.getPieceCount(.nWhiteKnight) + self.getPieceCount(.nWhiteRook) + self.getPieceCount(.nWhiteQueen)) else (self.getPieceCount(.nBlackBishop) + self.getPieceCount(.nBlackKnight) + self.getPieceCount(.nBlackRook) + self.getPieceCount(.nBlackQueen));

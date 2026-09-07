@@ -6,6 +6,7 @@ const std = @import("std");
 
 // for now, going to implement the sse instructions found at https://www.chessprogramming.org/SSE2
 // with implem at https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#ig_expand=6889,6889,6976,4635,4635,6179,6170&techs=SSE_ALL
+// https://github.com/aqrit/sse2zig SSE stuffs
 
 pub const __m128i: type = @Vector(2, u64);
 pub const __m256i: type = @Vector(4, u64);

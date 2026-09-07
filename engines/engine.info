@@ -1,8 +1,10 @@
 [engine1]
 //path="engines/bin/engine_06_09_26";
 //name="pat lmr formula + softLim adjust";
-path="engines/bin/engine_06_09_26_1";
-name="pat lmr formula + misc diff";
+//path="engines/bin/engine_06_09_26_1";
+//name="pat lmr formula + misc diff";
+path="engines/bin/engine_07_09_26";
+name="pat lmr formula + misc diff + depth indep tthit + no  static in check + no extended + reorder";
 //setoption name reportProgress value false";
 //"debug on";
 

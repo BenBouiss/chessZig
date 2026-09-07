@@ -631,24 +631,4 @@ pub fn modif_val() void {
     singularExtensionMinDepth = 9;
     singularExtensionDeltaTTDepth = 2;
     singularMarginDoubleExt = 45;
-
-    //global_MobilityVal = .{ 6, 15 };
-    //global_KingMobilityVal = .{ 1, 1 };
-    //global_OpenFileRookVal = .{ 43, 14 };
-    //global_StructureProtectionVal = .{ 24, 24 };
-    //global_centerProtectionVal = .{ 1, 0 };
-    //global_IsolatedPawnVal = .{ 1, 3 };
-    //global_StackedPawnVal = .{ 7, 0 };
-    //global_PassedPawnVal = .{ 0, 26 };
-    //global_phalanxDuoPawnVal = .{ 0, 14 };
-    //global_connectionPawnVal = .{ 8, 6 };
-    //global_tempoChecksScore = .{ 41, 20 };
-    //global_pieceThreatScore = .{ 41, 10 };
-    //global_weakCheckmate = .{ 1106, 1063 };
-    //global_SafetyBishopVal = .{ 15, 3 };
-    //global_SafetyKnightVal = .{ 26, 5 };
-    //global_SafetyRookVal = .{ 5, 0 };
-    //global_SafetyQueenVal = .{ 7, 23 };
-    //global_KingProximityVal = .{ 0, 0 };
-    //global_materialBishopPair = .{ 54, 60 };
 }
