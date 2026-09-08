@@ -893,12 +893,6 @@ pub const dFutilityMargin: scoreType = 300;
 // move heuristic "sections"
 pub const SEE_values: [13]scoreType = .{ weightl.simplePawnScore, weightl.simpleKnightScore, weightl.simpleBishopScore, weightl.simpleRookScore, weightl.simpleQueenScore, weightl.simpleKingScore, weightl.simplePawnScore, weightl.simpleKnightScore, weightl.simpleBishopScore, weightl.simpleRookScore, weightl.simpleQueenScore, weightl.simpleKingScore, 0 };
 
-//https://www.chessprogramming.org/History_Heuristic#Update
-pub inline fn computeHistoryBonus(depth: typel.depthT) scoreType {
-    //return @intCast(depth * depth);
-    return @intCast(@min(weightl.historyBonusCoeff * (depth - 1), weightl.historyBonusMax));
-}
-
 pub inline fn depthToMilliDepth(d: i32) milliDepth {
     return d * 1024;
 }

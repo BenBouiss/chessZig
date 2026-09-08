@@ -1,11 +1,11 @@
 [engine1]
-path="engines/bin/engine_07_09_26_4";
+path="engines/bin/engine_08_09_26";
 name="prev";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_07_09_26_5";
-name="prev + div lmr + singularExt a when no move";
+path="engines/bin/engine_08_09_26_1";
+name="prev + currS add move";
 "setoption name reportProgress value false";
 
 [match]

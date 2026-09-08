@@ -834,8 +834,7 @@ pub const typeMoveGenerator = struct {
                         //    p_self.captures.scores[i] = configl.ORDERING_PROMOTIONS;
                     } else {
                         const to = move.getTo();
-                        const cPiece: u8 = if (move.isEnpassant()) (if (white) @intFromEnum(e_piece.nBlackPawn) else @intFromEnum(e_piece.nWhitePawn)) else @intFromEnum(state.getPiece(to));
-                        //const cPiece: u8 = @intFromEnum(state.getPiece(to));
+                        const cPiece: u8 = @intFromEnum(state.getPiece(to));
                         const fpiece: u8 = @intFromEnum(state.getFromPiece(move));
                         //p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + (heuristicl.SEE_values[cPiece] * 100 - @divFloor(heuristicl.SEE_values[fpiece], 100));
                         p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + heuristicl.SEE_values[cPiece] - heuristicl.SEE_values[fpiece];

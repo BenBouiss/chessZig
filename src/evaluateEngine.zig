@@ -451,7 +451,7 @@ pub fn endMatchEloPrint(pool: *const poolCtx) !void {
     const res1 = pool.results.items[0].combine();
 
     const expectedWR: f32 = res1.getExpectedWinrate();
-    try interface.print("({s} vs {s}) - Elo difference {d} - LOS {d} % \n", .{ e1._slice(), e2._slice(), deltaElo(expectedWR), los(res1.win, res1.lose) * 100 });
+    try interface.print("({s} vs {s}) - Elo difference {d} (+- {d}) - LOS {d} % \n", .{ e1._slice(), e2._slice(), deltaElo(expectedWR), deltaEloError(expectedWR, res1.nMatch()), los(res1.win, res1.lose) * 100 });
     try interface.flush();
 }
 pub fn endMatchPrint(pool: *poolCtx, match: *matchStruct, matchId: usize) !void {
@@ -941,6 +941,11 @@ pub fn computeSPRT(elo_0: f32, elo_1: f32, alpha: f32, beta: f32, wins: usize, d
 pub fn deltaElo(expectedWR: f32) f32 {
     return 400 * std.math.log(f32, 10, expectedWR / (1 - expectedWR));
 }
+// https://www.talkchess.com/forum/viewtopic.php?t=57969
+pub fn deltaEloError(expectedWR: f32, nGames: usize) f32 {
+    const _nGames: f32 = @floatFromInt(@max(1, nGames));
+    return 700 * std.math.sqrt((4 * expectedWR * (1 - expectedWR)) - expectedWR) / std.math.sqrt(_nGames);
+}
 pub fn los(wins: usize, losses: usize) f32 {
     // 0 - 1
     if (wins + losses == 0) {
@@ -1086,7 +1091,7 @@ const poolCtx = struct {
         if (self.blockNewSubmit) {
             return false;
         }
-        if (self.setting.match.sprt.enabled or (self.nCommitedMatches < self.setting.match.nMatch)) {
+        if ((self.setting.match.sprt.enabled and self.nCommitedMatches < self.setting.match.sprt.maxMatch) or (self.nCommitedMatches < self.setting.match.nMatch)) {
             return true;
         }
         return false;

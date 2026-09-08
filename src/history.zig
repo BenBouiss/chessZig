@@ -69,3 +69,8 @@ pub fn _initMoveOrdering() void {
 pub inline fn pawnHashIndexToIdx(hash: u64) u64 {
     return hash % 16384;
 }
+//https://www.chessprogramming.org/History_Heuristic#Update
+pub inline fn computeHistoryBonus(depth: typel.depthT) scoreType {
+    //return @intCast(depth * depth);
+    return @intCast(@min(weightl.historyBonusCoeff * (depth - 1), weightl.historyBonusMax));
+}

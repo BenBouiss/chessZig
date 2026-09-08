@@ -269,7 +269,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     //std.debug.assert(!(t == .PV and cutnode));
 
     var bestMove: IMove = .{};
-    //var bestIdx: usize = 0;
     var skipQuietMoves: bool = false;
 
     const excludedMove = threadD.excludedMove;
@@ -475,7 +474,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     const otherKingSq = p_state.getKingSq(!white);
     const safetyArea = chessl.safetyArea(otherKingSq);
 
-    const historyBonus = heuristicl.computeHistoryBonus(_depth);
+    const historyBonus = historyl.computeHistoryBonus(_depth);
     var movesPlayed: u8 = 0;
     //var captures: [weightl.searchMoveBufferSize]IMove = undefined;
     //var nCaptures: usize = 0;
@@ -537,7 +536,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             //}
             if (bestScore > typel.scoreNone and comptime t == .NonPV) {
                 //const canFutility = !isCheck and !chessl.isMate(_alpha) and _depth <= weightl.futilityDepth and (static_eval + weightl.futilityConst + weightl.futilityCoeff * lmrDepth) <= _alpha;
-                const canFutility = !isChecked and !chessl.isMate(_alpha) and _depth <= weightl.futilityDepth and (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth) <= _alpha;
+                const fut = (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth);
+                const canFutility = !isChecked and !chessl.isMate(_alpha) and _depth <= weightl.futilityDepth and fut <= _alpha;
 
                 if (canFutility and movesPlayed > weightl.moveReductionAmount) {
                     skipQuietMoves = true;
@@ -611,16 +611,13 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         // https://github.com/Adam-Kulju/Patricia/
         if (!isChecked and _depth >= weightl.LMRDepth and movesPlayed > weightl.moveReductionAmount) {
             var _lmrR = lmrR;
-
             const R = historyl.lmrBase[@intCast(_depth)][movesPlayed];
-
             if (isCapture) {
                 _lmrR += @divFloor(R, 2);
             } else {
                 _lmrR += (R - heuristicl.depthToMilliDepth(@divFloor(histScore, weightl.lmr_histDiv)));
             }
 
-            //_lmrR += R;
             if (givesCheck) {
                 _lmrR += weightl.lmr_givesCheck;
             }
@@ -629,21 +626,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             }
             if (moveScore >= weightl.lmr_scoreThreshold) {
                 _lmrR += weightl.lmr_killerMove;
-            } else if (isCapture and !isThreat and gen.phase == .BADCAPTURE) {
+            } else if (!isThreat and gen.phase == .BADCAPTURE) {
                 _lmrR += weightl.lmr_badCapture;
             }
-
             if (nextS.failHighCount > weightl.lmr_highFailCount) {
                 _lmrR += weightl.lmr_highFailScore;
             }
-
             const d: depthT = std.math.clamp(heuristicl.milliDepthToDepth(_lmrR), 0, newDepth - 1);
-
             score = -searchLoop(p_state, p_info, newDepth - d, ply + 1, -_alpha - 1, -_alpha, ss, threadD, true, .NonPV);
-
-            if (score > _alpha and d > 0) {
-                fullSearch = true;
-            }
+            fullSearch = score > _alpha and d > 0;
         } else {
             // ignores the first move for the full search
             fullSearch = (movesPlayed != 0) or comptime t == .NonPV;
@@ -663,14 +654,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         //if (isRoot) {
         //    threadD.findRootMove(move).nodes += p_info.searchStat.n_nodeExplored - prevNode;
         //}
-
-        if (movesPlayed == 0 and isRoot and comptime t == .PV) {
-            currS.pv.?.add(move);
-        }
         movesPlayed += 1;
         if (score > bestScore) {
             bestScore = score;
-            //bestIdx = idx;
             if (bestScore > _alpha) {
                 bestMove = move;
                 _alpha = bestScore;
