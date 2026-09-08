@@ -703,7 +703,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         }
     }
     if (hashFlag == .LOWER) {
-        const malus = -@divFloor(historyBonus, 4);
+        //const malus = -@divFloor(historyBonus, 4);
+        const malus = -historyBonus;
         const _historyBonus = historyBonus - malus;
         if (bestMove.isQuietMove()) {
             currS.killerMove = bestMove;
@@ -759,9 +760,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             const move = gen.captures.moves.moves[i];
             const from = move.getFrom();
             const to = move.getTo();
-            const fPiece = p_state.getPiece(from);
-            const cPiece = p_state.getPiece(to);
-            historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] = updateHistory(historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to], malus);
+            const fPiece = @intFromEnum(p_state.getPiece(from));
+            const cPiece = @intFromEnum(p_state.getPiece(to));
+            historyl.captureHistory[fPiece][cPiece][to] = updateHistory(historyl.captureHistory[fPiece][cPiece][to], malus);
         }
     } else if (hashFlag == .ALL) {
         const bestTo = bestMove.getTo();
@@ -800,9 +801,19 @@ pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: s
     return std.math.clamp(eval + @divFloor(weightl.corrHistW * corr, 512), -weightl.simpleCheckMateThreshold + 1, weightl.simpleCheckMateThreshold - 1);
 }
 pub inline fn updateCorrhist(val: scoreType, bonus: scoreType) scoreType {
-    return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), weightl.corrHistMax);
+    //return val + bonus - @as(scoreType, @intCast(@divFloor(@as(i64, @intCast(val)) * @as(i64, @intCast(@abs(bonus))), 1024)));
+
+    const v = @as(i64, @intCast(val));
+    const b = @as(i64, @intCast(bonus));
+    return @truncate(v + b - @divFloor(v * @as(i64, @intCast(@abs(b))), 1024));
+    //return val + bonus - @as(scoreType, @intCast(@divFloor(@as(i64, @intCast(val)) * @as(i64, @intCast(@abs(bonus))), 1024)));
+    //return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), 1024);
 }
 
 pub inline fn updateHistory(val: scoreType, bonus: scoreType) scoreType {
-    return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
+    const v = @as(i64, @intCast(val));
+    const b = @as(i64, @intCast(bonus));
+    return @truncate(v + b - @divFloor(v * @as(i64, @intCast(@abs(b))), configl.MAX_HIST_HEURISTIC_VALUE));
+    //return val + bonus - @as(scoreType, @intCast(@divFloor(@as(i64, @intCast(val)) * @as(i64, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE)));
+    //return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
 }

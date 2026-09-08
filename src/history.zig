@@ -72,5 +72,10 @@ pub inline fn pawnHashIndexToIdx(hash: u64) u64 {
 //https://www.chessprogramming.org/History_Heuristic#Update
 pub inline fn computeHistoryBonus(depth: typel.depthT) scoreType {
     //return @intCast(depth * depth);
-    return @intCast(@min(weightl.historyBonusCoeff * (depth - 1), weightl.historyBonusMax));
+    const d: i64 = @intCast(depth);
+    //return @intCast(@min(weightl.historyBonusCoeff * (d - 1) * (d - 1), weightl.historyBonusMax));
+    return @intCast(@min(weightl.historyBonusCoeff * (d - 1) * (d - 1), weightl.historyBonusMax));
+    //const d: i64 = @intCast(depth - 1);
+    //return @intCast(@min(4 * d * d, configl.MAX_HIST_HEURISTIC_VALUE));
+    //return @intCast(@min(weightl.historyBonusCoeff * (depth - 1), weightl.historyBonusMax));
 }

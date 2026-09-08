@@ -1,17 +1,17 @@
 [engine1]
-path="engines/bin/engine_08_09_26_1";
+path="engines/bin/engine_08_09_26_3";
 name="prev";
+//path="engines/bin/engine_08_09_26_4_1";
+//name="prev + hist formula twk";
 "setoption name reportProgress value false";
 
 [engine2]
-//path="engines/bin/engine_08_09_26_2";
-//name="prev + futility twk + nmp twk";
-path="engines/bin/engine_08_09_26_3";
-name="prev + futility twk + nmp twk + razoring twk";
+path="engines/bin/engine_08_09_26_4";
+name="prev + hist formula twk v5 + configl.MAX_HIST_HEURISTIC_VALUE min";
 "setoption name reportProgress value false";
 
 [match]
-nMatch=256;
+nMatch=512;
 nThreads=4;
 playerSwitch=true;
 debugMode=false;
@@ -22,6 +22,6 @@ logsLocation="out/logs/evaluate";
 saveLogs=false;
 printToScreen=false;
 
-sprtmode=true;
+sprtmode=false;
 maxSPRTMatch=1000;
 

@@ -241,7 +241,7 @@ pub fn appendAll() !void {
     add_param(&historyMinExplore, 3, 24, "historyMinExplore");
 
     add_param(&historyBonusCoeff, 150, 512, "historyBonusCoeff");
-    add_param(&historyBonusMax, 1024, 5000, "historyBonusMax");
+    add_param(&historyBonusMax, 1024, 65576, "historyBonusMax");
     //add_param(&historyBonusBetaDiff, 100, 1024, "historyBonusBetaDiff");
 
     add_param(&lmpMaxDepth, 3, 14, "lmpMaxDepth");
@@ -438,7 +438,8 @@ pub var historyThreshConst: scoreType = -150;
 pub var historyMinExplore: scoreType = 12;
 
 pub var historyBonusCoeff: scoreType = 300;
-pub var historyBonusMax: scoreType = 3000;
+pub var historyBonusMax: scoreType = configl.MAX_HIST_HEURISTIC_VALUE;
+//pub var historyBonusMax: scoreType = 3000;
 //pub var historyBonusBetaDiff: scoreType = 300;
 
 pub var lmpMaxDepth: scoreType = 3;
