@@ -134,7 +134,6 @@ pub fn letterPromoToFlag(letter: u8) e_moveFlags {
 pub inline fn sqToBitboard(sq: e_square) u64 {
     return ONE << @intCast(@intFromEnum(sq));
 }
-
 pub inline fn xToBitboard(x: u8) u64 {
     return ONE << @intCast(x);
 }
