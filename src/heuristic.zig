@@ -484,7 +484,7 @@ pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
 
     //const color_mask: scoreType = if (p_board.whiteToMove()) 1 else -1;
     const stat = c_evaluate(p_board, p_board.whiteToMove());
-    var info: threadingl.threadInfo = .{ .alive = true, .working = true };
+    var info: threadingl.threadInfo = .{ .alive = true };
 
     const alpha: scoreType = -weightl.simpleCheckMateScore;
     const beta: scoreType = weightl.simpleCheckMateScore;

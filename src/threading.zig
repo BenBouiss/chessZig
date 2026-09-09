@@ -24,14 +24,14 @@ pub const searchStatistic = struct {
 /// "real world" settings mainly computing heuristics...
 pub const threadInfo = struct {
     currentBest: schedulerl.moveDecisionExt = .{},
-    currentMove: schedulerl.moveDecisionExt = .{},
+    //currentMove: schedulerl.moveDecisionExt = .{},
     depth: depthT = 0,
     seldepth: depthT = 0,
-    working: bool = false,
     alive: bool = false,
     searchStat: searchStatistic = .{},
     stopWatch: timel.stopWatch = .{},
     criticalTimeMs: i64 = 0,
+
     // maxTimeMs
     // check every 1024
     checkTime: u64 = 0,
@@ -84,7 +84,7 @@ pub const searchPackage = struct {
     chessState: boardl.boardState = undefined,
     depth: depthT = 0,
     features: schedulerl.searchFeatures = .{},
-    scheduler: *schedulerl.scheduler = undefined,
+    time: schedulerl.timeInfo = .{},
 };
 pub const threadStatus = enum { WAITING, WORKING };
 pub const threadP = struct {
@@ -104,6 +104,11 @@ pub const threadPool = struct {
     working: bool = false,
     lock: lockl.lock = .{},
     debugMode: bool = false,
+
+    schel: *schedulerl.scheduler = undefined,
+
+    computedPlies: i64 = 0,
+    nPlyCompute: usize = 0,
 
     pub fn isRunning(p_self: *threadPool) bool {
         p_self.lock.acquireLock();
@@ -154,28 +159,23 @@ pub const threadPool = struct {
         }
         return ret;
     }
-    pub fn submit(p_self: *threadPool, p_pack: *const searchPackage) threadPoolerr!void {
+    pub fn submit(p_self: *threadPool, pack: searchPackage) threadPoolerr!void {
         if (p_self.working) {
             return threadPoolerr.alreadySearching;
         }
         for (0..p_self.nThread) |i| {
-            p_self.packages[i] = p_pack.*;
-            p_self.threadInfos[i] = .{ .alive = true };
+            p_self.packages[i] = pack;
+            p_self.threadInfos[i].alive = true;
             p_self.threadProps[i].searchPing = true;
             p_self.threadProps[i].status = .WORKING;
         }
-        return;
     }
     pub fn getInfos(p_self: *const threadPool) []const threadInfo {
         return p_self.threadInfos[0..p_self.nThread];
     }
     pub fn getSearchStatus(p_self: *const threadPool) schedulerl.searchStatus {
-        var endCounter: usize = 0;
-        for (0..p_self.nThread) |i| {
-            const info: threadInfo = p_self.threadInfos[i];
-            endCounter += @intFromBool(!info.working);
-        }
-        if (endCounter == p_self.nThread) {
+        const working = p_self.getNumberOfWorking();
+        if (working == 0) {
             return .FINISHED;
         }
         return .CONTINUE;
@@ -208,9 +208,12 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
             props.searchPing = false;
             props.status = .WORKING;
             var pack = p_self.packages[idx];
-            schedulerl._startSearch(pack.scheduler, &pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth);
+            const d = schedulerl._startSearch(&pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth, pack.time);
             props.timeWorkingUs += sw.timeSinceStartUs();
             props.status = .WAITING;
+
+            p_self.nPlyCompute += 1;
+            p_self.computedPlies += d;
         }
     }
     p_self.running = false;

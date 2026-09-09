@@ -54,11 +54,9 @@ pub const moveDecisionExt = struct {
 
 pub const timeManager = struct {
     stopWatch: timel.stopWatch = .{},
-    remainingTimeMs: i64 = 0,
+    t: timeInfo = .{},
     softTimeLimit: i64 = 0,
     originalSoftTimeLim: i64 = 0,
-
-    incMs: i64 = 0,
 
     pub inline fn startSearchTick(p_self: *timeManager) void {
         p_self.stopWatch.startTimeTick();
@@ -73,7 +71,7 @@ pub const timeManager = struct {
         return p_self.stopWatch.timeSinceStartSec();
     }
     pub inline fn reset(p_self: *timeManager) void {
-        p_self.remainingTimeMs = 0;
+        p_self.t.timeMs = 0;
         p_self.stopWatch.reset();
     }
 };
@@ -94,17 +92,17 @@ pub fn outOfTime_t(p_info: *threadingl.threadInfo) bool {
     }
     return false;
 }
+pub const timeInfo = struct {
+    timeMs: i64 = std.math.maxInt(i64),
+    incMs: i64 = 0,
+};
 
 pub const scheduler = struct {
-    timeM: timeManager = .{},
     _threadPool: threadingl.threadPool = .{},
     interrupt: bool = false,
-    computedPlies: i64 = 0,
-    nPlyCompute: usize = 0,
 
     pub inline fn reset(self: *scheduler) void {
         self.interrupt = false;
-        self.timeM.reset();
     }
     pub inline fn close(self: *scheduler) void {
         self.interrupt = true;
@@ -114,30 +112,23 @@ pub const scheduler = struct {
         p_self._threadPool.stop();
         p_self._threadPool.waitOnFinish();
     }
-    pub inline fn setRemainingTimeMs(p_self: *scheduler, timeMs: i64) void {
-        p_self.timeM.remainingTimeMs = timeMs;
-    }
-    pub inline fn setInc(p_self: *scheduler, incMs: i64) void {
-        p_self.timeM.incMs = incMs;
-    }
-    pub fn entryPointSearch(p_self: *scheduler, p_engine: *enginel.engine, state: boardl.boardState, depth: depthT, features: searchFeatures) searchReport {
+    pub fn entryPointSearch(p_self: *scheduler, state: boardl.boardState, depth: depthT, features: searchFeatures) searchReport {
         // only used in the benchmark files
-        _ = p_engine;
         if (!p_self._threadPool.running) {
             return .{};
         }
-        p_self.timeM.startSearchTick();
-        defer p_self.timeM.stopWatch.stop();
-        const pack: threadingl.searchPackage = .{ .depth = depth, .features = features, .scheduler = p_self, .chessState = state };
+        var sw: timel.stopWatch = .init(true);
 
-        p_self._threadPool.submit(&pack) catch {
+        const pack: threadingl.searchPackage = .{ .depth = depth, .features = features, .chessState = state, .time = .{} };
+
+        p_self._threadPool.submit(pack) catch {
             @panic(":)");
         };
         p_self._threadPool.waitOnFinish();
 
         const decision = p_self.extractBest();
         const res = p_self._threadPool.getCombinedInfo();
-        return .{ .move = decision.move, .timeTakenMs = p_self.timeM.timeSinceStartMs(), .searchStat = res.searchStat, .score = decision.scoring };
+        return .{ .move = decision.move, .timeTakenMs = sw.timeSinceStartMs(), .searchStat = res.searchStat, .score = decision.scoring };
     }
     pub inline fn extractBest(p_self: *scheduler) moveDecisionExt {
         const res = p_self._threadPool.getCombinedInfo();
@@ -146,13 +137,15 @@ pub const scheduler = struct {
 };
 
 pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) bool {
-    const pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = p_engine.options.searchF, .scheduler = &(p_engine.scheduler) };
+    var pack: threadingl.searchPackage = .{ .chessState = p_engine.state, .depth = config.depth, .features = p_engine.options.searchF };
     if (p_engine.state.whiteToMove()) {
-        p_engine.scheduler.setRemainingTimeMs(config.wtime);
+        pack.time.timeMs = config.wtime;
+        pack.time.incMs = config.winc;
     } else {
-        p_engine.scheduler.setRemainingTimeMs(config.btime);
+        pack.time.timeMs = config.btime;
+        pack.time.incMs = config.binc;
     }
-    p_engine.scheduler._threadPool.submit(&pack) catch {
+    p_engine.scheduler._threadPool.submit(pack) catch {
         p_engine.respond("engineOp threadPoolSubmit failed crashing");
         _ = p_engine.executeQuitProcedure();
         @panic(":)");
@@ -161,62 +154,58 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) 
     return true;
 }
 pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: depthT) threadingl.threadInfo {
-    var sched: scheduler = .{};
-    sched.setRemainingTimeMs(std.math.maxInt(i64));
+    const t: timeInfo = .{};
     var info: threadingl.threadInfo = .{ .alive = true };
-    _startSearch(&sched, p_state, &info, features, maxDepth);
+    _ = _startSearch(p_state, &info, features, maxDepth, t);
     return info;
 }
-pub fn _startSearch(sched: *scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT) void {
+pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT, time: timeInfo) depthT {
     // everything gets "returned" via the p_info
     // launched as single threaded
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
-    p_info.working = true;
-    defer p_info.working = false;
+    var tm: timeManager = .{ .t = time };
+    tm.stopWatch.startTimeTick();
+
+    p_info.stopWatch = .init(true);
     p_info.searchStat = .{};
     p_info.depth = 0;
     p_info.seldepth = 0;
-
-    sched.timeM.originalSoftTimeLim = @divFloor(sched.timeM.remainingTimeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(sched.timeM.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
-    sched.timeM.softTimeLimit = sched.timeM.originalSoftTimeLim;
-
-    sched.timeM.stopWatch = .init(true);
-    p_info.stopWatch = .init(true);
-
     p_info.checkTime = 0;
-    p_info.criticalTimeMs = @divFloor(sched.timeM.remainingTimeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
+    p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
+
+    tm.originalSoftTimeLim = @divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
+    tm.softTimeLimit = tm.originalSoftTimeLim;
 
     hashl.hashTable.nextGeneration();
 
     const fmoves = moveGenl.generateLegalMoves(p_state);
     if (fmoves.len == 1) {
         sendFinal(fmoves.moves[0]) catch unreachable;
-        return;
+        return 1;
     }
     var threadD: alphaBetal.threadData = .{};
     for (0..fmoves.len) |i| {
         threadD.rootMoves[i] = .{ .move = fmoves.moves[i], .nodes = 0 };
     }
-    const depth = aspirationWindow(sched, p_state, p_info, features, maxDepth, &threadD);
+    const depth = aspirationWindow(&tm, p_state, p_info, features, maxDepth, &threadD);
     p_info.depth = depth;
-    sched.nPlyCompute += 1;
-    sched.computedPlies += depth;
+    return depth;
 }
 
-pub fn aspirationWindow(sched: *scheduler, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT, threadD: *alphaBetal.threadData) depthT {
+pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT, threadD: *alphaBetal.threadData) depthT {
     var depth: depthT = if (features.useStaticSearch) maxDepth else 1;
 
     var ss: alphaBetal.searchStack = .{};
     var alpha = -weightl.simpleCheckMateScore;
     var beta = weightl.simpleCheckMateScore;
+    var delta = weightl.aspirationCoefficient;
 
     var score = alphaBetal.searchEntrypoint(p_state, p_info, depth, &ss, alpha, beta, threadD);
-    var delta = weightl.aspirationCoefficient;
     var validDecision: IMove = p_info.currentBest.move;
     var samePrevBestMove: scoreType = 0;
     var prevBest: IMove = .{};
 
-    while (p_info.alive and canExtendSearch(&sched.timeM, depth, maxDepth, score, &features)) {
+    while (p_info.alive and canExtendSearch(tm, depth, maxDepth, score, &features)) {
         depth += 1;
         var _depth = depth;
         score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta, threadD);
@@ -249,12 +238,11 @@ pub fn aspirationWindow(sched: *scheduler, p_state: *boardl.boardState, p_info: 
         }
         //threadD.printRooMoves();
         if (features.reportProgress) {
-            sendPartial(p_info, sched.timeM.timeSinceStartMs(), _depth);
+            sendPartial(p_info, tm.timeSinceStartMs(), _depth);
         }
         if (depth > weightl.aspirationMinDepthVar) {
             //alpha = score - delta;
             //beta = score + delta;
-
             alpha = score - weightl.aspirationCoefficient;
             beta = score + weightl.aspirationCoefficient;
         } else {
@@ -271,8 +259,7 @@ pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depth
     if ((p_features.fixedDepth and depth == maxDepth) or (depth >= (typel.MAX_PLY - 2)) or chessl.isMate(score)) {
         return false;
     }
-    const prevTime: i64 = timer.timeSinceStartMs();
-    return ((prevTime * weightl.schedulerGrowthEstim) < timer.softTimeLimit);
+    return ((timer.timeSinceStartMs() * weightl.schedulerGrowthEstim) < timer.softTimeLimit);
 }
 
 pub fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64, depth: depthT) void {

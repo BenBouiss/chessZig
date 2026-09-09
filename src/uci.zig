@@ -55,7 +55,7 @@ pub const uciState = struct {
                     return state.eng.executeRegisterCmd(cmdBuffer);
                 },
                 .SETOPTION => {
-                    return state.eng.executeSetOptionCmd(cmdBuffer);
+                    return state.eng.executeSetOptionCmd(state.eng.alloc, cmdBuffer);
                 },
                 .DEBUG => {
                     const ret = state.eng.executeDebugCmd(cmdBuffer);
@@ -76,7 +76,7 @@ pub const uciState = struct {
                     return state.eng.executeBenchmarkCmd(cmdBuffer);
                 },
                 .PRINTPARAMS => {
-                    const stepDiv: f32 = 5;
+                    const stepDiv: f32 = 20;
                     std.debug.print("{{\n", .{});
                     for (0..weightl.tunerOpts.items.len) |i| {
                         const opt = weightl.tunerOpts.items[i];
@@ -106,7 +106,6 @@ pub const uciState = struct {
 pub fn loop(alloc: std.mem.Allocator) !void {
     var state: uciState = try .init(alloc);
     state.running = true;
-
     var buffer: [configl.MAX_USER_INPUT]u8 = undefined;
     var f_reader = std.Io.File.stdin().reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;

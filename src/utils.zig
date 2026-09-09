@@ -109,6 +109,8 @@ pub fn find(comptime T: type, a: []const T, e: T) i32 {
     }
     return -1;
 }
+
+////// find multiple
 pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
     if (e.len > a.len) {
         return -1;

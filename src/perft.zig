@@ -55,7 +55,6 @@ fn dispatchPerftPackage(p_engine: *engine, p_threadPack: *threadPackageArray, de
         if (p_engine.status.debugMode) {
             std.debug.print("[DEBUG] dispatchPerftPackage: Launching thread n° {d}, depth: {d}\n", .{ thread_id, depth });
         }
-        p_threadPack.items(._tInfo)[thread_id].working = true;
         p_threadPack.items(._tInfo)[thread_id].alive = true;
         p_threadPack.items(.threadHandle)[thread_id] = std.Thread.spawn(.{}, perftUciEntrypoint, .{ &p_threadPack.items(.chessState)[thread_id], &p_threadPack.items(.moves)[thread_id], &p_threadPack.items(._tInfo)[thread_id], depth, feats }) catch {
             std.debug.print("[ERROR] dispatchPerftPackage: thread n° {d}\n", .{thread_id});
@@ -77,7 +76,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, co
         p_engine.respond(msg);
         endCounter = 0;
         for (0..p_threadPack.len) |i| {
-            endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].working);
+            endCounter += @intFromBool(!p_threadPack.items(._tInfo)[i].alive);
         }
     }
 
@@ -102,8 +101,7 @@ const perftSearchFeatures = struct {
 };
 
 pub fn perftUciEntrypoint(p_state: *boardl.boardState, p_startingMoves: *std.ArrayList(IMove), p_info: *threadInfo, depth: depthT, feats: perftSearchFeatures) void {
-    p_info.working = true;
-    defer p_info.working = false;
+    p_info.alive = true;
     defer p_info.alive = false;
 
     if (depth == 0) {
@@ -186,10 +184,7 @@ pub fn perftWorkerJob(p_state: *boardl.boardState, depth: u8, p_info: *threadInf
     }
 }
 pub fn explorationNDepthPerft(p_state: *boardl.boardState, depth: u8, batched: bool, p_info: *threadInfo) u64 {
-    if (depth <= 0) {
-        return 1;
-    }
-    if (p_state.isStaleMate()) {
+    if (depth <= 0 or p_state.isStaleMate()) {
         return 1;
     }
 

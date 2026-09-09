@@ -30,8 +30,6 @@ const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
 const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
 
-const e_goToken = enum(u8) { SEARCHMOVES, EVAL, PERFT, BATCHED, PONDER, WTIME, BTIME, WINC, BINC, MOVESTOGO, DEPTH, NODES, MATE, MOVETIME, INFINITE, VAL };
-
 pub const e_logMsgType = enum(u8) { IN, OUT, CHANNELREAD };
 
 pub const goArgStruct = struct {
@@ -46,8 +44,8 @@ pub const goArgStruct = struct {
     winc: i64 = 0,
     binc: i64 = 0,
 
-    movestogo: u32 = 0,
-    movetime: u32 = 0,
+    movestogo: u64 = 0,
+    movetime: i64 = 0,
     nodes: u64 = 0,
     depth: typel.depthT = 0,
     mate: u16 = 0,
@@ -315,7 +313,7 @@ pub const engine = struct {
         p_self.respond("uciok");
     }
     pub fn initOptions(p_self: *engine) !void {
-        try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = 1 } } });
+        try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = configl.DEFAULT_THREAD } } });
 
         try p_self.addOption(.{ .name = "savelogs", .optionType = .SAVELOGS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "false" } } });
 
@@ -343,10 +341,9 @@ pub const engine = struct {
         return p_self.options.trackMetrics;
     }
     pub inline fn printMetrics(p_self: *engine) void {
-        //p_self.metric.addTimeToProcessingUs(p_self.scheduler._threadPool.timeSpentSearchingUs());
         p_self.metric.timeSearchingUs = p_self.scheduler._threadPool.timeSpentSearchingUs();
-        p_self.metric.computedPlies = p_self.scheduler.computedPlies;
-        p_self.metric.nPlyCompute = p_self.scheduler.nPlyCompute;
+        p_self.metric.computedPlies = p_self.scheduler._threadPool.computedPlies;
+        p_self.metric.nPlyCompute = p_self.scheduler._threadPool.nPlyCompute;
         p_self.metric.printMetric();
         hashTablel.printTTStats();
     }
@@ -380,7 +377,7 @@ pub const engine = struct {
         if (p_self.saveLogs) {
             p_self.saveLog() catch {};
         }
-        p_self.free();
+        p_self.free(p_self.alloc);
         return true;
     }
 
@@ -400,22 +397,22 @@ pub const engine = struct {
                 return;
             };
             defer self.alloc.free(_respmsg);
-            self.appendLog(_respmsg) catch {
+            self.appendLog(self.alloc, _respmsg) catch {
                 return;
             };
         }
     }
 
-    pub fn free(p_self: *engine) void {
-        p_self.workingThreads.deinit(p_self.alloc);
-        p_self.options.setOptions.deinit(p_self.alloc);
+    pub fn free(p_self: *engine, alloc: std.mem.Allocator) void {
+        p_self.workingThreads.deinit(alloc);
+        p_self.options.setOptions.deinit(alloc);
         if (p_self.status.initializedInternals) {
-            hashTablel.hashTable.free(p_self.alloc, p_self.status.debugMode);
+            hashTablel.hashTable.free(alloc, p_self.status.debugMode);
             //hashTablel.zobristKeys.free(p_self.alloc);
         }
-        p_self.logs.free(p_self.alloc);
-        p_self.logsPath.free(p_self.alloc);
-        weightl.tunerOpts.deinit(p_self.alloc);
+        p_self.logs.free(alloc);
+        p_self.logsPath.free(alloc);
+        weightl.tunerOpts.deinit(alloc);
     }
 
     pub fn saveLog(self: *engine) !void {
@@ -441,9 +438,9 @@ pub const engine = struct {
         try p_self.logs.append(p_self.alloc, logmsg);
     }
 
-    pub fn appendLog(p_self: *engine, log: []const u8) !void {
-        const logmsg = try std.fmt.allocPrint(p_self.alloc, "[LOG]{d} ms => {s}", .{ p_self.startSw.timeSinceStartMs(), log });
-        try p_self.logs.append(p_self.alloc, logmsg);
+    pub fn appendLog(p_self: *engine, alloc: std.mem.Allocator, log: []const u8) !void {
+        const logmsg = try std.fmt.allocPrint(alloc, "[LOG]{d} ms => {s}", .{ p_self.startSw.timeSinceStartMs(), log });
+        try p_self.logs.append(alloc, logmsg);
     }
 
     pub fn executeUciNewGameCmd(p_self: *engine) bool {
@@ -465,12 +462,12 @@ pub const engine = struct {
         _ = cmdBuffer;
         return true;
     }
-    pub fn executeSetOptionCmd(p_self: *engine, cmdBuffer: []const u8) bool {
+    pub fn executeSetOptionCmd(p_self: *engine, alloc: std.mem.Allocator, cmdBuffer: []const u8) bool {
         // format: setoption name <id> [value <x>]
-        var tokens = utilsl.split(u8, p_self.alloc, cmdBuffer, ' ') catch {
+        var tokens = utilsl.split(u8, alloc, cmdBuffer, ' ') catch {
             return false;
         };
-        defer tokens.deinit(p_self.alloc);
+        defer tokens.deinit(alloc);
         if (tokens.items.len < 2) {
             return false;
         }
@@ -497,16 +494,16 @@ pub const engine = struct {
                 };
 
                 if (utilsl.contains(path, ".log", .ignoreCase)) {
-                    const newP = stringl.string.initFromSlice(p_self.alloc, path) catch {
+                    const newP = stringl.string.initFromSlice(alloc, path) catch {
                         return false;
                     };
-                    p_self.logsPath.free(p_self.alloc);
+                    p_self.logsPath.free(alloc);
                     p_self.logsPath = newP;
                 } else {
-                    const newP = filel.joinPath(p_self.alloc, path, "engine.log") catch {
+                    const newP = filel.joinPath(alloc, path, "engine.log") catch {
                         return false;
                     };
-                    p_self.logsPath.free(p_self.alloc);
+                    p_self.logsPath.free(alloc);
                     p_self.logsPath = newP;
                 }
                 if (p_self.status.debugMode) {
@@ -609,11 +606,6 @@ pub const engine = struct {
         }
         return true;
     }
-    pub fn setFen(p_self: *engine, fen: []const u8) void {
-        p_self.state = chess.getBoardFromFen(fen) catch {
-            return;
-        };
-    }
 
     fn initInternals(p_self: *engine) !void {
         p_self.status.initializedInternals = true;
@@ -643,14 +635,12 @@ pub const engine = struct {
         return true;
     }
     pub fn interruptSearch(p_self: *engine) void {
-        p_self.scheduler.timeM.reset();
         p_self.scheduler.handleInterrupt();
     }
     pub fn executeGoCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         const goArg = parseGoCmd(cmdBuffer);
 
         p_self.scheduler.reset();
-
         if (goArg.type == .PERFT) {
             return perftl.dispatchUciPerftCmd(p_self, goArg);
         }
@@ -668,7 +658,7 @@ pub const engine = struct {
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
         _ = cmdBuffer;
         p_self.scheduler.reset();
-        return dispatchUciBenchmark(p_self);
+        return dispatchUciBenchmark(p_self, p_self.alloc);
     }
 };
 //https://github.com/maksimKorzh/chess_programming/
@@ -680,22 +670,22 @@ pub const benchmarkEntries = [_][]const u8{
     "4R1K1/8/8/8/8/8/3R1k2/8 b - - 0 0 ", // double rook situation
 };
 
-pub fn dispatchUciBenchmark(p_engine: *engine) bool {
+pub fn dispatchUciBenchmark(p_engine: *engine, alloc: std.mem.Allocator) bool {
     // executes the benchmark steps
 
-    const dispatchThread = std.Thread.spawn(.{}, dispatchUciBenchmarkThreads, .{p_engine}) catch {
+    const dispatchThread = std.Thread.spawn(.{}, dispatchUciBenchmarkThreads, .{ p_engine, alloc }) catch {
         return false;
     };
-    p_engine.workingThreads.append(p_engine.alloc, dispatchThread) catch {
+    p_engine.workingThreads.append(alloc, dispatchThread) catch {
         return false;
     };
     return true;
 }
-pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
-    var results: std.ArrayList(schedulerl.searchReport) = std.ArrayList(schedulerl.searchReport).initCapacity(p_engine.alloc, 4) catch {
+pub fn dispatchUciBenchmarkThreads(p_engine: *engine, alloc: std.mem.Allocator) void {
+    var results: std.ArrayList(schedulerl.searchReport) = std.ArrayList(schedulerl.searchReport).initCapacity(alloc, 4) catch {
         return;
     };
-    defer results.deinit(p_engine.alloc);
+    defer results.deinit(alloc);
     const benchmarkDepth: u16 = 8;
 
     var sched = &p_engine.scheduler;
@@ -708,11 +698,12 @@ pub fn dispatchUciBenchmarkThreads(p_engine: *engine) void {
     features.reportProgress = true;
     for (0..benchmarkEntries.len) |i| {
         p_engine.refreshInternals();
-        sched.setRemainingTimeMs(std.math.maxInt(i64));
         const fen = benchmarkEntries[i];
-        p_engine.setFen(fen);
-        const res = sched.entryPointSearch(p_engine, p_engine.state, benchmarkDepth, features);
-        results.append(p_engine.alloc, res) catch unreachable;
+        p_engine.state = chess.getBoardFromFen(fen) catch {
+            continue;
+        };
+        const res = sched.entryPointSearch(p_engine.state, benchmarkDepth, features);
+        results.append(alloc, res) catch unreachable;
     }
     printResults(&benchmarkEntries, &results);
     std.debug.print("============ Benchmark perft ============\nComing soon\n", .{});
@@ -771,7 +762,7 @@ fn parseGoCmd(cmd: []const u8) goArgStruct {
             }
         } else if (utilsl.startsWith(arg, "movestogo", .ignoreCase)) {
             if (gen.next()) |val| {
-                goArgs.movestogo = std.fmt.parseInt(u32, val, 10) catch {
+                goArgs.movestogo = std.fmt.parseInt(u64, val, 10) catch {
                     gen.rewind();
                     continue;
                 };
@@ -799,7 +790,7 @@ fn parseGoCmd(cmd: []const u8) goArgStruct {
             }
         } else if (utilsl.startsWith(arg, "movetime", .ignoreCase)) {
             if (gen.next()) |val| {
-                goArgs.movetime = std.fmt.parseInt(u32, val, 10) catch {
+                goArgs.movetime = std.fmt.parseInt(i64, val, 10) catch {
                     gen.rewind();
                     continue;
                 };

@@ -22,7 +22,6 @@ const depthT = typel.depthT;
 const e_color = typel.e_color;
 
 pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth: depthT, ss: *searchStack, alpha: scoreType, beta: scoreType, threadD: *threadData) scoreType {
-    p_info.working = true;
     ss.resetPv();
     var pv: movel.line = .{};
     ss.getFrame(0).pv = &pv;
@@ -98,7 +97,6 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     var raw_eval: scoreType = typel.scoreNone;
 
     if (!isChecked) {
-        //const static_eval = if (ttHit) (correct_eval(p_state, ss, hashSearchEval, ply)) else (correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply));
         if (hashStatEval == typel.scoreNone) {
             raw_eval = heuristicl.c_evaluate(p_state, white);
         } else {
@@ -115,7 +113,6 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
 
         if (bestScore > _alpha) {
             _alpha = bestScore;
-
             // stand pat https://www.chessprogramming.org/Quiescence_Search#StandPat
             if (bestScore >= beta) {
                 return bestScore;
@@ -531,10 +528,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             //    nQuiets += 1;
             //}
             if (bestScore > typel.scoreNone and comptime t == .NonPV) {
-
-                //const canFutility = !isCheck and !chessl.isMate(_alpha) and _depth <= weightl.futilityDepth and (static_eval + weightl.futilityConst + weightl.futilityCoeff * lmrDepth) <= _alpha;
                 const fut = (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth);
-
                 if (!isChecked and _depth <= weightl.futilityDepth and fut <= _alpha and movesPlayed > weightl.moveReductionAmount) {
                     skipQuietMoves = true;
                     //continue;
@@ -542,7 +536,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                     //    skipQuietMoves = true;
                 }
 
-                //if (!isCheck and movesPlayed >= weightl.historyMinExplore and lmrDepth < weightl.historyMaxDepth) {
                 if (_depth <= weightl.lmpMaxDepth and movesPlayed >= weightl.lmpBase + @divFloor(_depth * _depth, 2 - @as(scoreType, @intFromBool(improving)))) {
                     skipQuietMoves = true;
                     //continue;
@@ -560,7 +553,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         if (!isRoot) {
             if (bestScore > typel.scoreNone and _depth <= weightl.SeePruningMaxDepth) {
-                //if (_depth <= weightl.SeePruningMaxDepth) {
                 const margin = if (isCapture) weightl.SeePruningCaptureMargin else weightl.SeePruningQuietMargin;
                 if (!heuristicl.SEE_threshold(p_state, move, _depth * margin)) {
                     continue;
