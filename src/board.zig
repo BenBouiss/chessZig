@@ -22,16 +22,14 @@ const IMove = movel.IMove;
 const useDebug = build_options.useDebug;
 
 pub const board = struct {
-    pieceBB: [chessl.N_PIECES_TYPES]u64 = std.mem.zeroes([chessl.N_PIECES_TYPES]u64),
-    pieceArray: [chessl.N_SQUARES]e_piece = std.mem.zeroes([chessl.N_SQUARES]e_piece),
-    c_occupiedBB: [2]u64 = std.mem.zeroes([2]u64),
-    pieceCount: [chessl.N_PIECES]i8 = std.mem.zeroes([chessl.N_PIECES]i8),
+    pieceBB: [chessl.N_PIECES_TYPES]u64 = @splat(0),
+    pieceArray: [chessl.N_SQUARES]e_piece = @splat(e_piece.nEmptySquare),
+    c_occupiedBB: [2]u64 = @splat(0),
+    pieceCount: [chessl.N_PIECES]i8 = @splat(0),
     wKingSq: e_square = .a1,
     bKingSq: e_square = .a1,
-    turnCount: u16 = 0,
+    turnCount: u16 = 1,
     _whiteToMove: bool = false,
-
-    info: *boardFrame = undefined,
 
     pub fn init() board {
         var ret: board = .{};

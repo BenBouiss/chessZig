@@ -102,6 +102,13 @@ pub const uciState = struct {
         return true;
     }
 };
+pub fn getMsgStdin(reader: *std.Io.Reader) ![configl.MAX_USER_INPUT]u8 {
+    var buffer = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+    var w: std.Io.Writer = .fixed(&buffer);
+    _ = try reader.streamDelimiter(&w, '\n');
+    reader.toss(1);
+    return buffer;
+}
 
 pub fn loop(alloc: std.mem.Allocator) !void {
     var state: uciState = try .init(alloc);
@@ -110,7 +117,7 @@ pub fn loop(alloc: std.mem.Allocator) !void {
     var f_reader = std.Io.File.stdin().reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     while (state.running) {
-        const inputBuffer = try enginel.getMsgStdin(reader);
+        const inputBuffer = try getMsgStdin(reader);
         var sw: timel.stopWatch = .init(true);
         const msg = utilsl.trimStr(&inputBuffer);
         const status = state.executeBuffer(msg);

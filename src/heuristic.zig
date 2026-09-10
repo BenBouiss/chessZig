@@ -213,8 +213,11 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
 pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whiteToMove: bool) scoreVect {
     _ = whiteToMove;
     if (p_state.isEndGame()) {
-        const distance: scoreType = squarel.computeMHDistance(p_state.b.wKingSq, p_state.b.bKingSq);
-        const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) squarel.computeMHDistance(p_state.b.bKingSq, squarel.centerSq) else -squarel.computeMHDistance(p_state.b.wKingSq, squarel.centerSq);
+        const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
+        const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
+
+        const distance = wKing.computeMHDistance(bKing);
+        const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) distance else -distance;
         return .{ bonus * weightl.global_KingProximityVal[MG], bonus * weightl.global_KingProximityVal[EG] };
     } else {
         return .{ 0, 0 };

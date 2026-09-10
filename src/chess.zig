@@ -63,7 +63,7 @@ pub const centerBB: u64 = 0x183C3C180000;
 // turn + 4 castling rights + enPassant sq + 3 spaces = 80
 // round that up to 100? the match score can be ommited?
 pub const MAX_FEN_LENGTH: u8 = 120;
-pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0";
+pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1";
 //pub const DEFAULT_BOARD = getBoardFromFen(DEFAULT_FEN) catch unreachable;
 
 const arr_piece_str = [_]u8{ 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k', '_', '1', '2' };
@@ -725,24 +725,12 @@ pub fn knightAttacks(knights: u64) u64 {
     return (h1 << 16) | (h1 >> 16) | (h2 << 8) | (h2 >> 8);
 }
 
-pub fn diagonalMask(sq: i8) u64 {
-    const maindia: u64 = (0x8040201008040201);
-    const diag: i8 = (sq & 7) - (sq >> 3);
-    if (diag >= 0) {
-        return maindia >> @intCast(diag << 3);
-    } else {
-        return maindia << @intCast((-diag) << 3);
-    }
+pub inline fn diagonalMask(sq: e_square) u64 {
+    return moveGenl.diagonalBB[@intFromEnum(sq)];
 }
 
-pub fn antiDiagMask(sq: i8) u64 {
-    const maindia: u64 = (0x0102040810204080);
-    const diag: i8 = 7 - (sq & 7) - (sq >> 3);
-    if (diag >= 0) {
-        return maindia >> @intCast(diag << 3);
-    } else {
-        return maindia << @intCast((-diag) << 3);
-    }
+pub inline fn antiDiagonalMask(sq: e_square) u64 {
+    return moveGenl.antiDiagonalBB[@intFromEnum(sq)];
 }
 
 pub inline fn fileMaskFromFileN(file: u8) u64 {
@@ -930,16 +918,6 @@ pub inline fn _maskOutPawnDoublePush(white: bool, empty: u64) u64 {
         return maskOutPawnDoublePush(true, empty);
     }
     return maskOutPawnDoublePush(false, empty);
-}
-
-pub inline fn getSqDiag(sq: e_square) i8 {
-    const _sq: i8 = @intCast(@intFromEnum(sq));
-    return (_sq & 7) - (_sq >> 3);
-}
-
-pub inline fn getSqAntiDiag(sq: e_square) i8 {
-    const _sq: i8 = @intCast(@intFromEnum(sq));
-    return 7 - (_sq & 7) - (_sq >> 3);
 }
 
 pub inline fn fillFile(mask: u64) u64 {
@@ -1142,34 +1120,6 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
         }
         p_board.frame.pinnedBB = pinned;
     }
-}
-
-pub fn isPiecePinned(occBB: u64, sq: e_square, p_kingSq: *const squareInfo, diagPieceBB: u64, linePieceBB: u64) u64 {
-    const bishopAtts = getBishopAttacks(occBB, sq);
-    const kingBB = p_kingSq.getBB();
-    const sqInfo = squareInfo.init(sq);
-
-    const diagatts = [_]u64{ bishopAtts & sqInfo.getAntiDiagBB(), bishopAtts & sqInfo.getDiagBB() };
-
-    if ((((diagatts[0] & diagPieceBB) != 0) and ((diagatts[0] & kingBB) != 0))) {
-        return (diagatts[0] & diagPieceBB);
-    }
-
-    if (((diagatts[1] & diagPieceBB) != 0) and ((diagatts[1] & kingBB) != 0)) {
-        return (diagatts[1] & diagPieceBB);
-    }
-
-    const rookAtts = getRookAttacks(occBB, sq);
-    const lineatts = [_]u64{ rookAtts & sqInfo.getFileBB(), rookAtts & sqInfo.getRankBB() };
-
-    if (((lineatts[0] & linePieceBB) != 0) and ((lineatts[0] & kingBB) != 0)) {
-        return (lineatts[0] & linePieceBB);
-    }
-
-    if (((lineatts[1] & linePieceBB) != 0) and ((lineatts[1] & kingBB) != 0)) {
-        return (lineatts[1] & linePieceBB);
-    }
-    return EMPTY;
 }
 
 pub fn fillMoveFromState(p_state: *const boardl.boardState, move: *IMove) void {
@@ -1524,12 +1474,9 @@ pub fn _algebraicLineToIMoveMatch(line: []const u8, tmpBoard: *boardl.boardState
     return ret;
 }
 
-pub fn algebraicLineToIMoveMatch(line: []const u8) !matchMoveContainer {
-    var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
-    return _algebraicLineToIMoveMatch(line, &tmpBoard);
-}
 pub fn algebraicLineToBoardstate(line: *const stringl.string) !boardl.boardState {
-    const moves = try algebraicLineToIMoveMatch(line._slice());
+    var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
+    const moves = try _algebraicLineToIMoveMatch(line._slice(), &tmpBoard);
     var ret = try getBoardFromFen(DEFAULT_FEN);
     for (0..moves.len) |i| {
         const move = moves.moves[i];
@@ -1537,19 +1484,6 @@ pub fn algebraicLineToBoardstate(line: *const stringl.string) !boardl.boardState
         sanityCheckBoardState(&ret);
     }
     return ret;
-}
-pub fn test_alge() !void {
-    const line = "1. d4 {book} Nf6 {book} 2. Bg5 {book} e6 {book} 3. e4 {book} h6 {book} 4. Bxf6 {book} Qxf6 {book} 5. Nf3 {book} d6 {book} 6. c3 {book} Nd7 {book} 7. Nbd2 {book} g6 {book} 8. g3 {book} Bg7 {book} 9. Qb3 {+0.20/12 0.172s} h5 {-0.15/13 0.137s} 10. Be2 {+0.16/12 0.220s} Bh6 {-0.06/11 0.128s} 11. O-O-O {-0.04/11 0.171s} b6 {+0.18/12 0.165s} 12. Kb1 {-0.23/12 0.141s} Bb7 {+0.32/12 0.166s} 13. Rhf1 {-0.37/12 0.186s} a6 {+0.30/12 0.201s} 14. h4 {-0.46/12 0.195s} O-O {+0.54/12 0.179s} 15. Qc4 {-0.52/12 0.111s} Rfc8 {+0.57/12 0.191s} 16. Qd3 {-0.38/12 0.125s} c5 {+0.09/11 0.166s} 17. dxc5 {-0.21/12 0.125s} Nxc5 {-0.01/13 0.181s} 18. Qxd6 {-0.50/12 0.116s} Nxe4 {+0.52/13 0.136s} 19. Qxb6 {-0.68/12 0.146s} Rab8 {+3.17/13 0.421s} 20. Qb4 {-4.56/11 0.400s} Nxd2+ {+4.13/12 0.128s} 21. Nxd2 {-3.33/10 0.102s} Qf5+ {+3.07/12 0.119s} 22. Ka1 {-3.98/12 0.119s} Bg2 {+3.88/13 0.100s} 23. Qa4 {-3.81/13 0.094s} Bxd2 {+4.25/13 0.101s} 24. Rxd2 {-3.39/13 0.088s} Bxf1 {+3.31/13 0.087s} 25. Bxf1 {-2.81/13 0.101s} Rxc3 {+3.11/13 0.085s} 26. Qd1 {-2.85/12 0.083s} Rf3 {+2.74/13 0.176s} 27. Bh3 {-2.96/13 0.120s} Qa5 {+2.73/12 0.113s} 28. Bg2 {-2.62/11 0.085s} Rc3 {+2.74/12 0.106s} 29. Be4 {-2.77/11 0.098s} Rcc8 {+2.55/12 0.084s} 30. a3 {-2.55/11 0.088s} Rd8 {+2.68/12 0.080s} 31. Rxd8+ {-2.81/11 0.097s} Qxd8 {+3.05/12 0.081s} 32. Qxd8+ {-2.79/12 0.089s} Rxd8 {+4.21/13 0.082s} 33. Ka2 {-4.05/12 0.093s} Rd2 {+4.59/16 0.089s} 34. f3 {-4.74/15 0.090s} Rg2 {+4.67/16 0.117s} 35. Kb3 {-4.58/14 0.126s} Rxg3 {+4.67/14 0.083s} 36. Ka4 {-4.77/15 0.081s} Rh3 {+4.55/15 0.073s} 37. b4 {-4.74/15 0.089s} Rxh4 {+5.17/16 0.076s} 38. Bd3 {-5.65/14 0.137s} Rf4 {+6.78/14 0.067s} 39. Bf1 {-6.77/14 0.069s} Rxf3 {+7.31/17 0.078s} 40. Bxa6 {-7.09/15 0.089s} h4 {+7.45/17 0.098s} 41. b5 {-6.85/14 0.076s} Rf4+ {+5.37/14 0.071s} 42. Ka5 {-7.08/15 0.103s} h3 {+5.58/13 0.073s} 43. b6 {-5.76/16 0.083s} Rf5+ {+5.69/16 0.085s} 44. Bb5 {-6.15/15 0.093s} h2 {+5.92/15 0.066s} 45. b7 {-6.12/14 0.105s} h1=Q {+5.86/14 0.081s} 46. b8=Q+ {-6.21/12 0.073s} Kg7 {+5.91/12 0.079s} 47. a4 {-6.18/12 0.066s} Qc6 {+5.92/13 0.073s} 48. Qd8 {-6.14/14 0.076s} Qc5 {+5.97/12 0.066s} 49. Qb6 {-6.14/11 0.064s} Qd5 {+5.87/12 0.069s} 50. Qd6 {-6.18/13 0.086s} g5 {+5.95/13 0.084s} 51. Qe7 {-5.90/12 0.060s} Rf2 {+6.03/13 0.102s} 52. Qa7 {-5.91/12 0.134s} Rd2 {+6.06/13 0.104s} 53. Qe3 {-6.02/11 0.104s} Rd4 {+5.99/11 0.067s} 54. Qc3 {-6.24/11 0.064s} Qd6 {+6.47/12 0.055s} 55. Qc1 {-6.54/12 0.066s} Qd8+ {+6.33/11 0.060s} 56. Ka6 {-6.54/11 0.087s} g4 {+6.36/12 0.060s} 57. Kb7 {-6.46/10 0.071s} f6 {+6.38/12 0.078s} 58. a5 {-6.51/9 0.053s} Qxa5 {+7.83/11 0.103s} 59. Kc6 {-8.31/10 0.067s} Qa8+ {+7.82/11 0.056s} 60. Kb6 {-8.04/10 0.060s} Qb8+ {+7.87/12 0.071s} 61. Ka6 {-8.15/10 0.084s} Qd6+ {+8.03/11 0.066s} 62. Bc6 {-8.31/10 0.072s} g3 {+8.63/12 0.078s} 63. Qh1 {-9.43/11 0.071s} Rd2 {+10.27/12 0.062s} 64. Qc1 {-13.12/11 0.112s} g2 {+14.47/13 0.051s} 65. Kb7 {-12.23/12 0.054s} Rd1 {+14.83/16 0.068s} 66. Qxd1 {-15.69/13 0.100s} Qxd1 {+15.43/13 0.059s} 67. Bxg2 {-15.46/15 0.056s} Qb3+ {+15.75/15 0.063s} 68. Kc8 {-15.46/13 0.047s} Qc2+ {+16.60/16 0.049s} 69. Kd7 {-15.78/14 0.047s} Qxg2 {+18.27/17 0.066s} 70. Kxe6 {-16.78/16 0.061s} Qe4+ {+28.13/18 0.052s} 71. Kd6 {-16.37/15 0.046s} f5 {+309.85/19 0.126s} 72. Kc7 {-24.24/16 0.084s} Qd5 {/0 0.000s} 73. Kb8 {-309.87/17 0.063s} f4 {+309.85/4 0.001s} 74. Ka7 {/0 0.000s} f3 {+309.85/2 0.000s} 75. Ka6 {/0 0.000s} Qb3 {/0 0.000s} 76. Ka7 {-309.94/9 0.007s} Qd5 {/0 0.000s} 77. Ka6 {0.00/255 0.025s, Black makes an illegal move: a1a1} 1-0";
-    const moves = try algebraicLineToIMoveMatch(line);
-    moves.print();
-}
-fn test_inbetween() !void {
-    print_bitboard(inBetween(.a1, .a8));
-    print_bitboard(inBetween(.f1, .f8));
-    print_bitboard(inBetween(.h4, .a4));
-    print_bitboard(inBetween(.a8, .h8));
-    print_bitboard(inBetween(.a1, .h8));
-    print_bitboard(inBetween(.a8, .h1));
 }
 
 pub inline fn initAll(verbose: bool) void {
@@ -1560,7 +1494,5 @@ pub fn main(alloc: std.mem.Allocator) !void {
     //mainl.initAll(alloc, true);
     //try test_avx();
     _ = alloc;
-    try test_alge();
-    //try test_inbetween();
     return;
 }

@@ -243,8 +243,7 @@ pub const searchStack = struct {
 pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, depth: depthT, ply: depthT, alpha: scoreType, beta: scoreType, ss: *searchStack, threadD: *threadData, cutnode: bool, comptime t: searchType) scoreType {
     const white: bool = p_state.whiteToMove();
     const isRoot: bool = ply == 0;
-    if (!isRoot and p_state.isStaleMate()) {
-        //return weightl.simpleStalemateScore;
+    if (p_state.isStaleMate()) {
         const matBalance = heuristicl.c_materialImbalance(p_state, white);
         if (matBalance > 100) {
             return -25;
@@ -259,8 +258,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     var _beta = beta;
     var _depth = depth;
     const whiteIdx: usize = chessl.whiteBoolToInt(white);
-    const mate_value = chessl.mate_in(ply);
-    const isAllNode = !(cutnode or comptime t == .PV);
     var pv: movel.line = .init();
     //std.debug.assert(!(t == .PV and cutnode));
 
@@ -278,6 +275,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
     // https://github.com/nescitus/cpw-engine/blob/master/search.cpp
     if (!isRoot) {
+        const mate_value = chessl.mate_in(ply);
         if (mate_value < _beta) {
             _beta = mate_value;
             if (_alpha >= _beta) {
@@ -388,7 +386,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         // null move prunning here
         // R = 3
         const hasPieces = !p_state.onlyPawns();
-        if (!isRoot and hasPieces and prevSS.playedMove.isValid() and static_eval >= _beta) {
+
+        if (!isRoot and hasPieces and p_state.getLastMove().isValid() and static_eval >= _beta) {
             // see chess programming video
             const augment: depthT = if (_depth > weightl.nullMoveDepthAugmentThreshold) @intCast(weightl.nullMoveDepthAugment) else 0;
             const R: depthT = augment + @as(depthT, @intCast(if (improving) weightl.nullMoveReductionImproving else weightl.nullMoveReduction));
@@ -400,7 +399,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 p_state.undoNullMove();
                 p_state.frame = f;
 
-                //if (!p_info.alive) return weightl.simpleStalemateScore;
                 if (score >= _beta) {
                     if (chessl.isMateWin(score)) {
                         score = _beta;
@@ -416,18 +414,18 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     // https://github.com/nescitus/cpw-engine/
 
     // https://www.chessprogramming.org/Internal_Iterative_Reductions
-    if (_depth >= weightl.IIRDepthMin and !hashMove.isValid() and !currS.followPv and !isAllNode) {
-        //if (_depth >= weightl.IIRDepthMin and !hashMove.isValid() and !isAllNode) {
+    if (_depth >= weightl.IIRDepthMin and !hashMove.isValid() and !currS.followPv and (cutnode or comptime t == .PV)) {
         _depth -= 1;
     }
 
     var gen: moveGenl.typeMoveGenerator = .init();
 
+    ss.getFrame(ply + 1).killerMove = .{};
     ss.getFrame(ply + 2).failHighCount = 0;
 
     const p_beta = _beta + weightl.probCutMargin;
-    if (!singularExt and _depth > weightl.probCutMinimalDepth and !chessl.isMate(_beta)) {
-        if ((hashMove.isValid() and hashSearchEval >= p_beta and hashMoveIsCapture) or (static_eval >= _beta)) {
+    if (cutnode and _depth > weightl.probCutMinimalDepth and !chessl.isMate(_beta)) {
+        if ((ttHit and hashSearchEval >= p_beta and hashMoveIsCapture) or (static_eval >= _beta)) {
             const tresh = p_beta - static_eval;
             while (gen.pickNext(p_state, ply, prevLineMove, hashMove, tresh, true, ss)) |res| {
                 if (@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE)) {
@@ -435,8 +433,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 }
                 const move = res.@"0";
                 //const moveScore = res.@"1";
-                if (!p_state.legal(move)) continue;
-                if (move.equal(excludedMove)) continue;
+                if (move.equal(excludedMove) or !p_state.legal(move)) continue;
 
                 const from = move.getFrom();
                 const fPiece = p_state.getPiece(from);
@@ -454,11 +451,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 p_state.undoMove();
                 p_state.frame = f;
 
-                //if (!p_info.alive) return weightl.simpleStalemateScore;
                 if (score >= p_beta) {
                     // save to TT
-                    const probCutEntry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth - 4), .LOWER, move, raw_eval, hashl.evalToTTEval(bestScore, ply));
-                    writer.writeShort(probCutEntry);
+                    if (!singularExt) {
+                        const probCutEntry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth - 4), .LOWER, move, raw_eval, hashl.evalToTTEval(bestScore, ply));
+                        writer.writeShort(probCutEntry);
+                    }
                     return score;
                 }
             }
@@ -498,8 +496,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     while (gen.pickNext(p_state, ply, prevLineMove, hashMove, weightl.moveGenMinSeeThreshold, skipQuietMoves, ss)) |res| {
         const move = res.@"0";
         const moveScore = res.@"1";
-        if (move.equal(excludedMove)) continue;
-        if (!p_state.legal(move)) continue;
+        if (move.equal(excludedMove) or !p_state.legal(move)) continue;
 
         var extension: depthT = 0;
         const to = move.getTo();
@@ -667,7 +664,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             if (isChecked) {
                 bestScore = chessl.mated_in(ply);
             } else {
-                bestScore = weightl.simpleStalemateScore;
+                bestScore = 0;
             }
         } else {
             bestScore = _alpha;

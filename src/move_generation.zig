@@ -32,6 +32,9 @@ const boardState = boardl.boardState;
 pub const arrRectangular: [64][64]u64 = initInbetween();
 pub const cachedKingTable: [64]u64 = initKingAttacks();
 pub const safetyArea: [64]u64 = initSafetyArea();
+
+pub const diagonalBB: [64]u64 = initDiagonal(false);
+pub const antiDiagonalBB: [64]u64 = initDiagonal(true);
 // https://www.chessprogramming.org/Square_Attacked_By#Obstructed
 
 // https://www.chessprogramming.org/King_Safety will be defined
@@ -1236,6 +1239,15 @@ pub fn kingAttacks(sq: i8) u64 {
     }
     return ret;
 }
+pub inline fn getSqDiag(sq: e_square) i8 {
+    const _sq: i8 = @intCast(@intFromEnum(sq));
+    return (_sq & 7) - (_sq >> 3);
+}
+
+pub inline fn getSqAntiDiag(sq: e_square) i8 {
+    const _sq: i8 = @intCast(@intFromEnum(sq));
+    return 7 - (_sq & 7) - (_sq >> 3);
+}
 
 pub fn initInbetween() [64][64]u64 {
     @setEvalBranchQuota(100000);
@@ -1262,13 +1274,13 @@ pub fn initInbetween() [64][64]u64 {
                 } else {
                     table[x][y] = westOccl(fromBB, ~toBB) ^ fromBB;
                 }
-            } else if (fromSq.diagonal == toSq.diagonal) {
+            } else if (getSqDiag(fromSq.sq) == getSqDiag(toSq.sq)) {
                 if (x < y) {
                     table[x][y] = northEastOccl(fromBB, ~toBB) ^ fromBB;
                 } else {
                     table[x][y] = southWestOccl(fromBB, ~toBB) ^ fromBB;
                 }
-            } else if (fromSq.antidiagonal == toSq.antidiagonal) {
+            } else if (getSqAntiDiag(fromSq.sq) == getSqAntiDiag(toSq.sq)) {
                 if (x < y) {
                     table[x][y] = northWestOccl(fromBB, ~toBB) ^ fromBB;
                 } else {
@@ -1303,6 +1315,23 @@ pub fn initSafetyArea() [64]u64 {
         ret[sq] = chess.getRookAttacksRay(newBox, @enumFromInt(sq)) | chess.getBishopAttacksRay(newBox, @enumFromInt(sq));
 
         ret[sq] |= chess.knightAttacks(chess.xToBitboard(@intCast(sq)));
+    }
+    return ret;
+}
+pub fn initDiagonal(anti: bool) [64]u64 {
+    @setEvalBranchQuota(100000);
+    //const baseSq: i8 = 28;
+    var ret: [64]u64 = @splat(0);
+
+    const maindia: u64 = if (anti) (0x0102040810204080) else (0x8040201008040201);
+    for (0..ret.len) |i| {
+        const _i: i8 = @intCast(i);
+        const diag: i8 = if (anti) (7 - (_i & 7) - (_i >> 3)) else ((_i & 7) - (_i >> 3));
+        if (diag >= 0) {
+            ret[i] = maindia >> @intCast(diag << 3);
+        } else {
+            ret[i] = maindia << @intCast((-diag) << 3);
+        }
     }
     return ret;
 }

@@ -3,16 +3,12 @@ const typel = @import("type.zig");
 const std = @import("std");
 pub const e_square = typel.e_square;
 
-pub const MAX_CHECKS: u8 = 2;
-
 pub const squareInfo = struct {
     sq: e_square = e_square.a1,
     file: u8 = 0,
     rank: u8 = 0,
-    diagonal: i8 = 0,
-    antidiagonal: i8 = 0,
     pub fn init(sq: e_square) squareInfo {
-        return .{ .sq = sq, .file = chess.getSqFile(sq), .rank = chess.getSqRank(sq), .diagonal = chess.getSqDiag(sq), .antidiagonal = chess.getSqAntiDiag(sq) };
+        return .{ .sq = sq, .file = chess.getSqFile(sq), .rank = chess.getSqRank(sq) };
     }
     pub inline fn copy(self: squareInfo) squareInfo {
         return .{ .sq = self.sq, .file = self.file, .rank = self.rank, .diagonal = self.diagonal, .antidiagonal = self.antidiagonal };
@@ -24,10 +20,10 @@ pub const squareInfo = struct {
         return chess.ONE << @intCast(@intFromEnum(self.sq));
     }
     pub inline fn getDiagBB(self: squareInfo) u64 {
-        return chess.diagonalMask(@intCast(@intFromEnum(self.sq)));
+        return chess.diagonalMask(self.sq);
     }
     pub inline fn getAntiDiagBB(self: squareInfo) u64 {
-        return chess.antiDiagMask(@intCast(@intFromEnum(self.sq)));
+        return chess.antiDiagonalMask(self.sq);
     }
     pub inline fn getFileBB(self: squareInfo) u64 {
         return chess.fileMaskFromFileN(self.file);
@@ -55,44 +51,3 @@ pub const squareInfo = struct {
 };
 pub const maxBenDistance = 14;
 pub const centerSq: e_square = .e4;
-pub fn computeMHDistance(x1: e_square, x2: e_square) i8 {
-    const deltaF: i8 = @as(i8, @intCast(chess.getSqFile(x1))) - @as(i8, @intCast(chess.getSqFile(x2)));
-    const deltaR: i8 = @as(i8, @intCast(chess.getSqRank(x1))) - @as(i8, @intCast(chess.getSqRank(x2)));
-    return @as(i8, @intCast(@abs(deltaF) + @abs(deltaR)));
-}
-pub const checkContainer = struct {
-    squares: [MAX_CHECKS]squareInfo = std.mem.zeroes([MAX_CHECKS]squareInfo),
-    len: usize = 0,
-
-    pub fn addCheckSquare(p_self: *checkContainer, sq: squareInfo) bool {
-        if (p_self.len == MAX_CHECKS) {
-            return false;
-        }
-        p_self.squares[p_self.len] = sq.copy();
-        p_self.len += 1;
-        return true;
-    }
-    pub inline fn isDoubleCheck(self: checkContainer) bool {
-        return self.len == 2;
-    }
-    pub inline fn isCheck(self: checkContainer) bool {
-        return self.len > 0;
-    }
-    pub fn print(self: checkContainer) void {
-        for (0..self.len) |i| {
-            self.squares[i].print();
-        }
-        std.debug.print("\n", .{});
-    }
-};
-
-pub fn convertBitBoardtoCheckContainer(bb: u64) checkContainer {
-    var ret: checkContainer = .{};
-    var _bb = bb;
-    while (_bb != 0) {
-        const lsb = chess.bitscan(_bb);
-        _bb ^= chess.xToBitboard(lsb);
-        _ = ret.addCheckSquare(squareInfo.init(@enumFromInt(lsb)));
-    }
-    return ret;
-}

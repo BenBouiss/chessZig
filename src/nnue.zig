@@ -3,6 +3,7 @@ const std = @import("std");
 const typel = @import("type.zig");
 const boardl = @import("board.zig");
 const chessl = @import("chess.zig");
+const enginel = @import("engine.zig");
 const heuristicl = @import("heuristic.zig");
 const stringl = @import("string.zig");
 const filel = @import("file.zig");
@@ -342,11 +343,12 @@ pub fn debugTest(net: *const network, fen: []const u8) void {
 pub fn main(alloc: std.mem.Allocator) !void {
     //const netPath = "out/bin/quantised.bin";
     //const netPath = "out/bin/simple-130/quantised.bin";
-    const netPath = configl.NET_PATH;
+    //const netPath = configl.NET_PATH;
+    const netPath = "src/extern/simple-320-colM-128/quantised.bin";
 
     const net: network = try .init(alloc, netPath);
-    for (0..chessl.benchmarkEntries.len) |i| {
-        const fen = chessl.benchmarkEntries[i];
+    for (0..enginel.benchmarkEntries.len) |i| {
+        const fen = enginel.benchmarkEntries[i];
         debugTest(&net, fen);
     }
 

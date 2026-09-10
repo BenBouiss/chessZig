@@ -1,7 +1,6 @@
 // zig file for match orchestration in uci mode or more(?)
 const chessl = @import("chess.zig");
 const moveGenl = @import("move_generation.zig");
-const enginel = @import("engine.zig");
 const mainl = @import("main.zig");
 const utilsl = @import("utils.zig");
 const configl = @import("config.zig");
@@ -25,7 +24,67 @@ pub const SPRT_RES = enum(u8) { NULL, H0, H1 };
 
 const e_color = typel.e_color;
 const string = stringl.string;
-const inputChannel = enginel.inputChannel;
+
+const INPUTCHANNEL_LEN: usize = 64;
+pub const cmdResult = struct {
+    cmd: [configl.MAX_USER_INPUT]u8 = undefined,
+    len: usize = 0,
+};
+
+pub const inputChannel = struct {
+    cmdBuffer: [][configl.MAX_USER_INPUT]u8 = undefined,
+    cmdSize: []usize = undefined,
+    currentIdx: usize = 0,
+    nextIdx: usize = 0,
+    len: usize = INPUTCHANNEL_LEN,
+    l: lockl.lock = .{},
+
+    pub fn init(alloc: std.mem.Allocator) !inputChannel {
+        var ret: inputChannel = undefined;
+        ret.cmdBuffer = (try alloc.alloc([configl.MAX_USER_INPUT]u8, INPUTCHANNEL_LEN));
+        ret.cmdSize = (try alloc.alloc(usize, INPUTCHANNEL_LEN));
+        ret.nextIdx = 0;
+        ret.currentIdx = 0;
+        ret.l = .{};
+        return ret;
+    }
+    pub fn initP(alloc: std.mem.Allocator) !*inputChannel {
+        const ret = try alloc.create(inputChannel);
+        ret.cmdBuffer = (try alloc.alloc([configl.MAX_USER_INPUT]u8, INPUTCHANNEL_LEN));
+        ret.cmdSize = (try alloc.alloc(usize, INPUTCHANNEL_LEN));
+        ret.nextIdx = 0;
+        ret.currentIdx = 0;
+        ret.l = .{};
+        return ret;
+    }
+
+    pub fn nonEmpty(p_self: *inputChannel) bool {
+        p_self.l.acquireLock();
+        defer p_self.l.releaseLock();
+        return p_self.currentIdx != p_self.nextIdx;
+    }
+    pub fn readBuffer(p_self: *inputChannel) cmdResult {
+        p_self.l.acquireLock();
+        defer p_self.l.releaseLock();
+        p_self.currentIdx = (p_self.currentIdx + 1) % INPUTCHANNEL_LEN;
+        std.debug.assert(p_self.currentIdx != p_self.nextIdx + 1);
+        const ret_len = p_self.cmdSize[p_self.currentIdx];
+        var ret: cmdResult = .{ .len = ret_len };
+        @memcpy((ret.cmd[0..ret_len]), p_self.cmdBuffer[p_self.currentIdx][0..ret_len]);
+        return ret;
+    }
+    pub fn putCmd(p_self: *inputChannel, cmd: []const u8) void {
+        p_self.l.acquireLock();
+        defer p_self.l.releaseLock();
+        p_self.nextIdx = (p_self.nextIdx + 1) % INPUTCHANNEL_LEN;
+        @memcpy((p_self.cmdBuffer[p_self.nextIdx][0..cmd.len]), cmd[0..cmd.len]);
+        p_self.cmdSize[p_self.nextIdx] = cmd.len;
+    }
+    pub fn free(p_self: *inputChannel, alloc: std.mem.Allocator) void {
+        alloc.free(p_self.cmdBuffer);
+        alloc.free(p_self.cmdSize);
+    }
+};
 
 const INITIAL_LOGSIZE: u16 = 100;
 const DEFAULT_TIME_MS: i64 = 60 * 1_000; // 1 min in ms
@@ -1384,10 +1443,6 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
 
         if (match.positionUpdated) {
             match.positionUpdated = false;
-            //chessl.print_boardstate(&match.chessState);
-            //chessl.print_board(&match.chessState);
-            //std.debug.print("[{d} ms] ", .{roundTimer.timeSinceStartMs()});
-            //match.printTimes(turnTimer);
             const fmoves = moveGenl.generateLegalMoves(&match.chessState);
             if (fmoves.len == 0) {
                 if (match.chessState.isChecked()) {
