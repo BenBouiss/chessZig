@@ -28,8 +28,8 @@ const string = stringl.string;
 const inputChannel = enginel.inputChannel;
 
 const INITIAL_LOGSIZE: u16 = 100;
-const DEFAULT_TIME_MS: i64 = 300 * 1_000; // 5 min in ms
-const DEFAULT_TIME_INC_MS: i64 = 5 * 1_000; // 5 sec in ms
+const DEFAULT_TIME_MS: i64 = 60 * 1_000; // 1 min in ms
+const DEFAULT_TIME_INC_MS: i64 = 1_000; // 1 sec in ms
 
 const e_guiCmd = enum(u8) { NOOP = 0, INFO, BESTMOVE, READYOK, UCIOK, ID, OPTION };
 const e_guiPhase = enum(u8) { INVALID, WAITING, MATCH };
@@ -1369,6 +1369,7 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
             itr = 0;
             if (turnTimer.timeSinceStartMs() > inactivityMs) {
                 std.debug.print("[WARNING] inactivity? {d} ms thresh {d} ms \n", .{ turnTimer.timeSinceStartMs(), inactivityMs });
+                match.printTimes(turnTimer);
                 inactivityMs += (inactivityMs + 1000);
             }
 
@@ -1377,6 +1378,7 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
                 try eng.sendInterruptWait(inp);
                 match.status = .Flagged;
                 positionOver = true;
+                match.positionUpdated = true;
             }
         }
 
@@ -1387,18 +1389,23 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
             //std.debug.print("[{d} ms] ", .{roundTimer.timeSinceStartMs()});
             //match.printTimes(turnTimer);
             const fmoves = moveGenl.generateLegalMoves(&match.chessState);
-            if ((fmoves.len == 0 and !match.chessState.isChecked()) or match.chessState.isStaleMateRepetition()) {
-                match.status = .StaleMate;
+            if (fmoves.len == 0) {
+                if (match.chessState.isChecked()) {
+                    match.status = .CheckMate;
+                } else {
+                    match.status = .StaleMate;
+                }
+                positionOver = true;
+            } else if (match.chessState.isStaleMateRepetition()) {
+                match.status = .StaleMateRepetition;
                 positionOver = true;
             } else if (match.chessState.isInsufficientMaterial()) {
                 match.status = .StaleMateInsuficientMaterial;
                 positionOver = true;
-            } else if ((fmoves.len == 0 and match.chessState.isChecked())) {
-                match.status = .CheckMate;
-                positionOver = true;
             } else {
                 match.status = .Continue;
             }
+
             // send pos to current engine
             if (positionOver) {
                 try ctx.pool.submitMatch(ctx.alloc, match, matchId);

@@ -223,7 +223,6 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
 
             score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta, threadD);
         }
-
         if (!p_info.alive) {
             break;
         }

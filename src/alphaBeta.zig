@@ -673,8 +673,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             bestScore = _alpha;
         }
     }
-    //if (!isCheck and (!bestMove.isCapture() or !bestMove.isValid()) and (hashFlag == .LOWER and bestScore > static_eval) and (hashFlag == .UPPER and bestScore < static_eval)) {
-    if (!singularExt and !isChecked and (!bestMove.isCapture() or !bestMove.isValid()) and !(hashFlag == .LOWER and bestScore <= static_eval) and !(!bestMove.isValid() and bestScore >= static_eval)) {
+    if (!isChecked and (!bestMove.isCapture() or !bestMove.isValid()) and !(hashFlag == .LOWER and bestScore <= static_eval) and !(!bestMove.isValid() and bestScore >= static_eval)) {
         const bonus =
             std.math.clamp(@divFloor((bestScore - static_eval) * _depth, 8), -256, 256);
 
@@ -691,7 +690,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         const prev1 = ss.getPrevFrame(ply, 1);
         const prev2 = ss.getPrevFrame(ply, 2);
         if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
-            historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()] = updateCorrhist(historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()], bonus);
+            const to1 = prev1.playedMove.getTo();
+            const to2 = prev2.playedMove.getTo();
+            historyl.corrHist[@intFromEnum(prev2.pieceMoved)][to2][@intFromEnum(prev1.pieceMoved)][to1] = updateCorrhist(historyl.corrHist[@intFromEnum(prev2.pieceMoved)][to2][@intFromEnum(prev1.pieceMoved)][to1], bonus);
         }
     }
     if (hashFlag == .LOWER) {
@@ -701,15 +702,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         if (bestMove.isQuietMove()) {
             currS.killerMove = bestMove;
             const prevMove = ss.getPrevFrame(ply, 1).playedMove;
-            const prevPiece = ss.getPrevFrame(ply, 1).pieceMoved;
+            const prevPiece = @intFromEnum(ss.getPrevFrame(ply, 1).pieceMoved);
             const prevMoveTo = prevMove.getTo();
 
             const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
-            const prevPrevPiece = ss.getPrevFrame(ply, 2).pieceMoved;
+            const prevPrevPiece = @intFromEnum(ss.getPrevFrame(ply, 2).pieceMoved);
             const prevPrevMoveTo = prevPrevMove.getTo();
 
             const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
-            const prevPiece4 = ss.getPrevFrame(ply, 4).pieceMoved;
+            const prevPiece4 = @intFromEnum(ss.getPrevFrame(ply, 4).pieceMoved);
             const prevMove4To = prevMove4.getTo();
 
             //for (0..nQuiets) |i| {
@@ -720,10 +721,12 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 const to = move.getTo();
                 const from = move.getFrom();
                 const piece: u8 = @intFromEnum(p_state.getPiece(from));
-                historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][piece][to] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][piece][to], malus);
 
-                historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][piece][to] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][piece][to], malus);
-                historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][piece][to] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][piece][to], malus);
+                historyl.continuationHeuristic[prevPiece][prevMoveTo][piece][to] = updateHistory(historyl.continuationHeuristic[prevPiece][prevMoveTo][piece][to], malus);
+
+                historyl.continuationHeuristic[prevPrevPiece][prevPrevMoveTo][piece][to] = updateHistory(historyl.continuationHeuristic[prevPrevPiece][prevPrevMoveTo][piece][to], malus);
+
+                historyl.continuationHeuristic[prevPiece4][prevMove4To][piece][to] = updateHistory(historyl.continuationHeuristic[prevPiece4][prevMove4To][piece][to], malus);
 
                 historyl.historyHeuristic[whiteIdx][from][to] = updateHistory(historyl.historyHeuristic[whiteIdx][from][to], malus);
             }
@@ -732,10 +735,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             const bestPiece = @intFromEnum(p_state.getPiece(bestFrom));
             historyl.historyHeuristic[whiteIdx][bestFrom][bestTo] = updateHistory(historyl.historyHeuristic[whiteIdx][bestFrom][bestTo], _historyBonus);
 
-            historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMoveTo][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMoveTo][bestPiece][bestTo], _historyBonus);
-            historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMoveTo][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMoveTo][bestPiece][bestTo], _historyBonus);
+            historyl.continuationHeuristic[prevPiece][prevMoveTo][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[prevPiece][prevMoveTo][bestPiece][bestTo], _historyBonus);
+            historyl.continuationHeuristic[prevPrevPiece][prevPrevMoveTo][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[prevPrevPiece][prevPrevMoveTo][bestPiece][bestTo], _historyBonus);
 
-            historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4To][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4To][bestPiece][bestTo], _historyBonus);
+            historyl.continuationHeuristic[prevPiece4][prevMove4To][bestPiece][bestTo] = updateHistory(historyl.continuationHeuristic[prevPiece4][prevMove4To][bestPiece][bestTo], _historyBonus);
         } else {
             const from = bestMove.getFrom();
             const to = bestMove.getTo();

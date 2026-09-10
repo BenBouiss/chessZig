@@ -221,7 +221,7 @@ pub const engineOptions = struct {
     setOptions: std.ArrayList(setOptionEntry) = .empty,
 };
 pub const logging = struct {
-    _logs: std.ArrayList([]u8) = undefined,
+    _logs: std.ArrayList([]u8) = .empty,
     lock: lockl.lock = .{},
     freed: bool = false,
     pub fn init(alloc: std.mem.Allocator, initialCap: usize) !logging {
@@ -253,7 +253,7 @@ pub const logging = struct {
 pub const engine = struct {
     state: boardl.boardState = .{},
 
-    workingThreads: std.ArrayList(std.Thread),
+    workingThreads: std.ArrayList(std.Thread) = .empty,
     status: engineStatus = .{},
     scheduler: schedulerl.scheduler = .{},
 
