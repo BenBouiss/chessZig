@@ -445,10 +445,10 @@ pub fn moveGenKingBB(p_board: *const boardState, comptime white: bool, emptyOrEn
 pub inline fn moveGenBB(p_board: *const boardState) moveBBState {
     var ret: moveBBState = .{};
     if (p_board.whiteToMove()) {
-        cst_moveGenBB(p_board, true, &ret, .NONE);
+        cst_moveGenBB(p_board, true, &ret, .ALLLEGAL);
         return ret;
     }
-    cst_moveGenBB(p_board, false, &ret, .NONE);
+    cst_moveGenBB(p_board, false, &ret, .ALLLEGAL);
     return ret;
 }
 
@@ -795,37 +795,37 @@ pub const typeMoveGenerator = struct {
     computedQuiets: bool = false,
     badCaptures: movesScores = undefined,
     idx: u8 = 0,
-    phase: typel.e_moveGenFlag = .NONE,
+    phase: typel.e_moveGenFlag = .TTMOVE,
 
     pub fn init() typeMoveGenerator {
         var ret: typeMoveGenerator = undefined;
-        ret.idx = 0;
-        ret.phase = .NONE;
-        //ret._moves.moves.len = 0;
         ret.captures.moves.len = 0;
-        ret.computedCaptures = false;
         ret.quiets.moves.len = 0;
-        ret.computedQuiets = false;
         ret.badCaptures.moves.len = 0;
+
+        ret.idx = 0;
+        ret.phase = .TTMOVE;
+        ret.computedCaptures = false;
+        ret.computedQuiets = false;
         return ret;
     }
     pub fn reset(p_self: *typeMoveGenerator) void {
-        p_self.phase = .NONE;
+        p_self.phase = .TTMOVE;
         p_self.idx = 0;
+        // TODO: also reset the badCaptures as is, the badCaptures keeps growing after probcut
+        p_self.badCaptures.moves.len = 0;
     }
 
     pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, prevLineMove: IMove, hashMove: IMove, seeThreshold: scoreType, skipQuiet: bool, ss: *alphaBetal.searchStack) ?struct { movel.IMove, scoreType } {
         const white = state.whiteToMove();
         const currS = ss.getFrame(ply);
-        //const _ply: usize = @intCast(ply);
-        if (p_self.phase == .NONE) {
-            p_self.phase = .TTMOVE;
+        if (p_self.phase == .TTMOVE) {
+            p_self.phase = .GENERATECAPTURES;
             if (hashMove.isValid() and !(hashMove.isQuietMove() and skipQuiet)) {
-                p_self.idx = 1;
                 return .{ hashMove, configl.ORDERING_LINE_VALUE + 1 };
             }
         }
-        if (p_self.phase == .TTMOVE) {
+        if (p_self.phase == .GENERATECAPTURES) {
             if (!p_self.computedCaptures) {
                 p_self.generateMove(.CAPTURE, state);
                 for (0..p_self.captures.moves.len) |i| {
@@ -860,8 +860,10 @@ pub const typeMoveGenerator = struct {
                     p_self.badCaptures.moves.append(ret.@"0");
                 }
             }
+            p_self.phase = .GENERATEQUIETS;
+            p_self.idx = 0;
         }
-        if (p_self.phase == .CAPTURE) {
+        if (p_self.phase == .GENERATEQUIETS) {
             if (!p_self.computedQuiets and !skipQuiet) {
                 p_self.generateMove(.QUIET, state);
                 const prevMove = ss.getPrevFrame(ply, 1).playedMove;
@@ -880,9 +882,6 @@ pub const typeMoveGenerator = struct {
                 const offset = chess.whiteBoolToInt(white);
                 for (0..p_self.quiets.moves.len) |i| {
                     const move = p_self.quiets.moves.moves[i];
-                    const to = move.getTo();
-                    const from = move.getFrom();
-                    const p: u8 = @intFromEnum(state.getPiece(from));
 
                     if (move.equal(prevLineMove)) {
                         p_self.quiets.scores[i] = configl.ORDERING_LINE_VALUE;
@@ -891,7 +890,9 @@ pub const typeMoveGenerator = struct {
                     } else if (move.getFlag() == @intFromEnum(typel.e_moveFlags.QUEENPROMO)) {
                         p_self.quiets.scores[i] = configl.ORDERING_PROMOTIONS;
                     } else {
-                        // p_self.quiets.scores[i]
+                        const to = move.getTo();
+                        const from = move.getFrom();
+                        const p: u8 = @intFromEnum(state.getPiece(from));
                         var score = historyl.historyHeuristic[offset][from][to];
                         if (prevV) {
                             score += historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][p][to];
@@ -910,14 +911,16 @@ pub const typeMoveGenerator = struct {
             }
             p_self.phase = .QUIET;
         }
-        if (p_self.phase == .QUIET and !skipQuiet) {
-            while (p_self.idx < p_self.quiets.moves.len) {
-                const ret = p_self.quiets.getNext(p_self.idx);
-                p_self.idx += 1;
-                if (ret.@"0".equal(hashMove)) {
-                    continue;
+        if (p_self.phase == .QUIET) {
+            if (!skipQuiet) {
+                while (p_self.idx < p_self.quiets.moves.len) {
+                    const ret = p_self.quiets.getNext(p_self.idx);
+                    p_self.idx += 1;
+                    if (ret.@"0".equal(hashMove)) {
+                        continue;
+                    }
+                    return ret;
                 }
-                return ret;
             }
             p_self.idx = 0;
             p_self.phase = .BADCAPTURE;
@@ -932,7 +935,6 @@ pub const typeMoveGenerator = struct {
         return null;
     }
     pub inline fn generateMove(self: *typeMoveGenerator, comptime t: typel.e_moveGenFlag, p_state: *const boardState) void {
-        self.idx = 0;
         if (comptime t == .CAPTURE or t == .QUIET) {
             if (comptime t == .CAPTURE) {
                 self.computedCaptures = true;

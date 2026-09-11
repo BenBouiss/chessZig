@@ -495,8 +495,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     }
     while (gen.pickNext(p_state, ply, prevLineMove, hashMove, weightl.moveGenMinSeeThreshold, skipQuietMoves, ss)) |res| {
         const move = res.@"0";
-        const moveScore = res.@"1";
         if (move.equal(excludedMove) or !p_state.legal(move)) continue;
+        const moveScore = res.@"1";
 
         var extension: depthT = 0;
         const to = move.getTo();
@@ -518,7 +518,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             if (to == p_state.getLastMove().getTo() and historyl.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] > weightl.captureExtensionThresh and comptime t == .PV) {
                 extension += 1;
             }
-            //} else if (bestScore > typel.scoreNone and comptime t == .NonPV) {
         } else {
             //if (nQuiets < weightl.searchMoveBufferSize) {
             //    quiets[nQuiets] = move;
@@ -538,8 +537,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                     //continue;
                 }
                 if (!isChecked and movesPlayed >= weightl.historyMinExplore and _depth < weightl.historyMaxDepth) {
-                    //if (!isCheck and movesPlayed >= weightl.historyMinExplore) {
-                    //if (histScore < (weightl.historyThreshCoeff * _depth + weightl.historyThreshConst)) {
                     if (histScore < (weightl.historyThreshCoeff * _depth + weightl.historyThreshConst)) {
                         //skipQuietMoves = true;
                         continue;
@@ -548,6 +545,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             }
         }
 
+        // TODO: change condition
         if (!isRoot) {
             if (bestScore > typel.scoreNone and _depth <= weightl.SeePruningMaxDepth) {
                 const margin = if (isCapture) weightl.SeePruningCaptureMargin else weightl.SeePruningQuietMargin;
@@ -610,6 +608,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             if (isPromo) {
                 _lmrR += weightl.lmr_isPromotion;
             }
+            // TODO: only this on quiet moves
             if (moveScore >= weightl.lmr_scoreThreshold) {
                 _lmrR += weightl.lmr_killerMove;
             } else if (!isThreat and gen.phase == .BADCAPTURE) {
@@ -618,6 +617,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             if (nextS.failHighCount > weightl.lmr_highFailCount) {
                 _lmrR += weightl.lmr_highFailScore;
             }
+
             const d: depthT = std.math.clamp(heuristicl.milliDepthToDepth(_lmrR), 0, newDepth - 1);
             score = -searchLoop(p_state, p_info, newDepth - d, ply + 1, -_alpha - 1, -_alpha, ss, threadD, true, .NonPV);
             fullSearch = score > _alpha and d > 0;

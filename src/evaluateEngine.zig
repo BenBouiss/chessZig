@@ -1296,7 +1296,7 @@ const matchStruct = struct {
         const move = chessl.getFirstMoveFromStr(&p_self.chessState, cmdBuffer.str);
         const fmoves = moveGenl.generateLegalMoves(&p_self.chessState);
         if (!move.isValid() or !move.isIn(fmoves)) {
-            std.debug.print("[DEBUG] matchOnBestMove: found err: with command: '{s}' len {d}\n", .{ cmdBuffer.str, cmdBuffer.str.len });
+            std.debug.print("[DEBUG] matchOnBestMove: found err: with command: '{s}' len {d} engine used {d}\n", .{ cmdBuffer.str, cmdBuffer.str.len, cmdBuffer.engine });
             std.debug.print("[DEBUG] matchOnBestMove: move found: {s}-{} \n", .{ move.getStr(), move.getFlag() });
             chessl.print_boardstate(&p_self.chessState);
             p_self.status = .Error;

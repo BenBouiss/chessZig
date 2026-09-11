@@ -262,14 +262,7 @@ pub const matchMoveContainer = struct {
         std.debug.print("\n", .{});
         return;
     }
-    pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key, pawnMove: bool) bool {
-        _ = pawnMove;
-        //if (move.isCapture() or pawnMove) {
-        //    p_self.lastIrreversibleMoveIndex = p_self.len;
-        //    p_self.irreversible[p_self.len] = true;
-        //} else {
-        //    p_self.irreversible[p_self.len] = false;
-        //}
+    pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
         p_self.moves[p_self.len] = move;
         if (move.isDoublePush()) {
             p_self.keyCodes[p_self.len] = key ^ hashl.zobristKeys.enPassantKey;
@@ -314,16 +307,6 @@ pub const matchMoveContainer = struct {
 
     pub fn popMove(p_self: *matchMoveContainer) IMove {
         p_self.len -= 1;
-        //if (p_self.len == 0) {
-        //    p_self.lastIrreversibleMoveIndex = 0;
-        //} else if (p_self.lastIrreversibleMoveIndex == p_self.len) {
-        //    p_self.lastIrreversibleMoveIndex = @intCast(p_self.len - 1);
-        //    while (p_self.lastIrreversibleMoveIndex > 0) : (p_self.lastIrreversibleMoveIndex -= 1) {
-        //        if (p_self.irreversible[p_self.lastIrreversibleMoveIndex]) {
-        //            break;
-        //        }
-        //    }
-        //}
         return p_self.moves[p_self.len];
     }
     pub inline fn popMoveVoid(p_self: *matchMoveContainer) void {

@@ -850,10 +850,6 @@ pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_p
         return @enumFromInt(@intFromEnum(piece) - N_PIECES_TYPES);
     }
 }
-//pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
-//    if (whiteToMove) return .WHITE;
-//    return .BLACK;
-//}
 pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
     return @enumFromInt(whiteBoolToInt(whiteToMove));
 }
@@ -1460,15 +1456,13 @@ pub fn _algebraicLineToIMoveMatch(line: []const u8, tmpBoard: *boardl.boardState
             continue;
         }
 
-        //var moveStr = try stringl.string.initFromSlice(alloc, str[offset..str.len]);
-        //defer moveStr.free(alloc);
         const move = algebraicToIMove(tmpBoard, str[offset..]) catch |err| {
             std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line, str });
             return err;
         };
         if (move.isValid()) {
             tmpBoard.makeMove(move);
-            _ = ret.append(move, 0, isPawnPiece(tmpBoard.getPiece(move.getFrom())));
+            _ = ret.append(move, 0);
         }
     }
     return ret;
@@ -1476,14 +1470,9 @@ pub fn _algebraicLineToIMoveMatch(line: []const u8, tmpBoard: *boardl.boardState
 
 pub fn algebraicLineToBoardstate(line: *const stringl.string) !boardl.boardState {
     var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
-    const moves = try _algebraicLineToIMoveMatch(line._slice(), &tmpBoard);
-    var ret = try getBoardFromFen(DEFAULT_FEN);
-    for (0..moves.len) |i| {
-        const move = moves.moves[i];
-        ret.makeMove(move);
-        sanityCheckBoardState(&ret);
-    }
-    return ret;
+    _ = try _algebraicLineToIMoveMatch(line._slice(), &tmpBoard);
+    sanityCheckBoardState(&tmpBoard);
+    return tmpBoard;
 }
 
 pub inline fn initAll(verbose: bool) void {

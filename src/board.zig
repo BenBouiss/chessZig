@@ -607,7 +607,6 @@ pub const boardState = struct {
         var toPiece = p_self.getFromPiece(move);
         var _toPiece = chessl.e_pieceTo_e_pieceTypeCst(toPiece, white);
         var isPromo: bool = false;
-        var isPawn: bool = false;
         if (_victim == .ROOK) {
             p_self.frame.stat.onRookMove(toBB, !white);
         }
@@ -619,7 +618,6 @@ pub const boardState = struct {
         p_self.b.pieceBB[@intFromEnum(_toPiece)] ^= moveBB;
         p_self.b.c_occupiedBB[usIdx] ^= moveBB;
         if (_toPiece == .PAWN) {
-            isPawn = true;
             if (move.isEnpassant()) {
                 const epSq: e_square = chessl.enPassantVictimSq(from, to);
                 const epBB = chessl.sqToBitboard(epSq);
@@ -666,7 +664,7 @@ pub const boardState = struct {
             p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, true, move, isPromo, false, toPiece, p_self.getPhase(), &p_self.frame);
         }
 
-        _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
+        _ = p_self.moveHistory.append(move, p_self.frame.key);
     }
     pub fn makeMoveQuiet_cst(p_self: *boardState, move: IMove, comptime white: bool, comptime updatePSQT: bool) void {
         const prevCastle: u8 = p_self.frame.stat.castlingKey();
@@ -693,9 +691,7 @@ pub const boardState = struct {
         p_self.b.pieceBB[@intFromEnum(_toPiece)] ^= moveBB;
         p_self.b.c_occupiedBB[usIdx] ^= moveBB;
 
-        var isPawn: bool = false;
         if (_toPiece == .PAWN) {
-            isPawn = true;
             p_self.frame.halfMoveClock = 0;
             if (move.isPromotion()) {
                 isPromo = true;
@@ -746,10 +742,10 @@ pub const boardState = struct {
         if (comptime updatePSQT and !configl.USE_NNUE) {
             p_self.frame.psqtEval += heuristicl.updatePSQTOnMove(white, false, move, isPromo, isCastle, toPiece, p_self.getPhase(), &p_self.frame);
         }
-        _ = p_self.moveHistory.append(move, p_self.frame.key, isPawn);
+        _ = p_self.moveHistory.append(move, p_self.frame.key);
     }
 
-    pub inline fn getLastMove(self: boardState) IMove {
+    pub inline fn getLastMove(self: *const boardState) IMove {
         return self.frame.lastMove;
     }
 
