@@ -188,7 +188,6 @@ pub const threadPool = struct {
             if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
                 ret.currentBest = info.currentBest;
                 ret.depth = info.depth;
-                ret.currentBest.depth = info.depth;
             }
         }
         return ret;

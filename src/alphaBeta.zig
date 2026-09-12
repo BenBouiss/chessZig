@@ -36,7 +36,6 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
         p_info.currentBest.move = move;
         p_info.currentBest.scoring = score;
         p_info.currentBest.line.setLineFromPV(&pv);
-        p_info.currentBest.depth = depth;
         p_info.depth = depth;
     }
     return score;
@@ -424,41 +423,39 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     ss.getFrame(ply + 2).failHighCount = 0;
 
     const p_beta = _beta + weightl.probCutMargin;
-    if (cutnode and _depth > weightl.probCutMinimalDepth and !chessl.isMate(_beta)) {
-        if ((ttHit and hashSearchEval >= p_beta and hashMoveIsCapture) or (static_eval >= _beta)) {
-            const tresh = p_beta - static_eval;
-            while (gen.pickNext(p_state, ply, prevLineMove, hashMove, tresh, true, ss)) |res| {
-                if (@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE)) {
-                    break;
-                }
-                const move = res.@"0";
-                //const moveScore = res.@"1";
-                if (move.equal(excludedMove) or !p_state.legal(move)) continue;
+    if (cutnode and _depth > weightl.probCutMinimalDepth and !chessl.isMate(_beta) and ((ttHit and hashSearchEval >= p_beta and hashMoveIsCapture) or (static_eval >= _beta))) {
+        const tresh = p_beta - static_eval;
+        while (gen.pickNext(p_state, ply, prevLineMove, hashMove, tresh, true, ss)) |res| {
+            if (@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE)) {
+                break;
+            }
+            const move = res.@"0";
+            //const moveScore = res.@"1";
+            if (move.equal(excludedMove) or !p_state.legal(move)) continue;
 
-                const from = move.getFrom();
-                const fPiece = p_state.getPiece(from);
-                currS.playedMove = move;
-                currS.pieceMoved = fPiece;
-                p_state.makeMove(move);
-                //hashl.hashTable.prefetchHash(p_state.frame.key);
-                if (comptime configl.USE_NNUE) {
-                    nnuel.updateNnueOnMove(p_state, move);
-                }
-                var score = -quiescenceSearch(p_state, p_info, -p_beta, -p_beta + 1, ply + 1, ss);
-                if (score >= p_beta) {
-                    score = -searchLoop(p_state, p_info, _depth - 4, ply + 1, -p_beta, -p_beta + 1, ss, threadD, false, .NonPV);
-                }
-                p_state.undoMove();
-                p_state.frame = f;
+            const from = move.getFrom();
+            const fPiece = p_state.getPiece(from);
+            currS.playedMove = move;
+            currS.pieceMoved = fPiece;
+            p_state.makeMove(move);
+            //hashl.hashTable.prefetchHash(p_state.frame.key);
+            if (comptime configl.USE_NNUE) {
+                nnuel.updateNnueOnMove(p_state, move);
+            }
+            var score = -quiescenceSearch(p_state, p_info, -p_beta, -p_beta + 1, ply + 1, ss);
+            if (score >= p_beta) {
+                score = -searchLoop(p_state, p_info, _depth - 4, ply + 1, -p_beta, -p_beta + 1, ss, threadD, false, .NonPV);
+            }
+            p_state.undoMove();
+            p_state.frame = f;
 
-                if (score >= p_beta) {
-                    // save to TT
-                    if (!singularExt) {
-                        const probCutEntry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth - 4), .LOWER, move, raw_eval, hashl.evalToTTEval(bestScore, ply));
-                        writer.writeShort(probCutEntry);
-                    }
-                    return score;
+            if (score >= p_beta) {
+                // save to TT
+                if (!singularExt) {
+                    const probCutEntry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth - 4), .LOWER, move, raw_eval, hashl.evalToTTEval(bestScore, ply));
+                    writer.writeShort(probCutEntry);
                 }
+                return score;
             }
         }
         gen.reset();
@@ -504,7 +501,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         const fPiece = p_state.getPiece(from);
         const givesCheck = moveGenl.moveDeliverCheck(p_state, move, move.equal(hashMove));
         const isCapture = move.isCapture();
-        const isThreat = (chessl.xToBitboard(to) & safetyArea) != 0;
+        const isThreat = ((chessl.xToBitboard(to) & safetyArea) != 0) or givesCheck;
         const cPiece = p_state.getPiece(to);
         const isPromo = move.isPromotion();
 
@@ -608,8 +605,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             if (isPromo) {
                 _lmrR += weightl.lmr_isPromotion;
             }
-            // TODO: only this on quiet moves
-            if (moveScore >= weightl.lmr_scoreThreshold) {
+            if (!isCapture and moveScore >= weightl.lmr_scoreThreshold) {
                 _lmrR += weightl.lmr_killerMove;
             } else if (!isThreat and gen.phase == .BADCAPTURE) {
                 _lmrR += weightl.lmr_badCapture;

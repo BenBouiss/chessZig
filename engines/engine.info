@@ -1,11 +1,11 @@
 [engine1]
-path="engines/bin/engine_11_09_26";
+path="engines/bin/engine_12_09_26";
 name="prev";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_11_09_26_1";
-name="prev + move gen twk";
+path="engines/bin/engine_12_09_26_1";
+name="prev + !capture for lmr killerMove + threat givesCheck";
 "setoption name reportProgress value false";
 
 [match]

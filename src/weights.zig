@@ -187,7 +187,7 @@ pub fn appendAll() !void {
     add_param(&lmr_badCapture, 0, 2000, "lmr_badCapture");
 
     add_param(&lmr_highFailScore, 100, 2000, "lmr_highFailScore");
-    add_param(&lmr_highFailCount, 2, 16, "lmr_highFailCount");
+    add_param(&lmr_highFailCount, 1, 16, "lmr_highFailCount");
 
     add_param(&lmr_givesCheck, -2000, 0, "lmr_givesCheck");
     add_param(&lmr_killerMove, -2000, 0, "lmr_killerMove");

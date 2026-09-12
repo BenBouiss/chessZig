@@ -40,7 +40,6 @@ pub const moveDecisionExt = struct {
     move: IMove = .{},
     scoring: scoreType = 0,
     line: movel.line = .{},
-    depth: depthT = 0,
     pub inline fn invertScore(p_self: *moveDecisionExt) void {
         p_self.scoring = -p_self.scoring;
     }
