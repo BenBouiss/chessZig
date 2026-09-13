@@ -40,7 +40,7 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
     const phase: scoreType = p_state.getPhase();
 
-    var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB, white);
+    var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB);
 
     ret += evaluate_material(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
@@ -97,7 +97,7 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     var ret: heuristicComponents = .{
         //.PSQT = evaluate_PSQT(p_state, values, _phase),
         .PSQT = p_state.frame.psqtEval,
-        .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB, white), phase),
+        .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0, white), phase),
         .Material = computeTaperedV(evaluate_material(p_state), phase),
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
@@ -173,42 +173,17 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
 
     return .{ (isoS * weightl.global_IsolatedPawnVal[MG]) + (doS * weightl.global_StackedPawnVal[MG]) + (paS * weightl.global_PassedPawnVal[MG]) + (duoS * weightl.global_phalanxDuoPawnVal[MG]) + (connectS * weightl.global_connectionPawnVal[MG]), (isoS * weightl.global_IsolatedPawnVal[EG]) + (doS * weightl.global_StackedPawnVal[EG]) + (paS * weightl.global_PassedPawnVal[EG]) + (duoS * weightl.global_phalanxDuoPawnVal[EG]) + (connectS * weightl.global_connectionPawnVal[EG]) };
 }
-pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState, white: bool) scoreVect {
-    _ = white;
+pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // going to use "raw" mobility only taking board coverage
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
     const v = @as(scoreType, @intCast(moveW - moveB));
     const moveAmountScore: scoreVect = .{ weightl.global_MobilityVal[MG] * v, weightl.global_MobilityVal[EG] * v };
-    //const wkingBB = chess.sqToBitboard(p_state.b.wKingSq);
-    //const bkingBB = chess.sqToBitboard(p_state.b.bKingSq);
-    const wAttacks = (p_whiteMoveBB.getAttackedMask(chess.UNIVERSE));
-    const bAttacks = (p_blackMoveBB.getAttackedMask(chess.UNIVERSE));
-
-    const wTabouAttacks = p_whiteMoveBB.getAttackedMaskTabou(chess.UNIVERSE, bAttacks);
-    const bTabouAttacks = p_blackMoveBB.getAttackedMaskTabou(chess.UNIVERSE, wAttacks);
-
-    const kingMoveW = p_whiteMoveBB.kingMoves & (~bAttacks) & ~p_state.occupiedBB_col(.WHITE);
-    const kingMoveB = p_blackMoveBB.kingMoves & (~wAttacks) & ~p_state.occupiedBB_col(.BLACK);
-
-    var kingMoveScore: scoreVect = @splat(0);
-    if (p_state.isChecked()) {
-        if (p_state.whiteToMove()) {
-            if (kingMoveW == 0 and (wTabouAttacks & p_state.frame.checkersBB) == 0) {
-                kingMoveScore -= .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
-            }
-        } else {
-            if (kingMoveB == 0 and (bTabouAttacks & p_state.frame.checkersBB) == 0) {
-                kingMoveScore += .{ weightl.global_weakCheckmate[MG], weightl.global_weakCheckmate[EG] };
-            }
-        }
-    }
     const nOpenRookW: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.WHITE), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE), true)));
     const nOpenRookB: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.BLACK), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK), false)));
     const deltaOpenRook = nOpenRookW - nOpenRookB;
     const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookVal[MG] * deltaOpenRook, weightl.global_OpenFileRookVal[EG] * deltaOpenRook };
-    return moveAmountScore + kingMoveScore + pieceMobility;
-    //return moveAmountScore + pieceMobility;
+    return moveAmountScore + pieceMobility;
 }
 pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whiteToMove: bool) scoreVect {
     _ = whiteToMove;
