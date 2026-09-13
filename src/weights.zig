@@ -188,12 +188,14 @@ pub fn appendAll() !void {
 
     add_param(&lmr_highFailScore, 100, 2000, "lmr_highFailScore");
     add_param(&lmr_highFailCount, 1, 16, "lmr_highFailCount");
+    add_param(&lmr_hashMoveIsGood, 0, 4000, "lmr_hashMoveIsGood");
 
-    add_param(&lmr_givesCheck, -2000, 0, "lmr_givesCheck");
-    add_param(&lmr_killerMove, -2000, 0, "lmr_killerMove");
-    add_param(&lmr_threatening, -2000, 0, "lmr_threatening");
-    add_param(&lmr_inPvMode, -2000, 0, "lmr_inPvMode");
-    add_param(&lmr_isPromotion, -2000, 0, "lmr_isPromotion");
+    add_param(&lmr_inCheck, -4000, 0, "lmr_inCheck");
+    add_param(&lmr_givesCheck, -4000, 0, "lmr_givesCheck");
+    add_param(&lmr_killerMove, -4000, 0, "lmr_killerMove");
+    add_param(&lmr_threatening, -4000, 0, "lmr_threatening");
+    add_param(&lmr_inPvMode, -4000, 0, "lmr_inPvMode");
+    add_param(&lmr_isPromotion, -4000, 0, "lmr_isPromotion");
     add_param(&lmr_histDiv, 0, 12000, "lmr_histDiv");
 
     // margins
@@ -373,9 +375,10 @@ pub var lmr_baseDeficit: scoreType = 664;
 pub var lmr_badCapture: scoreType = 329;
 pub var lmr_highFailScore: scoreType = 1020;
 pub var lmr_highFailCount: scoreType = 10;
+pub var lmr_hashMoveIsGood: scoreType = 1024;
 
 // LMR negative (less reduction)
-pub var lmr_inCheck: scoreType = -600; // not used since no lmr in check
+pub var lmr_inCheck: scoreType = -1024;
 // try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
 pub var lmr_givesCheck: scoreType = -779;
 pub var lmr_killerMove: scoreType = -1105;

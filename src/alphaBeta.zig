@@ -58,7 +58,6 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     }
 
     var _alpha = alpha;
-    var currS: *searchFrame = ss.getFrame(ply);
 
     p_info.searchStat.n_nodeExplored += 1;
 
@@ -122,6 +121,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     const f: boardl.boardFrame = .copy(p_state);
     var gen: moveGenl.typeMoveGenerator = .init();
     var movesPlayed: u8 = 0;
+    var currS: *searchFrame = ss.getFrame(ply);
 
     while (gen.pickNext(p_state, ply, .{}, hashMove, weightl.moveGenMinSeeThreshold, !isChecked, ss)) |res| {
         if (@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE) and !isChecked) {
@@ -249,8 +249,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         }
         return 25;
     }
+    if (schedulerl.outOfTime(p_info) or ply >= typel.MAX_PLY) {
+        return correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
+    }
 
-    if (schedulerl.outOfTime(p_info) or depth <= 0 or ply >= typel.MAX_PLY) {
+    if (depth <= 0) {
         return quiescenceSearch(p_state, p_info, alpha, beta, ply, ss);
     }
     var _alpha = alpha;
@@ -484,8 +487,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     }
     if (hashMoveIsCapture) {
         lmrR += weightl.lmr_hashMoveCapture;
-        //lmrR += typel.oneDepthMilliDepth;
     }
+
+    if (ttHit and hashDepth >= _depth) {
+        lmrR += weightl.lmr_hashMoveIsGood;
+    }
+    if (isChecked) {
+        lmrR += weightl.lmr_inCheck;
+    }
+
     if (cutnode) {
         lmrR += weightl.lmr_expectedCutOff;
         //lmrR += typel.oneDepthMilliDepth;
@@ -525,19 +535,15 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 if (!isChecked and _depth <= weightl.futilityDepth and fut <= _alpha and movesPlayed > weightl.moveReductionAmount) {
                     skipQuietMoves = true;
                     //continue;
-                    //if (_depth <= weightl.futilityDepth and !isCheck and (static_eval + weightl.futilityConst + weightl.futilityCoeff * _depth) < alpha) {
-                    //    skipQuietMoves = true;
                 }
 
                 if (_depth <= weightl.lmpMaxDepth and movesPlayed >= weightl.lmpBase + @divFloor(_depth * _depth, 2 - @as(scoreType, @intFromBool(improving)))) {
                     skipQuietMoves = true;
                     //continue;
                 }
-                if (!isChecked and movesPlayed >= weightl.historyMinExplore and _depth < weightl.historyMaxDepth) {
-                    if (histScore < (weightl.historyThreshCoeff * _depth + weightl.historyThreshConst)) {
-                        //skipQuietMoves = true;
-                        continue;
-                    }
+                if (!isChecked and movesPlayed >= weightl.historyMinExplore and _depth < weightl.historyMaxDepth and histScore < (weightl.historyThreshCoeff * _depth + weightl.historyThreshConst)) {
+                    //skipQuietMoves = true;
+                    continue;
                 }
             }
         }
@@ -590,7 +596,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
         // rewrite of main search handling
         // https://github.com/Adam-Kulju/Patricia/
-        if (!isChecked and _depth >= weightl.LMRDepth and movesPlayed > weightl.moveReductionAmount) {
+        //if (!isChecked and _depth >= weightl.LMRDepth and movesPlayed > (weightl.moveReductionAmount - @intFromBool(t == .NonPV))) {
+        //if (!isChecked and _depth >= weightl.LMRDepth and movesPlayed > @intFromBool(t == .PV)) {
+        if (_depth >= weightl.LMRDepth and movesPlayed > weightl.moveReductionAmount) {
             var _lmrR = lmrR;
             const R = historyl.lmrBase[@intCast(_depth)][movesPlayed];
             if (isCapture) {
