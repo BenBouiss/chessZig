@@ -774,7 +774,7 @@ pub inline fn getPawnAttacksFromBB(bb: u64, comptime white: bool) u64 {
 }
 
 pub inline fn getKingAttacks(sq: e_square) u64 {
-    return moveGenl.cachedKingTable[@intFromEnum(sq)];
+    return moveGenl.kingTable[@intFromEnum(sq)];
 }
 pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
     switch (piece) {
@@ -1478,10 +1478,18 @@ pub fn algebraicLineToBoardstate(line: *const stringl.string) !boardl.boardState
 pub inline fn initAll(verbose: bool) void {
     magicl._initMagic(&magicl.magicTable, verbose);
 }
+pub fn test_safe() !void {
+    for (0..64) |i| {
+        const sq: e_square = @enumFromInt(i);
+        std.debug.print("{} \n", .{sq});
+        print_bitboard(safetyArea(sq));
+    }
+}
 
 pub fn main(alloc: std.mem.Allocator) !void {
     //mainl.initAll(alloc, true);
     //try test_avx();
     _ = alloc;
+    try test_safe();
     return;
 }

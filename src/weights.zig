@@ -158,19 +158,6 @@ pub fn appendAll() !void {
     add_param(&global_pieceThreatScore[0], 0, 100, "global_pieceThreatScore_MG");
     add_param(&global_pieceThreatScore[1], 0, 100, "global_pieceThreatScore_EG");
 
-    add_param(&global_weakCheckmate[0], 0, 2000, "global_weakCheckmate_MG");
-    add_param(&global_weakCheckmate[1], 0, 2000, "global_weakCheckmate_EG");
-
-    // safety
-    add_param(&global_SafetyBishopVal[0], 0, 100, "global_SafetyBishopVal_MG");
-    add_param(&global_SafetyBishopVal[1], 0, 100, "global_SafetyBishopVal_EG");
-    add_param(&global_SafetyKnightVal[0], 0, 100, "global_SafetyKnightVal_MG");
-    add_param(&global_SafetyKnightVal[1], 0, 100, "global_SafetyKnightVal_EG");
-    add_param(&global_SafetyRookVal[0], 0, 100, "global_SafetyRookVal_MG");
-    add_param(&global_SafetyRookVal[1], 0, 100, "global_SafetyRookVal_EG");
-    add_param(&global_SafetyQueenVal[0], 0, 100, "global_SafetyQueenVal_MG");
-    add_param(&global_SafetyQueenVal[1], 0, 100, "global_SafetyQueenVal_EG");
-
     // king
     add_param(&global_KingProximityVal[0], 0, 100, "global_KingProximityVal_MG");
     add_param(&global_KingProximityVal[1], 0, 100, "global_KingProximityVal_EG");
@@ -323,14 +310,9 @@ pub var global_connectionPawnVal: [2]scoreType = .{ 5, 10 };
 // ============ tempo ============
 pub var global_tempoChecksScore: [2]scoreType = .{ 46, 22 };
 pub var global_pieceThreatScore: [2]scoreType = .{ 48, 13 };
-pub var global_weakCheckmate: [2]scoreType = .{ 937, 1010 };
 
 // source: https://www.chessprogramming.org/King_Safety
 // ============ safety ============
-pub var global_SafetyBishopVal: [2]scoreType = .{ 12, 0 };
-pub var global_SafetyKnightVal: [2]scoreType = .{ 23, 4 };
-pub var global_SafetyRookVal: [2]scoreType = .{ 10, 0 };
-pub var global_SafetyQueenVal: [2]scoreType = .{ 9, 15 };
 
 // king
 pub var global_KingProximityVal: [2]scoreType = .{ 5, 0 };
@@ -452,7 +434,7 @@ pub var moveQsearchAmount: scoreType = 1;
 
 pub var moveGenMinSeeThreshold: scoreType = -53;
 // source: https://www.chessprogramming.org/King_Safety
-pub const SAFETY_ARR: [8]scoreType = [8]scoreType{ 0, 0, 50, 75, 88, 94, 97, 99 };
+pub const SAFETY_ARR: [100]scoreType = [_]scoreType{ 0, 0, 1, 2, 3, 5, 7, 9, 12, 15, 18, 22, 26, 30, 35, 39, 44, 50, 56, 62, 68, 75, 82, 85, 89, 97, 105, 113, 122, 131, 140, 150, 169, 180, 191, 202, 213, 225, 237, 248, 260, 272, 283, 295, 307, 319, 330, 342, 354, 366, 377, 389, 401, 412, 424, 436, 448, 459, 471, 483, 494, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500 };
 
 pub var singularExtensionMinDepth: scoreType = 9;
 pub var singularExtensionDeltaTTDepth: scoreType = 2;
@@ -496,7 +478,6 @@ pub fn modif_val() void {
     //global_connectionPawnVal = .{ 8, 10 };
     //global_tempoChecksScore = .{ 55, 27 };
     //global_pieceThreatScore = .{ 41, 16 };
-    //global_weakCheckmate = .{ 761, 1239 };
     //global_SafetyBishopVal = .{ 16, 5 };
     //global_SafetyKnightVal = .{ 26, 4 };
     //global_SafetyRookVal = .{ 11, 2 };

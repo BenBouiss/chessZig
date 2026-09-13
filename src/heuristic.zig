@@ -19,6 +19,7 @@ const std = @import("std");
 const e_piece = typel.e_piece;
 const e_pieceType = typel.e_pieceType;
 const e_color = typel.e_color;
+const squareInfo = squarel.squareInfo;
 
 const string = stringl.string;
 const IMove = movel.IMove;
@@ -188,8 +189,8 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
 pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whiteToMove: bool) scoreVect {
     _ = whiteToMove;
     if (p_state.isEndGame()) {
-        const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
-        const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
+        const wKing = squareInfo.init(p_state.b.wKingSq);
+        const bKing = squareInfo.init(p_state.b.bKingSq);
 
         const distance = wKing.computeMHDistance(bKing);
         const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) distance else -distance;
@@ -211,24 +212,19 @@ pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const 
 
     const wKnight: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.knightMoves));
     const bKnight: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.knightMoves));
-    const Knight: scoreType = wKnight - bKnight;
 
     const wBishop: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.bishopMoves));
     const bBishop: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.bishopMoves));
-    const Bishop: scoreType = wBishop - bBishop;
 
     const wRook: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.rookMoves));
     const bRook: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.rookMoves));
-    const Rook: scoreType = wRook - bRook;
 
     const wQueen: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.queenMoves));
     const bQueen: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.queenMoves));
-    const Queen: scoreType = wQueen - bQueen;
-
-    // white is advantaged from a high safety_arr index, more =wPieceAtt are present in the black king vicinity thus it should be counted as positive
-    const saf: scoreType = weightl.SAFETY_ARR[@intCast(@min(weightl.SAFETY_ARR.len - 1, wKnight + wBishop + wRook + wQueen))] - weightl.SAFETY_ARR[@intCast(@min(weightl.SAFETY_ARR.len - 1, bKnight + bBishop + bRook + bQueen))];
-    const v: scoreVect = .{ saf + (weightl.global_SafetyKnightVal[MG] * Knight) + (weightl.global_SafetyBishopVal[MG] * Bishop) + (weightl.global_SafetyRookVal[MG] * Rook) + (weightl.global_SafetyQueenVal[MG] * Queen), saf + (weightl.global_SafetyKnightVal[EG] * Knight) + (weightl.global_SafetyBishopVal[EG] * Bishop) + (weightl.global_SafetyRookVal[EG] * Rook) + weightl.global_SafetyQueenVal[EG] * Queen };
-    return v;
+    const wScore = (wBishop + wKnight) * 2 + wRook * 3 + wQueen * 5;
+    const bScore = (bBishop + bKnight) * 2 + bRook * 3 + bQueen * 5;
+    const ret: scoreType = weightl.SAFETY_ARR[@intCast(wScore)] - weightl.SAFETY_ARR[@intCast(bScore)];
+    return .{ ret, ret };
 }
 pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // structure protection,
@@ -413,7 +409,7 @@ pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) psqtVect {
         },
     }
 }
-pub inline fn getPieceInfos_cst(comptime piece: typel.e_pieceType, sq: u8) psqtVect {
+pub inline fn getPieceInfos_cst(comptime piece: e_pieceType, sq: u8) psqtVect {
     //pub inline fn getPieceInfos_cst(comptime piece: typel.e_pieceType, sq: u8) [3]typel.scoreType {
     switch (piece) {
         .PAWN => {
@@ -652,8 +648,8 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector) !voi
     std.debug.assert(idx == configl.TEXEL_SAFETY_QUEEN_PROX_IDX);
     idx += 1;
 
-    const wKing = squarel.squareInfo.init(p_state.b.wKingSq);
-    const bKing = squarel.squareInfo.init(p_state.b.bKingSq);
+    const wKing = squareInfo.init(p_state.b.wKingSq);
+    const bKing = squareInfo.init(p_state.b.bKingSq);
     const distance: scoreType = squarel.maxBenDistance - @as(scoreType, @intCast(wKing.computeMHDistance(bKing)));
 
     p_out.appendCoeff(.{ .wcoeff = distance, .bcoeff = distance });
@@ -937,7 +933,7 @@ pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, from
     const mayXray = diagPiece | horizPiece;
     var _attadef = attadef;
 
-    const toSqInfo = squarel.squareInfo.init(toSq);
+    const toSqInfo = squareInfo.init(toSq);
     const toSqDiags = toSqInfo.getDiagonalsBB();
 
     var gain: [32]scoreType = undefined;

@@ -30,7 +30,7 @@ const boardState = boardl.boardState;
 
 //pub const generationModifiers = enum { STD, NONE, QUIETMOVES, CAPTURES, ALL };
 pub const arrRectangular: [64][64]u64 = initInbetween();
-pub const cachedKingTable: [64]u64 = initKingAttacks();
+pub const kingTable: [64]u64 = initKingAttacks();
 pub const safetyArea: [64]u64 = initSafetyArea();
 
 pub const diagonalBB: [64]u64 = initDiagonal(false);
@@ -636,7 +636,7 @@ pub fn northOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub inline fn northOne(bb: u64) u64 {
-    return (bb << 8);
+    return bb << 8;
 }
 pub fn southOccl(pieceBB: u64, free: u64) u64 {
     var gen: u64 = pieceBB;
@@ -650,7 +650,7 @@ pub fn southOccl(pieceBB: u64, free: u64) u64 {
 }
 
 pub inline fn southOne(bb: u64) u64 {
-    return (bb >> 8);
+    return bb >> 8;
 }
 
 pub fn eastOccl(pieceBB: u64, free: u64) u64 {
@@ -665,7 +665,7 @@ pub fn eastOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub inline fn eastOne(bb: u64) u64 {
-    return ((bb & chess.notHFile) << 1);
+    return (bb & chess.notHFile) << 1;
 }
 
 pub fn westOccl(pieceBB: u64, free: u64) u64 {
@@ -680,7 +680,7 @@ pub fn westOccl(pieceBB: u64, free: u64) u64 {
     return gen;
 }
 pub inline fn westOne(bb: u64) u64 {
-    return ((bb & chess.notAFile) >> 1);
+    return (bb & chess.notAFile) >> 1;
 }
 
 pub fn northEastOccl(pieceBB: u64, free: u64) u64 {
@@ -1052,16 +1052,6 @@ pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comp
             genericStagedMovePushQuiet(out, att & targets, sq);
         }
     }
-    //if (p_state.getLastMove().equal(movel.build_move(@intFromEnum(e_square.b5), @intFromEnum(e_square.c7), @intFromEnum(e_moveFlags.CAPTURE)))) {
-    //    std.debug.print("move gen for type {} is checked {} \n", .{ t, isCheck });
-    //    out.print();
-    //}
-    //const badMove = movel.build_move(@intFromEnum(e_square.c8), @intFromEnum(e_square.d7), @intFromEnum(e_moveFlags.QUIETMOVE));
-    //if (badMove.isIn(out.*)) {
-    //    std.debug.print("bad move found in out t {} is checked {} \n", .{ t, isCheck });
-    //    chess.print_boardstate(p_state);
-    //    out.print();
-    //}
 }
 pub fn king_generatePieceMove(out: *moveContainer, comptime t: typel.e_moveGenFlag, comptime white: bool, p_state: *const boardState, targets: u64) void {
     const sq = if (comptime white) p_state.b.wKingSq else p_state.b.bKingSq;
@@ -1208,12 +1198,6 @@ pub const movesScores = struct {
         std.mem.swap(scoreType, &self.scores[idx], &self.scores[bestId]);
         return .{ self.moves.moves[idx], bestScore };
     }
-};
-
-pub const moveOrdering = struct {
-    indexes: [chess.MAX_POSSIBLE_MOVE]u8 = undefined,
-    scores: [chess.MAX_POSSIBLE_MOVE]scoreType = undefined,
-    len: u8 = 0,
 };
 
 pub fn initKingAttacks() [64]u64 {

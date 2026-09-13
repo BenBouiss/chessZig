@@ -141,6 +141,18 @@ def reduceFraction(values: heuristics, move: modifiers) -> npt.NDArray[np.float6
     return delta
 
 
+def testLinspace(arr: npt.NDArray[np.float64]):
+    a = (
+        np.interp(np.arange(0, 100) / 100 * len(arr), np.arange(0, len(arr)), arr)
+        * np.geomspace(0.5, 10, 100)
+    ).astype(int)
+    print(a)
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+
 if __name__ == "__main__":
     val = heuristics()
     stdDepths = extrapolate(
@@ -188,5 +200,5 @@ if __name__ == "__main__":
     fig.show()
     plt.show()
 
-    # while input("Press q to quit: ") != "q":
-    #    pass
+    while input("Press q to quit: ") != "q":
+        pass
