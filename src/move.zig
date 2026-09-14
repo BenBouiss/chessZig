@@ -101,9 +101,6 @@ pub const IMove = extern struct {
     pub inline fn isQuietMove(self: IMove) bool {
         return !self.isCapture();
     }
-    //pub inline fn isQuietMove(self: IMove) bool {
-    //    return self.getFlag() == @intFromEnum(e_moveFlags.QUIETMOVE);
-    //}
 
     pub inline fn isPromotion(self: IMove) bool {
         return (self.getFlag() >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
@@ -247,9 +244,6 @@ pub const MAX_MATCH_LENGTH_STR: usize = MAX_MATCH_LENGTH * (5 + 1);
 pub const matchMoveContainer = struct {
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     keyCodes: [MAX_MATCH_LENGTH]u64 = undefined,
-    //irreversible: [MAX_MATCH_LENGTH]bool = undefined,
-
-    //lastIrreversibleMoveIndex: u16 = 0,
     len: u16 = 0,
 
     pub fn print(p_self: *const matchMoveContainer) void {
@@ -286,7 +280,6 @@ pub const matchMoveContainer = struct {
         }
         var count: u8 = 0;
         const iLen: i32 = @intCast(self.len);
-        //const startIndex: u16 = self.len - @as(u16, @intCast(halfMoveClock));
         const end: i32 = @max(iLen - @as(i32, @intCast(halfMoveClock)) - 1, 0);
         const keyRepet = self.keyCodes[self.len - 1];
         var i: i32 = iLen - 5;
@@ -352,7 +345,7 @@ pub const matchMoveContainer = struct {
         return lineStr;
     }
     pub fn getLineStatic(self: matchMoveContainer) [MAX_MATCH_LENGTH_STR]u8 {
-        var ret: [MAX_MATCH_LENGTH_STR]u8 = std.mem.zeroes([MAX_MATCH_LENGTH_STR]u8);
+        var ret: [MAX_MATCH_LENGTH_STR]u8 = @splat(0);
         var idx: usize = 0;
 
         for (0..self.len) |i| {

@@ -392,14 +392,14 @@ const engine_info = struct {
             try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .awake);
         }
     }
-    pub inline fn sendInterrupt(p_self: *engine_info) !void {
+    pub fn sendInterrupt(p_self: *engine_info) !void {
         try p_self.sendMsg("stop");
     }
-    pub inline fn sendInterruptWait(p_self: *engine_info, input: *inputChannel) !void {
+    pub fn sendInterruptWait(p_self: *engine_info, input: *inputChannel) !void {
         try p_self.sendMsg("stop");
         try p_self.waitEngine(input);
     }
-    pub inline fn quit(p_self: *engine_info, alloc: std.mem.Allocator) !void {
+    pub fn quit(p_self: *engine_info, alloc: std.mem.Allocator) !void {
         try p_self.sendMsg("quit");
         p_self.alive = false;
         p_self.proc.kill(mainl.getGlobalIo());
@@ -551,8 +551,10 @@ pub fn endMatchPrint(pool: *poolCtx, match: *matchStruct, matchId: usize) !void 
     const e2 = settings.engineNames[1];
     const res1 = pool.results.items[0];
     const res2 = pool.results.items[1];
+    const s1 = res1.getScore();
+    const s2 = res2.getScore();
 
-    try interface.print("({s} vs {s}) - Score {d}-{d} \n", .{ e1._slice(), e2._slice(), res1.getScore(), res2.getScore() });
+    try interface.print("({s} vs {s}) - Score {d}-{d} ({d}) \n", .{ e1._slice(), e2._slice(), s1, s2, s1 - s2 });
     try interface.flush();
 }
 

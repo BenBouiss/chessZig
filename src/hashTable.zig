@@ -148,25 +148,12 @@ pub const hashWriter = struct {
     }
     pub inline fn writeShort(self: *hashWriter, entry: Hash_entry) void {
         const prev = self.bucket.entries[self.idx];
-        if (self.nextPerfectHit) {
-            if (prev._depth > entry._depth) {
-                hashTable.stat.missInsertion += 1;
-                return;
-            }
-            //if ((prev._depth == entry._depth) and (prev.nodeT() == .ALL)) {
-            //    hashTable.stat.missInsertion += 1;
-            //    return;
-            //}
+        if (self.nextPerfectHit and prev._depth > entry._depth) {
+            hashTable.stat.missInsertion += 1;
+            return;
         }
         self.bucket.entries[self.idx] = entry;
         hashTable.stat.insertion += 1;
-    }
-
-    pub inline fn write(self: *hashWriter, entry: Hash_entry) void {
-        const stat = self.bucket.addEntry(entry, configl.DEFAULT_TT_STRAT);
-        if (stat) {
-            hashTable.stat.insertion += 1;
-        }
     }
 };
 
@@ -237,8 +224,7 @@ pub const Hash_bucket = struct {
         return true;
     }
 
-    pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, depth: u8, p_state: *const boardl.boardState, nNodes: scoreType) getResult {
-        _ = depth;
+    pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, p_state: *const boardl.boardState, nNodes: scoreType) getResult {
         const _hash = keyToUpperKey(hash);
         var next: usize = 0;
         var worstQuality: scoreType = 0;
@@ -247,13 +233,6 @@ pub const Hash_bucket = struct {
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
             if (entry.key == _hash and p_state.isMovePseudoLegal(entry.bestMove)) {
                 return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
-                //if (entry._depth >= depth) {
-                //    hashTable.stat.hit += 1;
-                //    return .{ .entry = entry, .nextIdx = @intCast(i), .nextPerfectHit = true };
-                //} else {
-                //    hashTable.stat.miss += 1;
-                //    return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = true };
-                //}
             }
             if (!entry.valid()) {
                 hashTable.stat.miss += 1;
@@ -375,9 +354,9 @@ pub const Hash_table = struct {
         return true;
     }
 
-    pub fn probeMatch(p_self: *Hash_table, key: u64, depth: u8, p_state: *const boardl.boardState, nNodes: scoreType) probeResult {
+    pub fn probeMatch(p_self: *Hash_table, key: u64, p_state: *const boardl.boardState, nNodes: scoreType) probeResult {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
-        const res = p_bucket.getEntryMatchNext(key, depth, p_state, nNodes);
+        const res = p_bucket.getEntryMatchNext(key, p_state, nNodes);
         return .{ .writer = .{ .bucket = p_bucket, .idx = res.nextIdx, .nextPerfectHit = res.nextPerfectHit }, .entry = res.entry };
     }
     pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64) bool {

@@ -27,11 +27,10 @@ pub const _DEFAULT_STATIC_SEARCH = "false";
 pub const DEFAULT_STATIC_SEARCH = false;
 
 //https://www.chessprogramming.org/Move_Ordering
-//pub const ORDERING_LINE_VALUE = 9999;
 pub const ORDERING_LINE_VALUE = 99_999_999;
-pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
-
 pub const KILLER_0_HEURISTIC_VALUE = 1_999_999;
+
+pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
 
 pub const MAX_HIST_HEURISTIC_VALUE = 16394;
 pub const MAX_CONTINUATION_HEURISTIC_VALUE = 16394;
@@ -46,10 +45,9 @@ pub const OLD_THRESHOLD = 2;
 
 pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
-//pub const NET_PATH = "out/bin/simple-320-colM-128/quantised.bin";
-//pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
+pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
-pub const NET_PATH = "extern/simple_1024_retrained-120/quantised.bin";
+//pub const NET_PATH = "extern/simple_1024_retrained-120/quantised.bin";
 //pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";
 
 // scheduler options

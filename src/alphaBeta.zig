@@ -26,14 +26,12 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     var pv: movel.line = .{};
     ss.getFrame(0).pv = &pv;
 
-    if (comptime configl.USE_NNUE) {
-        p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
-    }
     const score = searchLoop(p_state, p_info, depth, 0, alpha, beta, ss, threadD, false, .PV);
 
     if (p_info.alive) {
         p_info.currentBest.move = pv.moves[0];
         p_info.currentBest.scoring = score;
+        // TODO: pass the line buffer to the search stack, saves this call for each iid iteration
         p_info.currentBest.line.setLineFromPV(&pv);
         p_info.depth = depth;
     }
@@ -63,7 +61,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     if (ply > p_info.seldepth) {
         p_info.seldepth = ply;
     }
-    const ttRes = hashl.hashTable.probeMatch(p_state.frame.key, 0, p_state, @intCast(p_info.searchStat.n_nodeExplored));
+    const ttRes = hashl.hashTable.probeMatch(p_state.frame.key, p_state, @intCast(p_info.searchStat.n_nodeExplored));
     var writer = ttRes.writer;
     var ttHit: bool = false;
 
@@ -223,7 +221,7 @@ pub const searchStack = struct {
     }
     pub inline fn setPrevLine(self: *searchStack, line: *const movel.line) void {
         for (0..line.len) |i| {
-            self.getFrame(@intCast(i)).prevLineMove = line.moves[i];
+            self.e[negativeOffset + i].prevLineMove = line.moves[i];
         }
     }
     pub fn printPV(self: *const searchStack) void {
@@ -293,7 +291,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     var hashDepth: depthT = 0;
     var hashType: hashl.nodeType = .UPPER;
 
-    const ttRes = hashl.hashTable.probeMatch(p_state.frame.key, @intCast(_depth), p_state, @intCast(p_info.searchStat.n_nodeExplored));
+    const ttRes = hashl.hashTable.probeMatch(p_state.frame.key, p_state, @intCast(p_info.searchStat.n_nodeExplored));
     var writer = ttRes.writer;
     var ttHit: bool = false;
     if (ttRes.entry) |_entry| {
@@ -767,13 +765,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
             historyl.historyHeuristic[whiteIdx][bestFrom][bestTo] = updateHistory(historyl.historyHeuristic[whiteIdx][bestFrom][bestTo], historyBonus);
         }
     }
-    // .PV set to not store position that could be obtained after a possible nullmove. TODO: just filter out nullmove
-    //if (!singularExt and p_state.getLastMove().isValid()) {
     if (!singularExt) {
         const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, @intCast(_depth), hashFlag, bestMove, raw_eval, hashl.evalToTTEval(bestScore, ply));
         writer.writeShort(s_entry);
     }
-    //}
     return bestScore;
 }
 
@@ -787,7 +782,9 @@ pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: s
     const prev1 = ss.getPrevFrame(ply, 1);
     const prev2 = ss.getPrevFrame(ply, 2);
     if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
-        corr += historyl.corrHist[@intFromEnum(prev2.pieceMoved)][prev2.playedMove.getTo()][@intFromEnum(prev1.pieceMoved)][prev1.playedMove.getTo()];
+        const p1 = prev1.playedMove.getTo();
+        const p2 = prev2.playedMove.getTo();
+        corr += historyl.corrHist[@intFromEnum(prev2.pieceMoved)][p2][@intFromEnum(prev1.pieceMoved)][p1];
     }
 
     return std.math.clamp(eval + @divFloor(weightl.corrHistW * corr, 512), -weightl.simpleCheckMateThreshold + 1, weightl.simpleCheckMateThreshold - 1);
@@ -795,17 +792,15 @@ pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: s
 pub inline fn updateCorrhist(val: scoreType, bonus: scoreType) scoreType {
     //return val + bonus - @as(scoreType, @intCast(@divFloor(@as(i64, @intCast(val)) * @as(i64, @intCast(@abs(bonus))), 1024)));
 
-    const v = @as(i64, @intCast(val));
-    const b = @as(i64, @intCast(bonus));
-    return @truncate(v + b - @divFloor(v * @as(i64, @intCast(@abs(b))), 1024));
+    //const v = @as(i64, @intCast(val));
+    //const b = @as(i64, @intCast(bonus));
+    //return @truncate(v + b - @divFloor(v * @as(i64, @intCast(@abs(b))), 1024));
     //return val + bonus - @as(scoreType, @intCast(@divFloor(@as(i64, @intCast(val)) * @as(i64, @intCast(@abs(bonus))), 1024)));
-    //return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), 1024);
+    return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), 1024);
 }
 
 pub inline fn updateHistory(val: scoreType, bonus: scoreType) scoreType {
-    const v = @as(i64, @intCast(val));
-    const b = @as(i64, @intCast(bonus));
-    return @truncate(v + b - @divFloor(v * @as(i64, @intCast(@abs(b))), configl.MAX_HIST_HEURISTIC_VALUE));
+    return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
     //return val + bonus - @as(scoreType, @intCast(@divFloor(@as(i64, @intCast(val)) * @as(i64, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE)));
     //return val + bonus - @divFloor(val * @as(scoreType, @intCast(@abs(bonus))), configl.MAX_HIST_HEURISTIC_VALUE);
 }

@@ -606,7 +606,7 @@ pub const boardState = struct {
 
         var toPiece = p_self.getFromPiece(move);
         var _toPiece = chessl.e_pieceTo_e_pieceTypeCst(toPiece, white);
-        var isPromo: bool = false;
+        const isPromo: bool = move.isPromotion();
         if (_victim == .ROOK) {
             p_self.frame.stat.onRookMove(toBB, !white);
         }
@@ -627,8 +627,7 @@ pub const boardState = struct {
             } else {
                 p_self.b.c_occupiedBB[enemyIdx] ^= toBB;
                 p_self.b.pieceBB[@intFromEnum(_victim)] ^= toBB;
-                if (move.isPromotion()) {
-                    isPromo = true;
+                if (isPromo) {
                     p_self.b.pieceCount[@intFromEnum(toPiece)] -= 1;
                     toPiece = chessl.flagPromotionToPiece(move.getFlag(), white);
                     _toPiece = chessl.e_pieceTo_e_pieceTypeCst(toPiece, white);
@@ -685,7 +684,7 @@ pub const boardState = struct {
         const usIdx = chessl.cst_whiteBoolToInt(white);
 
         var isCastle: bool = false;
-        var isPromo: bool = false;
+        const isPromo: bool = move.isPromotion();
 
         p_self.b.pieceArray[from] = .nEmptySquare;
         p_self.b.pieceBB[@intFromEnum(_toPiece)] ^= moveBB;
@@ -693,8 +692,7 @@ pub const boardState = struct {
 
         if (_toPiece == .PAWN) {
             p_self.frame.halfMoveClock = 0;
-            if (move.isPromotion()) {
-                isPromo = true;
+            if (isPromo) {
                 p_self.b.pieceCount[@intFromEnum(toPiece)] -= 1;
                 toPiece = chessl.flagPromotionToPiece(move.getFlag(), white);
                 _toPiece = chessl.e_pieceTo_e_pieceTypeCst(toPiece, white);
@@ -760,7 +758,7 @@ pub const boardState = struct {
     }
     pub inline fn getPhase(self: *const boardState) scoreType {
         const _phase = @max(0, typel.totalPhase - self.frame.phase);
-        return @divFloor(_phase * 256 + 12, typel.totalPhase);
+        return @divFloor((_phase * 256) + 12, typel.totalPhase);
         // ((24 - p) * 256) + (24 / 2)) / 24
     }
     pub inline fn isEndGame(self: *const boardState) bool {

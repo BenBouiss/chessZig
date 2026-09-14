@@ -29,6 +29,9 @@ pub const scoreVect: type = @Vector(2, scoreType);
 pub const psqtVect: type = @Vector(2, scoreType);
 const milliDepth: type = typel.milliDepth;
 
+const MG = typel.MG;
+const EG = typel.EG;
+
 pub const texel_err = error{board_err};
 
 pub fn evaluate(p_state: *const boardl.boardState) scoreType {
@@ -37,7 +40,6 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
     const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.occupiedBB_col(.WHITE));
     const blackMoveBB = allblackMoveBB.andFn(~p_state.occupiedBB_col(.BLACK));
-    const white = p_state.whiteToMove();
 
     const phase: scoreType = p_state.getPhase();
 
@@ -46,9 +48,8 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     ret += evaluate_material(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
-    ret += evaluate_tempo(p_state, white);
     ret += evaluate_pawnStructure(p_state);
-    ret += evaluate_king(p_state, (computeTaperedV(ret, phase) + p_state.frame.psqtEval) > 0, white);
+    ret += evaluate_king(p_state, (computeTaperedV(ret, phase) + p_state.frame.psqtEval) > 0);
 
     return computeTaperedV(ret, phase) + p_state.frame.psqtEval;
 }
@@ -99,7 +100,7 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
         //.PSQT = evaluate_PSQT(p_state, values, _phase),
         .PSQT = p_state.frame.psqtEval,
         .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
-        .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0, white), phase),
+        .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0), phase),
         .Material = computeTaperedV(evaluate_material(p_state), phase),
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
         .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
@@ -125,24 +126,14 @@ pub fn evaluate_PSQT(p_state: *const boardl.boardState, _phase: scoreType) score
     var score_mg: scoreType = 0;
     var score_eg: scoreType = 0;
     var _bb = p_state.b.occupiedBB();
-
-    //var score_count: scoreType = 0;
     while (_bb != 0) {
         const sq = chess.bitscan(_bb);
         _bb &= _bb - 1;
         const piece = p_state.getPiece(@intCast(sq));
-
         const sV: psqtVect = getPieceInfos(piece, @enumFromInt(sq));
-
-        //score_count += sV[0];
-        //score_mg += sV[1];
-        //score_eg += sV[2];
-
         score_mg += sV[0];
         score_eg += sV[1];
     }
-
-    //return score_count + computeTapered(score_mg, score_eg, _phase);
     return computeTapered(score_mg, score_eg, _phase);
 }
 
@@ -186,8 +177,7 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookVal[MG] * deltaOpenRook, weightl.global_OpenFileRookVal[EG] * deltaOpenRook };
     return moveAmountScore + pieceMobility;
 }
-pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool, whiteToMove: bool) scoreVect {
-    _ = whiteToMove;
+pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scoreVect {
     if (p_state.isEndGame()) {
         const wKing = squareInfo.init(p_state.b.wKingSq);
         const bKing = squareInfo.init(p_state.b.bKingSq);
@@ -413,36 +403,25 @@ pub inline fn getPieceInfos_cst(comptime piece: e_pieceType, sq: u8) psqtVect {
     //pub inline fn getPieceInfos_cst(comptime piece: typel.e_pieceType, sq: u8) [3]typel.scoreType {
     switch (piece) {
         .PAWN => {
-            //return .{ weightl.simplePawnScore, weightl.global_Pawn_PSQT[MG][sq], weightl.global_Pawn_PSQT[EG][sq] };
             return .{ weightl.global_Pawn_PSQT[MG][sq], weightl.global_Pawn_PSQT[EG][sq] };
         },
         .BISHOP => {
-            //return .{ weightl.simpleBishopScore, weightl.global_Bishop_PSQT[MG][sq], weightl.global_Bishop_PSQT[EG][sq] };
             return .{ weightl.global_Bishop_PSQT[MG][sq], weightl.global_Bishop_PSQT[EG][sq] };
         },
         .KNIGHT => {
-            //return .{ weightl.simpleKnightScore, weightl.global_Knight_PSQT[MG][sq], weightl.global_Knight_PSQT[EG][sq] };
             return .{ weightl.global_Knight_PSQT[MG][sq], weightl.global_Knight_PSQT[EG][sq] };
         },
         .ROOK => {
-            //return .{ weightl.simpleRookScore, weightl.global_Rook_PSQT[MG][sq], weightl.global_Rook_PSQT[EG][sq] };
             return .{ weightl.global_Rook_PSQT[MG][sq], weightl.global_Rook_PSQT[EG][sq] };
         },
         .QUEEN => {
-            //return .{ weightl.simpleQueenScore, weightl.global_Queen_PSQT[MG][sq], weightl.global_Queen_PSQT[EG][sq] };
             return .{ weightl.global_Queen_PSQT[MG][sq], weightl.global_Queen_PSQT[EG][sq] };
         },
         .KING => {
-            //return .{ 0, weightl.global_King_PSQT[MG][sq], weightl.global_King_PSQT[EG][sq] };
             return .{ weightl.global_King_PSQT[MG][sq], weightl.global_King_PSQT[EG][sq] };
         },
     }
 }
-
-const N_PHASES: usize = 2;
-
-pub const MG: usize = 0;
-pub const EG: usize = 1;
 
 pub fn computePhase(p_board: *const boardl.boardState) scoreType {
     const phase: i32 = 24 - 4 * (p_board.getPieceCount(.nWhiteQueen) + p_board.getPieceCount(.nBlackQueen)) - 2 * (p_board.getPieceCount(.nWhiteRook) + p_board.getPieceCount(.nBlackRook)) - (p_board.getPieceCount(.nWhiteBishop) + p_board.getPieceCount(.nBlackBishop)) - (p_board.getPieceCount(.nWhiteKnight) + p_board.getPieceCount(.nBlackKnight));
@@ -874,24 +853,6 @@ pub inline fn milliDepthToDepth(md: milliDepth) typel.depthT {
     return @intCast(@divFloor(md, 1024));
 }
 
-pub fn losingCapture(p_state: *const boardl.boardState, move: IMove) bool {
-    const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
-    const safetyArea = chess.safetyArea(otherKingSq);
-    const to = move.getTo();
-    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move, false)) {
-        return false;
-    }
-    return SEE(p_state, move) < 0;
-}
-pub fn losingCaptureT(p_state: *const boardl.boardState, move: IMove, threshold: scoreType) bool {
-    const otherKingSq = p_state.getKingSq(!p_state.whiteToMove());
-    const safetyArea = chess.safetyArea(otherKingSq);
-    const to = move.getTo();
-    if ((to & safetyArea) != 0 or moveGenl.moveDeliverCheck(p_state, move, false)) {
-        return false;
-    }
-    return !SEE_threshold(p_state, move, threshold);
-}
 pub const score = struct {
     s: scoreType = typel.scoreNone,
     t: typel.e_scoreType = .NONE,

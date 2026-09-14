@@ -867,15 +867,18 @@ pub const typeMoveGenerator = struct {
             if (!p_self.computedQuiets and !skipQuiet) {
                 p_self.generateMove(.QUIET, state);
                 const prevMove = ss.getPrevFrame(ply, 1).playedMove;
-                const prevPiece = ss.getPrevFrame(ply, 1).pieceMoved;
+                const prevPiece = @intFromEnum(ss.getPrevFrame(ply, 1).pieceMoved);
+                const prevMoveTo = prevMove.getTo();
                 const prevV = prevMove.isValid();
 
                 const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
-                const prevPrevPiece = ss.getPrevFrame(ply, 2).pieceMoved;
+                const prevPrevPiece = @intFromEnum(ss.getPrevFrame(ply, 2).pieceMoved);
+                const prevPrevMoveTo = prevPrevMove.getTo();
                 const prevPrevV = prevPrevMove.isValid();
 
                 const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
-                const prevPiece4 = ss.getPrevFrame(ply, 4).pieceMoved;
+                const prevPiece4 = @intFromEnum(ss.getPrevFrame(ply, 4).pieceMoved);
+                const prevMove4To = prevMove4.getTo();
                 const prevV4 = prevMove4.isValid();
 
                 const killerMove = currS.killerMove;
@@ -895,14 +898,14 @@ pub const typeMoveGenerator = struct {
                         const p: u8 = @intFromEnum(state.getPiece(from));
                         var score = historyl.historyHeuristic[offset][from][to];
                         if (prevV) {
-                            score += historyl.continuationHeuristic[@intFromEnum(prevPiece)][prevMove.getTo()][p][to];
+                            score += historyl.continuationHeuristic[prevPiece][prevMoveTo][p][to];
                         }
                         if (prevPrevV) {
-                            score += historyl.continuationHeuristic[@intFromEnum(prevPrevPiece)][prevPrevMove.getTo()][p][to];
+                            score += historyl.continuationHeuristic[prevPrevPiece][prevPrevMoveTo][p][to];
                         }
 
                         if (prevV4) {
-                            score += historyl.continuationHeuristic[@intFromEnum(prevPiece4)][prevMove4.getTo()][p][to];
+                            score += historyl.continuationHeuristic[prevPiece4][prevMove4To][p][to];
                         }
                         //p_self.quiets.scores[i] = std.math.clamp(score, -configl.MAX_CONTINUATION_HEURISTIC_VALUE, configl.MAX_CONTINUATION_HEURISTIC_VALUE);
                         p_self.quiets.scores[i] = score;
@@ -925,12 +928,10 @@ pub const typeMoveGenerator = struct {
             p_self.idx = 0;
             p_self.phase = .BADCAPTURE;
         }
-        if (p_self.phase == .BADCAPTURE) {
-            if (p_self.idx < p_self.badCaptures.moves.len) {
-                const ret = .{ p_self.badCaptures.moves.moves[p_self.idx], p_self.badCaptures.scores[p_self.idx] };
-                p_self.idx += 1;
-                return ret;
-            }
+        if (p_self.idx < p_self.badCaptures.moves.len) {
+            const ret = .{ p_self.badCaptures.moves.moves[p_self.idx], p_self.badCaptures.scores[p_self.idx] };
+            p_self.idx += 1;
+            return ret;
         }
         return null;
     }

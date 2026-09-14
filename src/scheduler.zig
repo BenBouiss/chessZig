@@ -17,6 +17,8 @@ const moveGenl = @import("move_generation.zig");
 const heuristicl = @import("heuristic.zig");
 const historyl = @import("history.zig");
 
+const nnuel = @import("nnue.zig");
+
 const IMove = movel.IMove;
 const scoreType = typel.scoreType;
 const depthT = typel.depthT;
@@ -193,7 +195,9 @@ pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo,
 
 pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT, threadD: *alphaBetal.threadData) depthT {
     var depth: depthT = if (features.useStaticSearch) maxDepth else 1;
-
+    if (comptime configl.USE_NNUE) {
+        p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
+    }
     var ss: alphaBetal.searchStack = .{};
     var alpha = -weightl.simpleCheckMateScore;
     var beta = weightl.simpleCheckMateScore;
@@ -236,7 +240,7 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
         }
         //threadD.printRooMoves();
         if (features.reportProgress) {
-            sendPartial(p_info, tm.timeSinceStartMs(), _depth);
+            sendPartial(p_info, tm.timeSinceStartMs(), depth);
         }
         if (depth > weightl.aspirationMinDepthVar) {
             //alpha = score - delta;

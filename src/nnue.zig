@@ -308,10 +308,6 @@ pub const _network = struct {
         ret.inited = true;
         const net: *network = @ptrCast(@alignCast(@constCast(@embedFile(path))));
         ret.net = net.*;
-
-        //ret.net = @bitCast(@embedFile(path));
-        //ret.net = @bitCast(@embedFile(path));
-        //@bitCast
         return ret;
     }
 };
