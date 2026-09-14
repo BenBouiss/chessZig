@@ -32,8 +32,7 @@ pub fn searchEntrypoint(p_state: *boardl.boardState, p_info: *threadInfo, depth:
     const score = searchLoop(p_state, p_info, depth, 0, alpha, beta, ss, threadD, false, .PV);
 
     if (p_info.alive) {
-        const move = pv.moves[0];
-        p_info.currentBest.move = move;
+        p_info.currentBest.move = pv.moves[0];
         p_info.currentBest.scoring = score;
         p_info.currentBest.line.setLineFromPV(&pv);
         p_info.depth = depth;
@@ -183,7 +182,7 @@ pub const searchFrame = struct {
 };
 pub const threadData = struct {
     excludedMove: IMove = .{},
-    rootMoves: [chessl.MAX_POSSIBLE_MOVE]movel.rootMoveInfo = undefined,
+    rootMoves: [chessl.MAX_POSSIBLE_MOVE]movel.rootMoveInfo = @splat(.{}),
     pub fn printRooMoves(self: *const threadData) void {
         for (0..self.rootMoves.len) |i| {
             const move = self.rootMoves[i];
@@ -335,9 +334,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         if (singularExt) {
             static_eval = currS.staticEval.s;
         } else {
-            //static_eval = correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
-
-            static_eval = if (ttHit) (correct_eval(p_state, ss, hashSearchEval, ply)) else (correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply));
             if (hashStatEval == typel.scoreNone) {
                 raw_eval = heuristicl.c_evaluate(p_state, white);
             } else {

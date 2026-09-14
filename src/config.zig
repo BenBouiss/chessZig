@@ -20,6 +20,12 @@ pub const _DEFAULT_TRACKMETRICS = "true";
 pub const DEFAULT_REPORTPROGRESS = true;
 pub const _DEFAULT_REPORTPROGRESS = "true";
 
+pub const _DEFAULT_FIXED_DEPTH = "false";
+pub const DEFAULT_FIXED_DEPTH = false;
+
+pub const _DEFAULT_STATIC_SEARCH = "false";
+pub const DEFAULT_STATIC_SEARCH = false;
+
 //https://www.chessprogramming.org/Move_Ordering
 //pub const ORDERING_LINE_VALUE = 9999;
 pub const ORDERING_LINE_VALUE = 99_999_999;
@@ -34,25 +40,16 @@ pub const DEFAULT_ELO = 0;
 pub const MIN_ELO = 0;
 pub const MAX_ELO = 0;
 
-pub const _DEFAULT_FIXED_DEPTH = "false";
-pub const DEFAULT_FIXED_DEPTH = false;
-
-pub const _DEFAULT_STATIC_SEARCH = "false";
-pub const DEFAULT_STATIC_SEARCH = false;
-
 pub const TT_strat = enum { ALWAYS_REPLACE, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 pub const OLD_THRESHOLD = 2;
 
-pub const DEFAULT_USE_RAZORING = true;
-pub const _DEFAULT_USE_RAZORING = "true";
-
 pub const USE_NNUE = false;
 //pub const NET_PATH = "out/bin/simple-130/quantised.bin";
 //pub const NET_PATH = "out/bin/simple-320-colM-128/quantised.bin";
-pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
+//pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 //pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
-//pub const NET_PATH = "out/bin/simple_1024_retrained-120/quantised.bin";
+pub const NET_PATH = "extern/simple_1024_retrained-120/quantised.bin";
 //pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";
 
 // scheduler options
@@ -70,9 +67,7 @@ pub const INFO_TICKRATE_NS = INFO_TICKRATE * 1_000_000_000;
 pub const WAIT_TICKRATE_NS = 500_000;
 
 // Tuner settings
-//pub const N_POSITIONS = 800000;
 pub const N_POSITIONS = 300000;
-//pub const N_POSITIONS = 8;
 
 pub const TUNE_COMPLEXITY: bool = false; // ? weights
 
