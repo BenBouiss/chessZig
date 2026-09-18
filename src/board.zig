@@ -439,8 +439,8 @@ pub const boardState = struct {
         p_self.frame.key ^= hashl.zobristKeys.playKey;
         if (p_self.frame.enPassantIdx != 0) {
             p_self.frame.key ^= hashl.zobristKeys.enPassantKey;
+            p_self.frame.enPassantIdx = 0;
         }
-        p_self.frame.enPassantIdx = 0;
         chessl.onMoveStaged(p_self, !white);
     }
     pub inline fn makeMove(p_self: *boardState, move: IMove) void {

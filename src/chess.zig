@@ -909,12 +909,6 @@ pub inline fn maskOutPawnDoublePush(comptime white: bool, empty: u64) u64 {
     }
     return (ret << 8) & ret & blackPawnDoubleRank;
 }
-pub inline fn _maskOutPawnDoublePush(white: bool, empty: u64) u64 {
-    if (white) {
-        return maskOutPawnDoublePush(true, empty);
-    }
-    return maskOutPawnDoublePush(false, empty);
-}
 
 pub inline fn fillFile(mask: u64) u64 {
     return moveGenl.northOne(moveGenl.northOccl(mask, UNIVERSE)) | moveGenl.southOne(moveGenl.southOccl(mask, UNIVERSE)) | mask;

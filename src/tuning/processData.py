@@ -1,12 +1,15 @@
 # ref: texel_zugblitz
+
 import utils
 
+from enum import Enum
 import sys, os, random, glob
 from dataclasses import dataclass
 
 import chess
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 import numpy.typing as npt
 import torch
 import torch.nn as nn
@@ -27,12 +30,31 @@ class entry:
     squares: npt.NDArray[np.int8]
     colors: npt.NDArray[np.int8]
     outcome: float
+    miscs: npt.NDArray[np.int16]
 
 
 @dataclass
 class saveConfig:
     trainPath: str
     validPath: str
+    nLim: int = -1
+    maxPositionPerSave: int = -1
+
+
+def ensurePath(s: saveConfig):
+    if not os.path.exists(s.trainPath):
+        os.makedirs(os.path.dirname(s.trainPath), exist_ok=True)
+    if not os.path.exists(s.validPath):
+        os.makedirs(os.path.dirname(s.validPath), exist_ok=True)
+
+
+def insertChunkNbr(p: str, chunk: int) -> str:
+    if "." in p:
+        tok = p.split(".")
+        assert len(tok) >= 2, f"malformed string {p}"
+        tok[-2] = f"{tok[-2]}_chunk_{chunk}"
+        return ".".join(tok)
+    return f"{p}_chunk_{chunk}"
 
 
 CHUNK_SIZE = 8192
@@ -56,6 +78,7 @@ class torchWriter:
         self.piecesArr: list[torch.Tensor] = []
         self.squaresArr: list[torch.Tensor] = []
         self.colorsArr: list[torch.Tensor] = []
+        self.miscsArr: list[torch.Tensor] = []
         self.outcomesArr: list[float] = []
 
         self.insertions: int = 0
@@ -68,6 +91,7 @@ class torchWriter:
         colors: torch.Tensor,
         squares: torch.Tensor,
         outcome: float,
+        miscs: torch.Tensor,
     ) -> None:
         if self.insertions == self.chunkSize:
             self.commit()
@@ -76,6 +100,7 @@ class torchWriter:
         self.colorsArr.append(colors)
         self.squaresArr.append(squares)
         self.outcomesArr.append(outcome)
+        self.miscsArr.append(miscs)
         self.insertions += 1
 
     def commit(self) -> None:
@@ -88,6 +113,7 @@ class torchWriter:
                 "pieces": torch.stack(self.piecesArr),
                 "squares": torch.stack(self.squaresArr),
                 "colors": torch.stack(self.colorsArr),
+                "miscs": torch.stack(self.miscsArr),
                 "outcomes": torch.tensor(self.outcomesArr, dtype=torch.float32),
             },
             f=path,
@@ -96,6 +122,7 @@ class torchWriter:
         self.piecesArr.clear()
         self.colorsArr.clear()
         self.squaresArr.clear()
+        self.miscsArr.clear()
         self.outcomesArr.clear()
 
 
@@ -108,6 +135,7 @@ baseMaterial = [
     0.0,
     0.0,
 ]
+baseMisc = [6.0, 47.0, 55.0, 18.0, 1.0, 32.0, 48.0, 2.0, 7.0, 2.0, 3.0, 5.0, 5.0]
 
 phaseArr = [
     0.0,
@@ -143,9 +171,33 @@ PIECES_STR = [
     "Queen",
     "King",
 ]
+MISCS_STR = [
+    "global_MobilityVal",
+    "global_OpenFileRookVal",
+    "global_materialBishopPair",
+    "global_StructureProtectionVal",
+    "global_centerProtectionVal",
+    "global_HangingVal",
+    "global_pieceThreatScore",
+    "global_IsolatedPawnVal",
+    "global_StackedPawnVal",
+    "global_PassedPawnVal",
+    "global_phalanxDuoPawnVal",
+    "global_connectionPawnVal",
+    "global_KingProximityVal",
+]
 
 
-def boardToEntry(bookFen: str) -> entry:
+def miscPathToDf(p: str) -> pd.DataFrame:
+    if ".csv" in p:
+        ret = pd.read_csv(
+            p, sep=",", usecols=list(range(len(baseMisc))), dtype=np.int16
+        )
+        return ret
+    raise NotImplementedError
+
+
+def boardToEntry(bookFen: str, miscVals: npt.NDArray[np.int16]) -> entry:
     outcomeStr: str = utils.strExtractFromBounds(bookFen, "[", "]")
     if "0.5" in outcomeStr:
         outcome = 0.5
@@ -165,49 +217,97 @@ def boardToEntry(bookFen: str) -> entry:
         squares=np.asarray(squares, dtype=np.int8),
         colors=np.asarray(colors, dtype=np.int8),
         outcome=outcome,
+        miscs=miscVals,
     )
 
 
-def process_book_to_npz(
-    path: str, valRatio: float, saveCfg: saveConfig, nLim: int = -1
-) -> list[entry]:
-    assert os.path.exists(path), f"File {path} does not exists"
-    totalSize = utils.getFileLineNumbers(path) if nLim == -1 else nLim
-
-    vals: list[entry] = []
-
-    curr = 0
-    with open(path, "r") as f:
-        for line in tqdm(f, total=totalSize, desc="Parsing book"):
-            vals.append(boardToEntry(line))
-            curr += 1
-            if curr == nLim:
-                break
-
-    print(f"{curr} lines extracted")
-
-    random.shuffle(vals)
-    valIdx = int(valRatio * len(vals))
-    valEts = vals[:valIdx]
-    trainingEts = vals[valIdx:]
-    print(f"{len(trainingEts)} training samples, {len(valEts)} validation samples")
+def saveChunk(
+    ents: list[entry], saveCfg: saveConfig, chunk: int, valRatio: float
+) -> list[str]:
+    ret: list[str] = []
+    random.shuffle(ents)
+    valIdx = int(valRatio * len(ents))
+    valEts = ents[:valIdx]
+    trainingEts = ents[valIdx:]
+    print(
+        f"{len(trainingEts)} training samples, {len(valEts)} validation samples chunk {chunk}"
+    )
     for d, p, name in (
         [trainingEts, saveCfg.trainPath, "train"],
         [valEts, saveCfg.validPath, "validation"],
     ):
+        pp = insertChunkNbr(p, chunk) if (saveCfg.maxPositionPerSave != -1) else p
+        ret.append(pp)
         packed = packData(d)
         if packed:
-            np.savez_compressed(p, **packed)
-            print(f"Saving {name} at path {p}")
+            np.savez_compressed(pp, **packed)
+            print(f"Saving {name} at path {pp}")
 
-    return trainingEts
+    return ret
+
+
+def process_book_to_npz(
+    path: str, miscPath: str, valRatio: float, saveCfg: saveConfig
+) -> list[list[str]]:
+
+    assert os.path.exists(path), f"File {path} does not exists"
+    totalSize = utils.getFileLineNumbers(path) if saveCfg.nLim == -1 else saveCfg.nLim
+    print(f"total size of position file {totalSize}")
+
+    vals: list[entry] = []
+    miscDF = miscPathToDf(miscPath)
+    ret: list[list[str]] = []
+
+    curr = 0
+    chunk = 0
+    with open(path, "r") as f:
+        for idx, line in enumerate(tqdm(f, total=totalSize, desc="Parsing book")):
+            vals.append(boardToEntry(line, np.asarray(miscDF.iloc[idx])))
+            curr += 1
+            if curr == saveCfg.nLim:
+                break
+
+            if len(vals) == saveCfg.maxPositionPerSave:
+                ret.append(saveChunk(vals, saveCfg, chunk, valRatio))
+                vals = []
+                chunk += 1
+
+    print(f"{curr} lines extracted")
+    if vals:
+        ret.append(saveChunk(vals, saveCfg, chunk, valRatio))
+    vals = []
+
+    del miscDF
+    if saveCfg.maxPositionPerSave and chunk != 0:
+        for idx, savePath in enumerate([saveCfg.trainPath, saveCfg.validPath]):
+            val = {}
+
+            # for i, p in enumerate(paths):
+            #    x = np.load(p)
+            #    for k, v in x.items():
+            #        if i == 0:
+            #            val[k] = v
+            #        else:
+            #            val[k] = np.concatenate((val[k], v), axis=0)
+            # np.savez_compressed(saves.trainPath, **val)
+            for i in range(len(ret)):
+                x = np.load(ret[i][idx])
+                for k, v in x.items():
+                    if i == 0:
+                        val[k] = v
+                    else:
+                        val[k] = np.concatenate((val[k], v), axis=0)
+
+            np.savez_compressed(savePath, **val)
+
+    return ret
 
 
 def packData(data: list[entry]) -> dict:
     if not data:
         return {}
 
-    pieces, squares, colors, outcomes, lengths = [], [], [], [], []
+    pieces, squares, colors, outcomes, lengths, miscs = [], [], [], [], [], []
 
     for d in data:
         pieces.append(d.pieces)
@@ -215,6 +315,7 @@ def packData(data: list[entry]) -> dict:
         colors.append(d.colors)
         outcomes.append(d.outcome)
         lengths.append(len(d.pieces))
+        miscs.append(d.miscs)
 
     return {
         "pieces": np.concatenate(pieces, dtype=np.int8),
@@ -222,6 +323,7 @@ def packData(data: list[entry]) -> dict:
         "colors": np.concatenate(colors, dtype=np.int8),
         "outcomes": np.array(outcomes, dtype=np.float16),
         "lengths": np.array(lengths, dtype=np.uint32),
+        "miscs": np.array(miscs, dtype=np.int16),
     }
 
 
@@ -232,9 +334,7 @@ def processPackedDataPath(path: str, outDir: str) -> None:
     data = np.load(path)
     if not data:
         return
-    # print(data)
     lengths = data["lengths"]
-    # print(lengths)
     pieces_all = padVect(
         data["pieces"], lengths=lengths, maxLen=MAX_TOKEN_SIZE, padValue=DEFAULT_TOKEN
     )
@@ -245,6 +345,7 @@ def processPackedDataPath(path: str, outDir: str) -> None:
         data["colors"], lengths=lengths, maxLen=MAX_TOKEN_SIZE, padValue=DEFAULT_TOKEN
     )
     outcomes_all = data["outcomes"]
+    miscs_all = data["miscs"]
     print(f"len of lengths {len(lengths)} shape pieces {pieces_all.shape}")
 
     writer: torchWriter = torchWriter(folderPath=outDir)
@@ -252,12 +353,14 @@ def processPackedDataPath(path: str, outDir: str) -> None:
     pieces_tensor = torch.from_numpy(pieces_all)
     squares_tensor = torch.from_numpy(squares_all)
     colors_tensor = torch.from_numpy(colors_all)
+    miscs_tensor = torch.from_numpy(miscs_all)
     for i in range(len(outcomes_all)):
         writer.append(
             pieces_tensor[i],
             colors_tensor[i],
             squares=squares_tensor[i],
             outcome=outcomes_all[i],
+            miscs=miscs_tensor[i],
         )
     writer.commit()
 
@@ -279,17 +382,19 @@ def loadDatasets(dirPath: str) -> TensorDataset:
     assert os.path.exists(dirPath), f"Directory {dirPath} does not exists"
     files = sorted(glob.glob(os.path.join(dirPath, "*.pt")))
 
-    pieces, squares, colors, outcomes = [], [], [], []
+    pieces, squares, colors, outcomes, miscs = [], [], [], [], []
     for f in files:
         d = torch.load(f)
         pieces.append(d["pieces"])
         colors.append(d["colors"])
         squares.append(d["squares"])
+        miscs.append(d["miscs"])
         outcomes.append(d["outcomes"])
     out = TensorDataset(
         torch.cat(pieces).contiguous(),
         torch.cat(colors).contiguous(),
         torch.cat(squares).contiguous(),
+        torch.cat(miscs).contiguous(),
         torch.cat(outcomes).contiguous(),
     )
     return out
@@ -305,11 +410,14 @@ class zugNet(nn.Module):
         phaseArr: torch.Tensor,
         nSquares: int,
         maxPhase: int,
+        miscScores: torch.Tensor,
     ):
         super(zugNet, self).__init__()
         self.nSquares = nSquares
         self.maxPhase = maxPhase
         self.materialScores = materialScores
+        self.miscScores = miscScores
+        self.nMisc = len(miscScores)
 
         self.phaseArr: torch.Tensor
         self.register_buffer("phaseArr", phaseArr)
@@ -318,17 +426,26 @@ class zugNet(nn.Module):
         self.psqt_mg = nn.Parameter(init.clone())
         self.psqt_eg = nn.Parameter(init.clone())
 
+        self.misc_mg = nn.Parameter(miscScores.clone())
+        self.misc_eg = nn.Parameter(miscScores.clone())
+
         self.NOISE = 0.5
 
         with torch.no_grad():
             self.psqt_mg += torch.randn_like(self.psqt_mg) * self.NOISE
             self.psqt_eg += torch.randn_like(self.psqt_eg) * self.NOISE
 
-        # self.half()
+            self.misc_mg += torch.randn_like(self.misc_mg) * self.NOISE
+            self.misc_eg += torch.randn_like(self.misc_eg) * self.NOISE
+
         self.K = nn.Parameter(torch.tensor([0.0090], dtype=torch.float32))
 
     def forward(
-        self, pieces: torch.Tensor, squares: torch.Tensor, colors: torch.Tensor
+        self,
+        pieces: torch.Tensor,
+        squares: torch.Tensor,
+        colors: torch.Tensor,
+        miscs: torch.Tensor,
     ):
         """ """
         mask = (pieces != DEFAULT_TOKEN).float()
@@ -340,8 +457,8 @@ class zugNet(nn.Module):
         eg = self.psqt_eg.view(-1)[idx]
 
         sign = 1.0 - 2.0 * colors.float()
-        mg_val = (mg * sign * mask).sum(dim=1)
-        eg_val = (eg * sign * mask).sum(dim=1)
+        mg_val = (mg * sign * mask).sum(dim=1) + (self.misc_mg * miscs).sum(dim=1)
+        eg_val = (eg * sign * mask).sum(dim=1) + (self.misc_eg * miscs).sum(dim=1)
 
         phase = (self.phaseArr[pieces.long()] * mask).sum(dim=1)
         phase = (phase / self.maxPhase).clamp(0.0, 1.0)
@@ -360,23 +477,28 @@ class zugNet(nn.Module):
             else:
                 print(f"global_{p}_PSQT = .{{ [_]scoreType {{", end="")
                 for i, n in enumerate(self.psqt_mg[x]):
+                    nbr = int(torch.round(n))
                     if i < 63:
-                        print(f"{int(n)}, ", end="")
+                        print(f"{nbr}, ", end="")
                     else:
-                        print(f"{int(n)}", end="")
+                        print(f"{nbr}", end="")
                 print("}, [_]scoreType {", end="")
 
-                # [print(f"{int(n)}, ", end="") for n in self.psqt_eg[x]]
-
                 for i, n in enumerate(self.psqt_eg[x]):
+                    nbr = int(torch.round(n))
                     if i < 63:
-                        print(f"{int(n)}, ", end="")
+                        print(f"{nbr}, ", end="")
                     else:
-                        print(f"{int(n)}", end="")
+                        print(f"{nbr}", end="")
                 print("} };")
 
-                # print_board(f"{p}_MG", [int(n) for n in self.psqt_mg[x]])
-                # print_board(f"{p}_EG", [int(n) for n in self.psqt_eg[x]])
+                # print_board(f"{p}_MG", [torch.round(n) for n in self.psqt_mg[x]])
+                # print_board(f"{p}_EG", [torch.round(n) for n in self.psqt_eg[x]])
+
+        for idx, (m, e) in enumerate(zip(self.misc_mg, self.misc_eg)):
+            print(
+                f"{MISCS_STR[idx]} = .{{ {int(torch.round(m))}, {int(torch.round(e))} }};"
+            )
 
 
 def print_board(name: str, l: list[int]):
@@ -397,8 +519,8 @@ def train(opt: trainingOptions):
         phaseArr=torch.Tensor(phaseArr).to(DEVICE),
         nSquares=64,
         maxPhase=24,
+        miscScores=torch.Tensor(baseMisc).to(DEVICE),
     ).to(DEVICE)
-    # optimizer = torch.optim.Adam(model.parameters(), weight_decay=0.0001)
 
     train_ds = loadDatasets(opt.trainingPath)
     train_loader = DataLoader(
@@ -407,7 +529,6 @@ def train(opt: trainingOptions):
         shuffle=True,
         num_workers=0,
     )
-    print(f"Size of training loader {sys.getsizeof(train_loader)}")
     valid_ds = loadDatasets(opt.validationPath)
     valid_loader = DataLoader(
         valid_ds,
@@ -415,39 +536,34 @@ def train(opt: trainingOptions):
         shuffle=False,
     )
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adagrad(
+    optimizer = torch.optim.Adam(
         [
             {
-                "params": [model.psqt_mg, model.psqt_eg],
+                "params": [model.psqt_mg, model.psqt_eg, model.misc_mg, model.misc_eg],
                 "lr": 1.5,
             },
             {"params": [model.K], "lr": 0.01},
         ],
     )
     currBest, epoch = loadCheckpoint(model, optimizer, opt.checkpointsPath)
-    optimizer = torch.optim.Adagrad(
-        [
-            {
-                "params": [model.psqt_mg, model.psqt_eg],
-                "lr": 1.5,
-            },
-            {"params": [model.K], "lr": 0.01},
-        ],
-    )
+    if epoch == -1:
+        epoch = 0
+
     scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
     while True:
         model.train()
         pbar = tqdm(train_loader, desc=f"Epoch {epoch:03d}", unit="batch", leave=False)
 
         train_loss = 0
-        for batch_idx, (pieces, colors, squares, outcomes) in enumerate(pbar):
+        for batch_idx, (pieces, colors, squares, miscs, outcomes) in enumerate(pbar):
             pieces = pieces.to(DEVICE)
             colors = colors.to(DEVICE)
             squares = squares.to(DEVICE)
+            miscs = miscs.to(DEVICE)
             outcomes = outcomes.to(DEVICE)
 
             optimizer.zero_grad()
-            outputs = model(pieces, squares, colors)
+            outputs = model(pieces, squares, colors, miscs)
             loss = (
                 criterion(outputs, outcomes)
                 + 0.05 * material_consistency_loss(model)
@@ -463,24 +579,26 @@ def train(opt: trainingOptions):
         )
         model.eval()
         val_loss = 0
-        for batch_idx, (pieces, colors, squares, outcomes) in enumerate(validPbar):
+        for batch_idx, (pieces, colors, squares, miscs, outcomes) in enumerate(
+            validPbar
+        ):
             pieces = pieces.to(DEVICE)
             colors = colors.to(DEVICE)
             squares = squares.to(DEVICE)
+            miscs = miscs.to(DEVICE)
             outcomes = outcomes.to(DEVICE)
 
-            evals = model(pieces, squares, colors)
+            evals = model(pieces, squares, colors, miscs)
             val_loss += criterion(evals, outcomes).item()
         val_loss /= len(valid_loader)
         if val_loss < currBest:
             print(
-                f"New best loss found at epoch {epoch} prev {currBest} new {val_loss}"
+                f"New best loss found at epoch {epoch} prev {currBest} new {val_loss} current lr {scheduler.get_last_lr()}"
             )
             currBest = val_loss
         else:
             scheduler.step()
         saveCheckpoint(model, optimizer, opt.checkpointsPath, epoch, val_loss)
-
         epoch += 1
 
 
@@ -510,7 +628,10 @@ def saveCheckpoint(
     epoch: int,
     val_loss: float,
 ) -> None:
-    assert os.path.exists(checkpointDirPath)
+
+    if not os.path.exists(checkpointDirPath):
+        os.makedirs(checkpointDirPath, exist_ok=True)
+
     name = f"checkpoint_{epoch}.pt"
     torch.save(
         {
@@ -527,22 +648,22 @@ def loadCheckpoint(
     model: zugNet, optimizer: torch.optim.Optimizer, checkpointDirPath: str
 ) -> tuple[float, int]:
     files = glob.glob(os.path.join(checkpointDirPath, "*.pt"))
-    if not files:
-        return (float("inf"), 0)
+    bestLoss = float("inf")
     bestEpoch = -1
-    bestF = ""
+    if not files:
+        return (bestLoss, bestEpoch)
+    bestR = None
     for f in files:
-        ep = int(utils.strExtractFromBounds(f, "_", "."))
-        if not ep:
-            continue
-        if ep > bestEpoch:
-            bestEpoch = ep
-            bestF = f
+        r = torch.load(f)
+        l = float(r["val_loss"])
+        if bestLoss > l:
+            bestLoss = l
+            bestR = r
     assert bestEpoch > -1, f"No checkpoints file found at {checkpointDirPath}"
-    res = torch.load(bestF)
-    model.load_state_dict(res["model"])
-    optimizer.load_state_dict(res["optimizer"])
-    return (float(res["val_loss"]), bestEpoch)
+    assert bestR is not None
+    model.load_state_dict(bestR["model"])
+    optimizer.load_state_dict(bestR["optimizer"])
+    return (bestLoss, bestEpoch)
 
 
 # for ep in range(opt.epoch):
@@ -570,11 +691,6 @@ def loadCheckpoint(
 #        )
 
 
-def a() -> None:
-    et = boardToEntry(DEFAULT_FEN)
-    print(et)
-
-
 def print_checkpoint(path: str, variablePrint: bool = False) -> None:
     assert os.path.exists(path)
 
@@ -583,23 +699,28 @@ def print_checkpoint(path: str, variablePrint: bool = False) -> None:
         phaseArr=torch.Tensor(phaseArr),
         nSquares=64,
         maxPhase=24,
+        miscScores=torch.Tensor(baseMisc),
     ).to(DEVICE)
     res = torch.load(path)
-    print(res)
     model.load_state_dict(res["model"])
+    print(res)
     model.print(variablePrint)
 
 
 if __name__ == "__main__":
-    # a()
     # path = "out/csv/CCRL-4040.[2370489]_2.book"
-    # path = "out/book/CCRL-4040.[2370489]_filtered_5388899Pos.book"
-    # nPos = 5_388_899
+    path = "out/book/CCRL-4040.[2370489]_filtered_5388899Pos.book"
+    miscPath = "out/csv/CCRL-4040.[2370489]_filtered_5388899Pos_evalCoeff_t.csv"
+    nPos = 5_388_899
+    # nPos = 2_000_000
     # saves = saveConfig(
-    #     trainPath="out/bin/torch/train.npz",
-    #     validPath="out/bin/torch/valid.npz",
+    #    trainPath="out/bin/torch/train.npz",
+    #    validPath="out/bin/torch/valid.npz",
+    #    nLim=nPos,
+    #    maxPositionPerSave=1_000_000,
     # )
-    # # process_book_to_npz(path, 0.2, saves, int(nPos / 4))
+    # ensurePath(saves)
+    # process_book_to_npz(path, miscPath, 0.2, saves)
     # processPackedDataPath(saves.trainPath, "out/bin/torch/train")
     # processPackedDataPath(saves.validPath, "out/bin/torch/valid")
 
@@ -608,7 +729,7 @@ if __name__ == "__main__":
     #        trainingPath="out/bin/torch/valid",
     #        validationPath="out/bin/torch/valid",
     #        checkpointsPath="out/bin/torch/checkpoint",
-    #        chunksize=128,
+    #        chunksize=256,
     #    )
     # )
 

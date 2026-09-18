@@ -994,7 +994,7 @@ pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comp
     const own = if (comptime white) p_state.b.occupiedBB_col(.WHITE) else p_state.b.occupiedBB_col(.BLACK);
     const _emptyOrEnemy = ~own;
     const occ = p_state.b.occupiedBB();
-    const targets = if (comptime t == .QUIET) (if (isCheck) (p_state.frame.checkersBB & (~occ)) else (_emptyOrEnemy & (~occ))) else if (comptime t == .CAPTURE) (if (isCheck) (p_state.frame.checkersBB & occ) else (_emptyOrEnemy & occ)) else if (comptime t == .ALL) (if (isCheck) (p_state.frame.checkersBB) else (_emptyOrEnemy));
+    const targets = if (comptime t == .QUIET) (if (isCheck) (p_state.frame.checkersBB & (~occ)) else (~occ)) else if (comptime t == .CAPTURE) (if (isCheck) (p_state.frame.checkersBB & occ) else (_emptyOrEnemy & occ)) else if (comptime t == .ALL) (if (isCheck) (p_state.frame.checkersBB) else (_emptyOrEnemy));
 
     if (isCheck) {
         const checkers = p_state.frame.checkersBB & occ;
@@ -1082,31 +1082,26 @@ pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: type
     //const empty = realEmpty & emptyOrEnemy;
 
     if (comptime t == .QUIET or t == .ALL) {
-        var bbProm = p & chess.maskOutPawnQuietMove(white, targets) & if (comptime white) chess.blackPawnDoubleRank else chess.whitePawnDoubleRank;
+        const mask = chess.maskOutPawnQuietMove(white, targets);
+        var bbProm = p & mask & if (comptime white) chess.blackPawnDoubleRank else chess.whitePawnDoubleRank;
         while (bbProm != 0) {
             const sq = chess.bitscan(bbProm);
             bbProm &= bbProm - 1;
             push_promotion(sq, if (comptime white) (sq + 8) else (sq - 8), out);
         }
-        var bb: u64 = p & chess.maskOutPawnQuietMove(white, targets) & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
+        var bb: u64 = p & mask & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
         while (bb != 0) {
             const sq = chess.bitscan(bb);
             bb &= bb - 1;
             _ = movel.build_move_in(sq, if (comptime white) (sq + 8) else (sq - 8), @intFromEnum(e_moveFlags.QUIETMOVE), out);
         }
 
-        //std.debug.print("generatePawnt double pawn occ emptyorenemy empty\n", .{});
-        //chess.print_bitboard(occ);
-        //chess.print_bitboard(emptyOrEnemy);
-        //chess.print_bitboard(empty);
-        bb = p & chess.maskOutPawnDoublePush(white, realEmpty);
+        bb = p & chess.maskOutPawnDoublePush(white, realEmpty & targets);
         while (bb != 0) {
             const sq = chess.bitscan(bb);
             const dest = if (comptime white) (sq + 16) else (sq - 16);
             bb &= bb - 1;
-            if (chess.xToBitboard(dest) & targets != 0) {
-                _ = movel.build_move_in(sq, dest, @intFromEnum(e_moveFlags.DOUBLEPAWN), out);
-            }
+            _ = movel.build_move_in(sq, dest, @intFromEnum(e_moveFlags.DOUBLEPAWN), out);
         }
     }
     if (comptime t == .CAPTURE or t == .ALL) {

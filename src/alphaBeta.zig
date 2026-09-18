@@ -54,8 +54,6 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
         return correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white), ply);
     }
 
-    var _alpha = alpha;
-
     p_info.searchStat.n_nodeExplored += 1;
 
     if (ply > p_info.seldepth) {
@@ -81,7 +79,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
         hashStatEval = _entry.staticEval;
         hashType = _entry.nodeT();
 
-        if (hashType == .ALL or (hashType == .LOWER and hashSearchEval >= beta) or (hashType == .UPPER and hashSearchEval <= _alpha)) {
+        if (hashType == .ALL or (hashType == .LOWER and hashSearchEval >= beta) or (hashType == .UPPER and hashSearchEval <= alpha)) {
             return hashSearchEval;
         }
         hashMove = _entry.bestMove;
@@ -90,6 +88,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     var bestScore: scoreType = typel.scoreNone;
     var static_eval: scoreType = typel.scoreNone;
     var raw_eval: scoreType = typel.scoreNone;
+    var _alpha = alpha;
 
     if (!isChecked) {
         if (hashStatEval == typel.scoreNone) {
@@ -236,7 +235,7 @@ pub const searchStack = struct {
 };
 
 //https://www.chessprogramming.org/Principal_Variation_Search#cite_note-23
-pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, depth: depthT, ply: depthT, alpha: scoreType, beta: scoreType, ss: *searchStack, threadD: *threadData, cutnode: bool, comptime t: searchType) scoreType {
+pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depthT, ply: depthT, alpha: scoreType, beta: scoreType, ss: *searchStack, threadD: *threadData, cutnode: bool, comptime t: searchType) scoreType {
     const white: bool = p_state.whiteToMove();
     const isRoot: bool = ply == 0;
     if (p_state.isStaleMate()) {
@@ -253,8 +252,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     if (depth <= 0) {
         return quiescenceSearch(p_state, p_info, alpha, beta, ply, ss);
     }
-    var _alpha = alpha;
-    var _beta = beta;
     var _depth = depth;
     const whiteIdx: usize = chessl.whiteBoolToInt(white);
     var pv: movel.line = .init();
@@ -272,13 +269,14 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         p_info.seldepth = ply;
     }
 
+    var _beta = beta;
     // https://github.com/nescitus/cpw-engine/blob/master/search.cpp
     if (!isRoot) {
         const mate_value = chessl.mate_in(ply);
         if (mate_value < _beta) {
             _beta = mate_value;
-            if (_alpha >= _beta) {
-                return _alpha;
+            if (alpha >= _beta) {
+                return alpha;
             }
         }
     }
@@ -302,16 +300,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         hashStatEval = _entry.staticEval;
         hashType = _entry.nodeT();
         hashDepth = @intCast(_entry._depth);
-        //if (!singularExt and comptime t == .NonPV) {
         if (hashDepth >= _depth and comptime t == .NonPV) {
-            if (hashType == .ALL or (hashType == .LOWER and hashSearchEval >= _beta) or (hashType == .UPPER and hashSearchEval <= _alpha)) {
+            if (hashType == .ALL or (hashType == .LOWER and hashSearchEval >= _beta) or (hashType == .UPPER and hashSearchEval <= alpha)) {
                 return hashSearchEval;
             }
         }
-        //if (hashType == .LOWER and !extended) {
-        //    extension += 1;
-        //    extended = true;
-        //}
         hashMove = _entry.bestMove;
     }
 
@@ -338,6 +331,10 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 raw_eval = hashStatEval;
             }
             static_eval = correct_eval(p_state, ss, raw_eval, ply);
+            //if (!ttHit) {
+            //    const s_entry: hashl.Hash_entry = hashl.buildEntryMatchExt(p_state.frame.key, 0, .INVALID, .{}, raw_eval, typel.scoreNone);
+            //    writer.writeShort(s_entry);
+            //}
         }
     }
     if (isChecked or singularExt) {
@@ -358,8 +355,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
 
     const improving: bool = if (isChecked or isRoot) (false) else if (ss.getPrevFrame(ply, 2).staticEval.s != typel.scoreNone) (static_eval > ss.getPrevFrame(ply, 2).staticEval.s) else (static_eval > ss.getPrevFrame(ply, 4).staticEval.s);
 
-    // const isEndGame = p_state.isEndGame();
-    //and !p_state.onlyPawnsSide(white)
     if (!singularExt and !isChecked and comptime t == .NonPV) {
         if (_depth <= weightl.rfpDepth) {
             const margin: scoreType = if (improving) weightl.rfpImproving else weightl.rfpNotImproving;
@@ -371,9 +366,9 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
         // this version from the cpw cpp code using the qsearch method
         if (_depth <= weightl.razoringMaxDepth) {
             const base: scoreType = if (improving) weightl.razoringBaseImproving else weightl.razoringBaseNotImproving;
-            if ((static_eval + base + _depth * weightl.razoringCoefficient) <= _alpha) {
-                const val = quiescenceSearch(p_state, p_info, _alpha, _alpha + 1, ply, ss);
-                if (val <= _alpha) {
+            if ((static_eval + base + _depth * weightl.razoringCoefficient) <= alpha) {
+                const val = quiescenceSearch(p_state, p_info, alpha, alpha + 1, ply, ss);
+                if (val <= alpha) {
                     return val;
                 }
             }
@@ -427,7 +422,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
                 break;
             }
             const move = res.@"0";
-            //const moveScore = res.@"1";
             if (move.equal(excludedMove) or !p_state.legal(move)) continue;
 
             const from = move.getFrom();
@@ -469,6 +463,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadingl.threadInfo, d
     //var quiets: [weightl.searchMoveBufferSize]IMove = undefined;
     //var nQuiets: usize = 0;
 
+    var _alpha = alpha;
     var lmrR: milliDepth = weightl.lmr_baseDeficit;
     if (comptime t == .PV) {
         lmrR += weightl.lmr_inPvMode;

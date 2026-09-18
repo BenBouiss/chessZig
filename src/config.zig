@@ -43,12 +43,10 @@ pub const TT_strat = enum { ALWAYS_REPLACE, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 pub const OLD_THRESHOLD = 2;
 
-pub const USE_NNUE = false;
-//pub const NET_PATH = "out/bin/simple-130/quantised.bin";
-pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
-//pub const NET_PATH = "out/bin/simple_1024-50/quantised.bin";
+pub const USE_NNUE = true;
+//pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
+pub const NET_PATH = "extern/simple_1024_load100_cosine-120/quantised.bin";
 //pub const NET_PATH = "extern/simple_1024_retrained-120/quantised.bin";
-//pub const NET_PATH = "out/bin/simple-10-rowM/quantised.bin";
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
@@ -70,47 +68,48 @@ pub const N_POSITIONS = 300000;
 pub const TUNE_COMPLEXITY: bool = false; // ? weights
 
 // TEXEL indexes
-// counts
-pub const TEXEL_PAWN_COUNT_IDX = 0;
-pub const TEXEL_BISHOP_COUNT_IDX = 1;
-pub const TEXEL_KNIGHT_COUNT_IDX = 2;
-pub const TEXEL_ROOK_COUNT_IDX = 3;
-pub const TEXEL_QUEEN_COUNT_IDX = 4;
-
 // mobility
-pub const TEXEL_MOVE_COUNT_IDX = 5;
-pub const TEXEL_KINGMOVE_COUNT_IDX = 6;
+pub const TEXEL_MOVE_COUNT_IDX = 0;
+pub const TEXEL_OPEN_ROOK_IDX = 1;
+// material
+pub const TEXEL_DOUBLE_BISHOP_IDX = 2;
 
 //structure protection
-pub const TEXEL_PROTECTION_COUNT_IDX = 7;
-pub const TEXEL_CENTER_PROTECTION_IDX = 8;
+pub const TEXEL_PROTECTION_COUNT_IDX = 3;
+pub const TEXEL_CENTER_PROTECTION_IDX = 4;
+pub const TEXEL_HANGING_PIECE_IDX = 5;
+pub const TEXEL_BIG_PIECE_THREAT_IDX = 6;
 
 // pawn structure
-pub const TEXEL_PAWN_ISOL_IDX = 9;
-pub const TEXEL_PAWN_STACKED_IDX = 10;
-pub const TEXEL_PAWN_PASSED_IDX = 11;
-
-// tempo
-pub const TEXEL_TEMPO_CHECKS_IDX = 12;
-pub const TEXEL_PIECE_THREAT_IDX = 13;
-pub const TEXEL_WEAK_CHECKMATE_IDX = 14;
+pub const TEXEL_PAWN_ISOL_IDX = 7;
+pub const TEXEL_PAWN_STACKED_IDX = 8;
+pub const TEXEL_PAWN_PASSED_IDX = 9;
+pub const TEXEL_PAWN_PHALANX_IDX = 10;
+pub const TEXEL_PAWN_CONNECTED_IDX = 11;
 
 // safety
-pub const TEXEL_SAFETY_PAWN_PROX_IDX = 15;
-pub const TEXEL_SAFETY_BISHOP_PROX_IDX = 16;
-pub const TEXEL_SAFETY_KNIGHT_PROX_IDX = 17;
-pub const TEXEL_SAFETY_ROOK_PROX_IDX = 18;
-pub const TEXEL_SAFETY_QUEEN_PROX_IDX = 19;
+//pub const TEXEL_SAFETY_PAWN_PROX_IDX = 15;
+//pub const TEXEL_SAFETY_BISHOP_PROX_IDX = 16;
+//pub const TEXEL_SAFETY_KNIGHT_PROX_IDX = 17;
+//pub const TEXEL_SAFETY_ROOK_PROX_IDX = 18;
+//pub const TEXEL_SAFETY_QUEEN_PROX_IDX = 19;
 
 // king proximity
-pub const TEXEL_KING_PROXIMITY_IDX = 20;
+pub const TEXEL_KING_DISTANCE_IDX = 12;
+
+// counts
+pub const TEXEL_PAWN_COUNT_IDX = 13;
+pub const TEXEL_BISHOP_COUNT_IDX = 14;
+pub const TEXEL_KNIGHT_COUNT_IDX = 15;
+pub const TEXEL_ROOK_COUNT_IDX = 16;
+pub const TEXEL_QUEEN_COUNT_IDX = 17;
 
 // PSQT
-pub const TEXEL_PAWN_PSQT_IDX = 21;
-pub const TEXEL_BISHOP_PSQT_IDX = 85;
-pub const TEXEL_KNIGHT_PSQT_IDX = 149;
-pub const TEXEL_ROOK_PSQT_IDX = 213;
-pub const TEXEL_QUEEN_PSQT_IDX = 277;
-pub const TEXEL_KING_PSQT_IDX = 341;
+pub const TEXEL_PAWN_PSQT_IDX = 18;
+pub const TEXEL_BISHOP_PSQT_IDX = 82;
+pub const TEXEL_KNIGHT_PSQT_IDX = 146;
+pub const TEXEL_ROOK_PSQT_IDX = 210;
+pub const TEXEL_QUEEN_PSQT_IDX = 274;
+pub const TEXEL_KING_PSQT_IDX = 338;
 
 pub const N_TERMS = TEXEL_KING_PSQT_IDX + 64; // see below

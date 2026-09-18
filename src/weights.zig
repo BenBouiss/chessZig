@@ -115,56 +115,45 @@ pub fn add_param_1d(comptime size: usize, values: *[size]scoreType, min: scoreTy
 
 // global things here
 pub fn appendAll() !void {
-    // counts
-    //add_param(&global_PawnVal, 0, 1000, "global_PawnVal");
-    //add_param(&global_BishopVal, 0, 100, "global_BishopVal");
-    //add_param(&global_KnightVal, 0, 100, "global_KnightVal");
-    //add_param(&global_RookVal, 0, 100, "global_RookVal");
-    //add_param(&global_QueenVal, 0, 100, "global_QueenVal");
     modif_val();
-    add_param(&global_MobilityVal[0], 0, 100, "global_MobilityVal_MG");
-    add_param(&global_MobilityVal[1], 0, 100, "global_MobilityVal_EG");
+    add_param(&global_MobilityVal[0], -200, 200, "global_MobilityVal_MG");
+    add_param(&global_MobilityVal[1], -200, 200, "global_MobilityVal_EG");
 
-    add_param(&global_KingMobilityVal[0], 0, 100, "global_KingMobilityVal_MG");
-    add_param(&global_KingMobilityVal[1], 0, 100, "global_KingMobilityVal_EG");
-    add_param(&global_OpenFileRookVal[0], 0, 100, "global_OpenFileRookVal_MG");
-    add_param(&global_OpenFileRookVal[1], 0, 100, "global_OpenFileRookVal_EG");
+    add_param(&global_OpenFileRookVal[0], -200, 200, "global_OpenFileRookVal_MG");
+    add_param(&global_OpenFileRookVal[1], -200, 200, "global_OpenFileRookVal_EG");
 
     // structure
-    add_param(&global_StructureProtectionVal[0], 0, 100, "global_StructureProtectionVal_MG");
-    add_param(&global_StructureProtectionVal[1], 0, 100, "global_StructureProtectionVal_EG");
+    add_param(&global_StructureProtectionVal[0], -200, 200, "global_StructureProtectionVal_MG");
+    add_param(&global_StructureProtectionVal[1], -200, 200, "global_StructureProtectionVal_EG");
 
-    add_param(&global_HangingVal[0], 0, 100, "global_HangingVal_MG");
-    add_param(&global_HangingVal[1], 0, 100, "global_HangingVal_EG");
+    add_param(&global_centerProtectionVal[0], -200, 200, "global_centerProtectionVal_MG");
+    add_param(&global_centerProtectionVal[1], -200, 200, "global_centerProtectionVal_EG");
 
-    add_param(&global_centerProtectionVal[0], 0, 100, "global_centerProtectionVal_MG");
-    add_param(&global_centerProtectionVal[1], 0, 100, "global_centerProtectionVal_EG");
+    add_param(&global_HangingVal[0], -200, 300, "global_HangingVal_MG");
+    add_param(&global_HangingVal[1], -200, 300, "global_HangingVal_EG");
+
+    add_param(&global_pieceThreatScore[0], -200, 200, "global_pieceThreatScore_MG");
+    add_param(&global_pieceThreatScore[1], -200, 200, "global_pieceThreatScore_EG");
 
     // pawn structure
-    add_param(&global_IsolatedPawnVal[0], 0, 100, "global_IsolatedPawnVal_MG");
-    add_param(&global_IsolatedPawnVal[1], 0, 100, "global_IsolatedPawnVal_EG");
-    add_param(&global_StackedPawnVal[0], 0, 100, "global_StackedPawnVal_MG");
-    add_param(&global_StackedPawnVal[1], 0, 100, "global_StackedPawnVal_EG");
-    add_param(&global_PassedPawnVal[0], 0, 100, "global_PassedPawnVal_MG");
-    add_param(&global_PassedPawnVal[1], 0, 100, "global_PassedPawnVal_EG");
-    add_param(&global_phalanxDuoPawnVal[0], 0, 100, "global_phalanxDuoPawnVal_MG");
-    add_param(&global_phalanxDuoPawnVal[1], 0, 100, "global_phalanxDuoPawnVal_EG");
-    add_param(&global_connectionPawnVal[0], 0, 100, "global_connectionPawnVal_MG");
-    add_param(&global_connectionPawnVal[1], 0, 100, "global_connectionPawnVal_EG");
-
-    // tempo
-    add_param(&global_tempoChecksScore[0], 0, 100, "global_tempoChecksScore_MG");
-    add_param(&global_tempoChecksScore[1], 0, 100, "global_tempoChecksScore_EG");
-    add_param(&global_pieceThreatScore[0], 0, 100, "global_pieceThreatScore_MG");
-    add_param(&global_pieceThreatScore[1], 0, 100, "global_pieceThreatScore_EG");
+    add_param(&global_IsolatedPawnVal[0], -200, 200, "global_IsolatedPawnVal_MG");
+    add_param(&global_IsolatedPawnVal[1], -200, 200, "global_IsolatedPawnVal_EG");
+    add_param(&global_StackedPawnVal[0], -200, 200, "global_StackedPawnVal_MG");
+    add_param(&global_StackedPawnVal[1], -200, 200, "global_StackedPawnVal_EG");
+    add_param(&global_PassedPawnVal[0], -200, 200, "global_PassedPawnVal_MG");
+    add_param(&global_PassedPawnVal[1], -200, 200, "global_PassedPawnVal_EG");
+    add_param(&global_phalanxDuoPawnVal[0], -200, 200, "global_phalanxDuoPawnVal_MG");
+    add_param(&global_phalanxDuoPawnVal[1], -200, 200, "global_phalanxDuoPawnVal_EG");
+    add_param(&global_connectionPawnVal[0], -200, 200, "global_connectionPawnVal_MG");
+    add_param(&global_connectionPawnVal[1], -200, 200, "global_connectionPawnVal_EG");
 
     // king
-    add_param(&global_KingProximityVal[0], 0, 100, "global_KingProximityVal_MG");
-    add_param(&global_KingProximityVal[1], 0, 100, "global_KingProximityVal_EG");
+    add_param(&global_KingProximityVal[0], -200, 200, "global_KingProximityVal_MG");
+    add_param(&global_KingProximityVal[1], -200, 200, "global_KingProximityVal_EG");
 
     // material
-    add_param(&global_materialBishopPair[0], 0, 100, "global_materialBishopPair_MG");
-    add_param(&global_materialBishopPair[1], 0, 100, "global_materialBishopPair_EG");
+    add_param(&global_materialBishopPair[0], -200, 300, "global_materialBishopPair_MG");
+    add_param(&global_materialBishopPair[1], -200, 300, "global_materialBishopPair_EG");
     // LMR
     add_param(&lmr_scoreThreshold, 0, 20000, "lmr_scoreThreshold");
     add_param(&lmr_expectedCutOff, 0, 2000, "lmr_expectedCutOff");
@@ -233,7 +222,7 @@ pub fn appendAll() !void {
 
     add_param(&historyBonusCoeff, 150, 512, "historyBonusCoeff");
     add_param(&historyBonusMax, 1024, 65576, "historyBonusMax");
-    //add_param(&historyBonusBetaDiff, 100, 1024, "historyBonusBetaDiff");
+    //add_param(&historyBonusBetaDiff, 200, 1024, "historyBonusBetaDiff");
 
     add_param(&lmpMaxDepth, 2, 14, "lmpMaxDepth");
     add_param(&lmpBase, 1, 24, "lmpBase");
@@ -260,27 +249,27 @@ pub fn appendAll() !void {
 
     //const start = tunerOpts.items.len;
 
-    //try add_param_1d(&global_Pawn_PSQT[0], -100, 200, "global_Pawn_PSQT_MG");
-    //try add_param_1d(&global_Pawn_PSQT[1], -100, 200, "global_Pawn_PSQT_EG");
+    //try add_param_1d(&global_Pawn_PSQT[0], -200, 200, "global_Pawn_PSQT_MG");
+    //try add_param_1d(&global_Pawn_PSQT[1], -200, 200, "global_Pawn_PSQT_EG");
 
-    //try add_param_1d(&global_Knight_PSQT[0], -100, 200, "global_Knight_PSQT_MG");
-    //try add_param_1d(&global_Knight_PSQT[1], -100, 200, "global_Knight_PSQT_EG");
+    //try add_param_1d(&global_Knight_PSQT[0], -200, 200, "global_Knight_PSQT_MG");
+    //try add_param_1d(&global_Knight_PSQT[1], -200, 200, "global_Knight_PSQT_EG");
 
-    //try add_param_1d(&global_Bishop_PSQT[0], -100, 200, "global_Bishop_PSQT_MG");
-    //try add_param_1d(&global_Bishop_PSQT[1], -100, 200, "global_Bishop_PSQT_EG");
+    //try add_param_1d(&global_Bishop_PSQT[0], -200, 200, "global_Bishop_PSQT_MG");
+    //try add_param_1d(&global_Bishop_PSQT[1], -200, 200, "global_Bishop_PSQT_EG");
 
-    //try add_param_1d(&global_Rook_PSQT[0], -100, 200, "global_Rook_PSQT_MG");
-    //try add_param_1d(&global_Rook_PSQT[1], -100, 200, "global_Rook_PSQT_EG");
+    //try add_param_1d(&global_Rook_PSQT[0], -200, 200, "global_Rook_PSQT_MG");
+    //try add_param_1d(&global_Rook_PSQT[1], -200, 200, "global_Rook_PSQT_EG");
 
-    //try add_param_1d(&global_Queen_PSQT[0], -100, 200, "global_Queen_PSQT_MG");
-    //try add_param_1d(&global_Queen_PSQT[1], -100, 200, "global_Queen_PSQT_EG");
+    //try add_param_1d(&global_Queen_PSQT[0], -200, 200, "global_Queen_PSQT_MG");
+    //try add_param_1d(&global_Queen_PSQT[1], -200, 200, "global_Queen_PSQT_EG");
 
-    //try add_param_1d(&global_King_PSQT[0], -100, 200, "global_King_PSQT_MG");
-    //try add_param_1d(&global_King_PSQT[1], -100, 200, "global_King_PSQT_EG");
+    //try add_param_1d(&global_King_PSQT[0], -200, 200, "global_King_PSQT_MG");
+    //try add_param_1d(&global_King_PSQT[1], -200, 200, "global_King_PSQT_EG");
     //_ = start;
     //for (start..tunerOpts.items.len) |i| {
     //    const e = tunerOpts.items[i];
-    //    std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\":{d} }}, \n", .{ e.opt.name, e.addr.*, -100, 200, 20 });
+    //    std.debug.print(" \"{s}\": {{ \"value\": {d}, \"min_value\": {d}, \"max_value\": {d}, \"step\":{d} }}, \n", .{ e.opt.name, e.addr.*, -200, 200, 20 });
     //}
 }
 //pub var _global_PawnVal: scoreType = simplePawnScore;
@@ -291,34 +280,27 @@ pub fn appendAll() !void {
 
 // mobility
 pub var global_MobilityVal: [2]scoreType = .{ 6, 11 };
-pub var global_KingMobilityVal: [2]scoreType = .{ 4, 0 };
 pub var global_OpenFileRookVal: [2]scoreType = .{ 47, 15 };
+
+// material
+pub var global_materialBishopPair: [2]scoreType = .{ 55, 62 };
 
 // ============ structure ============
 pub var global_StructureProtectionVal: [2]scoreType = .{ 18, 19 };
-pub var global_HangingVal: [2]scoreType = .{ 32, 32 };
 pub var global_centerProtectionVal: [2]scoreType = .{ 1, 2 };
-pub const simpleWeakCheckMateScore: scoreType = 1000;
+pub var global_HangingVal: [2]scoreType = .{ -32, -32 };
+pub var global_pieceThreatScore: [2]scoreType = .{ 48, 13 };
 
 // ============ pawn structure ============
-pub var global_IsolatedPawnVal: [2]scoreType = .{ 2, 0 };
-pub var global_StackedPawnVal: [2]scoreType = .{ 7, 2 };
+pub var global_IsolatedPawnVal: [2]scoreType = .{ -2, 0 };
+pub var global_StackedPawnVal: [2]scoreType = .{ -7, -2 };
 pub var global_PassedPawnVal: [2]scoreType = .{ 2, 20 };
 pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 3, 11 };
 pub var global_connectionPawnVal: [2]scoreType = .{ 5, 10 };
 
-// ============ tempo ============
-pub var global_tempoChecksScore: [2]scoreType = .{ 46, 22 };
-pub var global_pieceThreatScore: [2]scoreType = .{ 48, 13 };
-
-// source: https://www.chessprogramming.org/King_Safety
-// ============ safety ============
-
 // king
 pub var global_KingProximityVal: [2]scoreType = .{ 5, 0 };
 
-// material
-pub var global_materialBishopPair: [2]scoreType = .{ 55, 62 };
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = @splat(pawnScoreArr);
 pub var global_Bishop_PSQT: [2][64]scoreType = @splat(bishopScoreArr);
@@ -458,7 +440,7 @@ pub const searchMoveBufferSize: usize = 64;
 
 pub fn modif_val() void {
 
-    //global_Pawn_PSQT = .{ [_]scoreType{ 75, 75, 76, 74, 75, 74, 75, 75, 44, 33, 32, 39, 46, 111, 110, 36, 56, 48, 33, 35, 64, 98, 111, 105, 59, 57, 73, 72, 79, 112, 106, 88, 126, 105, 98, 97, 112, 142, 120, 97, 159, 193, 169, 186, 177, 191, 166, 171, 203, 186, 173, 183, 144, 111, 106, 108, 75, 75, 75, 75, 74, 75, 75, 75 }, [_]scoreType{ 31, 32, 33, 31, 32, 32, 32, 32, 128, 99, 106, 47, 108, 142, 102, 105, 87, 88, 67, 87, 102, 93, 91, 65, 130, 106, 58, 2, 43, 100, 116, 80, 171, 150, 121, 45, 80, 115, 141, 143, 238, 196, 168, 127, 130, 169, 178, 195, 252, 220, 177, 153, 123, 119, 133, 161, 32, 32, 32, 32, 32, 32, 31, 32 } };
+    //global_Pawn_PSQT = .{ [_]scoreType{ 75, 75, 76, 74, 75, 74, 75, 75, 44, 33, 32, 39, 46, 111, 110, 36, 56, 48, 33, 35, 64, 98, 111, 105, 59, 57, 73, 72, 79, 112, 106, 88, 126, 105, 98, 97, 112, 142, 120, 97, 159, 193, 169, 186, 177, 191, 166, 171, 203, 186, 173, 183, 144, 111, 106, 108, 75, 75, 75, 75, 74, 75, 75, 75 }, [_]scoreType{ 31, 32, 33, 31, 32, 32, 32, 32, 128, 99, 106, 47, 108, 142, 102, 105, 87, 88, 67, 87, 102, 93, 91, 65, 130, 106, 58, 2, 43, 200, 116, 80, 171, 150, 121, 45, 80, 115, 141, 143, 238, 196, 168, 127, 130, 169, 178, 195, 252, 220, 177, 153, 123, 119, 133, 161, 32, 32, 32, 32, 32, 32, 31, 32 } };
     //global_Knight_PSQT = .{ [_]scoreType{ 289, 230, 223, 221, 226, 231, 245, 305, 257, 254, 238, 256, 257, 279, 249, 278, 227, 240, 254, 308, 344, 286, 286, 273, 267, 305, 315, 283, 317, 329, 331, 271, 302, 304, 329, 343, 337, 395, 319, 341, 314, 333, 261, 377, 331, 373, 312, 354, 313, 324, 338, 311, 326, 339, 331, 322, 303, 325, 318, 326, 329, 321, 330, 317 }, [_]scoreType{ 283, 212, 232, 230, 223, 220, 263, 301, 272, 274, 250, 204, 231, 271, 262, 289, 271, 237, 262, 277, 276, 213, 258, 281, 297, 315, 324, 313, 327, 314, 322, 314, 317, 336, 346, 357, 366, 350, 336, 326, 320, 328, 379, 362, 338, 338, 316, 319, 314, 315, 326, 338, 324, 327, 321, 317, 309, 319, 317, 321, 322, 317, 321, 308 } };
     //global_Bishop_PSQT = .{ [_]scoreType{ 291, 259, 287, 236, 258, 296, 295, 270, 346, 297, 329, 291, 308, 333, 327, 299, 292, 311, 337, 311, 333, 315, 323, 297, 324, 271, 307, 328, 306, 310, 314, 328, 309, 318, 298, 346, 326, 311, 300, 316, 271, 318, 238, 321, 316, 200, 311, 334, 293, 302, 296, 299, 268, 296, 278, 273, 285, 291, 287, 297, 292, 267, 295, 287 }, [_]scoreType{ 246, 244, 232, 253, 264, 236, 271, 268, 293, 281, 279, 283, 304, 286, 289, 276, 302, 307, 300, 311, 321, 287, 281, 293, 313, 309, 350, 329, 325, 315, 306, 278, 305, 336, 319, 344, 324, 326, 320, 305, 295, 331, 336, 336, 325, 307, 310, 307, 301, 322, 309, 311, 306, 299, 295, 281, 299, 298, 307, 311, 298, 287, 299, 289 } };
     //global_Rook_PSQT = .{ [_]scoreType{ 426, 446, 464, 479, 476, 442, 485, 435, 392, 425, 428, 444, 428, 428, 470, 435, 436, 445, 438, 440, 447, 457, 509, 485, 490, 495, 483, 482, 489, 495, 489, 501, 531, 531, 550, 550, 541, 527, 546, 541, 559, 559, 556, 552, 551, 564, 547, 535, 553, 564, 560, 562, 551, 537, 535, 545, 515, 525, 512, 508, 525, 517, 524, 514 }, [_]scoreType{ 410, 418, 439, 421, 409, 424, 445, 430, 439, 438, 442, 430, 402, 404, 463, 450, 432, 456, 459, 447, 431, 445, 483, 458, 497, 502, 501, 493, 485, 490, 495, 491, 547, 551, 545, 532, 525, 525, 530, 535, 574, 568, 572, 562, 555, 555, 551, 542, 582, 590, 577, 566, 542, 537, 545, 557, 548, 544, 538, 538, 534, 526, 537, 510 } };
@@ -466,7 +448,6 @@ pub fn modif_val() void {
     //global_King_PSQT = .{ [_]scoreType{ -47, 33, -16, -101, -37, -85, 20, -24, 0, -8, -18, -23, 0, -11, 55, 1, -8, 5, 1, -12, 21, -4, 9, -20, -1, 7, 7, 15, 21, 10, 2, -3, 0, 16, 11, 20, 12, 16, 16, 5, 3, 10, 13, 11, 9, 8, 11, 8, 0, 4, 4, 3, 5, 5, 8, 4, -3, 0, 0, 1, 0, 1, 0, -1 }, [_]scoreType{ -82, -25, -69, -86, -111, -90, -66, -124, -37, -41, -57, -51, -58, -40, -49, -67, -16, -28, -18, -22, 4, -21, -3, -52, 10, 16, 13, 40, 38, 33, 29, 9, 16, 68, 39, 74, 49, 68, 62, 34, 21, 52, 52, 52, 53, 63, 60, 46, 4, 22, 15, 25, 24, 26, 38, 26, -9, 8, 5, 4, 4, 9, 6, -3 } };
 
     //global_MobilityVal = .{ 3, 21 };
-    //global_KingMobilityVal = .{ 3, 5 };
     //global_OpenFileRookVal = .{ 38, 12 };
     //global_StructureProtectionVal = .{ 12, 16 };
     //global_HangingVal = .{ 35, 35 };
@@ -476,7 +457,6 @@ pub fn modif_val() void {
     //global_PassedPawnVal = .{ 1, 22 };
     //global_phalanxDuoPawnVal = .{ 5, 1 };
     //global_connectionPawnVal = .{ 8, 10 };
-    //global_tempoChecksScore = .{ 55, 27 };
     //global_pieceThreatScore = .{ 41, 16 };
     //global_SafetyBishopVal = .{ 16, 5 };
     //global_SafetyKnightVal = .{ 26, 4 };
@@ -540,4 +520,96 @@ pub fn modif_val() void {
     //singularExtensionMinDepth = 9;
     //singularExtensionDeltaTTDepth = 3;
     //singularMarginDoubleExt = 28;
+    //global_Pawn_PSQT = .{ [_]scoreType{ -107, -106, -107, -106, -106, -106, -106, -106, 6, 6, -22, -36, 8, 132, 143, -29, 8, -1, -25, -46, 3, 93, 121, 70, 51, 50, 62, 59, 68, 120, 118, 67, 149, 137, 149, 135, 149, 224, 144, 111, 254, 318, 361, 374, 357, 379, 418, 221, 499, 499, 499, 499, 499, 276, 204, 213, -106, -105, -106, -106, -106, -107, -106, -106 }, [_]scoreType{ -299, -299, -299, -299, -299, -299, -299, -299, 275, 141, 151, 265, 218, 197, 107, 188, 207, 120, 95, 185, 167, 128, 79, 141, 262, 164, 71, -8, 58, 130, 129, 164, 371, 239, 170, 66, 85, 170, 216, 271, 499, 402, 340, 172, 195, 302, 303, 409, 499, 499, 428, 297, 285, 398, 435, 499, -299, -299, -299, -299, -299, -299, -299, -299 } };
+    //global_Knight_PSQT = .{ [_]scoreType{ -99, 85, 26, 60, 106, 142, 105, 199, -2, 69, 128, 180, 176, 235, 99, 156, 92, 173, 221, 310, 350, 262, 246, 117, 166, 227, 311, 255, 319, 331, 379, 240, 257, 254, 370, 370, 318, 467, 248, 467, 307, 363, 245, 477, 470, 692, 307, 441, 362, 259, 433, 342, 418, 437, 585, 495, 200, 518, 455, 580, 671, 482, 699, 546 }, [_]scoreType{ -2, 143, 189, 189, 210, 128, 140, 166, 165, 204, 176, 214, 198, 216, 193, 247, 162, 162, 119, 229, 192, 61, 182, 252, 312, 339, 299, 316, 321, 267, 308, 336, 396, 362, 312, 385, 408, 345, 497, 444, 408, 344, 457, 301, 328, 295, 430, 417, 429, 452, 387, 493, 436, 387, 459, 387, 229, 382, 403, 436, 465, 459, 379, 255 } };
+    //global_Bishop_PSQT = .{ [_]scoreType{ 224, 240, 230, 157, 204, 240, 318, 129, 340, 267, 371, 260, 298, 408, 323, 388, 262, 340, 346, 316, 356, 323, 349, 239, 325, 289, 326, 402, 399, 323, 323, 356, 308, 308, 387, 430, 388, 389, 270, 319, 306, 311, 247, 408, 361, 251, 315, 382, 271, 343, 302, 289, 199, 392, 164, 214, 152, 290, 278, 228, 261, 216, 317, 231 }, [_]scoreType{ 285, 225, 304, 297, 310, 285, 223, 259, 305, 249, 214, 237, 252, 150, 209, 105, 317, 187, 213, 222, 221, 170, 173, 307, 298, 254, 243, 170, 149, 164, 237, 263, 332, 319, 225, 230, 200, 281, 316, 400, 369, 378, 371, 245, 284, 367, 382, 374, 427, 372, 374, 388, 386, 339, 392, 354, 498, 456, 471, 444, 473, 433, 401, 421 } };
+    //global_Rook_PSQT = .{ [_]scoreType{ 305, 343, 371, 395, 407, 366, 457, 366, 202, 284, 313, 335, 370, 377, 448, 251, 245, 255, 309, 332, 383, 369, 499, 341, 289, 316, 395, 369, 400, 343, 468, 361, 445, 477, 552, 573, 590, 587, 643, 601, 581, 619, 605, 632, 692, 843, 899, 751, 538, 461, 550, 610, 682, 802, 867, 811, 482, 586, 392, 503, 676, 899, 899, 887 }, [_]scoreType{ 498, 465, 435, 373, 343, 455, 390, 431, 483, 401, 419, 356, 313, 285, 310, 424, 456, 480, 437, 377, 366, 337, 320, 389, 580, 541, 465, 435, 439, 510, 485, 475, 639, 629, 514, 502, 438, 539, 581, 606, 665, 610, 595, 523, 507, 559, 571, 606, 648, 722, 606, 569, 563, 510, 526, 566, 666, 637, 644, 614, 539, 536, 562, 537 } };
+    //global_Queen_PSQT = .{ [_]scoreType{ 836, 814, 811, 875, 888, 710, 684, 794, 771, 884, 907, 922, 909, 946, 912, 885, 791, 861, 904, 887, 904, 872, 911, 911, 812, 836, 853, 880, 865, 900, 939, 931, 847, 783, 886, 886, 908, 895, 895, 919, 855, 768, 819, 890, 983, 1054, 1026, 977, 915, 819, 838, 818, 875, 1017, 1099, 1176, 953, 980, 989, 608, 989, 1104, 1216, 1208 }, [_]scoreType{ 786, 774, 783, 690, 537, 606, 656, 738, 950, 755, 715, 700, 654, 501, 501, 707, 859, 794, 740, 687, 673, 750, 714, 753, 999, 954, 846, 812, 783, 856, 868, 1049, 1125, 1043, 962, 836, 894, 985, 1092, 1184, 1090, 1164, 1029, 975, 876, 974, 1030, 1113, 1061, 1123, 1106, 1087, 1083, 1025, 1139, 1133, 1002, 980, 1078, 1132, 1026, 1037, 1016, 1012 } };
+    //global_King_PSQT = .{ [_]scoreType{ -85, 87, -29, -337, -52, -216, 53, -30, 132, -13, -76, -137, -54, -65, 139, 4, 73, -4, -78, -200, 0, -149, -47, -139, -61, 69, 80, 113, 1, -34, -80, -117, 41, 19, 6, 93, 27, 35, -7, -36, 6, 41, 49, 34, 37, -21, 78, 50, 30, 42, 84, 9, 59, 76, 60, 62, -14, 21, 64, 67, 47, 43, 35, 13 }, [_]scoreType{ -236, -184, -185, -70, -240, -135, -202, -218, -210, -261, -191, -188, -203, -201, -297, -149, -114, -166, -153, -122, -153, -171, -221, -111, 8, -99, -84, -82, -96, -101, -104, -8, 152, 51, 53, 40, 18, 35, 27, 110, 209, 201, 192, 127, 150, 197, 212, 187, 113, 217, 211, 190, 222, 224, 212, 280, -32, 152, 254, 261, 207, 253, 180, 40 } };
+
+    //global_MobilityVal = .{ -7, 41 };
+    //global_OpenFileRookVal = .{ 35, 83 };
+    //global_materialBishopPair = .{ -26, 197 };
+    //global_StructureProtectionVal = .{ -3, 7 };
+    //global_centerProtectionVal = .{ 6, 6 };
+    //global_HangingVal = .{ 26, 191 };
+    //global_pieceThreatScore = .{ 26, 124 };
+    //global_IsolatedPawnVal = .{ -19, -32 };
+    //global_StackedPawnVal = .{ -14, -24 };
+    //global_PassedPawnVal = .{ -54, 73 };
+    //global_phalanxDuoPawnVal = .{ -44, 81 };
+    //global_connectionPawnVal = .{ 40, 16 };
+    //global_KingProximityVal = .{ -2, 4 };
+
+    //global_MobilityVal = .{ 9, 60 };
+    //global_OpenFileRookVal = .{ 50, 64 };
+    //global_StructureProtectionVal = .{ 30, 36 };
+    //global_centerProtectionVal = .{ 3, 9 };
+    //global_HangingVal = .{ -10, -160 };
+    //global_pieceThreatScore = .{ 51, 123 };
+    //global_IsolatedPawnVal = .{ 10, 44 };
+    //global_StackedPawnVal = .{ -9, -33 };
+    //global_PassedPawnVal = .{ -45, 89 };
+    //global_phalanxDuoPawnVal = .{ -8, 55 };
+    //global_connectionPawnVal = .{ 60, 12 };
+    //global_KingProximityVal = .{ 28, -4 };
+    //global_materialBishopPair = .{ 5, 188 };
+    //lmr_scoreThreshold = 1931;
+    //lmr_expectedCutOff = 217;
+    //lmr_notImproving = 1193;
+    //lmr_hashMoveCapture = 1235;
+    //lmr_baseDeficit = 606;
+    //lmr_badCapture = 928;
+    //lmr_highFailScore = 792;
+    //lmr_highFailCount = 3;
+    //lmr_hashMoveIsGood = 1093;
+    //lmr_inCheck = -1441;
+    //lmr_givesCheck = -450;
+    //lmr_killerMove = -1159;
+    //lmr_threatening = -911;
+    //lmr_inPvMode = -271;
+    //lmr_isPromotion = -1081;
+    //lmr_histDiv = 8799;
+    //rfpNotImproving = -23;
+    //rfpImproving = -1;
+    //rfpDepth = 12;
+    //rfpCoeff = 67;
+    //rfpConst = 104;
+    //captureExtensionThresh = 1223;
+    //aspirationCoefficient = 67;
+    //aspirationMinDepthVar = 7;
+    //nullMoveDepthAugmentThreshold = 8;
+    //nullMoveDepthAugment = 5;
+    //nullMoveReduction = 6;
+    //nullMoveReductionImproving = 6;
+    //razoringBaseImproving = 46;
+    //razoringBaseNotImproving = 499;
+    //razoringCoefficient = 295;
+    //razoringMaxDepth = 5;
+    //IIRDepthMin = 6;
+    //LMRDepth = 2;
+    //SeePruningMaxDepth = 2;
+    //SeePruningQuietMargin = -146;
+    //SeePruningCaptureMargin = -395;
+    //probCutMargin = 261;
+    //probCutMinimalDepth = 6;
+    //futilityDepth = 6;
+    //futilityCoeff = 218;
+    //futilityConst = 212;
+    //historyMaxDepth = 6;
+    //historyThreshCoeff = -1902;
+    //historyThreshConst = -2049;
+    //historyMinExplore = 24;
+    //historyBonusCoeff = 291;
+    //historyBonusMax = 3887;
+    //lmpMaxDepth = 8;
+    //lmpBase = 1;
+    //moveReductionAmount = 1;
+    //moveQsearchAmount = 1;
+    //moveGenMinSeeThreshold = -36;
+    //corrHistMax = 205;
+    //corrHistW = 142;
+    //singularExtensionMinDepth = 11;
+    //singularExtensionDeltaTTDepth = 4;
+    //singularMarginDoubleExt = 85;
 }

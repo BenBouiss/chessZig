@@ -38,16 +38,31 @@ pub inline fn getGlobalIo() std.Io {
 pub inline fn getGlobalGPA() std.mem.Allocator {
     return GLOBAL_CTX.gpa;
 }
+pub fn t() !void {
+    //
+    const x: @Vector(1024, u8) = @splat(1);
+    var sum: i16 = 0;
+    const pos = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    const acc = nnuel.computeAccPair(&nnuel.nnueNet.net, &pos);
+    const v: nnuel.vectAcum = acc.w;
+    _ = v;
+    for (0..nnuel._FORWARD_LOOP) |i| {
+        sum += x[i];
+        std.debug.print("{d}\n", .{sum});
+    }
+    std.debug.print("done {d} {d}\n", .{ sum, nnuel._FORWARD_LOOP });
+}
 
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
-    //_ = GPA;
+    _ = GPA;
+    try t();
     //hashl.zobristKeys.print();
     //try moveGenl.main();
 
     //try bookl.main(GPA);
-    try chessl.main(GPA);
+    //try chessl.main(GPA);
     //try logl.main(GPA);
     //try nnuel.main(GPA);
     //try heuristicl.main(GPA);
