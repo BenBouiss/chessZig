@@ -266,11 +266,8 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "reportProgress", .optionType = .REPORTPROG, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_REPORTPROGRESS } } });
         if (build_options.useTune) {
-            try weightl.appendAll();
+            try weightl.appendAll(p_self.alloc);
         }
-    }
-    pub inline fn trackMetrics(p_self: *engine) bool {
-        return p_self.options.trackMetrics;
     }
     pub inline fn printMetrics(p_self: *engine) void {
         p_self.metric.timeSearchingUs = p_self.scheduler._threadPool.timeSpentSearchingUs();
@@ -301,7 +298,7 @@ pub const engine = struct {
     pub fn executeQuitProcedure(p_self: *engine) bool {
         p_self.status.running = false;
         p_self.scheduler.close();
-        if (p_self.trackMetrics()) {
+        if (p_self.options.trackMetrics) {
             p_self.printMetrics();
         }
         p_self.waitOnWorkingThreads();

@@ -100,9 +100,9 @@ pub const param_entry = struct {
 };
 pub var strOpts: std.ArrayList([]u8) = .empty;
 
-pub fn add_param(addr: *scoreType, min: scoreType, max: scoreType, name: []const u8) void {
+pub fn add_param(alloc: std.mem.Allocator, addr: *scoreType, min: scoreType, max: scoreType, name: []const u8) void {
     const p: param_entry = .{ .addr = addr, .opt = .{ .argType = .SPIN, .optionType = .INVALID, .name = name, .info = enginel.optionInfo{ .spin = .{ .default = addr.*, .min = min, .max = max } } } };
-    tunerOpts.append(mainl.getGlobalGPA(), p) catch unreachable;
+    tunerOpts.append(alloc, p) catch unreachable;
 }
 pub fn add_param_1d(comptime size: usize, values: *[size]scoreType, min: scoreType, max: scoreType, name: []const u8) !void {
     for (0..size) |i| {
@@ -114,138 +114,137 @@ pub fn add_param_1d(comptime size: usize, values: *[size]scoreType, min: scoreTy
 }
 
 // global things here
-pub fn appendAll() !void {
+pub fn appendAll(alloc: std.mem.Allocator) !void {
     modif_val();
-    add_param(&global_MobilityVal[0], -200, 200, "global_MobilityVal_MG");
-    add_param(&global_MobilityVal[1], -200, 200, "global_MobilityVal_EG");
+    add_param(alloc, &global_MobilityVal[0], -200, 200, "global_MobilityVal_MG");
+    add_param(alloc, &global_MobilityVal[1], -200, 200, "global_MobilityVal_EG");
 
-    add_param(&global_OpenFileRookVal[0], -200, 200, "global_OpenFileRookVal_MG");
-    add_param(&global_OpenFileRookVal[1], -200, 200, "global_OpenFileRookVal_EG");
+    add_param(alloc, &global_OpenFileRookVal[0], -200, 200, "global_OpenFileRookVal_MG");
+    add_param(alloc, &global_OpenFileRookVal[1], -200, 200, "global_OpenFileRookVal_EG");
 
     // structure
-    add_param(&global_StructureProtectionVal[0], -200, 200, "global_StructureProtectionVal_MG");
-    add_param(&global_StructureProtectionVal[1], -200, 200, "global_StructureProtectionVal_EG");
+    add_param(alloc, &global_StructureProtectionVal[0], -200, 200, "global_StructureProtectionVal_MG");
+    add_param(alloc, &global_StructureProtectionVal[1], -200, 200, "global_StructureProtectionVal_EG");
 
-    add_param(&global_centerProtectionVal[0], -200, 200, "global_centerProtectionVal_MG");
-    add_param(&global_centerProtectionVal[1], -200, 200, "global_centerProtectionVal_EG");
+    add_param(alloc, &global_centerProtectionVal[0], -200, 200, "global_centerProtectionVal_MG");
+    add_param(alloc, &global_centerProtectionVal[1], -200, 200, "global_centerProtectionVal_EG");
 
-    add_param(&global_HangingVal[0], -200, 300, "global_HangingVal_MG");
-    add_param(&global_HangingVal[1], -200, 300, "global_HangingVal_EG");
+    add_param(alloc, &global_HangingVal[0], -200, 300, "global_HangingVal_MG");
+    add_param(alloc, &global_HangingVal[1], -200, 300, "global_HangingVal_EG");
 
-    add_param(&global_pieceThreatScore[0], -200, 200, "global_pieceThreatScore_MG");
-    add_param(&global_pieceThreatScore[1], -200, 200, "global_pieceThreatScore_EG");
+    add_param(alloc, &global_pieceThreatScore[0], -200, 200, "global_pieceThreatScore_MG");
+    add_param(alloc, &global_pieceThreatScore[1], -200, 200, "global_pieceThreatScore_EG");
 
     // pawn structure
-    add_param(&global_IsolatedPawnVal[0], -200, 200, "global_IsolatedPawnVal_MG");
-    add_param(&global_IsolatedPawnVal[1], -200, 200, "global_IsolatedPawnVal_EG");
-    add_param(&global_StackedPawnVal[0], -200, 200, "global_StackedPawnVal_MG");
-    add_param(&global_StackedPawnVal[1], -200, 200, "global_StackedPawnVal_EG");
-    add_param(&global_PassedPawnVal[0], -200, 200, "global_PassedPawnVal_MG");
-    add_param(&global_PassedPawnVal[1], -200, 200, "global_PassedPawnVal_EG");
-    add_param(&global_phalanxDuoPawnVal[0], -200, 200, "global_phalanxDuoPawnVal_MG");
-    add_param(&global_phalanxDuoPawnVal[1], -200, 200, "global_phalanxDuoPawnVal_EG");
-    add_param(&global_connectionPawnVal[0], -200, 200, "global_connectionPawnVal_MG");
-    add_param(&global_connectionPawnVal[1], -200, 200, "global_connectionPawnVal_EG");
+    add_param(alloc, &global_IsolatedPawnVal[0], -200, 200, "global_IsolatedPawnVal_MG");
+    add_param(alloc, &global_IsolatedPawnVal[1], -200, 200, "global_IsolatedPawnVal_EG");
+    add_param(alloc, &global_StackedPawnVal[0], -200, 200, "global_StackedPawnVal_MG");
+    add_param(alloc, &global_StackedPawnVal[1], -200, 200, "global_StackedPawnVal_EG");
+    add_param(alloc, &global_PassedPawnVal[0], -200, 200, "global_PassedPawnVal_MG");
+    add_param(alloc, &global_PassedPawnVal[1], -200, 200, "global_PassedPawnVal_EG");
+    add_param(alloc, &global_phalanxDuoPawnVal[0], -200, 200, "global_phalanxDuoPawnVal_MG");
+    add_param(alloc, &global_phalanxDuoPawnVal[1], -200, 200, "global_phalanxDuoPawnVal_EG");
+    add_param(alloc, &global_connectionPawnVal[0], -200, 200, "global_connectionPawnVal_MG");
+    add_param(alloc, &global_connectionPawnVal[1], -200, 200, "global_connectionPawnVal_EG");
 
     // king
-    add_param(&global_KingProximityVal[0], -200, 200, "global_KingProximityVal_MG");
-    add_param(&global_KingProximityVal[1], -200, 200, "global_KingProximityVal_EG");
+    add_param(alloc, &global_KingProximityVal[0], -200, 200, "global_KingProximityVal_MG");
+    add_param(alloc, &global_KingProximityVal[1], -200, 200, "global_KingProximityVal_EG");
 
     // material
-    add_param(&global_materialBishopPair[0], -200, 300, "global_materialBishopPair_MG");
-    add_param(&global_materialBishopPair[1], -200, 300, "global_materialBishopPair_EG");
+    add_param(alloc, &global_materialBishopPair[0], -200, 300, "global_materialBishopPair_MG");
+    add_param(alloc, &global_materialBishopPair[1], -200, 300, "global_materialBishopPair_EG");
     // LMR
-    add_param(&lmr_scoreThreshold, 0, 20000, "lmr_scoreThreshold");
-    add_param(&lmr_expectedCutOff, 0, 2000, "lmr_expectedCutOff");
-    add_param(&lmr_notImproving, 0, 2000, "lmr_notImproving");
-    add_param(&lmr_hashMoveCapture, 0, 2000, "lmr_hashMoveCapture");
-    add_param(&lmr_baseDeficit, 0, 2000, "lmr_baseDeficit");
-    add_param(&lmr_badCapture, 0, 2000, "lmr_badCapture");
+    add_param(alloc, &lmr_scoreThreshold, 0, 20000, "lmr_scoreThreshold");
+    add_param(alloc, &lmr_expectedCutOff, 0, 2000, "lmr_expectedCutOff");
+    add_param(alloc, &lmr_notImproving, 0, 2000, "lmr_notImproving");
+    add_param(alloc, &lmr_hashMoveCapture, 0, 2000, "lmr_hashMoveCapture");
+    add_param(alloc, &lmr_baseDeficit, 0, 2000, "lmr_baseDeficit");
+    add_param(alloc, &lmr_badCapture, 0, 2000, "lmr_badCapture");
 
-    add_param(&lmr_highFailScore, 100, 2000, "lmr_highFailScore");
-    add_param(&lmr_highFailCount, 1, 16, "lmr_highFailCount");
-    add_param(&lmr_hashMoveIsGood, 0, 4000, "lmr_hashMoveIsGood");
+    add_param(alloc, &lmr_highFailScore, 100, 2000, "lmr_highFailScore");
+    add_param(alloc, &lmr_highFailCount, 1, 16, "lmr_highFailCount");
+    add_param(alloc, &lmr_hashMoveIsGood, 0, 4000, "lmr_hashMoveIsGood");
 
-    add_param(&lmr_inCheck, -4000, 0, "lmr_inCheck");
-    add_param(&lmr_givesCheck, -4000, 0, "lmr_givesCheck");
-    add_param(&lmr_killerMove, -4000, 0, "lmr_killerMove");
-    add_param(&lmr_threatening, -4000, 0, "lmr_threatening");
-    add_param(&lmr_inPvMode, -4000, 0, "lmr_inPvMode");
-    add_param(&lmr_isPromotion, -4000, 0, "lmr_isPromotion");
-    add_param(&lmr_histDiv, 0, 12000, "lmr_histDiv");
+    add_param(alloc, &lmr_inCheck, -4000, 0, "lmr_inCheck");
+    add_param(alloc, &lmr_givesCheck, -4000, 0, "lmr_givesCheck");
+    add_param(alloc, &lmr_killerMove, -4000, 0, "lmr_killerMove");
+    add_param(alloc, &lmr_threatening, -4000, 0, "lmr_threatening");
+    add_param(alloc, &lmr_inPvMode, -4000, 0, "lmr_inPvMode");
+    add_param(alloc, &lmr_isPromotion, -4000, 0, "lmr_isPromotion");
+    add_param(alloc, &lmr_histDiv, 0, 12000, "lmr_histDiv");
 
     // margins
-    //add_param(&futilityMargin[0], 0, 1500, "futilityMargin_0");
-    //add_param(&futilityMargin[1], 0, 1500, "futilityMargin_1");
-    //add_param(&futilityMargin[2], 0, 1500, "futilityMargin_2");
-    //add_param(&futilityMargin[3], 0, 1500, "futilityMargin_3");
+    //add_param(alloc, &futilityMargin[0], 0, 1500, "futilityMargin_0");
+    //add_param(alloc, &futilityMargin[1], 0, 1500, "futilityMargin_1");
+    //add_param(alloc, &futilityMargin[2], 0, 1500, "futilityMargin_2");
+    //add_param(alloc, &futilityMargin[3], 0, 1500, "futilityMargin_3");
     //try add_param_1d(futilityMargin.len, &futilityMargin, 0, 1500, "futilityMargin");
     //try add_param_1d(rfpMargin.len, &rfpMargin, 0, 1500, "rfpMargin");
 
-    add_param(&rfpNotImproving, -500, 0, "rfpNotImproving");
-    add_param(&rfpImproving, -500, 0, "rfpImproving");
-    add_param(&rfpDepth, 2, 12, "rfpDepth");
-    add_param(&rfpCoeff, 25, 150, "rfpCoeff");
-    add_param(&rfpConst, 25, 150, "rfpConst");
+    add_param(alloc, &rfpNotImproving, -500, 0, "rfpNotImproving");
+    add_param(alloc, &rfpImproving, -500, 0, "rfpImproving");
+    add_param(alloc, &rfpDepth, 2, 12, "rfpDepth");
+    add_param(alloc, &rfpCoeff, 25, 150, "rfpCoeff");
+    add_param(alloc, &rfpConst, 25, 150, "rfpConst");
 
-    add_param(&captureExtensionThresh, 0, 10000, "captureExtensionThresh");
+    add_param(alloc, &captureExtensionThresh, 0, 10000, "captureExtensionThresh");
 
-    add_param(&aspirationCoefficient, 10, 200, "aspirationCoefficient");
-    add_param(&aspirationMinDepthVar, 2, 14, "aspirationMinDepthVar");
-    add_param(&nullMoveDepthAugmentThreshold, 8, 32, "nullMoveDepthAugmentThreshold");
-    add_param(&nullMoveDepthAugment, 2, 6, "nullMoveDepthAugment");
-    add_param(&nullMoveReduction, 2, 8, "nullMoveReduction");
-    add_param(&nullMoveReductionImproving, 2, 8, "nullMoveReductionImproving");
+    add_param(alloc, &aspirationCoefficient, 10, 200, "aspirationCoefficient");
+    add_param(alloc, &aspirationMinDepthVar, 2, 14, "aspirationMinDepthVar");
+    add_param(alloc, &nullMoveDepthAugmentThreshold, 8, 32, "nullMoveDepthAugmentThreshold");
+    add_param(alloc, &nullMoveDepthAugment, 2, 6, "nullMoveDepthAugment");
+    add_param(alloc, &nullMoveReduction, 2, 8, "nullMoveReduction");
+    add_param(alloc, &nullMoveReductionImproving, 2, 8, "nullMoveReductionImproving");
 
-    add_param(&razoringBaseImproving, 0, 1000, "razoringBaseImproving");
-    add_param(&razoringBaseNotImproving, 0, 1000, "razoringBaseNotImproving");
-    add_param(&razoringCoefficient, 0, 1000, "razoringCoefficient");
-    add_param(&razoringMaxDepth, 2, 12, "razoringMaxDepth");
-    add_param(&IIRDepthMin, 2, 6, "IIRDepthMin");
-    add_param(&LMRDepth, 2, 8, "LMRDepth");
+    add_param(alloc, &razoringBaseImproving, 0, 1000, "razoringBaseImproving");
+    add_param(alloc, &razoringBaseNotImproving, 0, 1000, "razoringBaseNotImproving");
+    add_param(alloc, &razoringCoefficient, 0, 1000, "razoringCoefficient");
+    add_param(alloc, &razoringMaxDepth, 2, 12, "razoringMaxDepth");
+    add_param(alloc, &IIRDepthMin, 2, 6, "IIRDepthMin");
+    add_param(alloc, &LMRDepth, 2, 8, "LMRDepth");
 
-    add_param(&SeePruningMaxDepth, 2, 12, "SeePruningMaxDepth");
-    add_param(&SeePruningQuietMargin, -400, 0, "SeePruningQuietMargin");
-    add_param(&SeePruningCaptureMargin, -400, 0, "SeePruningCaptureMargin");
+    add_param(alloc, &SeePruningMaxDepth, 2, 12, "SeePruningMaxDepth");
+    add_param(alloc, &SeePruningQuietMargin, -400, 0, "SeePruningQuietMargin");
+    add_param(alloc, &SeePruningCaptureMargin, -400, 0, "SeePruningCaptureMargin");
 
-    add_param(&probCutMargin, 0, 500, "probCutMargin");
-    add_param(&probCutMinimalDepth, 2, 10, "probCutMinimalDepth");
+    add_param(alloc, &probCutMargin, 0, 500, "probCutMargin");
+    add_param(alloc, &probCutMinimalDepth, 2, 10, "probCutMinimalDepth");
 
-    add_param(&futilityDepth, 2, 16, "futilityDepth");
-    add_param(&futilityCoeff, 50, 500, "futilityCoeff");
-    add_param(&futilityConst, 50, 500, "futilityConst");
+    add_param(alloc, &futilityDepth, 2, 16, "futilityDepth");
+    add_param(alloc, &futilityCoeff, 50, 500, "futilityCoeff");
+    add_param(alloc, &futilityConst, 50, 500, "futilityConst");
 
-    add_param(&historyMaxDepth, 2, 14, "historyMaxDepth");
-    add_param(&historyThreshCoeff, -12000, 0, "historyThreshCoeff");
-    add_param(&historyThreshConst, -10000, 0, "historyThreshConst");
-    add_param(&historyMinExplore, 3, 24, "historyMinExplore");
+    add_param(alloc, &historyMaxDepth, 2, 14, "historyMaxDepth");
+    add_param(alloc, &historyThreshCoeff, -12000, 0, "historyThreshCoeff");
+    add_param(alloc, &historyThreshConst, -10000, 0, "historyThreshConst");
+    add_param(alloc, &historyMinExplore, 3, 24, "historyMinExplore");
 
-    add_param(&historyBonusCoeff, 150, 512, "historyBonusCoeff");
-    add_param(&historyBonusMax, 1024, 65576, "historyBonusMax");
-    //add_param(&historyBonusBetaDiff, 200, 1024, "historyBonusBetaDiff");
+    add_param(alloc, &historyBonusCoeff, 150, 512, "historyBonusCoeff");
+    add_param(alloc, &historyBonusMax, 1024, 65576, "historyBonusMax");
+    //add_param(alloc, &historyBonusBetaDiff, 200, 1024, "historyBonusBetaDiff");
 
-    add_param(&lmpMaxDepth, 2, 14, "lmpMaxDepth");
-    add_param(&lmpBase, 1, 24, "lmpBase");
+    add_param(alloc, &lmpMaxDepth, 2, 14, "lmpMaxDepth");
+    add_param(alloc, &lmpBase, 1, 24, "lmpBase");
 
-    add_param(&moveReductionAmount, 1, 10, "moveReductionAmount");
-    add_param(&moveQsearchAmount, 1, 10, "moveQsearchAmount");
+    add_param(alloc, &moveReductionAmount, 1, 10, "moveReductionAmount");
+    add_param(alloc, &moveQsearchAmount, 1, 10, "moveQsearchAmount");
 
-    add_param(&moveGenMinSeeThreshold, -256, -32, "moveGenMinSeeThreshold");
+    add_param(alloc, &moveGenMinSeeThreshold, -256, -32, "moveGenMinSeeThreshold");
 
-    add_param(&corrHistMax, 64, 10000, "corrHistMax");
-    add_param(&corrHistW, 64, 512, "corrHistW");
+    add_param(alloc, &corrHistMax, 64, 10000, "corrHistMax");
+    add_param(alloc, &corrHistW, 64, 512, "corrHistW");
 
-    add_param(&singularExtensionMinDepth, 2, 14, "singularExtensionMinDepth");
-    add_param(&singularExtensionDeltaTTDepth, 2, 6, "singularExtensionDeltaTTDepth");
-    add_param(&singularMarginDoubleExt, 8, 128, "singularMarginDoubleExt");
+    add_param(alloc, &singularExtensionMinDepth, 2, 14, "singularExtensionMinDepth");
+    add_param(alloc, &singularExtensionDeltaTTDepth, 2, 6, "singularExtensionDeltaTTDepth");
+    add_param(alloc, &singularMarginDoubleExt, 8, 128, "singularMarginDoubleExt");
 
-    add_param(&bestMoveMax, 4, 32, "bestMoveMax");
-    add_param(&nodeFactor1, 100, 200, "nodeFactor1");
-    add_param(&nodeFactor2, 100, 200, "nodeFactor2");
+    add_param(alloc, &bestMoveMax, 4, 32, "bestMoveMax");
+    add_param(alloc, &nodeFactor1, 100, 200, "nodeFactor1");
+    add_param(alloc, &nodeFactor2, 100, 200, "nodeFactor2");
 
-    add_param(&tmFactor, 100, 200, "tmFactor");
-    add_param(&tmBmCoeff, 3, 30, "tmBmCoeff");
-    add_param(&schedulerGrowthEstim, 1, 6, "schedulerGrowthEstim");
+    add_param(alloc, &tmFactor, 100, 200, "tmFactor");
+    add_param(alloc, &tmBmCoeff, 3, 30, "tmBmCoeff");
 
     //const start = tunerOpts.items.len;
 
@@ -436,8 +435,6 @@ pub var nodeFactor2: scoreType = 177;
 
 pub var tmFactor: scoreType = 152;
 pub var tmBmCoeff: scoreType = 6;
-
-pub var schedulerGrowthEstim: scoreType = 2;
 
 pub const searchMoveBufferSize: usize = 64;
 

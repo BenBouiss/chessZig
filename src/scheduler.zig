@@ -148,18 +148,18 @@ pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo,
     // everything gets "returned" via the p_info
     // launched as single threaded
     // redundant as the thread beeing launch already sets this beforehand, however the previous init serves just to prevent very early return (ie: status == .FINISHED) when nothing happened
-    var tm: timeManager = .{ .t = time };
-    tm.stopWatch.startTimeTick();
-
+    var tm: timeManager = .{ .t = time, .stopWatch = .init(true) };
     p_info.stopWatch = .init(true);
+
     p_info.searchStat = .{};
     p_info.depth = 0;
     p_info.seldepth = 0;
     p_info.checkTime = 0;
-    p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
 
-    tm.originalSoftTimeLim = @divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
+    tm.originalSoftTimeLim = @divFloor(@divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(3 * tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV), 2);
     tm.softTimeLimit = tm.originalSoftTimeLim;
+
+    p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
 
     hashl.hashTable.nextGeneration();
 
@@ -174,7 +174,6 @@ pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo,
     }
     threadD.nnueStack.len = 1;
     if (comptime configl.USE_NNUE) {
-        //p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
         threadD.nnueStack.items[0] = nnuel.computeAccPair(&nnuel.nnueNet, p_state);
     }
     const depth = aspirationWindow(&tm, p_state, p_info, features, maxDepth, &threadD);
@@ -251,7 +250,7 @@ pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depth
     if ((p_features.fixedDepth and depth == maxDepth) or (depth >= typel.MAX_PLY) or chessl.isMate(score)) {
         return false;
     }
-    return ((timer.timeSinceStartMs() * weightl.schedulerGrowthEstim) < timer.softTimeLimit);
+    return timer.timeSinceStartMs() < timer.softTimeLimit;
 }
 
 pub fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64, depth: depthT, innerLoop: usize) void {
