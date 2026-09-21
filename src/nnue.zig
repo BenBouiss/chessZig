@@ -24,6 +24,7 @@ pub const QA = 255;
 pub const QB = 64;
 pub const QAQB = 255 * 64;
 pub const HL_SIZE = if (configl.USE_NNUE) 1024 else 0;
+//pub const HL_SIZE = if (configl.USE_NNUE) 128 else 0;
 pub const INPUT_SIZE = 768; // 6 pieces x 2 colors x 64 sqs
 pub const FORWARD_LOOP = HL_SIZE / 16;
 pub const _FORWARD_LOOP = HL_SIZE / 32;
@@ -50,9 +51,10 @@ pub const network = extern struct {
         const ret: *network = @ptrCast(@alignCast(content));
         return ret.*;
     }
-    //pub fn free(self: *network, alloc: std.mem.Allocator) !void {
-    //    const _ptr: []u8 = @ptrCast(@alignCast(self));
-    //}
+    pub fn initCplt(comptime path: []const u8) network {
+        const net: *network = @ptrCast(@alignCast(@constCast(@embedFile(path))));
+        return net.*;
+    }
 };
 pub const accumulatorPair = struct {
     w: [HL_SIZE]i16 align(64) = @splat(0),
@@ -64,14 +66,18 @@ pub const accumulatorPair = struct {
 pub const accumulatorPairStack = struct {
     items: [typel.MAX_PLY]accumulatorPair = @splat(.{}),
     len: usize = 0,
-    pub fn getCurrent(self: *const accumulatorPair) *accumulatorPair {
-        return self.items[self.len - 1];
+    pub inline fn getCurrent(self: *accumulatorPairStack) *accumulatorPair {
+        return &self.items[self.len - 1];
     }
-    pub fn append(self: *accumulator, item: accumulatorPair) void {
+    pub inline fn getNext(self: *accumulatorPairStack) *accumulatorPair {
+        return &self.items[self.len];
+    }
+
+    pub inline fn append(self: *accumulatorPairStack, item: accumulatorPair) void {
         self.items[self.len] = item;
         self.len += 1;
     }
-    pub fn pop(self: *accumulator) void {
+    pub inline fn pop(self: *accumulatorPairStack) void {
         self.len -= 1;
     }
 };
@@ -91,35 +97,56 @@ pub fn networkIndexPerspective(piece: typel.e_pieceType, sq: typel.e_square, per
 pub inline fn networkIndexPair(piece: typel.e_pieceType, sq: typel.e_square, side: e_color) [2]usize {
     return [2]usize{ networkIndex(piece, side, sq), networkIndex(piece, @enumFromInt(1 - @intFromEnum(side)), @enumFromInt(chessl.flipSq(@intFromEnum(sq)))) };
 }
-pub fn quiet_Add_Sub(accPair: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color) void {
+pub fn quiet_Add_Sub(next: *accumulatorPair, prev: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color) void {
     const sub = networkIndexPair(fromP, fromSq, side);
     const add = networkIndexPair(toP, toSq, side);
 
-    accPair.w = @as(@Vector(HL_SIZE, i16), accPair.w) + nnueNet.net.accWeights[add[@intFromEnum(e_color.WHITE)]] - nnueNet.net.accWeights[sub[@intFromEnum(e_color.WHITE)]];
-    accPair.b = @as(@Vector(HL_SIZE, i16), accPair.b) + nnueNet.net.accWeights[add[@intFromEnum(e_color.BLACK)]] - nnueNet.net.accWeights[sub[@intFromEnum(e_color.BLACK)]];
+    next.w = (@as(@Vector(HL_SIZE, i16), prev.w) +
+        nnueNet.accWeights[add[@intFromEnum(e_color.WHITE)]] -
+        nnueNet.accWeights[sub[@intFromEnum(e_color.WHITE)]]);
+
+    next.b = (@as(@Vector(HL_SIZE, i16), prev.b) +
+        nnueNet.accWeights[add[@intFromEnum(e_color.BLACK)]] -
+        nnueNet.accWeights[sub[@intFromEnum(e_color.BLACK)]]);
 }
-pub fn castling_Add_Add_Sub_Sub(accPair: *accumulatorPair, side: e_color, info: boardl.castleS) void {
+pub fn castling_Add_Add_Sub_Sub(next: *accumulatorPair, prev: *accumulatorPair, side: e_color, info: boardl.castleS) void {
     const kSub = networkIndexPair(.KING, info.kingFrom, side);
     const kAdd = networkIndexPair(.KING, info.kingTo, side);
 
     const rSub = networkIndexPair(.ROOK, info.rookFrom, side);
     const rAdd = networkIndexPair(.ROOK, info.rookTo, side);
 
-    accPair.w = @as(@Vector(HL_SIZE, i16), accPair.w) + nnueNet.net.accWeights[kAdd[@intFromEnum(e_color.WHITE)]] + nnueNet.net.accWeights[rAdd[@intFromEnum(e_color.WHITE)]] - nnueNet.net.accWeights[kSub[@intFromEnum(e_color.WHITE)]] - nnueNet.net.accWeights[rSub[@intFromEnum(e_color.WHITE)]];
-    accPair.b = @as(@Vector(HL_SIZE, i16), accPair.b) + nnueNet.net.accWeights[kAdd[@intFromEnum(e_color.BLACK)]] + nnueNet.net.accWeights[rAdd[@intFromEnum(e_color.BLACK)]] - nnueNet.net.accWeights[kSub[@intFromEnum(e_color.BLACK)]] - nnueNet.net.accWeights[rSub[@intFromEnum(e_color.BLACK)]];
+    next.w = (@as(@Vector(HL_SIZE, i16), prev.w) +
+        nnueNet.accWeights[kAdd[@intFromEnum(e_color.WHITE)]] +
+        nnueNet.accWeights[rAdd[@intFromEnum(e_color.WHITE)]] -
+        nnueNet.accWeights[kSub[@intFromEnum(e_color.WHITE)]] -
+        nnueNet.accWeights[rSub[@intFromEnum(e_color.WHITE)]]);
+
+    next.b = (@as(@Vector(HL_SIZE, i16), prev.b) +
+        nnueNet.accWeights[kAdd[@intFromEnum(e_color.BLACK)]] +
+        nnueNet.accWeights[rAdd[@intFromEnum(e_color.BLACK)]] -
+        nnueNet.accWeights[kSub[@intFromEnum(e_color.BLACK)]] -
+        nnueNet.accWeights[rSub[@intFromEnum(e_color.BLACK)]]);
 
     //for (0..HL_SIZE) |i| {
     //    accPair.w[i] += (kNextW[i] + rNextW[i] - kPrevW[i] - rPrevW[i]);
     //    accPair.b[i] += (kNextB[i] + rNextB[i] - kPrevB[i] - rPrevB[i]);
     //}
 }
-pub fn capture_Add_Sub_Sub(accPair: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color, cPiece: typel.e_pieceType, captureSq: typel.e_square) void {
+pub fn capture_Add_Sub_Sub(next: *accumulatorPair, prev: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color, cPiece: typel.e_pieceType, captureSq: typel.e_square) void {
     const sub = networkIndexPair(fromP, fromSq, side);
     const add = networkIndexPair(toP, toSq, side);
     const victimSub = networkIndexPair(cPiece, captureSq, chessl.invert_e_color(side));
 
-    accPair.w = @as(@Vector(HL_SIZE, i16), accPair.w) + nnueNet.net.accWeights[add[@intFromEnum(e_color.WHITE)]] - nnueNet.net.accWeights[sub[@intFromEnum(e_color.WHITE)]] - nnueNet.net.accWeights[victimSub[@intFromEnum(e_color.WHITE)]];
-    accPair.b = @as(@Vector(HL_SIZE, i16), accPair.b) + nnueNet.net.accWeights[add[@intFromEnum(e_color.BLACK)]] - nnueNet.net.accWeights[sub[@intFromEnum(e_color.BLACK)]] - nnueNet.net.accWeights[victimSub[@intFromEnum(e_color.BLACK)]];
+    next.w = (@as(@Vector(HL_SIZE, i16), prev.w) +
+        nnueNet.accWeights[add[@intFromEnum(e_color.WHITE)]] -
+        nnueNet.accWeights[sub[@intFromEnum(e_color.WHITE)]] -
+        nnueNet.accWeights[victimSub[@intFromEnum(e_color.WHITE)]]);
+
+    next.b = (@as(@Vector(HL_SIZE, i16), prev.b) +
+        nnueNet.accWeights[add[@intFromEnum(e_color.BLACK)]] -
+        nnueNet.accWeights[sub[@intFromEnum(e_color.BLACK)]] -
+        nnueNet.accWeights[victimSub[@intFromEnum(e_color.BLACK)]]);
 }
 
 // easier to vectorize compared to below
@@ -222,12 +249,13 @@ pub fn computeAccPair(net: *const network, board: *const boardl.boardState) accu
     }
     return ret;
 }
-pub inline fn updateNnueOnMove(p_state: *boardl.boardState, move: movel.IMove) void {
-    // !whiteToMove since this is done after makeMove
-    _updateNnueOnMove(p_state, !p_state.whiteToMove(), move.isCapture(), move, move.isPromotion(), move.isCastle());
-}
 
-pub fn _updateNnueOnMove(p_state: *boardl.boardState, white: bool, isCapture: bool, move: movel.IMove, isPromo: bool, isCastle: bool) void {
+pub fn updateNnueOnMove(p_state: *boardl.boardState, move: movel.IMove, stack: *accumulatorPairStack) void {
+    // !whiteToMove since this is done after makeMove
+    const white = !p_state.whiteToMove();
+    const isCapture = move.isCapture();
+    const isPromo = move.isPromotion();
+    const isCastle = move.isCastle();
     const to = move.getTo();
     var fromPiece: typel.e_pieceType = chessl.e_pieceTo_e_pieceType(p_state.getPiece(to));
     const _toPiece: typel.e_pieceType = fromPiece;
@@ -236,45 +264,24 @@ pub fn _updateNnueOnMove(p_state: *boardl.boardState, white: bool, isCapture: bo
     if (isPromo) {
         fromPiece = .PAWN;
     }
-    const accPair = &p_state.frame.nnueAccumul;
     if (isCapture) {
         // is capture
         const victimSq: typel.e_square = if (move.isEnpassant()) chessl.enPassantVictimSq(from, to) else (@enumFromInt(to));
-        capture_Add_Sub_Sub(accPair, fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c, chessl.e_pieceTo_e_pieceType(p_state.frame.victim), victimSq);
+        capture_Add_Sub_Sub(stack.getNext(), stack.getCurrent(), fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c, chessl.e_pieceTo_e_pieceType(p_state.frame.victim), victimSq);
     } else {
         if (isCastle) {
-            castling_Add_Add_Sub_Sub(accPair, c, .init(white, move.isKingSideCastle()));
+            castling_Add_Add_Sub_Sub(stack.getNext(), stack.getCurrent(), c, .init(white, move.isKingSideCastle()));
         } else {
-            quiet_Add_Sub(accPair, fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c);
+            quiet_Add_Sub(stack.getNext(), stack.getCurrent(), fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c);
         }
     }
+    stack.len += 1;
 }
-pub const _network = struct {
-    net: network = .{},
-    inited: bool = false,
-    pub fn init(alloc: std.mem.Allocator, path: []const u8) !_network {
-        var ret: _network = .{};
-        ret.net = try network.init(alloc, path);
-        ret.inited = true;
-        return ret;
-    }
-    pub fn initCplt(comptime path: []const u8) _network {
-        var ret: _network = .{};
-        ret.inited = true;
-        const net: *network = @ptrCast(@alignCast(@constCast(@embedFile(path))));
-        ret.net = net.*;
-        return ret;
-    }
-};
-//pub var nnueNet: _network = .{};
-pub var nnueNet: _network = if (configl.USE_NNUE) (.initCplt(configl.NET_PATH)) else (.{});
-//pub var global_nnueAcc: accumulatorPairStack = .{};
 
-pub fn initNNUE(alloc: std.mem.Allocator, path: []const u8) !void {
-    nnueNet = try .init(alloc, path);
-}
+pub const nnueNet: network = if (configl.USE_NNUE) (.initCplt(configl.NET_PATH)) else (.{});
+
 pub inline fn evaluate(white: bool, pair: *const accumulatorPair) scoreType {
-    return if (white) ___forward(&nnueNet.net, &pair.w, &pair.b) else ___forward(&nnueNet.net, &pair.b, &pair.w);
+    return if (white) ___forward(&nnueNet, &pair.w, &pair.b) else ___forward(&nnueNet, &pair.b, &pair.w);
 }
 //pub const BAD_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w HAha - 0 1";
 pub const BAD_FEN = "1n3R2/r2N4/4kB1p/1P6/8/p4NPB/P1P2P1P/3R2K1 b - - 3 57";

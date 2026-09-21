@@ -9,7 +9,6 @@ const hashl = @import("hashTable.zig");
 const typel = @import("type.zig");
 const squarel = @import("square.zig");
 const configl = @import("config.zig");
-const nnuel = @import("nnue.zig");
 
 const e_piece = typel.e_piece;
 const e_pieceType = typel.e_pieceType;
@@ -144,7 +143,6 @@ pub const boardFrame = struct {
     halfMoveClock: u8 = 0,
     stat: boardStatusl.status = .{},
     psqtEval: scoreType = 0,
-    nnueAccumul: nnuel.accumulatorPair = .{},
     pub inline fn copy(state: *const boardState) boardFrame {
         return state.frame;
     }

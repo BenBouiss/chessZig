@@ -1042,6 +1042,7 @@ pub fn engineInfoListener(engine: *engine_info, engineIndex: usize, output: *inp
         //std.debug.print("[DEBUG] readingThread.gui (#{d}): found {d} bytes, message: '{s}'\n", .{ engineIndex, n, msg });
         output.putCmd(msg);
     }
+    engine.alive = false;
 
     //std.debug.print("[DEBUG] readingThread.gui (#{d}): exiting \n", .{engineIndex});
 }
@@ -1420,6 +1421,12 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
         const engIdx = match.playerToMove().engineUsed;
         const inp = inputs[engIdx];
         itr += 1;
+        if (!match.engineToMove(&ctx.engineInventory).alive) {
+            //
+            std.debug.print("current engine is down \n", .{});
+            chessl.print_boardstate(&match.chessState);
+            break;
+        }
 
         while (inp.nonEmpty()) {
             const cmd = inp.readBuffer();

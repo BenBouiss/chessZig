@@ -43,9 +43,9 @@ pub const TT_strat = enum { ALWAYS_REPLACE, KEEP_DEEPER };
 pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
 pub const OLD_THRESHOLD = 2;
 
-pub const USE_NNUE = true;
-//pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
-pub const NET_PATH = "extern/simple_1024_load100_cosine-120/quantised.bin";
+pub const USE_NNUE = false;
+pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
+//pub const NET_PATH = "extern/simple_1024_load100_cosine-120/quantised.bin";
 //pub const NET_PATH = "extern/simple_1024_retrained-120/quantised.bin";
 
 // scheduler options

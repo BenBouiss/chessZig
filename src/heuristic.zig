@@ -54,13 +54,11 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
     return computeTaperedV(ret, phase) + p_state.frame.psqtEval;
 }
 
-pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool) scoreType {
+pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool, nnuePair: *const nnuel.accumulatorPair) scoreType {
     if (comptime configl.USE_NNUE) {
-        const eval = nnuel.evaluate(white, &p_state.frame.nnueAccumul);
-        return @divFloor(eval * (200 - p_state.frame.halfMoveClock), 200);
+        return nnuel.evaluate(white, nnuePair);
     } else {
-        const eval = evaluate(p_state);
-        const ret: scoreType = @divFloor(eval * (200 - p_state.frame.halfMoveClock), 200);
+        const ret = evaluate(p_state);
         return if (white) ret else -ret;
     }
 }
@@ -106,7 +104,7 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     };
     if (configl.USE_NNUE) {
         // always from white perspective?
-        const acc = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
+        const acc = nnuel.computeAccPair(&nnuel.nnueNet, p_state);
         ret.nnueW = nnuel.evaluate(true, &acc);
         ret.nnueB = nnuel.evaluate(false, &acc);
     }
@@ -321,8 +319,7 @@ pub fn materialImbalance(p_state: *const boardl.boardState) scoreType {
 }
 pub inline fn c_materialImbalance(p_state: *const boardl.boardState, white: bool) scoreType {
     const ret = materialImbalance(p_state);
-    if (white) return ret;
-    return -ret;
+    return if (white) ret else -ret;
 }
 
 pub fn getMaskFromBB(bb: u64) [chess.N_SQUARES]scoreType {
@@ -413,6 +410,7 @@ pub fn computePhase(p_board: *const boardl.boardState) scoreType {
     return @divFloor(256 * (24 - _phase) + 12, 24);
 }
 pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
+    // TODO: change someday
     if (true) {
         return true;
     }
@@ -423,7 +421,8 @@ pub fn isBoardTexelValid(p_board: *boardl.boardState) bool {
     }
 
     //const color_mask: scoreType = if (p_board.whiteToMove()) 1 else -1;
-    const stat = c_evaluate(p_board, p_board.whiteToMove());
+    const acc = nnuel.computeAccPair(&nnuel.nnueNet, &p_board);
+    const stat = c_evaluate(p_board, p_board.whiteToMove(), &acc);
     var info: threadingl.threadInfo = .{ .alive = true };
 
     const alpha: scoreType = -weightl.simpleCheckMateScore;
@@ -465,8 +464,8 @@ pub const texelEntry = struct {
             @panic("");
         };
 
-        board.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, &board);
-        p_self.eval = c_evaluate(&board, true);
+        const acc = nnuel.computeAccPair(&nnuel.nnueNet, &board);
+        p_self.eval = c_evaluate(&board, true, &acc);
         p_self.phase = board.getPhase();
         p_self.turn = board.whiteToMove();
         p_self.valid = isBoardTexelValid(&board);

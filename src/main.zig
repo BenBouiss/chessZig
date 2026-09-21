@@ -56,13 +56,13 @@ pub fn t() !void {
 pub fn main(init: std.process.Init) anyerror!void {
     GLOBAL_CTX.setInit(init);
     const GPA = init.gpa;
-    _ = GPA;
-    try t();
+    //_ = GPA;
+    //try t();
     //hashl.zobristKeys.print();
     //try moveGenl.main();
 
     //try bookl.main(GPA);
-    //try chessl.main(GPA);
+    try chessl.main(GPA);
     //try logl.main(GPA);
     //try nnuel.main(GPA);
     //try heuristicl.main(GPA);

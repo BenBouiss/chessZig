@@ -1473,11 +1473,12 @@ pub inline fn initAll(verbose: bool) void {
     magicl._initMagic(&magicl.magicTable, verbose);
 }
 pub fn test_safe() !void {
-    for (0..64) |i| {
-        const sq: e_square = @enumFromInt(i);
-        std.debug.print("{} \n", .{sq});
-        print_bitboard(safetyArea(sq));
-    }
+    //for (0..64) |i| {
+    //    const sq: e_square = @enumFromInt(i);
+    //    std.debug.print("{} \n", .{sq});
+    //    print_bitboard(safetyArea(sq));
+    //}
+    print_bitboard(safetyArea(.c3));
 }
 
 pub fn main(alloc: std.mem.Allocator) !void {

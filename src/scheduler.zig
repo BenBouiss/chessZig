@@ -76,23 +76,7 @@ pub const timeManager = struct {
         p_self.stopWatch.reset();
     }
 };
-pub fn outOfTime(p_info: *threadingl.threadInfo) bool {
-    if (!p_info.alive) return true;
-    p_info.checkTime += 1;
-    if (p_info.checkTime == 1024) {
-        p_info.checkTime = 0;
-        return outOfTime_t(p_info);
-    }
-    return false;
-}
 
-pub fn outOfTime_t(p_info: *threadingl.threadInfo) bool {
-    if (p_info.stopWatch.timeSinceStartMs() >= p_info.criticalTimeMs) {
-        p_info.alive = false;
-        return true;
-    }
-    return false;
-}
 pub const timeInfo = struct {
     timeMs: i64 = std.math.maxInt(i64),
     incMs: i64 = 0,
@@ -188,6 +172,11 @@ pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo,
     for (0..fmoves.len) |i| {
         threadD.rootMoves[i] = .{ .move = fmoves.moves[i], .nodes = 0 };
     }
+    threadD.nnueStack.len = 1;
+    if (comptime configl.USE_NNUE) {
+        //p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
+        threadD.nnueStack.items[0] = nnuel.computeAccPair(&nnuel.nnueNet, p_state);
+    }
     const depth = aspirationWindow(&tm, p_state, p_info, features, maxDepth, &threadD);
     p_info.depth = depth;
     return depth;
@@ -195,9 +184,7 @@ pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo,
 
 pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *threadingl.threadInfo, features: searchFeatures, maxDepth: depthT, threadD: *alphaBetal.threadData) depthT {
     var depth: depthT = if (features.useStaticSearch) maxDepth else 1;
-    if (comptime configl.USE_NNUE) {
-        p_state.frame.nnueAccumul = nnuel.computeAccPair(&nnuel.nnueNet.net, p_state);
-    }
+
     var ss: alphaBetal.searchStack = .{};
     var alpha = -weightl.simpleCheckMateScore;
     var beta = weightl.simpleCheckMateScore;
@@ -207,13 +194,16 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
     var validDecision: IMove = p_info.currentBest.move;
     var samePrevBestMove: scoreType = 0;
     var prevBest: IMove = .{};
+    var innerLoopRep: usize = 0;
 
     while (p_info.alive and canExtendSearch(tm, depth, maxDepth, score, &features)) {
         depth += 1;
         var _depth = depth;
         score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta, threadD);
+        innerLoopRep = 0;
 
         while (p_info.alive and (score <= alpha or score >= beta)) {
+            innerLoopRep += 1;
             if (score <= alpha) {
                 beta = @divFloor(alpha + beta, 2);
                 alpha -= delta;
@@ -240,7 +230,7 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
         }
         //threadD.printRooMoves();
         if (features.reportProgress) {
-            sendPartial(p_info, tm.timeSinceStartMs(), depth);
+            sendPartial(p_info, tm.timeSinceStartMs(), depth, innerLoopRep);
         }
         if (depth > weightl.aspirationMinDepthVar) {
             //alpha = score - delta;
@@ -258,17 +248,20 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
 
 //https://www.chessprogramming.org/Time_Management
 pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depthT, score: scoreType, p_features: *const searchFeatures) bool {
-    if ((p_features.fixedDepth and depth == maxDepth) or (depth >= (typel.MAX_PLY - 2)) or chessl.isMate(score)) {
+    if ((p_features.fixedDepth and depth == maxDepth) or (depth >= typel.MAX_PLY) or chessl.isMate(score)) {
         return false;
     }
     return ((timer.timeSinceStartMs() * weightl.schedulerGrowthEstim) < timer.softTimeLimit);
 }
 
-pub fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64, depth: depthT) void {
-    var msgBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
+pub fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64, depth: depthT, innerLoop: usize) void {
+    var msgBuffer: [2 * configl.MAX_USER_INPUT]u8 = undefined;
     const nNodes: i64 = @intCast(p_info.searchStat.n_nodeExplored);
     const nps = @divFloor(nNodes * 1000, (1 + timeSinceStartMs));
-    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} score cp {d} nodes {d} nps {d} currmove {s} pv {f}\n", .{ depth, p_info.seldepth, p_info.currentBest.scoring, nNodes, nps, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch unreachable;
+
+    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} loop {d} score cp {d} nodes {d} nps {d} currmove {s} pv {f}\n", .{ depth, p_info.seldepth, innerLoop, p_info.currentBest.scoring, nNodes, nps, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch {
+        @panic("hehehehe");
+    };
     respondNoEng(utilsl.trimStr(final_info)) catch unreachable;
 }
 

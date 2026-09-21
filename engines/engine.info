@@ -1,15 +1,19 @@
 [engine1]
-path="engines/bin/engine_15_09_26";
+path="engines/bin/engine_18_09_26";
 name="current";
+//path="engines/bin/engine_19_09_26_S";
+//name="1";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_18_09_26";
-name="current + twk";
+path="engines/bin/engine_21_09_26";
+name="current + twk + max ply 255";
+//path="engines/bin/engine_19_09_26_S";
+//name="2";
 "setoption name reportProgress value false";
 
 [match]
-nMatch=1024;
+nMatch=4096;
 nThreads=4;
 playerSwitch=true;
 debugMode=false;

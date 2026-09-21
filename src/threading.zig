@@ -108,7 +108,7 @@ pub const threadPool = struct {
     schel: *schedulerl.scheduler = undefined,
 
     computedPlies: i64 = 0,
-    nPlyCompute: usize = 0,
+    nPlyCompute: u64 = 0,
 
     pub fn isRunning(p_self: *threadPool) bool {
         p_self.lock.acquireLock();

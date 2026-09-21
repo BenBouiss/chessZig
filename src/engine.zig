@@ -10,7 +10,6 @@ const heuristicl = @import("heuristic.zig");
 const schedulerl = @import("scheduler.zig");
 const perftl = @import("perft.zig");
 const historyl = @import("history.zig");
-const nnuel = @import("nnue.zig");
 const weightl = @import("weights.zig");
 const ucil = @import("uci.zig");
 const typel = @import("type.zig");
@@ -545,9 +544,6 @@ pub const engine = struct {
         try p_self.initOptions();
         magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
         p_self.refreshInternals();
-        if (!nnuel.nnueNet.inited and comptime configl.USE_NNUE) {
-            nnuel.nnueNet = try .init(p_self.alloc, configl.NET_PATH);
-        }
     }
     pub fn refreshInternals(p_self: *engine) void {
         historyl._initMoveOrdering();
