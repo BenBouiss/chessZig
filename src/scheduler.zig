@@ -157,13 +157,8 @@ pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo,
     p_info.checkTime = 0;
     historyl.nodeCount = std.mem.zeroes([64][64]u64);
 
-    //tm.originalSoftTimeLim = @divFloor(@divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(3 * tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV), 2);
-    //tm.softTimeLimit = tm.originalSoftTimeLim;
-    //p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
-
-    //p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
-    p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(3 * tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
-    tm.originalSoftTimeLim = @divFloor(p_info.criticalTimeMs, 2);
+    p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
+    tm.originalSoftTimeLim = @divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(3 * tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
     tm.softTimeLimit = tm.originalSoftTimeLim;
 
     hashl.hashTable.nextGeneration();

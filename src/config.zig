@@ -47,16 +47,14 @@ pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 // scheduler options
 // maximum allocated time in fraction of the remaining time
 //pub const SCHEDULER_MAX_TIME_DIV = 20;
-pub const SCHEDULER_MAX_TIME_DIV = 3;
+pub const SCHEDULER_MAX_TIME_DIV = 20;
 pub const SCHEDULER_MAX_TIME_INC_DIV = 5;
-pub const SCHEDULER_CRITICAL_TIME_DIV = 3;
+pub const SCHEDULER_CRITICAL_TIME_DIV = 2;
 
 // hashTable constants
 pub const ITEM_PER_BUCKET = 3;
 
-pub const INFO_TICKRATE = 1; // 1 ticks/second
-
-pub const INFO_TICKRATE_NS = INFO_TICKRATE * 1_000_000_000;
+pub const INFO_TICKRATE_NS = 1_000_000_000;
 pub const WAIT_TICKRATE_NS = 500_000;
 
 // Tuner settings
