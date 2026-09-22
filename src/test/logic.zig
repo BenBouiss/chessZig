@@ -57,25 +57,25 @@ test "SEE" {
 }
 
 const testcases = [_][]const u8{
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
-    " rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR  w HAha - 0 0 ",
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR   w   HAha - 0  0  ",
-    "   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1 ",
+    " rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1 ",
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR  w HAha - 0 1 ",
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR   w   HAha - 0  1  ",
+    "   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1 ",
 };
 
 test "generator" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-
     var tokens = utilsl.split(u8, arena, chessl.DEFAULT_FEN, ' ') catch unreachable;
+
     defer tokens.deinit(arena);
     for (0..testcases.len) |i| {
         const vers = testcases[i];
         var gen = utilsl.splitGenerator(u8).init(vers, ' ');
-        var j: usize = 0;
         try std.testing.expectEqual(tokens.items.len, gen.len());
+        var j: usize = 0;
         while (gen.next()) |tok| : (j += 1) {
             try std.testing.expect(utilsl.equal(u8, tokens.items[j], tok));
         }

@@ -1109,6 +1109,7 @@ const poolCtx = struct {
         const stnm: usize = @intFromEnum(chessl.boolTo_e_color(!w));
         switch (m.status) {
             .Continue, .Error, .Dnf => {
+                std.debug.print("err match {d} {}\n", .{ matchId, m.status });
                 return;
             },
             .CheckMate => {
@@ -1411,10 +1412,8 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
     match.positionUpdated = true;
     match.resetTimes();
 
-    //var roundTimer: timel.stopWatch = .init(true);
     var turnTimer: timel.stopWatch = .init(true);
-    //const heartBeatNS: i64 = 10_000;
-    var inactivityMs: i64 = 2_000;
+    var inactivityMs: i64 = @divFloor(setting.timeF.time, 2);
     var itr: usize = 0;
     while (ctx.alive and !roundOver and !ctx.pool.blockNewSubmit) {
         std.atomic.spinLoopHint();
@@ -1438,14 +1437,13 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
             if (turnTimer.timeSinceStartMs() > inactivityMs) {
                 std.debug.print("[WARNING] inactivity? {d} ms thresh {d} ms \n", .{ turnTimer.timeSinceStartMs(), inactivityMs });
                 match.printTimes(turnTimer);
-                inactivityMs += (inactivityMs + 1000);
+                inactivityMs += inactivityMs;
             }
 
             if (match.isCurrentlyFlagged(turnTimer)) {
                 const eng = match.engineToMove(&ctx.engineInventory);
                 try eng.sendInterruptWait(inp);
                 match.status = .Flagged;
-                positionOver = true;
                 match.positionUpdated = true;
             }
         }
@@ -1453,7 +1451,9 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
         if (match.positionUpdated) {
             match.positionUpdated = false;
             const fmoves = moveGenl.generateLegalMoves(&match.chessState);
-            if (fmoves.len == 0) {
+            if (match.status == .Flagged) {
+                positionOver = true;
+            } else if (fmoves.len == 0) {
                 if (match.chessState.isChecked()) {
                     match.status = .CheckMate;
                 } else {
@@ -1482,6 +1482,7 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
                     match.chessState = originalState.copy();
                     match.resetTimes();
                     match.positionUpdated = true;
+                    match.status = .Continue;
                 } else {
                     roundOver = true;
                 }

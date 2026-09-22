@@ -39,10 +39,6 @@ pub const DEFAULT_ELO = 0;
 pub const MIN_ELO = 0;
 pub const MAX_ELO = 0;
 
-pub const TT_strat = enum { ALWAYS_REPLACE, KEEP_DEEPER };
-pub const DEFAULT_TT_STRAT: TT_strat = .KEEP_DEEPER;
-pub const OLD_THRESHOLD = 2;
-
 pub const USE_NNUE = false;
 pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 //pub const NET_PATH = "extern/simple_1024_load100_cosine-120/quantised.bin";
@@ -50,8 +46,9 @@ pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
-pub const SCHEDULER_MAX_TIME_DIV = 20;
-pub const SCHEDULER_MAX_TIME_INC_DIV = 2;
+//pub const SCHEDULER_MAX_TIME_DIV = 20;
+pub const SCHEDULER_MAX_TIME_DIV = 3;
+pub const SCHEDULER_MAX_TIME_INC_DIV = 5;
 pub const SCHEDULER_CRITICAL_TIME_DIV = 3;
 
 // hashTable constants

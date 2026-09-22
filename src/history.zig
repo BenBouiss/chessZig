@@ -17,6 +17,7 @@ const e_square = typel.e_square;
 // indexes: sideToMove, piece, fromSq, toSq
 // https://www.chessprogramming.org/History_Heuristic#Update
 pub var historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]scoreType);
+pub var nodeCount: [64][64]u64 = std.mem.zeroes([64][64]u64);
 
 // https://www.chessprogramming.org/History_Heuristic#Continuation_History
 // combination of couter move heuristic and follow up history. Works via pair of move using the following index template:
@@ -29,7 +30,6 @@ pub var pawnCorrHist: [2][16384]scoreType = std.mem.zeroes([2][16384]scoreType);
 pub var nonPawnCorrHist: [2][2][16384]scoreType = std.mem.zeroes([2][2][16384]scoreType);
 
 pub var lmrBase: [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType);
-//pub var lmrBase: [chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([chessl.MAX_POSSIBLE_MOVE]scoreType);
 
 pub var continuationHeuristic: [13][64]pieceHistory = std.mem.zeroes([13][64]pieceHistory);
 // fPiece cPiece toSq
@@ -48,17 +48,9 @@ pub fn _initMoveOrdering() void {
     // https://int0x80.ca/posts/chess-engines/8-pvs
     for (1..typel.MAX_PLY) |d| {
         for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
-            //const s: f32 = 0.77 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2.36);
-            //const s: f32 = 0.77 + (std.math.log(f32, 10, @floatFromInt(d)) * std.math.log(f32, 10, @floatFromInt(i + 1)) / 2.36);
-            //std.debug.print("{d}\n", .{s});
-
             // patricia version
             const s: f32 = 1024 * (0.4 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2));
             lmrBase[d][i] = @as(scoreType, @intFromFloat(s));
-
-            //const s: f32 = (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2);
-            //lmrBase[d][i] = @as(scoreType, @intCast(@divFloor(d, 4))) + @as(scoreType, @intFromFloat(s));
-            //lmrBase[d][i] = @as(scoreType, @intCast(@divFloor(d * 1024, 3))) + (weightl.lmr_oldMulti * @as(scoreType, @intCast(std.math.log(usize, 10, @intCast(i + 1)))));
         }
     }
     //

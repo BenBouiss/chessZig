@@ -16,11 +16,11 @@ test "entry retrievale" {
     for (0..50) |i| {
         const code1: u64 = @intCast(i);
         const entry = hashl.buildEntryFromMatchResult(code1, 1, @intCast(2 * i), 0);
-        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code1, .KEEP_DEEPER));
+        try std.testing.expect(hashl.hashTable.storeEntry(entry, code1));
 
         const code2 = @as(u64, @intCast(i)) + m;
         const entry2 = hashl.buildEntryFromMatchResult(code2, 2, @intCast(3 * i), 0);
-        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry2, code2, .KEEP_DEEPER));
+        try std.testing.expect(hashl.hashTable.storeEntry(entry2, code2));
     }
     for (0..50) |i| {
         const entry = hashl.getEntryFromMatch(@intCast(i), 1);
@@ -50,14 +50,14 @@ test "entry overwrite" {
 
     for (0..100) |i| {
         const entry = hashl.buildEntryFromMatchResult(code, @intCast(i), @intCast(i), 0);
-        try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
+        try std.testing.expect(hashl.hashTable.storeEntry(entry, code));
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
     try std.testing.expectEqual(1, bucket.len());
 
     const entry = hashl.buildEntryFromMatchResult(code + m, 0, 200, 0);
-    try std.testing.expect(hashl.hashTable.storeEntry_cst(entry, code + m, .KEEP_DEEPER));
+    try std.testing.expect(hashl.hashTable.storeEntry(entry, code + m));
 
     try std.testing.expectEqual(2, bucket.len());
 
@@ -75,7 +75,7 @@ test "entry replacement" {
     const code: u64 = 42;
     for (0..d.len) |i| {
         const entry = hashl.buildEntryFromMatchResult(code, 1, d[i], 0);
-        std.debug.assert(hashl.hashTable.storeEntry_cst(entry, code, .KEEP_DEEPER));
+        std.debug.assert(hashl.hashTable.storeEntry(entry, code));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
     try std.testing.expectEqual(1, _bucket.len());

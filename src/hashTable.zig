@@ -11,7 +11,6 @@ const build_options = @import("build_options");
 const e_piece = typel.e_piece;
 const scoreType = typel.scoreType;
 const depthT = typel.depthT;
-const TT_strat = configl.TT_strat;
 
 pub const Key: type = u64;
 //pub const Key = struct {
@@ -21,6 +20,7 @@ pub const Key: type = u64;
 // note: the gain in space is not visible in the debug build
 // will try to implement the chess programming version where way more stuff is stored
 
+const OLD_THRESHOLD = 2;
 pub const zobristKeys: Zobrist_Keys = .{
     .pieceKeys = [12][64]Key{
         [64]Key{ 0xd0764d4f4476689f, 0x519e4174576f3791, 0xfbe07cfb0c24ed8c, 0xb37d9f600cd835b8, 0xcb231c3874846a73, 0x968d9f004e50de7d, 0x201718ff221a3556, 0x9ae94e070ed8cb46, 0x352cf3daf095ccc7, 0xeeefd63219b4a0d4, 0x8f3dfa98020e7942, 0xd99b8e00792f360d, 0xae14e77054359b98, 0x11ccbfbb36590dbd, 0x672fcfd4efd0e0bd, 0x8bc6e858d0501168, 0x367abb657f468b2e, 0xce254eaf1b0177e, 0x939e7abb81f5d5fc, 0x7784cb89e2481d7b, 0x296566311008aaa4, 0xdcda5b94829765e3, 0xa70de5b169e02435, 0x8686e981e604aa1c, 0xd0dafde236ba2593, 0x24896b7216d2d83c, 0x6d172ed3e81a7e8c, 0xf2eda4bfdf254cbb, 0x85ff42c6c6703f37, 0xdf321e3788bd2ceb, 0x15a0b07d583a481f, 0xa318445d13be8320, 0xb829333a229d7a38, 0x4775fb7db9c64a04, 0xfbf66cab58c5ce18, 0xb726234444b3460f, 0xc9eae0817bec39d6, 0x680386963ebb4053, 0x89eb358fd9821a96, 0xcca7e752da48d83d, 0xda7120595706973d, 0x2b5d999ce90ca71e, 0x77a22c4f769f4fdf, 0x977a0e80f0435870, 0xc3657ed88978d97, 0x6a22c726e186d3a2, 0xa4dee725ea8ec0a8, 0x94220f4a76070359, 0xc1ad5450730123f8, 0x3dfc82c5e51ecd63, 0xbe6d5f7cba543f17, 0x7d650780ce30aa72, 0x7405e883d0b9af7b, 0xcf43ed6994a6d3b3, 0xa062272dbbd8cd61, 0x2d058c37aeff1a86, 0xbccf20f4077763ad, 0x2ef7bb1d431319c6, 0xa6d8f28a297ebba4, 0xf77d1b5e9830d8b, 0xa78f9c5a19171faa, 0xf774ba509e10d54b, 0xd7f2b08901a4d152, 0xf648960c3bbe8add },
@@ -174,18 +174,7 @@ pub const Hash_bucket = struct {
         }
         return ret;
     }
-    pub fn addEntry(p_self: *Hash_bucket, entry: Hash_entry, comptime strategy: TT_strat) bool {
-        switch (strategy) {
-            .ALWAYS_REPLACE => {
-                return p_self.addEntry_AR(entry);
-            },
-            .KEEP_DEEPER => {
-                return p_self.addEntry_deep(entry);
-            },
-        }
-    }
-
-    pub fn addEntry_deep(p_self: *Hash_bucket, n_entry: Hash_entry) bool {
+    pub fn addEntry(p_self: *Hash_bucket, n_entry: Hash_entry) bool {
         var idxS: usize = 0;
         var sDepth: u8 = 255;
         const reqDepth = n_entry._depth;
@@ -194,7 +183,7 @@ pub const Hash_bucket = struct {
         for (0..configl.ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             const currDepth = entry._depth;
-            if (!entry.valid() or (entry.age() + configl.OLD_THRESHOLD) < a) {
+            if (!entry.valid() or (entry.age() + OLD_THRESHOLD) < a) {
                 p_self.entries[i] = n_entry;
                 return true;
             }
@@ -213,14 +202,6 @@ pub const Hash_bucket = struct {
         }
 
         p_self.entries[idxS] = n_entry;
-        return true;
-    }
-
-    pub fn addEntry_AR(p_self: *Hash_bucket, entry: Hash_entry) bool {
-        _ = p_self;
-        _ = entry;
-        //p_self.entries[p_self.len] = entry;
-        //p_self.len = (p_self.len + 1) % configl.ITEM_PER_BUCKET;
         return true;
     }
 
@@ -345,14 +326,6 @@ pub const Hash_table = struct {
             }
         }
     }
-    pub fn storeEntry_cst(p_self: *Hash_table, p_entry: Hash_entry, key: u64, comptime strategy: TT_strat) bool {
-        var p_bucket = p_self.getBucketFromFullHashIndex(key);
-        const stat = p_bucket.addEntry(p_entry, strategy);
-        if (stat) {
-            p_self.stat.insertion += 1;
-        }
-        return true;
-    }
 
     pub fn probeMatch(p_self: *Hash_table, key: u64, p_state: *const boardl.boardState, nNodes: scoreType) probeResult {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
@@ -361,12 +334,13 @@ pub const Hash_table = struct {
     }
     pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64) bool {
         var p_bucket = p_self.getBucketFromFullHashIndex(key);
-        const stat = p_bucket.addEntry(entry, configl.DEFAULT_TT_STRAT);
+        const stat = p_bucket.addEntry(entry);
         if (stat) {
             p_self.stat.insertion += 1;
         }
         return true;
     }
+
     pub fn countNonEmpty(p_self: *Hash_table) u64 {
         var ret: u64 = 0;
         for (0..p_self.size) |i| {

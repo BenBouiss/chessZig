@@ -73,11 +73,8 @@ const arr_piece_str = [_]u8{ 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', '
 pub const debug_err = error{ fenErr, earlyReturn, valueErr, memErr };
 
 pub fn strFromLERF(sq: e_square) [2]u8 {
-    var ret: [2]u8 = undefined;
     const sq_i: u8 = @intFromEnum(sq);
-    ret[0] = 'a' + sq_i % 8;
-    ret[1] = '1' + sq_i / 8;
-    return ret;
+    return [2]u8{ 'a' + sq_i % 8, '1' + sq_i / 8 };
 }
 
 pub fn stringToLERF(sq: *const [2]u8) e_square {
@@ -144,7 +141,7 @@ pub inline fn mate_in(depth: typel.depthT) scoreType {
     return weightl.simpleCheckMateScore - @as(scoreType, @intCast(depth));
 }
 pub inline fn mated_in(depth: typel.depthT) scoreType {
-    return -(mate_in(depth));
+    return -mate_in(depth);
 }
 pub inline fn isMate(score: scoreType) bool {
     return @abs(score) >= weightl.simpleCheckMateThreshold;

@@ -155,11 +155,16 @@ pub fn _startSearch(p_state: *boardl.boardState, p_info: *threadingl.threadInfo,
     p_info.depth = 0;
     p_info.seldepth = 0;
     p_info.checkTime = 0;
+    historyl.nodeCount = std.mem.zeroes([64][64]u64);
 
-    tm.originalSoftTimeLim = @divFloor(@divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(3 * tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV), 2);
+    //tm.originalSoftTimeLim = @divFloor(@divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(3 * tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV), 2);
+    //tm.softTimeLimit = tm.originalSoftTimeLim;
+    //p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
+
+    //p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
+    p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_MAX_TIME_DIV) + @divFloor(3 * tm.t.incMs, configl.SCHEDULER_MAX_TIME_INC_DIV);
+    tm.originalSoftTimeLim = @divFloor(p_info.criticalTimeMs, 2);
     tm.softTimeLimit = tm.originalSoftTimeLim;
-
-    p_info.criticalTimeMs = @divFloor(tm.t.timeMs, configl.SCHEDULER_CRITICAL_TIME_DIV);
 
     hashl.hashTable.nextGeneration();
 
@@ -228,6 +233,11 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
             prevBest = validDecision;
         }
         //threadD.printRooMoves();
+        const nratio: f64 = @as(f64, @floatFromInt(historyl.nodeCount[validDecision.getFrom()][validDecision.getTo()])) / @as(f64, @floatFromInt(p_info.searchStat.n_nodeExplored));
+        const lim = 1.5 - nratio;
+        tm.softTimeLimit = @intFromFloat(@as(f64, @floatFromInt(tm.originalSoftTimeLim)) * lim);
+        //std.debug.print("new soft time {d} from original time {d}\n", .{ tm.softTimeLimit, tm.originalSoftTimeLim });
+
         if (features.reportProgress) {
             sendPartial(p_info, tm.timeSinceStartMs(), depth, innerLoopRep);
         }

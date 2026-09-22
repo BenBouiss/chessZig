@@ -317,7 +317,6 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
     var currS = ss.getFrame(ply);
     const nextS = ss.getFrame(ply + 1);
     const prevSS = ss.getPrevFrame(ply, 1);
-    //const prevNode = p_info.searchStat.n_nodeExplored;
 
     const f: boardl.boardFrame = .copy(p_state);
     const hashMoveIsCapture = hashMove.isCapture();
@@ -579,6 +578,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
             }
         }
 
+        const prevNode = p_info.searchStat.n_nodeExplored;
         currS.playedMove = move;
         currS.pieceMoved = fPiece;
         p_state.makeMove(move);
@@ -640,9 +640,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
             threadD.nnueStack.pop();
         }
         //if (!p_info.alive) return bestScore;
-        //if (isRoot) {
-        //    threadD.findRootMove(move).nodes += p_info.searchStat.n_nodeExplored - prevNode;
-        //}
+        if (isRoot) {
+            //threadD.findRootMove(move).nodes += p_info.searchStat.n_nodeExplored - prevNode;
+            historyl.nodeCount[from][to] += p_info.searchStat.n_nodeExplored - prevNode;
+        }
+
         movesPlayed += 1;
         if (score > bestScore) {
             bestScore = score;
