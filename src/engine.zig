@@ -68,8 +68,15 @@ const optionInfo_str = struct {
         return utilsl.contains(self._var, value, .ignoreCase);
     }
 };
+const optionInfo_check = struct {
+    val: bool,
+    pub fn validateValue(self: optionInfo_check, value: []const u8) bool {
+        _ = self;
+        return utilsl.contains("false true", value, .ignoreCase);
+    }
+};
 
-pub const optionInfo = union { spin: optionInfo_spin, str: optionInfo_str };
+pub const optionInfo = union { spin: optionInfo_spin, str: optionInfo_str, check: optionInfo_check };
 
 pub const setOptionEntry = struct {
     name: []const u8 = undefined,
@@ -83,7 +90,7 @@ pub const setOptionEntry = struct {
         } else if (self.argType == .COMBO) {
             msg = try std.fmt.allocPrint(alloc, "option name {s} type combo default {s} var {s}", .{ self.name, self.info.str.default, self.info.str._var });
         } else if (self.argType == .CHECK) {
-            msg = try std.fmt.allocPrint(alloc, "option name {s} type check default {s} var {s}", .{ self.name, self.info.str.default, self.info.str._var });
+            msg = try std.fmt.allocPrint(alloc, "option name {s} type check default {} var false true", .{ self.name, self.info.check.val });
         } else if (self.argType == .BUTTON) {
             msg = try std.fmt.allocPrint(alloc, "option name {s} type button ", .{self.name});
         } else if (self.argType == .STRING) {
@@ -247,7 +254,7 @@ pub const engine = struct {
     pub fn initOptions(p_self: *engine) !void {
         try p_self.addOption(.{ .name = "threads", .optionType = .THREADS, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = 1, .max = configl.MAX_THREAD, .default = configl.DEFAULT_THREAD } } });
 
-        try p_self.addOption(.{ .name = "savelogs", .optionType = .SAVELOGS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = "false" } } });
+        try p_self.addOption(.{ .name = "savelogs", .optionType = .SAVELOGS, .argType = .CHECK, .info = optionInfo{ .check = optionInfo_check{ .val = false } } });
 
         try p_self.addOption(.{ .name = "logsPath", .optionType = .LOGSPATH, .argType = .STRING, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "engine.log" } } });
 
@@ -255,16 +262,16 @@ pub const engine = struct {
 
         try p_self.addOption(.{ .name = "UCI_Elo", .optionType = .UCI_ELO, .argType = .SPIN, .info = optionInfo{ .spin = optionInfo_spin{ .min = configl.MIN_ELO, .max = configl.MAX_ELO, .default = configl.DEFAULT_ELO } } });
 
-        try p_self.addOption(.{ .name = "fixedDepth", .optionType = .FIXED_DEPTH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_FIXED_DEPTH } } });
-        try p_self.addOption(.{ .name = "useStaticSearch", .optionType = .USESTATICSEARCH, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_STATIC_SEARCH } } });
+        try p_self.addOption(.{ .name = "fixedDepth", .optionType = .FIXED_DEPTH, .argType = .CHECK, .info = optionInfo{ .check = optionInfo_check{ .val = configl.DEFAULT_FIXED_DEPTH } } });
+        try p_self.addOption(.{ .name = "useStaticSearch", .optionType = .USESTATICSEARCH, .argType = .CHECK, .info = optionInfo{ .check = optionInfo_check{ .val = configl.DEFAULT_STATIC_SEARCH } } });
 
         try p_self.addOption(.{ .name = "clearHash", .optionType = .CLEAR_HASH, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
         try p_self.addOption(.{ .name = "printMetric", .optionType = .PRINT_METRIC, .argType = .BUTTON, .info = optionInfo{ .str = optionInfo_str{ ._var = "", .default = "" } } });
 
-        try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_TRACKMETRICS } } });
+        try p_self.addOption(.{ .name = "trackMetrics", .optionType = .TRACKMETRICS, .argType = .CHECK, .info = optionInfo{ .check = optionInfo_check{ .val = configl.DEFAULT_TRACKMETRICS } } });
 
-        try p_self.addOption(.{ .name = "reportProgress", .optionType = .REPORTPROG, .argType = .CHECK, .info = optionInfo{ .str = optionInfo_str{ ._var = "false true", .default = configl._DEFAULT_REPORTPROGRESS } } });
+        try p_self.addOption(.{ .name = "reportProgress", .optionType = .REPORTPROG, .argType = .CHECK, .info = optionInfo{ .check = optionInfo_check{ .val = configl.DEFAULT_REPORTPROGRESS } } });
         if (build_options.useTune) {
             try weightl.appendAll(p_self.alloc);
         }
@@ -766,7 +773,7 @@ pub fn getSpinValFromSetOptionCmd(tokens: *std.ArrayList([]const u8), entry: set
 
 pub fn getCheckValFromSetOptionCmd(tokens: *std.ArrayList([]const u8), entry: setOptionEntry) !bool {
     const s = try getValueSlice(tokens);
-    if (!entry.info.str.validateValue(s)) {
+    if (!entry.info.check.validateValue(s)) {
         return debug_err.valueErr;
     }
     return utilsl.contains(s, "true", .ignoreCase);

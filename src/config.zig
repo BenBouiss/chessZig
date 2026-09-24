@@ -15,15 +15,8 @@ pub const DEFAULT_THREAD = 1;
 pub const DEFAULT_HASHTABLE_SIZE = 16; // in MB
 
 pub const DEFAULT_TRACKMETRICS = true;
-pub const _DEFAULT_TRACKMETRICS = "true";
-
 pub const DEFAULT_REPORTPROGRESS = true;
-pub const _DEFAULT_REPORTPROGRESS = "true";
-
-pub const _DEFAULT_FIXED_DEPTH = "false";
 pub const DEFAULT_FIXED_DEPTH = false;
-
-pub const _DEFAULT_STATIC_SEARCH = "false";
 pub const DEFAULT_STATIC_SEARCH = false;
 
 //https://www.chessprogramming.org/Move_Ordering
@@ -40,9 +33,13 @@ pub const MIN_ELO = 0;
 pub const MAX_ELO = 0;
 
 pub const USE_NNUE = false;
-pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
+//pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 //pub const NET_PATH = "extern/simple_1024_load100_cosine-120/quantised.bin";
 //pub const NET_PATH = "extern/simple_1024_retrained-120/quantised.bin";
+//pub const NET_PATH = "extern/simple_128_hl_8_output_buckets-140/quantised.bin";
+//pub const NET_PATH = "extern/simple_128_hl_8_output_buckets-320/quantised.bin";
+//pub const NET_PATH = "extern/simple_1024_hl_8_output_buckets-110/quantised.bin";
+pub const NET_PATH = "extern/2_output_buckets-10/quantised.bin";
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
@@ -50,12 +47,6 @@ pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
 pub const SCHEDULER_MAX_TIME_DIV = 20;
 pub const SCHEDULER_MAX_TIME_INC_DIV = 5;
 pub const SCHEDULER_CRITICAL_TIME_DIV = 2;
-
-// hashTable constants
-pub const ITEM_PER_BUCKET = 3;
-
-pub const INFO_TICKRATE_NS = 1_000_000_000;
-pub const WAIT_TICKRATE_NS = 500_000;
 
 // Tuner settings
 pub const N_POSITIONS = 300000;

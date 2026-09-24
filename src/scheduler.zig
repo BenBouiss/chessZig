@@ -252,7 +252,7 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
 
 //https://www.chessprogramming.org/Time_Management
 pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depthT, score: scoreType, p_features: *const searchFeatures) bool {
-    if ((p_features.fixedDepth and depth == maxDepth) or (depth >= typel.MAX_PLY) or chessl.isMate(score)) {
+    if ((p_features.fixedDepth and depth == maxDepth) or (depth >= (typel.MAX_PLY - 1)) or chessl.isMate(score)) {
         return false;
     }
     return timer.timeSinceStartMs() < timer.softTimeLimit;

@@ -2,20 +2,12 @@ const std = @import("std");
 const chess = @import("chess.zig");
 const movel = @import("move.zig");
 const boardl = @import("board.zig");
-const configl = @import("config.zig");
 const typel = @import("type.zig");
-const weightl = @import("weights.zig");
 
-const build_options = @import("build_options");
-
-const e_piece = typel.e_piece;
 const scoreType = typel.scoreType;
 const depthT = typel.depthT;
 
 pub const Key: type = u64;
-//pub const Key = struct {
-//    code: u64 = 0,
-//};
 
 // note: the gain in space is not visible in the debug build
 // will try to implement the chess programming version where way more stuff is stored
@@ -50,6 +42,8 @@ pub const KEY_SHIFT = 64 - @bitSizeOf(subKeyType);
 pub inline fn keyToUpperKey(key: u64) subKeyType {
     return @intCast(key >> KEY_SHIFT);
 }
+// hashTable constants
+const ITEM_PER_BUCKET = 3;
 
 pub inline fn qualityHeuristic(entry: Hash_entry, nNodes: scoreType) scoreType {
     const diff = @mod(MAX_AGE + nNodes - @as(scoreType, @intCast(entry.age())), MAX_AGE);
@@ -158,7 +152,7 @@ pub const hashWriter = struct {
 };
 
 pub const Hash_bucket = struct {
-    entries: [configl.ITEM_PER_BUCKET]Hash_entry align(32) = @splat(.{}),
+    entries: [ITEM_PER_BUCKET]Hash_entry align(32) = @splat(.{}),
 
     pub fn printSize(p_self: *const Hash_bucket) void {
         std.debug.print("[DEBUG] printSize: hash bucket = {d} bytes\n", .{@sizeOf(Hash_bucket)});
@@ -169,7 +163,7 @@ pub const Hash_bucket = struct {
 
     pub fn len(self: Hash_bucket) u8 {
         var ret: u8 = 0;
-        for (0..configl.ITEM_PER_BUCKET) |i| {
+        for (0..ITEM_PER_BUCKET) |i| {
             ret += @intFromBool(self.entries[i].valid());
         }
         return ret;
@@ -180,7 +174,7 @@ pub const Hash_bucket = struct {
         const reqDepth = n_entry._depth;
         // if a better entry exists for this hash key we exit
         const a = n_entry.age();
-        for (0..configl.ITEM_PER_BUCKET) |i| {
+        for (0..ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             const currDepth = entry._depth;
             if (!entry.valid() or (entry.age() + OLD_THRESHOLD) < a) {
@@ -209,7 +203,7 @@ pub const Hash_bucket = struct {
         const _hash = keyToUpperKey(hash);
         var next: usize = 0;
         var worstQuality: scoreType = 0;
-        for (0..configl.ITEM_PER_BUCKET) |i| {
+        for (0..ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             // note: now that only one instance of the key gets stored, the highest depth is the first one to get hit
             if (entry.key == _hash and p_state.isMovePseudoLegal(entry.bestMove)) {
@@ -230,7 +224,7 @@ pub const Hash_bucket = struct {
     }
     pub fn getEntryMatch(p_self: *Hash_bucket, hash: u64, depth: u8) ?Hash_entry {
         const _hash = keyToUpperKey(hash);
-        for (0..configl.ITEM_PER_BUCKET) |i| {
+        for (0..ITEM_PER_BUCKET) |i| {
             const entry = p_self.entries[i];
             if (entry.key == _hash and entry._depth >= depth) {
                 hashTable.stat.hit += 1;
@@ -263,7 +257,7 @@ pub const Hash_table = struct {
         ret.MBsize = MBsize;
 
         var total_size: u64 = @intCast(MBsize * 1024 * 1024);
-        total_size = @divFloor(total_size, @sizeOf(Hash_entry) * configl.ITEM_PER_BUCKET);
+        total_size = @divFloor(total_size, @sizeOf(Hash_entry) * ITEM_PER_BUCKET);
 
         ret.closestBit = chess.l_getMsbIdx(total_size) - 1;
         ret.size = chess.xToBitboard(ret.closestBit);
@@ -274,7 +268,7 @@ pub const Hash_table = struct {
         ret.initialized = true;
 
         if (verbose) {
-            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Total allocated size {d} bytes for {d} entries\n", .{ ret.size, ret.closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, ret.size * configl.ITEM_PER_BUCKET * @sizeOf(Hash_entry), ret.size * configl.ITEM_PER_BUCKET });
+            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Total allocated size {d} bytes for {d} entries\n", .{ ret.size, ret.closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, ret.size * ITEM_PER_BUCKET * @sizeOf(Hash_entry), ret.size * ITEM_PER_BUCKET });
             ret.getBucket(0).printSize();
         }
         return ret;
@@ -319,7 +313,7 @@ pub const Hash_table = struct {
     pub fn overwriteEvaluationEntries(p_self: *Hash_table, p_entry: *Hash_entry, eval: scoreType) void {
         const index = p_entry.key;
         var p_bucket = p_self.getBucketFromFullHashIndex(index);
-        for (0..configl.ITEM_PER_BUCKET) |i| {
+        for (0..ITEM_PER_BUCKET) |i| {
             var ent = &p_bucket.entries[i];
             if (ent.key == p_entry.key) {
                 ent.staticEval = eval;
@@ -361,7 +355,7 @@ pub const Hash_table = struct {
         for (0..p_self.size) |i| {
             const e = p_self.getBucket(@intCast(i));
             ret = @max(ret, e.len());
-            if (ret == configl.ITEM_PER_BUCKET) {
+            if (ret == ITEM_PER_BUCKET) {
                 break;
             }
         }
@@ -506,7 +500,7 @@ pub fn printTTStats() void {
     std.log.info("TT: {d:.2}% of buckets used, non empty {d} total {} buckets", .{ frac, n, hashTable.size });
 
     const nvalid = hashTable.countValids();
-    const frac2: f64 = @as(f64, @floatFromInt(nvalid)) / @as(f64, @floatFromInt(hashTable.entries.len * configl.ITEM_PER_BUCKET)) * 100;
+    const frac2: f64 = @as(f64, @floatFromInt(nvalid)) / @as(f64, @floatFromInt(hashTable.entries.len * ITEM_PER_BUCKET)) * 100;
     std.log.info("TT: total utilization {d:.2}%", .{frac2});
 
     const util = hashTable.getMostUtilized();

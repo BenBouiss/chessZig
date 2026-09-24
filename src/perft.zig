@@ -67,7 +67,7 @@ pub fn waitThreadFinish(p_engine: *engine, p_threadPack: *threadPackageArray, co
     var sw: timel.stopWatch = .init(true);
     var endCounter: usize = 0;
     while (!p_engine.scheduler.interrupt and endCounter != p_engine.options.nThreads) {
-        try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.INFO_TICKRATE_NS) }, .real);
+        try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = 1_000_000_000 }, .real);
         const res = threadingl.getCombinedFromPack(p_threadPack);
         const msg = std.fmt.allocPrint(p_engine.alloc, "info nps: {d} nodes {d} retrieved: {d} stored: {d}", .{ @divFloor(res.searchStat.n_nodeExplored, @as(u64, @intCast(sw.timeSinceStartMs() + 1))) * 1000, res.searchStat.n_nodeExplored, res.searchStat.n_hashRetrieve, hashl.hashTable.stat.insertion }) catch {
             continue;

@@ -56,7 +56,8 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
 pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool, nnuePair: *const nnuel.accumulatorPair) scoreType {
     if (comptime configl.USE_NNUE) {
-        return nnuel.evaluate(white, nnuePair);
+        const i = nnuel.bucketIdx(p_state.occupiedBB());
+        return nnuel.evaluate(i, white, nnuePair);
     } else {
         const ret = evaluate(p_state);
         return if (white) ret else -ret;
@@ -105,8 +106,9 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     if (configl.USE_NNUE) {
         // always from white perspective?
         const acc = nnuel.computeAccPair(&nnuel.nnueNet, p_state);
-        ret.nnueW = nnuel.evaluate(true, &acc);
-        ret.nnueB = nnuel.evaluate(false, &acc);
+        const i = nnuel.bucketIdx(p_state.occupiedBB());
+        ret.nnueW = nnuel.evaluate(i, true, &acc);
+        ret.nnueB = nnuel.evaluate(i, false, &acc);
     }
     return ret;
 }

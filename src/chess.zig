@@ -254,7 +254,7 @@ pub inline fn getStrFromPieceCapital(piece: e_piece) u8 {
 }
 
 pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
-    var ret: boardl.boardState = .init();
+    var ret: boardl.boardState = .{};
     var offset: i8 = 0;
     var board_offset = N_SQUARES - 8;
     var commitedRowSize: u8 = 0;

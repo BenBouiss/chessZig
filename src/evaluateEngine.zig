@@ -389,7 +389,7 @@ const engine_info = struct {
                     return;
                 }
             }
-            try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @intCast(configl.WAIT_TICKRATE_NS) }, .awake);
+            try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = 500_000 }, .awake);
         }
     }
     pub fn sendInterrupt(p_self: *engine_info) !void {

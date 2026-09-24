@@ -30,12 +30,6 @@ pub const board = struct {
     turnCount: u16 = 1,
     _whiteToMove: bool = false,
 
-    pub fn init() board {
-        var ret: board = .{};
-        @memset(&ret.pieceArray, e_piece.nEmptySquare);
-        return ret;
-    }
-
     pub inline fn occupiedBB(self: board) u64 {
         return self.c_occupiedBB[0] | self.c_occupiedBB[1];
     }
@@ -152,9 +146,7 @@ pub const boardState = struct {
     b: board = .{},
     frame: boardFrame = .{},
     moveHistory: movel.matchMoveContainer = .{},
-    pub fn init() boardState {
-        return .{ .b = .init() };
-    }
+
     pub inline fn copy(p_self: *const boardState) boardState {
         return p_self.*;
     }
@@ -858,7 +850,6 @@ pub const boardState = struct {
         return chessl.popcount(self.b.c_occupiedBB[@intFromEnum(color)]);
     }
     pub fn legal(self: *const boardState, move: IMove) bool {
-        //
         const white = self.whiteToMove();
         const from = move.getFrom();
         const to = move.getTo();
@@ -893,32 +884,24 @@ pub const boardState = struct {
         return (chessl.slider_getAllAttackerFromSq(self, occ ^ chessl.xToBitboard(from) ^ chessl.xToBitboard(to), white, kingSq) & ~chessl.xToBitboard(to)) == 0;
     }
     pub fn isLegal(p_self: *const boardState, white: bool) bool {
-        // faster than previous _islegal going from ~100-150k nodes/s to 250-300k nodes per sec
+        // slow only used for print purposes
         const king_attacks = chessl.getAllAttackerFromSq(p_self, p_self.b.occupiedBB(), white, p_self.getKingSq(white));
         return king_attacks == 0;
     }
     pub inline fn isChecked(p_self: *const boardState) bool {
         return p_self.frame.checkersBB != 0;
     }
-    //pub inline fn isInsufficientMaterial(p_self: *const boardState) bool {
-    //    return p_self.isInsufficientMaterialSide(false) and p_self.isInsufficientMaterialSide(true);
-    //}
-
     pub fn isInsufficientMaterial(p_self: *const boardState) bool {
         // TODO: implement complex heuristic at https://www.chessprogramming.org/Draw_Evaluation
-
-        const singleP = [_]e_piece{ .nWhitePawn, .nWhiteQueen, .nWhiteRook, .nBlackPawn, .nBlackQueen, .nBlackRook };
-        for (singleP) |p| {
-            if (p_self.getPieceCount(p) != 0) {
-                return false;
-            }
+        if (p_self.getPieceBB_t(.PAWN) != 0 or p_self.getPieceBB_t(.QUEEN) != 0 or p_self.getPieceBB_t(.ROOK) != 0) {
+            return false;
         }
         const nWBishop = p_self.getPieceCount(.nWhiteBishop);
         const nWKnight = p_self.getPieceCount(.nWhiteKnight);
-        //const nWMinor = nWBishop + nWKnight;
 
         const nBBishop = p_self.getPieceCount(.nBlackBishop);
         const nBKnight = p_self.getPieceCount(.nBlackKnight);
+
         //const nBMinor = nBBishop + nBKnight;
         //if ((nBMinor == 0 and nWBishop == 2) or (nWMinor == 0 and nBBishop == 2)) {
         //    return false;
