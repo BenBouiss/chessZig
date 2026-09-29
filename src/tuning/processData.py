@@ -23,108 +23,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-@dataclass
-class entry:
-    pieces: npt.NDArray[np.int8]
-    squares: npt.NDArray[np.int8]
-    colors: npt.NDArray[np.int8]
-    outcome: float
-    miscs: npt.NDArray[np.int16]
-
-
-@dataclass
-class saveConfig:
-    trainPath: str
-    validPath: str
-    nLim: int = -1
-    maxPositionPerSave: int = -1
-
-
-def ensurePath(s: saveConfig):
-    if not os.path.exists(s.trainPath):
-        os.makedirs(os.path.dirname(s.trainPath), exist_ok=True)
-    if not os.path.exists(s.validPath):
-        os.makedirs(os.path.dirname(s.validPath), exist_ok=True)
-
-
-def insertChunkNbr(p: str, chunk: int) -> str:
-    if "." in p:
-        tok = p.split(".")
-        assert len(tok) >= 2, f"malformed string {p}"
-        tok[-2] = f"{tok[-2]}_chunk_{chunk}"
-        return ".".join(tok)
-    return f"{p}_chunk_{chunk}"
-
-
 CHUNK_SIZE = 8192
 MAX_TOKEN_SIZE = 32
 
-
-class torchWriter:
-    def __init__(
-        self,
-        folderPath: str,
-        processId: int = 0,
-        chunkSize: int = CHUNK_SIZE,
-    ):
-        self.folderPath: str = folderPath
-        if not os.path.exists(self.folderPath):
-            os.makedirs(self.folderPath, exist_ok=True)
-
-        self.processId: int = processId
-        self.chunkSize: int = chunkSize
-
-        self.piecesArr: list[torch.Tensor] = []
-        self.squaresArr: list[torch.Tensor] = []
-        self.colorsArr: list[torch.Tensor] = []
-        self.miscsArr: list[torch.Tensor] = []
-        self.outcomesArr: list[float] = []
-
-        self.insertions: int = 0
-        self.nSaved: int = 0
-        self.chunkSaved: int = 0
-
-    def append(
-        self,
-        pieces: torch.Tensor,
-        colors: torch.Tensor,
-        squares: torch.Tensor,
-        outcome: float,
-        miscs: torch.Tensor,
-    ) -> None:
-        if self.insertions == self.chunkSize:
-            self.commit()
-
-        self.piecesArr.append(pieces)
-        self.colorsArr.append(colors)
-        self.squaresArr.append(squares)
-        self.outcomesArr.append(outcome)
-        self.miscsArr.append(miscs)
-        self.insertions += 1
-
-    def commit(self) -> None:
-        self.insertions = 0
-        self.chunkSaved += 1
-        name = f"chunk_{self.nSaved}_{self.processId}_{self.chunkSaved}.pt"
-        path = os.path.join(self.folderPath, name)
-        torch.save(
-            {
-                "pieces": torch.stack(self.piecesArr),
-                "squares": torch.stack(self.squaresArr),
-                "colors": torch.stack(self.colorsArr),
-                "miscs": torch.stack(self.miscsArr),
-                "outcomes": torch.tensor(self.outcomesArr, dtype=torch.float32),
-            },
-            f=path,
-        )
-
-        self.piecesArr.clear()
-        self.colorsArr.clear()
-        self.squaresArr.clear()
-        self.miscsArr.clear()
-        self.outcomesArr.clear()
-
+MAX_DEVIATION = 400
 
 baseMaterial = [
     100.0,
@@ -135,7 +37,7 @@ baseMaterial = [
     0.0,
     0.0,
 ]
-baseMisc = [6.0, 47.0, 55.0, 18.0, 1.0, 32.0, 48.0, 2.0, 7.0, 2.0, 3.0, 5.0, 5.0]
+baseMisc = [6.0, 47.0, 55.0, 18.0, 1.0, 32.0, 48.0, 2.0, 7.0, 2.0, 3.0, 5.0, 5.0, 1.0]
 
 phaseArr = [
     0.0,
@@ -185,14 +87,119 @@ MISCS_STR = [
     "global_phalanxDuoPawnVal",
     "global_connectionPawnVal",
     "global_KingProximityVal",
+    "global_SafetyVal",
 ]
+MISCS_COLS: list[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16]
+# all the miscs str from above plus last one for eval
+
+
+@dataclass
+class entry:
+    pieces: npt.NDArray[np.int8]
+    squares: npt.NDArray[np.int8]
+    colors: npt.NDArray[np.int8]
+    outcome: float
+    eval: np.int16
+    miscs: npt.NDArray[np.int16]
+
+
+@dataclass
+class saveConfig:
+    trainPath: str
+    validPath: str
+    nLim: int = -1
+    maxPositionPerSave: int = -1
+
+
+def ensurePath(s: saveConfig):
+    if not os.path.exists(s.trainPath):
+        os.makedirs(os.path.dirname(s.trainPath), exist_ok=True)
+    if not os.path.exists(s.validPath):
+        os.makedirs(os.path.dirname(s.validPath), exist_ok=True)
+
+
+def insertChunkNbr(p: str, chunk: int) -> str:
+    if "." in p:
+        tok = p.split(".")
+        assert len(tok) >= 2, f"malformed string {p}"
+        tok[-2] = f"{tok[-2]}_chunk_{chunk}"
+        return ".".join(tok)
+    return f"{p}_chunk_{chunk}"
+
+
+class torchWriter:
+    def __init__(
+        self,
+        folderPath: str,
+        processId: int = 0,
+        chunkSize: int = CHUNK_SIZE,
+    ):
+        self.folderPath: str = folderPath
+        if not os.path.exists(self.folderPath):
+            os.makedirs(self.folderPath, exist_ok=True)
+
+        self.processId: int = processId
+        self.chunkSize: int = chunkSize
+
+        self.piecesArr: list[torch.Tensor] = []
+        self.squaresArr: list[torch.Tensor] = []
+        self.colorsArr: list[torch.Tensor] = []
+        self.miscsArr: list[torch.Tensor] = []
+        self.outcomesArr: list[float] = []
+        self.evalsArr: list[float] = []
+
+        self.insertions: int = 0
+        self.nSaved: int = 0
+        self.chunkSaved: int = 0
+
+    def append(
+        self,
+        pieces: torch.Tensor,
+        colors: torch.Tensor,
+        squares: torch.Tensor,
+        outcome: float,
+        eval: int,
+        miscs: torch.Tensor,
+    ) -> None:
+        if self.insertions == self.chunkSize:
+            self.commit()
+
+        self.piecesArr.append(pieces)
+        self.colorsArr.append(colors)
+        self.squaresArr.append(squares)
+        self.outcomesArr.append(outcome)
+        self.evalsArr.append(eval)
+        self.miscsArr.append(miscs)
+        self.insertions += 1
+
+    def commit(self) -> None:
+        self.insertions = 0
+        self.chunkSaved += 1
+        name = f"chunk_{self.nSaved}_{self.processId}_{self.chunkSaved}.pt"
+        path = os.path.join(self.folderPath, name)
+        torch.save(
+            {
+                "pieces": torch.stack(self.piecesArr),
+                "squares": torch.stack(self.squaresArr),
+                "colors": torch.stack(self.colorsArr),
+                "miscs": torch.stack(self.miscsArr),
+                "outcomes": torch.tensor(self.outcomesArr, dtype=torch.float32),
+                "evals": torch.tensor(self.evalsArr, dtype=torch.int16),
+            },
+            f=path,
+        )
+
+        self.piecesArr.clear()
+        self.colorsArr.clear()
+        self.squaresArr.clear()
+        self.miscsArr.clear()
+        self.outcomesArr.clear()
+        self.evalsArr.clear()
 
 
 def miscPathToDf(p: str) -> pd.DataFrame:
     if ".csv" in p:
-        ret = pd.read_csv(
-            p, sep=",", usecols=list(range(len(baseMisc))), dtype=np.int16
-        )
+        ret = pd.read_csv(p, sep=",", usecols=MISCS_COLS, dtype=np.int16)
         return ret
     raise NotImplementedError
 
@@ -205,7 +212,7 @@ def boardToEntry(bookFen: str, miscVals: npt.NDArray[np.int16]) -> entry:
         outcome = 1.0
     else:
         outcome = 0.0
-    pieces, squares, colors = [], [], []
+    pieces, squares, colors, evals = [], [], [], []
     lIdx = bookFen.find("[")
     b = chess.Board(bookFen[:lIdx])
     for sq, p in b.piece_map().items():
@@ -217,7 +224,8 @@ def boardToEntry(bookFen: str, miscVals: npt.NDArray[np.int16]) -> entry:
         squares=np.asarray(squares, dtype=np.int8),
         colors=np.asarray(colors, dtype=np.int8),
         outcome=outcome,
-        miscs=miscVals,
+        miscs=miscVals[:-1],
+        eval=miscVals[-1],
     )
 
 
@@ -308,6 +316,7 @@ def packData(data: list[entry]) -> dict:
         return {}
 
     pieces, squares, colors, outcomes, lengths, miscs = [], [], [], [], [], []
+    evals = []
 
     for d in data:
         pieces.append(d.pieces)
@@ -316,12 +325,14 @@ def packData(data: list[entry]) -> dict:
         outcomes.append(d.outcome)
         lengths.append(len(d.pieces))
         miscs.append(d.miscs)
+        evals.append(d.eval)
 
     return {
         "pieces": np.concatenate(pieces, dtype=np.int8),
         "squares": np.concatenate(squares, dtype=np.int8),
         "colors": np.concatenate(colors, dtype=np.int8),
         "outcomes": np.array(outcomes, dtype=np.float16),
+        "evals": np.array(evals, dtype=np.int16),
         "lengths": np.array(lengths, dtype=np.uint32),
         "miscs": np.array(miscs, dtype=np.int16),
     }
@@ -345,6 +356,7 @@ def processPackedDataPath(path: str, outDir: str) -> None:
         data["colors"], lengths=lengths, maxLen=MAX_TOKEN_SIZE, padValue=DEFAULT_TOKEN
     )
     outcomes_all = data["outcomes"]
+    evals_all = data["evals"]
     miscs_all = data["miscs"]
     print(f"len of lengths {len(lengths)} shape pieces {pieces_all.shape}")
 
@@ -360,6 +372,7 @@ def processPackedDataPath(path: str, outDir: str) -> None:
             colors_tensor[i],
             squares=squares_tensor[i],
             outcome=outcomes_all[i],
+            eval=evals_all[i],
             miscs=miscs_tensor[i],
         )
     writer.commit()
@@ -382,13 +395,14 @@ def loadDatasets(dirPath: str) -> TensorDataset:
     assert os.path.exists(dirPath), f"Directory {dirPath} does not exists"
     files = sorted(glob.glob(os.path.join(dirPath, "*.pt")))
 
-    pieces, squares, colors, outcomes, miscs = [], [], [], [], []
+    pieces, squares, colors, outcomes, miscs, evals = [], [], [], [], [], []
     for f in files:
         d = torch.load(f)
         pieces.append(d["pieces"])
         colors.append(d["colors"])
         squares.append(d["squares"])
         miscs.append(d["miscs"])
+        evals.append(d["evals"])
         outcomes.append(d["outcomes"])
     out = TensorDataset(
         torch.cat(pieces).contiguous(),
@@ -396,6 +410,7 @@ def loadDatasets(dirPath: str) -> TensorDataset:
         torch.cat(squares).contiguous(),
         torch.cat(miscs).contiguous(),
         torch.cat(outcomes).contiguous(),
+        torch.cat(evals).contiguous(),
     )
     return out
 
@@ -463,7 +478,16 @@ class zugNet(nn.Module):
         phase = (self.phaseArr[pieces.long()] * mask).sum(dim=1)
         phase = (phase / self.maxPhase).clamp(0.0, 1.0)
         val = mg_val * phase + eg_val * (1.0 - phase)
-        return torch.sigmoid(self.K * val)
+        return val
+
+    def forwardS(
+        self,
+        pieces: torch.Tensor,
+        squares: torch.Tensor,
+        colors: torch.Tensor,
+        miscs: torch.Tensor,
+    ):
+        return torch.sigmoid(self.K * self(pieces, squares, colors, miscs))
 
     def print(self, variablePrint: bool) -> None:
         print(f"shape {self.psqt_eg.shape}")
@@ -475,25 +499,11 @@ class zugNet(nn.Module):
                 print("EG")
                 texel.print2dTensor(self.psqt_eg[x], False, True)
             else:
-                print(f"global_{p}_PSQT = .{{ [_]scoreType {{", end="")
-                for i, n in enumerate(self.psqt_mg[x]):
-                    nbr = int(torch.round(n))
-                    if i < 63:
-                        print(f"{nbr}, ", end="")
-                    else:
-                        print(f"{nbr}", end="")
-                print("}, [_]scoreType {", end="")
-
-                for i, n in enumerate(self.psqt_eg[x]):
-                    nbr = int(torch.round(n))
-                    if i < 63:
-                        print(f"{nbr}, ", end="")
-                    else:
-                        print(f"{nbr}", end="")
-                print("} };")
-
-                # print_board(f"{p}_MG", [torch.round(n) for n in self.psqt_mg[x]])
-                # print_board(f"{p}_EG", [torch.round(n) for n in self.psqt_eg[x]])
+                print1dMg_Eg(
+                    self.psqt_mg[x].round().int(),
+                    self.psqt_eg[x].int(),
+                    f"global_{p}_PSQT",
+                )
 
         for idx, (m, e) in enumerate(zip(self.misc_mg, self.misc_eg)):
             print(
@@ -541,6 +551,7 @@ def train(opt: trainingOptions):
             {
                 "params": [model.psqt_mg, model.psqt_eg, model.misc_mg, model.misc_eg],
                 "lr": 1.5,
+                "weight_decay": 0.0001,
             },
             {"params": [model.K], "lr": 0.01},
         ],
@@ -555,20 +566,31 @@ def train(opt: trainingOptions):
         pbar = tqdm(train_loader, desc=f"Epoch {epoch:03d}", unit="batch", leave=False)
 
         train_loss = 0
-        for batch_idx, (pieces, colors, squares, miscs, outcomes) in enumerate(pbar):
+        for batch_idx, (pieces, colors, squares, miscs, outcomes, evals) in enumerate(
+            pbar
+        ):
             pieces = pieces.to(DEVICE)
             colors = colors.to(DEVICE)
             squares = squares.to(DEVICE)
             miscs = miscs.to(DEVICE)
             outcomes = outcomes.to(DEVICE)
+            evals = evals.float().to(DEVICE)
 
             optimizer.zero_grad()
-            outputs = model(pieces, squares, colors, miscs)
-            loss = (
-                criterion(outputs, outcomes)
-                + 0.05 * material_consistency_loss(model)
-                + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
-            )
+            if opt.optimizeOutcome:
+                outputs = model(pieces, squares, colors, miscs)
+                loss = (
+                    criterion(outputs, evals)
+                    + 0.05 * material_consistency_loss(model)
+                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
+                )
+            else:
+                outputs = model.forwardS(pieces, squares, colors, miscs)
+                loss = (
+                    criterion(outputs, outcomes)
+                    + 0.05 * material_consistency_loss(model)
+                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
+                )
             loss.backward()
             optimizer.step()  # Update the parameters
             train_loss += loss.item()
@@ -579,7 +601,7 @@ def train(opt: trainingOptions):
         )
         model.eval()
         val_loss = 0
-        for batch_idx, (pieces, colors, squares, miscs, outcomes) in enumerate(
+        for batch_idx, (pieces, colors, squares, miscs, outcomes, evals) in enumerate(
             validPbar
         ):
             pieces = pieces.to(DEVICE)
@@ -587,9 +609,22 @@ def train(opt: trainingOptions):
             squares = squares.to(DEVICE)
             miscs = miscs.to(DEVICE)
             outcomes = outcomes.to(DEVICE)
+            evals = evals.float().to(DEVICE)
 
-            evals = model(pieces, squares, colors, miscs)
-            val_loss += criterion(evals, outcomes).item()
+            if opt.optimizeOutcome:
+                outputs = model(pieces, squares, colors, miscs)
+                val_loss += (
+                    criterion(outputs, evals).item()
+                    + +0.05 * material_consistency_loss(model)
+                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
+                )
+            else:
+                outputs = model.forwardS(pieces, squares, colors, miscs)
+                val_loss += (
+                    criterion(outputs, outcomes).item()
+                    + +0.05 * material_consistency_loss(model)
+                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
+                )
         val_loss /= len(valid_loader)
         if val_loss < currBest:
             print(
@@ -611,7 +646,9 @@ def material_consistency_loss(model: zugNet):
     return (diff_mg**2).sum() + (diff_eg**2).sum()
 
 
-def psqt_deviation_loss(psqts_mg, psqts_eg, max_deviation=400.0, temperature=5.0):
+def psqt_deviation_loss(
+    psqts_mg, psqts_eg, max_deviation=MAX_DEVIATION, temperature=5.0
+):
     loss = 0.0
     for psqts in [psqts_mg, psqts_eg]:
         mean = psqts.mean(dim=1, keepdim=True).to(DEVICE)
@@ -655,10 +692,11 @@ def loadCheckpoint(
     bestR = None
     for f in files:
         r = torch.load(f)
-        l = float(r["val_loss"])
+        l = float(r["val_loss"].detach())
         if bestLoss > l:
             bestLoss = l
             bestR = r
+            bestEpoch = r["epoch"]
     assert bestEpoch > -1, f"No checkpoints file found at {checkpointDirPath}"
     assert bestR is not None
     model.load_state_dict(bestR["model"])
@@ -707,18 +745,210 @@ def print_checkpoint(path: str, variablePrint: bool = False) -> None:
     model.print(variablePrint)
 
 
+def print_folder_pt(path: str, variablePrint: bool = False) -> None:
+    assert os.path.exists(path)
+    files = glob.glob(os.path.join(os.path.dirname(path), "*.pt"))
+    for f in files:
+        a = torch.load(f)
+        print(
+            f"file {f} val loss {a['val_loss']} lr {a['optimizer']['param_groups'][0]['lr']}"
+        )
+
+
+bonus_mg = [
+    [
+        [-175, -92, -74, -73],
+        [-77, -41, -27, -15],
+        [-61, -17, 6, 12],
+        [-35, 8, 40, 49],
+        [-34, 13, 44, 51],
+        [-9, 22, 58, 53],
+        [-67, -27, 4, 37],
+        [-201, -83, -56, -26],
+    ],
+    [
+        [-53, -5, -8, -23],
+        [-15, 8, 19, 4],
+        [-7, 21, -5, 17],
+        [-5, 11, 25, 39],
+        [-12, 29, 22, 31],
+        [-16, 6, 1, 11],
+        [-17, -14, 5, 0],
+        [-48, 1, -14, -23],
+    ],
+    [
+        [-31, -20, -14, -5],
+        [-21, -13, -8, 6],
+        [-25, -11, -1, 3],
+        [-13, -5, -4, -6],
+        [-27, -15, -4, 3],
+        [-22, -2, 6, 12],
+        [-2, 12, 16, 18],
+        [-17, -19, -1, 9],
+    ],
+    [
+        [3, -5, -5, 4],
+        [-3, 5, 8, 12],
+        [-3, 6, 13, 7],
+        [4, 5, 9, 8],
+        [0, 14, 12, 5],
+        [-4, 10, 6, 8],
+        [-5, 6, 10, 8],
+        [-2, -2, 1, -2],
+    ],
+    [
+        [271, 327, 271, 198],
+        [278, 303, 234, 179],
+        [195, 258, 169, 120],
+        [164, 190, 138, 98],
+        [154, 179, 105, 70],
+        [123, 145, 81, 31],
+        [88, 120, 65, 33],
+        [59, 89, 45, -1],
+    ],
+]
+
+bonus_eg = [
+    [
+        [-96, -65, -49, -21],
+        [-67, -54, -18, 8],
+        [-40, -27, -8, 29],
+        [-35, -2, 13, 28],
+        [-45, -16, 9, 39],
+        [-51, -44, -16, 17],
+        [-69, -50, -51, 12],
+        [-100, -88, -56, -17],
+    ],
+    [
+        [-57, -30, -37, -12],
+        [-37, -13, -17, 1],
+        [-16, -1, -2, 10],
+        [-20, -6, 0, 17],
+        [-17, -1, -14, 15],
+        [-30, 6, 4, 6],
+        [-31, -20, -1, 1],
+        [-46, -42, -37, -24],
+    ],
+    [
+        [-9, -13, -10, -9],
+        [-12, -9, -1, -2],
+        [6, -8, -2, -6],
+        [-6, 1, -9, 7],
+        [-5, 8, 7, -6],
+        [6, 1, -7, 10],
+        [4, 5, 20, -5],
+        [18, 0, 19, 13],
+    ],
+    [
+        [-69, -57, -47, -26],
+        [-55, -31, -22, -4],
+        [-39, -18, -9, 3],
+        [-23, -3, 13, 24],
+        [-29, -6, 9, 21],
+        [-38, -18, -12, 1],
+        [-50, -27, -24, -8],
+        [-75, -52, -43, -36],
+    ],
+    [
+        [1, 45, 85, 76],
+        [53, 100, 133, 135],
+        [88, 130, 169, 175],
+        [103, 156, 172, 172],
+        [96, 166, 199, 199],
+        [92, 172, 184, 191],
+        [47, 121, 116, 131],
+        [11, 59, 73, 78],
+    ],
+]
+pbonus_mg = [
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [3, 3, 10, 19, 16, 19, 7, -5],
+    [-9, -15, 11, 15, 32, 22, 5, -22],
+    [-4, -23, 6, 20, 40, 17, 4, -8],
+    [13, 0, -13, 1, 11, -2, -13, 5],
+    [5, -12, -7, 22, -8, -5, -15, -8],
+    [-7, 7, -3, -13, 5, -16, 10, -8],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+]
+pbonus_eg = [
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [-10, -6, 10, 0, 14, 7, -5, -19],
+    [-10, -10, -10, 4, 4, 3, -6, -4],
+    [6, -2, -8, -4, -13, -12, -10, -9],
+    [10, 5, 4, -5, -5, -5, 14, 9],
+    [28, 20, 21, 28, 30, 7, 6, 13],
+    [0, -11, 12, 21, 25, 19, 4, 7],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+]
+
+
+def print1dMg_Eg(mg, eg, name: str) -> None:
+    print(f"{name} = .{{ [_]scoreType {{", end="")
+    for i, n in enumerate(mg):
+        nbr = int(n)
+        if i < 63:
+            print(f"{nbr}, ", end="")
+        else:
+            print(f"{nbr}", end="")
+    print("}, [_]scoreType {", end="")
+
+    for i, n in enumerate(eg):
+        nbr = int(n)
+        if i < 63:
+            print(f"{nbr}, ", end="")
+        else:
+            print(f"{nbr}", end="")
+    print("} };")
+
+    pass
+
+
+def print_stuff():
+    for i_p, p in enumerate(PIECES):
+        big_arr: list[list[int]] = [[0] * 64 for _ in range(2)]
+        for sq in range(64):
+            x, y = sq % 8, sq // 8
+            if p == chess.PAWN:
+                vals = [pbonus_mg[7 - y][x], pbonus_eg[7 - y][x]]
+            else:
+                vals = [
+                    bonus_mg[i_p - 1][7 - y][min(x, 7 - x)],
+                    bonus_eg[i_p - 1][7 - y][min(x, 7 - x)],
+                ]
+            big_arr[0][sq] = vals[0] + int(baseMaterial[i_p])
+            big_arr[1][sq] = vals[1] + int(baseMaterial[i_p])
+
+            # if p == chess.KING:
+            #    print(vals)
+            #    print(big_arr[0][sq], big_arr[1][sq])
+            #    print(id(big_arr[0]), id(big_arr[1]))
+
+        print1dMg_Eg(
+            big_arr[0],
+            big_arr[1],
+            f"global_{PIECES_STR[i_p]}_PSQT",
+        )
+
+
+# print(f"Piece {PIECES_STR[i_p]}")
+# print("MG")
+# texel.print2dTensor(big_arr[0], False, True)
+# print("EG")
+# texel.print2dTensor(big_arr[1], False, True)
+
+
 if __name__ == "__main__":
     # path = "out/csv/CCRL-4040.[2370489]_2.book"
     path = "out/book/CCRL-4040.[2370489]_filtered_5388899Pos.book"
     miscPath = "out/csv/CCRL-4040.[2370489]_filtered_5388899Pos_evalCoeff_t.csv"
     nPos = 5_388_899
     # nPos = 2_000_000
-    # saves = saveConfig(
-    #    trainPath="out/bin/torch/train.npz",
-    #    validPath="out/bin/torch/valid.npz",
-    #    nLim=nPos,
-    #    maxPositionPerSave=1_000_000,
-    # )
+    saves = saveConfig(
+        trainPath="out/bin/torch/train.npz",
+        validPath="out/bin/torch/valid.npz",
+        nLim=nPos,
+        maxPositionPerSave=1_000_000,
+    )
     # ensurePath(saves)
     # process_book_to_npz(path, miscPath, 0.2, saves)
     # processPackedDataPath(saves.trainPath, "out/bin/torch/train")
@@ -729,10 +959,14 @@ if __name__ == "__main__":
     #        trainingPath="out/bin/torch/valid",
     #        validationPath="out/bin/torch/valid",
     #        checkpointsPath="out/bin/torch/checkpoint",
-    #        chunksize=256,
+    #        chunksize=512,
+    #        optimizeOutcome=True,
     #    )
     # )
 
     b = sys.argv[1]
     print(f"Found argument {b} with type {type(b)}")
     print_checkpoint(b, True)
+    print_folder_pt(b)
+
+    print_stuff()

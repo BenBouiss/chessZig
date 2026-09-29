@@ -147,6 +147,10 @@ pub fn splitGenerator(comptime T: type) type {
             return .{ .sep = sep, .slice = a, .idx = 0 };
         }
         pub fn get(p_self: *self, idx: usize) ?[]const T {
+            const base = p_self.idx;
+            defer {
+                p_self.idx = base;
+            }
             var id: usize = 0;
             var ret = p_self.next();
             while (id != idx) {
@@ -157,6 +161,24 @@ pub fn splitGenerator(comptime T: type) type {
                 id += 1;
             }
             return ret;
+        }
+        pub fn get_t(p_self: *self, idx: usize, comptime o: type) ?o {
+            const text = p_self.get(idx) orelse return null;
+            switch (@typeInfo(o)) {
+                .int => {
+                    return std.fmt.parseInt(o, text, 10) catch {
+                        return null;
+                    };
+                },
+                .float => {
+                    return std.fmt.parseFloat(o, text) catch {
+                        return null;
+                    };
+                },
+                else => {
+                    return null;
+                },
+            }
         }
 
         pub fn reset(p_self: *self) void {

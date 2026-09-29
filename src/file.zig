@@ -121,10 +121,3 @@ pub fn joinPath(alloc: std.mem.Allocator, p1: []const u8, p2: []const u8) !strin
     _ = ret.extend(_p2);
     return ret;
 }
-pub fn main(alloc: std.mem.Allocator, path: []const u8) !void {
-    var tokens = try getTokensFromFile(alloc, path, '\n');
-    defer stringl.freeArrayList_string(alloc, &tokens);
-    for (0..tokens.items.len) |i| {
-        std.debug.print("Token: n°{d}: {s} \n", .{ i, tokens.items[i]._slice() });
-    }
-}

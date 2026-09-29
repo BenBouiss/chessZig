@@ -17,19 +17,20 @@ const string = stringl.string;
 const file_err = filel.file_err;
 
 pub const fileFormat = enum { bulletFF, viriFF };
-const boardLogFiles = union(fileFormat) { bulletFF: *logging(FEN_EVAL_ENTRY_SIZE), viriFF: *logging(@sizeOf(boardl.viriGame)) };
+pub const boardLogFiles = union(fileFormat) { bulletFF: *logging(FEN_EVAL_ENTRY_SIZE), viriFF: *logging(@sizeOf(boardl.viriGame)) };
 
 pub fn logging(comptime SIZE: usize) type {
     return struct {
         scratchArr: [][SIZE + 1]u8,
         insertions: usize = 0,
+        totalSaved: u64 = 0,
         totalSize: usize = 0,
         filename: stringl.string,
         l: lockl.lock = .{},
         freed: bool = false,
         textMode: bool = true,
         const self = @This();
-        pub fn init(alloc: std.mem.Allocator, totalSize: usize, filename: string, textMode: bool) !logging(SIZE) {
+        pub fn init(alloc: std.mem.Allocator, totalSize: usize, filename: string, textMode: bool) !self {
             if (!filel.fileExists(filename._slice())) {
                 const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), filename._slice(), .{ .read = true });
                 defer file.close(mainl.getGlobalIo());
@@ -43,6 +44,7 @@ pub fn logging(comptime SIZE: usize) type {
         }
         pub fn append(p_self: *self, item: []const u8) !void {
             p_self.l.acquireLock();
+            defer p_self.l.releaseLock();
             if (p_self.insertions == p_self.totalSize) {
                 try p_self.commit();
             }
@@ -56,19 +58,21 @@ pub fn logging(comptime SIZE: usize) type {
             }
 
             p_self.insertions += 1;
-            p_self.l.releaseLock();
         }
         pub fn commit(p_self: *self) !void {
             const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), p_self.filename._slice(), .{ .mode = .write_only });
-            const base = file.length(mainl.getGlobalIo()) catch unreachable;
+            const base = try file.length(mainl.getGlobalIo());
             defer file.close(mainl.getGlobalIo());
             var inserted: u64 = 0;
             for (0..p_self.insertions) |i| {
-                //TODO: fix the unreachables
                 const msg = if (p_self.textMode) utilsl.trimStr(p_self.scratchArr[i][0..SIZE]) else (p_self.scratchArr[i][0..SIZE]);
-                _ = file.writePositionalAll(mainl.getGlobalIo(), msg, base + inserted) catch unreachable;
+                _ = try file.writePositionalAll(mainl.getGlobalIo(), msg, base + inserted);
                 inserted += @intCast(msg.len);
+                if (!p_self.textMode) {
+                    std.debug.assert(msg.len == SIZE);
+                }
             }
+            p_self.totalSaved += p_self.insertions;
             p_self.insertions = 0;
         }
         pub fn write(p_self: *self, msg: []const u8) !void {
@@ -169,7 +173,7 @@ pub fn parseAlgebraicStringList(alloc: std.mem.Allocator, logFile: *logging(FEN_
             }
             realParsed += 1;
             //const info = schedulerl.startSearch(&tmp, .{ .fixedDepth = true, .reportProgress = false }, 8);
-            //const score = info.currentBest.scoring;
+            //const score = info.currentBest.score;
             //if (chessl.isMate(score)) {
             //    break;
             //}
@@ -194,7 +198,7 @@ pub fn packed_incrementalMoveContainer(logFile: *logging(@sizeOf(boardl.viriGame
     var outcome: u8 = 1;
     if (fmoves.len == 0) {
         if (tmp.isChecked()) {
-            // 0 is black win 1 is white
+            // 0 is black win, 1 draw, 2 white win
             outcome = if (tmp.whiteToMove()) 0 else 2;
         }
     }
@@ -202,15 +206,15 @@ pub fn packed_incrementalMoveContainer(logFile: *logging(@sizeOf(boardl.viriGame
     for (0..moves.len) |i| {
         const move = moves.moves[i];
         state.makeMove(move);
-        const info = schedulerl.startSearch(&state, .{ .fixedDepth = true, .reportProgress = false }, 8);
-        if (!info.currentBest.move.isValid()) {
+        const res = schedulerl.startSearch(&state, .{ .fixedDepth = true, .reportProgress = false }, 8, .{}, &hashl.hashTable);
+        if (!res.move.isValid()) {
             break;
         }
-        const score = if (state.whiteToMove()) info.currentBest.scoring else (-info.currentBest.scoring);
+        const score = if (state.whiteToMove()) res.score else (-res.score);
         var pB: boardl.packedBoard = .init(&state);
         pB.score = @intCast(score);
         pB.outcome = outcome;
-        var game: boardl.viriGame = .{ .b = pB, .bestMove = .{ .move = .init(info.currentBest.move), .score = @intCast(score) } };
+        var game: boardl.viriGame = .{ .b = pB, .bestMove = .{ .move = .init(res.move), .score = @intCast(score) } };
 
         const b = transmutePtr(boardl.viriGame, &game);
         try logFile.append(b);
@@ -239,8 +243,8 @@ pub fn str_incrementalMoveContainer(logFile: *logging(FEN_EVAL_ENTRY_SIZE), move
     for (0..moves.len) |i| {
         const move = moves.moves[i];
         state.makeMove(move);
-        const info = schedulerl.startSearch(&state, .{ .fixedDepth = true, .reportProgress = false }, 10);
-        const score = info.currentBest.scoring;
+        const res = schedulerl.startSearch(&state, .{ .fixedDepth = true, .reportProgress = false }, 10, .{}, &hashl.hashTable);
+        const score = res.score;
         //const score = -35;
         var buffer: [FEN_EVAL_ENTRY_SIZE]u8 = @splat(0);
         const fen = state.get_fen();
@@ -403,11 +407,10 @@ pub fn test_viriBin(alloc: std.mem.Allocator) !void {
     var state = chessl.getBoardFromFen(chessl.DEFAULT_FEN) catch {
         return;
     };
-    const info = schedulerl.startSearch(&state, .{ .fixedDepth = true, .reportProgress = false }, 10);
+    _ = schedulerl.startSearch(&state, .{ .fixedDepth = true, .reportProgress = false }, 10, .{}, &hashl.hashTable);
     var pB: boardl.packedBoard = .init(&state);
     pB.outcome = 2;
-    _ = info;
-    //pB.score = @intCast(info.currentBest.scoring);
+    //pB.score = @intCast(info.currentBest.score);
     var b: boardl.viriGame = .{ .b = pB };
     const bin = transmutePtr(boardl.viriGame, &b);
     _ = try file.writePositionalAll(mainl.getGlobalIo(), bin, 0);

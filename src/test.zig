@@ -4,4 +4,5 @@ comptime {
     _ = @import("test/uci_position.zig");
     _ = @import("test/engine_decision.zig");
     _ = @import("test/hashtable.zig");
+    _ = @import("test/string.zig");
 }

@@ -4,6 +4,7 @@ const std = @import("std");
 const stringl = @import("../string.zig");
 const bookl = @import("../book.zig");
 const chessl = @import("../chess.zig");
+const filel = @import("../file.zig");
 
 test "entry retrievale" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
@@ -101,19 +102,20 @@ test "zobrist key consistency" {
     chessl.initAll(false);
     //
     const path = "opening/8moves_v3.pgn";
-    var s = try stringl.string.initFromSlice(alloc, path);
-    defer s.free(alloc);
-    var db = try bookl.openingDatabase.init(alloc, &s, 42, false);
+    if (!filel.fileExists(path)) {
+        return;
+    }
+
+    var db = try bookl.openingDatabase.init(alloc, path, 42, false);
     defer db.free(alloc);
-    var openings: std.ArrayList(stringl.string) = .empty;
-    openings = db.drawnEntries;
+    const openings = db.drawnEntries;
 
     const base = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     var tmp = base.copy();
     var map: std.StringHashMap(u64) = .init(alloc);
     var keys: std.DoublyLinkedList = .{};
     for (0..openings.items.len) |i| {
-        var algeFen = openings.items[i];
+        var algeFen = openings.items[i].v;
 
         _ = try chessl._algebraicLineToIMoveMatch(algeFen._slice(), &tmp);
         //chessl.print_boardstate(&tmp);

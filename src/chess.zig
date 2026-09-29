@@ -49,6 +49,12 @@ pub const notAFile: u64 = 0xfefefefefefefefe; // ~0x0101010101010101
 pub const notABFile: u64 = 0xfcfcfcfcfcfcfcfc;
 pub const notGHFile: u64 = 0x3f3f3f3f3f3f3f3f;
 pub const notHFile: u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
+pub const maskABCFile: u64 = 0x707070707070707; // ~0x8080808080808080
+pub const maskABCDFile: u64 = 0xF0F0F0F0F0F0F0F; // ~0x8080808080808080
+//
+pub const maskFGHFile: u64 = 0xE0E0E0E0E0E0E0E0; // ~0x8080808080808080
+pub const maskEFGHFile: u64 = 0xF0F0F0F0F0F0F0F0; // ~0x8080808080808080
+//
 pub const whitePawnPromoRank: u64 = 0xFF00000000000000;
 pub const blackPawnPromoRank: u64 = 0xFF;
 
@@ -851,6 +857,7 @@ pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
     return @enumFromInt(whiteBoolToInt(whiteToMove));
 }
 
+/// returns 0 for white to move 1 else
 pub inline fn whiteBoolToInt(w: bool) u8 {
     return @as(u8, (@intFromBool(!w)));
 }
@@ -944,6 +951,41 @@ pub fn stackedPawns(pawn: u64) u64 {
     const downPawns = pawn & (moveGenl.southOne(moveGenl.southOccl(pawn, UNIVERSE)));
     const tripleFiles = (upPawns & downPawns);
     return upPawns | downPawns | tripleFiles;
+}
+pub fn kingPawnTropism(pawn: u64, sqKing: squareInfo) i32 {
+    if (pawn == 0) {
+        return 7;
+    }
+    var bb = pawn;
+    var ret: i32 = 7;
+    while (bb != 0) {
+        const sq = bitscan(bb);
+        bb &= bb - 1;
+        const _sq: squareInfo = .init(@enumFromInt(sq));
+        const v: scoreType = @intCast(@max(@abs(sqKing.file - _sq.file), @abs(sqKing.rank - _sq.rank)));
+        ret = @min(ret, v);
+    }
+    return ret;
+}
+pub fn kingPawnlessFlank(pawn: u64, sqKing: squareInfo) bool {
+    if (pawn == 0) {
+        return true;
+    }
+    if (sqKing.file == 0) {
+        return (pawn & maskABCFile) == 0;
+    } else if (sqKing.file < 4) {
+        return (pawn & maskABCDFile) == 0;
+    } else if (sqKing.file < 7) {
+        return (pawn & maskEFGHFile) == 0;
+    }
+    return (pawn & maskFGHFile) == 0;
+}
+pub fn kingPawnStorm(oppPawn: u64, sqKing: squareInfo, comptime white: bool) scoreType {
+    const safe = safetyArea(sqKing.sq);
+    if (white) {
+        return @intCast(popcount(safe & (safe << 16) & oppPawn));
+    }
+    return @intCast(popcount(safe & (safe >> 16) & oppPawn));
 }
 pub inline fn pawnWithEastNeighbor(pawn: u64) u64 {
     return (moveGenl.westOne(pawn)) & pawn;
@@ -1323,7 +1365,10 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove
     } else if (utils.contains(moveStr, "-", .ignoreCase)) {
         return debug_err.valueErr;
     }
-    std.debug.assert(moveStr.len > 1);
+    if (!(moveStr.len > 1)) {
+        std.debug.print("weird move found '{s}'\n", .{moveStr});
+        std.debug.assert(moveStr.len > 1);
+    }
     var startXPos = moveStr.len - 2;
     while (startXPos >= 0) {
         const posSq = moveStr[startXPos .. startXPos + 2];

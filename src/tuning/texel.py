@@ -166,7 +166,7 @@ def training_loop(
     if opt.initWeights is not None:
         setInitWeight(opt, model)
     freezeM = opt.makeFreezeMask()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.01)
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.1, weight_decay=0.01)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)

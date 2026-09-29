@@ -6,10 +6,18 @@ const timel = @import("time.zig");
 const lockl = @import("lock.zig");
 const boardl = @import("board.zig");
 const typel = @import("type.zig");
+const hashl = @import("hashTable.zig");
+const chessl = @import("chess.zig");
+const nnuel = @import("nnue.zig");
+const historyl = @import("history.zig");
 
 const std = @import("std");
 const depthT = typel.depthT;
+const IMove = movel.IMove;
+const scoreType = typel.scoreType;
 
+/// Benchmark function to test the node generation speed in
+/// "real world" settings mainly computing heuristics...
 pub const searchStatistic = struct {
     n_cutoffs: u64 = 0,
     n_hashRetrieve: u64 = 0,
@@ -19,22 +27,48 @@ pub const searchStatistic = struct {
         self.n_hashRetrieve += other.n_hashRetrieve;
         self.n_nodeExplored += other.n_nodeExplored;
     }
+    pub fn print(self: searchStatistic) void {
+        std.debug.print("cutoff={d}\nhash retrieve={d}\nnodes={d}\n", .{ self.n_cutoffs, self.n_hashRetrieve, self.n_nodeExplored });
+    }
 };
-/// Benchmark function to test the node generation speed in
-/// "real world" settings mainly computing heuristics...
+
 pub const threadInfo = struct {
     currentBest: schedulerl.moveDecisionExt = .{},
-    //currentMove: schedulerl.moveDecisionExt = .{},
     depth: depthT = 0,
     seldepth: depthT = 0,
     alive: bool = false,
     searchStat: searchStatistic = .{},
     stopWatch: timel.stopWatch = .{},
     criticalTimeMs: i64 = 0,
+    criticalNodeLim: u64 = std.math.maxInt(u64),
 
     // maxTimeMs
     // check every 1024
     checkTime: u64 = 0,
+    d: ?*threadData = null,
+};
+pub const threadData = struct {
+    excludedMove: movel.IMove = .{},
+    rootMoves: [chessl.MAX_POSSIBLE_MOVE]movel.rootMoveInfo = @splat(.{}),
+    nnueStack: nnuel.accumulatorPairStack = .{},
+
+    pawnCorrHist: [2][16384]scoreType = std.mem.zeroes([2][16384]scoreType),
+    nonPawnCorrHist: [2][2][16384]scoreType = std.mem.zeroes([2][2][16384]scoreType),
+    historyHeuristic: [2][64][64]scoreType = std.mem.zeroes([2][64][64]scoreType),
+    captureHistory: [13][13][64]scoreType = std.mem.zeroes([13][13][64]scoreType),
+    continuationHeuristic: [13][64]historyl.pieceHistory = std.mem.zeroes([13][64]historyl.pieceHistory),
+    corrHist: [12][64][12][64]scoreType = std.mem.zeroes([12][64][12][64]scoreType),
+
+    nodeCount: [64][64]u64 = std.mem.zeroes([64][64]u64),
+    pub fn reset(self: *threadData) void {
+        self.pawnCorrHist = std.mem.zeroes([2][16384]scoreType);
+        self.nonPawnCorrHist = std.mem.zeroes([2][2][16384]scoreType);
+
+        self.historyHeuristic = std.mem.zeroes([2][64][64]scoreType);
+        self.captureHistory = std.mem.zeroes([13][13][64]scoreType);
+        self.continuationHeuristic = std.mem.zeroes([13][64]historyl.pieceHistory);
+        self.corrHist = std.mem.zeroes([12][64][12][64]scoreType);
+    }
 };
 
 pub const threadPackageFrame = struct {
@@ -60,7 +94,7 @@ pub fn getCombinedFromPack(p_array: *threadPackageArray) threadInfo {
     for (0..p_array.len) |i| {
         const info = p_array.items(._tInfo)[i];
         ret.searchStat.add(info.searchStat);
-        if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
+        if (i == 0 or (ret.currentBest.score < info.currentBest.score)) {
             ret.currentBest = info.currentBest;
         }
     }
@@ -96,16 +130,14 @@ pub const threadP = struct {
 };
 
 pub const threadPool = struct {
-    threadProps: [configl.MAX_THREAD]threadP = undefined,
-    threadInfos: [configl.MAX_THREAD]threadInfo = undefined,
-    packages: [configl.MAX_THREAD]searchPackage = undefined,
+    threadProps: [configl.MAX_THREAD]threadP = @splat(.{}),
+    threadInfos: [configl.MAX_THREAD]threadInfo = @splat(.{}),
+    packages: [configl.MAX_THREAD]searchPackage = @splat(.{}),
     nThread: usize = 0,
     running: bool = false,
     working: bool = false,
     lock: lockl.lock = .{},
     debugMode: bool = false,
-
-    schel: *schedulerl.scheduler = undefined,
 
     computedPlies: i64 = 0,
     nPlyCompute: u64 = 0,
@@ -185,12 +217,20 @@ pub const threadPool = struct {
         for (0..p_self.nThread) |i| {
             const info = p_self.threadInfos[i];
             ret.searchStat.add(info.searchStat);
-            if (i == 0 or (ret.currentBest.scoring < info.currentBest.scoring)) {
+            if (i == 0 or (ret.currentBest.score < info.currentBest.score)) {
                 ret.currentBest = info.currentBest;
                 ret.depth = info.depth;
             }
         }
         return ret;
+    }
+    pub fn resetDatas(p_self: *threadPool) void {
+        for (0..p_self.nThread) |i| {
+            const info = &p_self.threadInfos[i];
+            if (info.d) |d| {
+                d.reset();
+            }
+        }
     }
 };
 pub const threadPoolerr = error{ timedOut, alreadySearching };
@@ -200,6 +240,8 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
     props.status = .WAITING;
     props.alive = true;
     props.timeWorkingUs = 0;
+    var d: threadData = .{};
+    p_self.threadInfos[idx].d = &d;
     while (p_self.isRunning() and props.alive) {
         std.atomic.spinLoopHint();
         if (props.searchPing) {
@@ -207,12 +249,12 @@ pub fn waitingRoom(p_self: *threadPool, idx: usize) void {
             props.searchPing = false;
             props.status = .WORKING;
             var pack = p_self.packages[idx];
-            const d = schedulerl._startSearch(&pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth, pack.time);
+            const res = schedulerl._startSearch(&pack.chessState, &p_self.threadInfos[idx], pack.features, pack.depth, pack.time, &hashl.hashTable, &d);
             props.timeWorkingUs += sw.timeSinceStartUs();
             props.status = .WAITING;
 
             p_self.nPlyCompute += 1;
-            p_self.computedPlies += d;
+            p_self.computedPlies += res.depth;
         }
     }
     p_self.running = false;

@@ -1262,11 +1262,6 @@ const matchStruct = struct {
         try p_self.engineToMove(engines).sendMsg(msg);
     }
 
-    pub fn drawNewState(self: *matchStruct, book: *bookl.openingDatabase) !void {
-        const line = book.pickOne(.draw);
-        self.chessState = try chessl.algebraicLineToBoardstate(&line);
-    }
-
     pub fn executeCmd(p_self: *matchStruct, cmdBuffer: signedCmd, turnTimer: timel.stopWatch) bool {
         const cmd = getGuiCmdType(cmdBuffer.str);
         switch (cmd) {
@@ -1351,7 +1346,7 @@ pub fn threadMainLoop(self: *threadCtx) !void {
     var inputs = try spawnListeningThreads(self, self.alloc);
 
     const setting = self.pool.setting.match;
-    var openingDb = try bookl.openingDatabase.init(self.alloc, &setting.openingBookPath, self.seed, false);
+    var openingDb = try bookl.openingDatabase.init(self.alloc, setting.openingBookPath._slice(), self.seed, false);
 
     defer {
         self.engineInventory.free(self.alloc);
@@ -1382,7 +1377,7 @@ pub fn threadMainLoop(self: *threadCtx) !void {
 
     while (self.alive) {
         if (setting.useOpeningBook) {
-            try match.drawNewState(&openingDb);
+            match.chessState = try openingDb.pickOneState(.draw);
         } else {
             match.chessState = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
         }

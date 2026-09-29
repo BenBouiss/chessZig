@@ -24,9 +24,10 @@ pub const networkScale = 400;
 pub const QA = 255;
 pub const QB = 64;
 pub const QAQB = 255 * 64;
-pub const HL_SIZE = if (configl.USE_NNUE) 512 else 0;
+pub const HL_SIZE = if (configl.USE_NNUE) 1024 else 0;
 // https://chessprogramming.org/NNUE#output-buckets
 pub const OUTPUT_BUCKETS = 8;
+//pub const OUTPUT_BUCKETS = 1;
 pub const BUCKET_DIV = @divFloor(32, OUTPUT_BUCKETS);
 //pub const HL_SIZE = if (configl.USE_NNUE) 128 else 0;
 pub const INPUT_SIZE = 768; // 6 pieces x 2 colors x 64 sqs
@@ -45,6 +46,13 @@ const _VEC_QA: __m512i = ssel._mm512_set1_epi16(QA);
 pub inline fn bucketIdx(occ: u64) usize {
     return @divFloor(chessl.popcount(occ) - 2, BUCKET_DIV);
 }
+pub const _network = extern struct {
+    accWeights: [INPUT_SIZE * HL_SIZE]i16 = @splat(0),
+    accBiases: [HL_SIZE]i16 = @splat(0),
+
+    outputWeights: [2 * HL_SIZE]i16 = @splat(0),
+    outputBiase: i16 = 0,
+};
 
 //https://www.chessprogramming.org/NNUE
 pub const network = extern struct {
@@ -323,9 +331,13 @@ pub fn main(alloc: std.mem.Allocator) !void {
     //std.debug.print("{any}\n", .{nnueNet.accBiases});
     //std.debug.print("{any}\n", .{nnueNet.outputWeights});
     //std.debug.print("{any}\n", .{nnueNet.outputBiase});
-    std.debug.print("size of bucket net {d} bytes \n", .{@sizeOf(network)});
-    std.debug.print("embeded net {d} bytes \n", .{embeded_net.len});
+    std.debug.print("size of bucket net {d} bytes  ___ orig {d} \n", .{ @sizeOf(network), @sizeOf(_network) });
+    std.debug.print("embeded net {d} bytes\n", .{embeded_net.len});
     std.debug.print("align of network {d} bytes \n", .{@alignOf(network)});
     try deb(alloc);
+
+    const e = @embedFile("extern/feanor.nnue");
+    std.debug.print("{d} \n", .{e.len});
+
     return;
 }

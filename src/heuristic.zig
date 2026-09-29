@@ -27,7 +27,7 @@ const moveBBState = movel.moveBBState;
 const scoreType: type = typel.scoreType;
 pub const scoreVect: type = @Vector(2, scoreType);
 pub const psqtVect: type = @Vector(2, scoreType);
-const milliDepth: type = typel.milliDepth;
+const milliDepth = typel.milliDepth;
 
 const MG = typel.MG;
 const EG = typel.EG;
@@ -45,10 +45,9 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
     var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB);
 
-    ret += evaluate_material(p_state);
+    ret += evaluate_pieces(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
-    ret += evaluate_pawnStructure(p_state);
     ret += evaluate_king(p_state, (computeTaperedV(ret, phase) + p_state.frame.psqtEval) > 0);
 
     return computeTaperedV(ret, phase) + p_state.frame.psqtEval;
@@ -67,7 +66,6 @@ pub inline fn c_evaluate(p_state: *const boardl.boardState, white: bool, nnuePai
 pub const heuristicComponents = struct {
     PSQT: scoreType = 0,
     Mobility: scoreType = 0,
-    PawnStruct: scoreType = 0,
     Safety: scoreType = 0,
     Material: scoreType = 0,
     Structure: scoreType = 0,
@@ -75,13 +73,13 @@ pub const heuristicComponents = struct {
     nnueW: scoreType = 0,
     nnueB: scoreType = 0,
     pub fn total(self: *const heuristicComponents) scoreType {
-        return self.PSQT + self.Mobility + self.PawnStruct + self.Safety + self.Structure + self.King + self.Material;
+        return self.PSQT + self.Mobility + self.Safety + self.Structure + self.King + self.Material;
     }
     pub fn print(self: *const heuristicComponents) void {
         if (configl.USE_NNUE) {
-            std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Material = {d}, Structure = {d}, King = {d}, Total = {d} NNUE-W = {d} NNUE-B = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Material, self.Structure, self.King, self.total(), self.nnueW, self.nnueB });
+            std.debug.print("Score: PSQT = {d}, Mobility = {d}, Safety = {d}, Material = {d}, Structure = {d}, King = {d}, Total = {d} NNUE-W = {d} NNUE-B = {d}\n", .{ self.PSQT, self.Mobility, self.Safety, self.Material, self.Structure, self.King, self.total(), self.nnueW, self.nnueB });
         } else {
-            std.debug.print("Score: PSQT = {d}, Mobility = {d}, PawnStruct = {d}, Safety = {d}, Material = {d}, Structure = {d}, King = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.PawnStruct, self.Safety, self.Material, self.Structure, self.King, self.total() });
+            std.debug.print("Score: PSQT = {d}, Mobility = {d}, Safety = {d}, Material = {d}, Structure = {d}, King = {d}, Total = {d}\n", .{ self.PSQT, self.Mobility, self.Safety, self.Material, self.Structure, self.King, self.total() });
         }
     }
 };
@@ -98,10 +96,9 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
         .PSQT = p_state.frame.psqtEval,
         .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0), phase),
-        .Material = computeTaperedV(evaluate_material(p_state), phase),
+        .Material = computeTaperedV(evaluate_pieces(p_state), phase),
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
         .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
-        .PawnStruct = computeTaperedV(evaluate_pawnStructure(p_state), phase),
     };
     if (configl.USE_NNUE) {
         // always from white perspective?
@@ -163,33 +160,91 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
     return .{ (isoS * weightl.global_IsolatedPawnVal[MG]) + (doS * weightl.global_StackedPawnVal[MG]) + (paS * weightl.global_PassedPawnVal[MG]) + (duoS * weightl.global_phalanxDuoPawnVal[MG]) + (connectS * weightl.global_connectionPawnVal[MG]), (isoS * weightl.global_IsolatedPawnVal[EG]) + (doS * weightl.global_StackedPawnVal[EG]) + (paS * weightl.global_PassedPawnVal[EG]) + (duoS * weightl.global_phalanxDuoPawnVal[EG]) + (connectS * weightl.global_connectionPawnVal[EG]) };
 }
 pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
+    _ = p_state;
     // going to use "raw" mobility only taking board coverage
     const moveW: i64 = @intCast(p_whiteMoveBB.count());
     const moveB: i64 = @intCast(p_blackMoveBB.count());
+
     const v = @as(scoreType, @intCast(moveW - moveB));
     const moveAmountScore: scoreVect = .{ weightl.global_MobilityVal[MG] * v, weightl.global_MobilityVal[EG] * v };
+    return moveAmountScore;
+}
+pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scoreVect {
+    // features
+    // in mg king safety
+    //  - pawn shield, if no shield or openfile near king, penalty
+    //  - pawn storm enemy pawn near and in front of the king is penalise
+    // [x] in eg king centralization
+    // [x] in mg/eg penalize king if no pawn on current flank
+    // malus on number of pinned TODO: compute other sides pinned pieces
+
+    // [x] in eg king "tropism" only for now get the minimum distance to pawn
+
+    const wKing = squareInfo.init(p_state.b.wKingSq);
+    const bKing = squareInfo.init(p_state.b.bKingSq);
+    const wP = p_state.getPieceBB(.nWhitePawn);
+    const bP = p_state.getPieceBB(.nBlackPawn);
+    const wKingTropism = chess.kingPawnTropism(wP, wKing);
+    const bKingTropism = chess.kingPawnTropism(bP, bKing);
+    const tropismDelta = -weightl.global_KingTropism * (wKingTropism - bKingTropism);
+    var ret: scoreVect = .{ 0, tropismDelta };
+    const distance = wKing.computeMHDistance(bKing);
+    const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) distance else -distance;
+    ret += .{ 0, bonus * weightl.global_KingProximityVal };
+    const deltaPawnless: scoreType = @as(scoreType, @intFromBool(chess.kingPawnlessFlank(wP, wKing))) - @as(scoreType, @intFromBool(chess.kingPawnlessFlank(bP, bKing)));
+    ret -= .{
+        weightl.global_KingPawnlessFlank[MG] * deltaPawnless,
+        weightl.global_KingPawnlessFlank[EG] * deltaPawnless,
+    };
+
+    return ret;
+}
+pub inline fn evaluate_pieces(p_state: *const boardl.boardState) scoreVect {
+    // counting negative for white as the best safety is not attackers => 0 heuristic
+    // https://chessprogramming.org/Evaluation_of_Pieces
+    // pawn:
+    //  - pawn structure
+    // knight:
+    //  - decrease val with less pawns
+    //  - outpost knight destination that are not attacked but defended by own pawn
+    //  - trapped knight in A8/H8/A7/H7 or A1/H1/A2/H2
+    //  - remove pawn attacked squares from knight mobility
+    //  - bonus if knight defended by pawn
+    //  - malus if undefended (1)
+    //
+    // bishop:
+    //  - bonus if control of a potential queening square
+    //  - malus if undefended (1)
+    //  - pairs
+    //
+    // rook:
+    //  - increase val with less pawns
+    //  - openfile
+    //  - 7th or 8th rank
+    //  - rook behind passed pawns
+    //  - small bonus if rook on same file as queen
+    //  - bonus if rooks "doubled"(rooks defending each other)
+    //
+    //  queen:
+    //  ?
+    //
+    // king:
+    //  - outside of this evaluate_king
+    //
+
+    // bishop
+    const nPairs: scoreType = @as(scoreType, @intFromBool(p_state.getPieceCount(.nWhiteBishop) == 2)) - @as(scoreType, @intFromBool(p_state.getPieceCount(.nBlackBishop) == 2));
+    const bishopS: scoreVect = .{ nPairs * weightl.global_materialBishopPair[MG], nPairs * weightl.global_materialBishopPair[EG] };
+
+    // rook
     const nOpenRookW: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.WHITE), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE), true)));
     const nOpenRookB: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.BLACK), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK), false)));
     const deltaOpenRook = nOpenRookW - nOpenRookB;
-    const pieceMobility: scoreVect = .{ weightl.global_OpenFileRookVal[MG] * deltaOpenRook, weightl.global_OpenFileRookVal[EG] * deltaOpenRook };
-    return moveAmountScore + pieceMobility;
-}
-pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scoreVect {
-    if (p_state.isEndGame()) {
-        const wKing = squareInfo.init(p_state.b.wKingSq);
-        const bKing = squareInfo.init(p_state.b.bKingSq);
+    const rookS: scoreVect = .{ weightl.global_OpenFileRookVal[MG] * deltaOpenRook, weightl.global_OpenFileRookVal[EG] * deltaOpenRook };
 
-        const distance = wKing.computeMHDistance(bKing);
-        const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) distance else -distance;
-        return .{ bonus * weightl.global_KingProximityVal[MG], bonus * weightl.global_KingProximityVal[EG] };
-    } else {
-        return .{ 0, 0 };
-    }
-}
-pub inline fn evaluate_material(p_state: *const boardl.boardState) scoreVect {
-    // counting negative for white as the best safety is not attackers => 0 heuristic
-    const nPairs: scoreType = @as(scoreType, @intFromBool(p_state.getPieceCount(.nWhiteBishop) == 2)) - @as(scoreType, @intFromBool(p_state.getPieceCount(.nBlackBishop) == 2));
-    return .{ nPairs * weightl.global_materialBishopPair[MG], nPairs * weightl.global_materialBishopPair[EG] };
+    // pawn
+    const pawnsS = evaluate_pawnStructure(p_state);
+    return pawnsS + bishopS + rookS;
 }
 
 pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
@@ -500,8 +555,8 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector, skip
 
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    //const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.occupiedBB_col(.WHITE));
-    //const blackMoveBB = allblackMoveBB.andFn(~p_state.occupiedBB_col(.BLACK));
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.occupiedBB_col(.WHITE));
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.occupiedBB_col(.BLACK));
 
     // mobility
     const moveW: scoreType = @intCast(allwhiteMoveBB.count());
@@ -607,6 +662,11 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector, skip
     const bonus = if (p_state.isEndGame()) (2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) distance else -distance) else 0;
     p_out.appendCoeff(.{ .wcoeff = bonus, .bcoeff = 0 });
     std.debug.assert(idx == configl.TEXEL_KING_DISTANCE_IDX);
+    idx += 1;
+
+    const safe = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
+    p_out.appendCoeff(.{ .wcoeff = safe[0], .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_SAFETY_IDX);
     idx += 1;
 
     if (configl.TUNE_COMPLEXITY) {}

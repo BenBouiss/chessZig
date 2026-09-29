@@ -46,6 +46,7 @@ pub inline fn keyToUpperKey(key: u64) subKeyType {
 const ITEM_PER_BUCKET = 3;
 
 pub inline fn qualityHeuristic(entry: Hash_entry, nNodes: scoreType) scoreType {
+    // from patricia
     const diff = @mod(MAX_AGE + nNodes - @as(scoreType, @intCast(entry.age())), MAX_AGE);
     return entry._depth - diff * 8;
 }

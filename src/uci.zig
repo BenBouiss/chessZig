@@ -7,8 +7,6 @@ const chessl = @import("chess.zig");
 const weightl = @import("weights.zig");
 const timel = @import("time.zig");
 
-const e_uciCMD = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS };
-
 pub const uciState = struct {
     eng: enginel.engine = undefined,
     running: bool = false,
@@ -92,6 +90,9 @@ pub const uciState = struct {
                 .PRINT => {
                     chessl.print_boardstate(&state.eng.state);
                     return true;
+                },
+                .DATAGEN => {
+                    return state.eng.executeDatagenCmd(cmdBuffer);
                 },
             }
         } else if (cmdType == .UCI) {

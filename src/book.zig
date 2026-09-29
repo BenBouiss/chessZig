@@ -10,32 +10,39 @@ const boardl = @import("board.zig");
 
 const string = stringl.string;
 
-pub const outcomeFlag = enum(u8) { draw, blackWin, whiteWin };
+pub const outcomeFlag = enum(u8) { any, draw, blackWin, whiteWin };
+pub const entryType = enum(u8) { line, fen };
+
+pub const bookErr = error{noValidEntryErr};
 
 pub fn getOutcomeFlag(str: []const u8) outcomeFlag {
     if (utilsl.contains(str, "1/2-1/2", .ignoreCase)) {
         return .draw;
     }
-    // dont know from there
     if (utilsl.contains(str, "1-0", .ignoreCase)) {
         return .whiteWin;
     }
     if (utilsl.contains(str, "0-1", .ignoreCase)) {
         return .blackWin;
     }
-    return .draw;
+    // dont know from there
+    return .any;
 }
+//
+pub const entry = struct {
+    v: string = undefined,
+    t: entryType = .line,
+};
 pub const openingDatabase = struct {
     //
-    drawnEntries: std.ArrayList(string) = undefined,
-    whiteEntries: std.ArrayList(string) = undefined,
-    blackEntries: std.ArrayList(string) = undefined,
+    drawnEntries: std.ArrayList(entry) = .empty,
+    whiteEntries: std.ArrayList(entry) = .empty,
+    blackEntries: std.ArrayList(entry) = .empty,
     initialized: bool = false,
-    size: usize = 0,
 
     rngIntGenerator: std.Random.DefaultPrng = undefined,
     seed: u64 = 42,
-    pub fn init(alloc: std.mem.Allocator, path: *const string, seed: u64, verbose: bool) !openingDatabase {
+    pub fn init(alloc: std.mem.Allocator, path: []const u8, seed: u64, verbose: bool) !openingDatabase {
         // exemple of an entry
         // [Event "?"]
         //[Site "?"]
@@ -56,26 +63,73 @@ pub const openingDatabase = struct {
         ret.whiteEntries = try .initCapacity(alloc, 4);
         ret.blackEntries = try .initCapacity(alloc, 4);
         ret.initialized = true;
-        try readEntries(&ret, alloc, path._slice());
+        if (utilsl.contains(path, ".pgn", .ignoreCase)) {
+            try readEntriesPgn(&ret, alloc, path);
+        } else if (utilsl.contains(path, ".epd", .ignoreCase)) {
+            try readEntriesEpd(&ret, alloc, path);
+        }
         ret.setSeed(seed);
         if (verbose) {
             ret.printInfo();
         }
         return ret;
     }
-    pub fn addEntry(p_self: *openingDatabase, alloc: std.mem.Allocator, flag: outcomeFlag, lineStr: *string) !void {
+    pub fn addEntry(p_self: *openingDatabase, alloc: std.mem.Allocator, flag: outcomeFlag, lineStr: *string, t: entryType) !void {
         switch (flag) {
-            .draw => {
-                try p_self.drawnEntries.append(alloc, try lineStr.copy(alloc));
+            .draw, .any => {
+                try p_self.drawnEntries.append(alloc, .{ .t = t, .v = try lineStr.copy(alloc) });
             },
             .whiteWin => {
-                try p_self.whiteEntries.append(alloc, try lineStr.copy(alloc));
+                try p_self.whiteEntries.append(alloc, .{ .t = t, .v = try lineStr.copy(alloc) });
             },
             .blackWin => {
-                try p_self.blackEntries.append(alloc, try lineStr.copy(alloc));
+                try p_self.blackEntries.append(alloc, .{ .t = t, .v = try lineStr.copy(alloc) });
             },
         }
-        p_self.size += 1;
+    }
+    pub fn getSize(p_self: *const openingDatabase, outcome: outcomeFlag) usize {
+        switch (outcome) {
+            .draw => {
+                return p_self.drawnEntries.items.len;
+            },
+            .whiteWin => {
+                return p_self.whiteEntries.items.len;
+            },
+            .blackWin => {
+                return p_self.blackEntries.items.len;
+            },
+            .any => {
+                return p_self.drawnEntries.items.len + p_self.whiteEntries.items.len + p_self.blackEntries.items.len;
+            },
+        }
+    }
+    pub fn getItem(p_self: *const openingDatabase, outcome: outcomeFlag, idx: usize) ?entry {
+        const n = p_self.getSize(outcome);
+        if (idx >= n) {
+            return null;
+        }
+        switch (outcome) {
+            .draw => {
+                return p_self.drawnEntries.items[idx];
+            },
+            .whiteWin => {
+                return p_self.whiteEntries.items[idx];
+            },
+            .blackWin => {
+                return p_self.blackEntries.items[idx];
+            },
+            .any => {
+                const ndraw = p_self.drawnEntries.items.len;
+                const nwhiteW = p_self.whiteEntries.items.len;
+                if (idx < ndraw) {
+                    return p_self.drawnEntries.items[idx];
+                }
+                if (idx < (ndraw + nwhiteW)) {
+                    return p_self.whiteEntries.items[idx];
+                }
+                return p_self.blackEntries.items[idx];
+            },
+        }
     }
     pub fn setSeed(p_self: *openingDatabase, seed: u64) void {
         p_self.seed = seed;
@@ -86,40 +140,38 @@ pub const openingDatabase = struct {
             return;
         }
         for (p_self.whiteEntries.items) |*str| {
-            str.free(alloc);
+            str.v.free(alloc);
         }
         for (p_self.blackEntries.items) |*str| {
-            str.free(alloc);
+            str.v.free(alloc);
         }
         for (p_self.drawnEntries.items) |*str| {
-            str.free(alloc);
+            str.v.free(alloc);
         }
         p_self.whiteEntries.deinit(alloc);
         p_self.blackEntries.deinit(alloc);
         p_self.drawnEntries.deinit(alloc);
         p_self.initialized = false;
     }
-    pub fn pickOne(p_self: *openingDatabase, flag: outcomeFlag) string {
+    pub fn pickOneState(p_self: *openingDatabase, flag: outcomeFlag) !boardl.boardState {
         std.debug.assert(p_self.initialized);
-        var entries: std.ArrayList(string) = undefined;
-        switch (flag) {
-            .draw => {
-                entries = p_self.drawnEntries;
+        var randInt = p_self.rngIntGenerator.random();
+        const n = p_self.getSize(flag);
+        std.debug.assert(n != 0);
+        const randIdx = randInt.intRangeAtMost(usize, 0, n - 1);
+        const ent = p_self.getItem(flag, randIdx) orelse return bookErr.noValidEntryErr;
+        switch (ent.t) {
+            .line => {
+                return try chessl.algebraicLineToBoardstate(&ent.v);
             },
-            .whiteWin => {
-                entries = p_self.whiteEntries;
-            },
-            .blackWin => {
-                entries = p_self.blackEntries;
+            .fen => {
+                return try chessl.getBoardFromFen(ent.v._slice());
             },
         }
-        var randInt = p_self.rngIntGenerator.random();
-        const randIdx = randInt.intRangeAtMost(usize, 0, entries.items.len - 1);
-        return entries.items[randIdx];
     }
-    pub fn sample(p_self: *openingDatabase, alloc: std.mem.Allocator, size: usize, flag: outcomeFlag) !std.ArrayList(string) {
+    pub fn sample(p_self: *openingDatabase, alloc: std.mem.Allocator, size: usize, flag: outcomeFlag) !std.ArrayList(entry) {
         std.debug.assert(p_self.initialized);
-        var drawing: std.ArrayList(string) = undefined;
+        var drawing: std.ArrayList(entry) = undefined;
         switch (flag) {
             .draw => {
                 drawing = p_self.drawnEntries;
@@ -130,8 +182,11 @@ pub const openingDatabase = struct {
             .blackWin => {
                 drawing = p_self.blackEntries;
             },
+            .any => {
+                @panic("hehe");
+            },
         }
-        var ret: std.ArrayList(string) = try .initCapacity(alloc, 4);
+        var ret: std.ArrayList(entry) = try .initCapacity(alloc, 4);
         var randInt = p_self.rngIntGenerator.random();
         for (0..size) |_| {
             const randIdx = randInt.intRangeAtMost(usize, 0, drawing.items.len);
@@ -145,7 +200,7 @@ pub const openingDatabase = struct {
         std.log.info("Number of black won openings: {d}", .{p_self.blackEntries.items.len});
     }
 };
-pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: []const u8) !void {
+pub fn readEntriesPgn(db: *openingDatabase, alloc: std.mem.Allocator, path: []const u8) !void {
     const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
     defer file.close(mainl.getGlobalIo());
     var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
@@ -172,7 +227,7 @@ pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: []const
             emptySpaces += 1;
             if (emptySpaces == 2) {
                 // save to db
-                db.addEntry(alloc, currentEntriesType, &lineStr) catch {
+                db.addEntry(alloc, currentEntriesType, &lineStr, .line) catch {
                     @panic("Cant add entries to database");
                 };
                 lineStr.clearRetainingCapacity();
@@ -190,6 +245,28 @@ pub fn readEntries(db: *openingDatabase, alloc: std.mem.Allocator, path: []const
             _ = lineStr.put(' ');
             try lineStr.extendWithResize(alloc, s._slice()[0 .. size - 1]);
         }
+    }
+}
+pub fn readEntriesEpd(db: *openingDatabase, alloc: std.mem.Allocator, path: []const u8) !void {
+    var read: u64 = 0;
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
+    const file_size = try file.length(mainl.getGlobalIo());
+    var buffer: []u8 = try alloc.alloc(u8, file_size);
+    defer file.close(mainl.getGlobalIo());
+    defer alloc.free(buffer);
+
+    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer[0..buffer.len], 0);
+    var itr = std.mem.tokenizeAny(u8, buffer, "\n");
+    var strBuffer: [chessl.MAX_FEN_LENGTH]u8 = @splat(0);
+
+    while (itr.next()) |line| {
+        if (read % 1024 == 0) {
+            std.debug.print("read {d} entries \r", .{read});
+        }
+        var fen: string = .initFromBuffer(&strBuffer);
+        fen.copyFromSlice(line) catch unreachable;
+        try db.addEntry(alloc, .any, &fen, .fen);
+        read += 1;
     }
 }
 
@@ -214,12 +291,26 @@ pub fn test_read(path: *string) !void {
         std.debug.print("Found {d} bytes in the file '{s}'\n", .{ size, s._slice()[0 .. size - 1] });
     }
 }
+const boardFrameStack = struct {
+    item: [chessl.MAX_POSSIBLE_MOVE]boardl.boardFrame = undefined,
+    len: usize = 0,
+    pub fn pop(self: *boardFrameStack) boardl.boardFrame {
+        std.debug.assert(self.len != 0);
+        self.len -= 1;
+        return self.item[self.len];
+    }
+    pub fn push(self: *boardFrameStack, f: boardl.boardFrame) void {
+        std.debug.assert(self.len < self.item.len);
+        self.item[self.len] = f;
+        self.len += 1;
+    }
+};
 
 pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
-    var db = try openingDatabase.init(alloc, path, 42, false);
+    var db = try openingDatabase.init(alloc, path._slice(), 42, false);
     defer db.free(alloc);
     db.printInfo();
-    var openings: std.ArrayList(string) = .empty;
+    var openings: std.ArrayList(entry) = .empty;
     if (full) {
         openings.deinit(alloc);
         openings = db.drawnEntries;
@@ -228,10 +319,17 @@ pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
     }
 
     const base = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
-    var stack: boardl.boardStack = .{};
+    var stack: boardFrameStack = .{};
     for (0..openings.items.len) |i| {
+        if (openings.items[i].t == .fen) {
+            _ = chessl.getBoardFromFen(openings.items[i].v._slice()) catch |err| {
+                std.debug.print("error {} on fen {s} \n", .{ err, openings.items[i].v._slice() });
+                @panic("err");
+            };
+            continue;
+        }
         var tmp = base.copy();
-        var algeFen = openings.items[i];
+        var algeFen = openings.items[i].v;
         const moves = try chessl._algebraicLineToIMoveMatch(algeFen._slice(), &tmp);
         tmp = base.copy();
 
@@ -263,7 +361,8 @@ pub fn test_draw(path: *string, alloc: std.mem.Allocator) !void {
 pub fn main(alloc: std.mem.Allocator) !void {
     //
     //const path = "opening/8moves_v3.pgn";
-    const path = "../bin/CCRL-4040.[2370489].pgn";
+    //const path = "../bin/CCRL-4040.[2370489].pgn";
+    const path = "opening/UHO_Lichess_4852_v1.epd";
     var s = try stringl.string.initFromSlice(alloc, path);
     defer s.free(alloc);
     //hashl.zobristKeys.free(alloc);
@@ -272,6 +371,7 @@ pub fn main(alloc: std.mem.Allocator) !void {
         return;
     }
     try test_db(&s, alloc, true);
+
     std.log.info("[TEST]: Reading random algebraic position passed", .{});
     //try test_read(path);
     //try test_draw(path, alloc);

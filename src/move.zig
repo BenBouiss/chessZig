@@ -254,7 +254,6 @@ pub const matchMoveContainer = struct {
             std.debug.print("{s} ", .{move.getStr()});
         }
         std.debug.print("\n", .{});
-        return;
     }
     pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
         p_self.moves[p_self.len] = move;
@@ -319,7 +318,6 @@ pub const matchMoveContainer = struct {
             }
             _ = lineStr.put(' ');
         }
-        return;
     }
     pub fn getLineString(self: matchMoveContainer, alloc: std.mem.Allocator) !string {
         var lineStr: string = try string.initZero(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
@@ -448,7 +446,6 @@ pub const moveBBState = struct {
         p_self.promotionMoves &= bb;
         p_self.queenSideCastlingMoves &= bb;
         p_self.kingSideCastlingMoves &= bb;
-        return;
     }
     pub fn orEq(p_self: *moveBBState, bb: u64) void {
         p_self.pawnMoves |= bb;
@@ -464,7 +461,6 @@ pub const moveBBState = struct {
         p_self.promotionMoves |= bb;
         p_self.queenSideCastlingMoves |= bb;
         p_self.kingSideCastlingMoves |= bb;
-        return;
     }
 
     pub fn print(self: moveBBState) void {
@@ -521,13 +517,7 @@ pub const line = struct {
         ret.len = 0;
         return ret;
     }
-    pub inline fn reset(self: *line) void {
-        self.len = 0;
-    }
-    pub inline fn add(self: *line, move: IMove) void {
-        self.moves[self.len] = move;
-        self.len += 1;
-    }
+
     pub fn format(self: *const line, writer: *std.Io.Writer) !void {
         for (0..self.len) |i| {
             try writer.print("{s} ", .{utilsl.trimStr(&self.moves[i].getStr())});
@@ -539,11 +529,9 @@ pub const line = struct {
         }
         std.debug.print("\n", .{});
     }
-    pub fn setLineFromPV(self: *line, pv: *const line) void {
+    pub inline fn setLineFromPV(self: *line, pv: *const line) void {
         self.len = pv.len;
-        for (0..self.len) |i| {
-            self.moves[i] = pv.moves[i];
-        }
+        @memcpy(self.moves[0..self.len], &pv.moves);
     }
     pub fn onBestMove(self: *line, move: IMove, other: ?*const line) void {
         if (other) |child| {
@@ -555,20 +543,8 @@ pub const line = struct {
         self.moves[0] = move;
         self.len += 1;
     }
-    pub fn testPv(self: *line, state: *const boardl.boardState) bool {
-        var tmp = state.copy();
-        for (0..self.len) |i| {
-            const move = self.moves[i];
-            const fmoves = moveGenl.generateLegalMoves(&tmp);
-            if (!move.isIn(fmoves)) {
-                chess.print_boardstate(&tmp);
-                std.debug.print("invalid move {s} \n", .{move.getStr()});
-                self.print();
-                return false;
-            }
-            tmp.makeMove(move);
-        }
-        return true;
+    pub inline fn reset(self: *line) void {
+        self.len = 0;
     }
 };
 

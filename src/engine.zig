@@ -13,6 +13,7 @@ const historyl = @import("history.zig");
 const weightl = @import("weights.zig");
 const ucil = @import("uci.zig");
 const typel = @import("type.zig");
+const datagenl = @import("datagen.zig");
 
 const build_options = @import("build_options");
 
@@ -24,7 +25,7 @@ const stringl = @import("string.zig");
 
 const debug_err = chess.debug_err;
 
-const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS };
+const e_engineCmd = enum(u8) { NOOP = 0, QUIT, STOP, ISREADY, GO, POSITION, UCINEWGAME, REGISTER, SETOPTION, DEBUG, UCI, PONDERHIT, PRINT, BENCHMARK, PRINTPARAMS, DATAGEN };
 const e_goTypes = enum(u8) { DEFAULT, PONDER, EVAL, PERFT };
 const e_engineOptions = enum(u8) { THREADS = 0, HASHTABLESIZE, INVALID, UCI_ELO, FIXED_DEPTH, USESTATICSEARCH, CLEAR_HASH, PRINT_METRIC, TRACKMETRICS, REPORTPROG, SAVELOGS, LOGSPATH };
 pub const e_engineOptionsArgType = enum(u8) { SPIN = 0, CHECK, STRING, COMBO, BUTTON, INVALID };
@@ -45,7 +46,7 @@ pub const goArgStruct = struct {
 
     movestogo: u64 = 0,
     movetime: i64 = 0,
-    nodes: u64 = 0,
+    nodes: u64 = std.math.maxInt(u64),
     depth: typel.depthT = 0,
     mate: u16 = 0,
 };
@@ -398,6 +399,22 @@ pub const engine = struct {
         _ = cmdBuffer;
         return true;
     }
+    pub fn executeDatagenCmd(p_self: *engine, cmdBuffer: []const u8) bool {
+        // format: datagen {book_path} {thread}
+
+        var gen = utilsl.splitGenerator(u8).init(cmdBuffer, ' ');
+        if (gen.len() != 3) {
+            std.debug.print("Expected format datagen {{book_path}} {{nThreads}}\n", .{});
+            return false;
+        }
+        p_self.scheduler.inDatagen = true;
+        datagenl.main(p_self.alloc, &p_self.scheduler, cmdBuffer) catch {
+            p_self.scheduler.inDatagen = false;
+            return false;
+        };
+
+        return true;
+    }
     pub fn executeSetOptionCmd(p_self: *engine, alloc: std.mem.Allocator, cmdBuffer: []const u8) bool {
         // format: setoption name <id> [value <x>]
         var tokens = utilsl.split(u8, alloc, cmdBuffer, ' ') catch {
@@ -550,7 +567,10 @@ pub const engine = struct {
         p_self.refreshInternals();
     }
     pub fn refreshInternals(p_self: *engine) void {
-        historyl._initMoveOrdering();
+        if (p_self.scheduler._threadPool.running) {
+            p_self.scheduler._threadPool.resetDatas();
+        }
+
         _ = p_self.updateHash(p_self.options.hashTableSize) catch {};
     }
 
@@ -571,6 +591,9 @@ pub const engine = struct {
         p_self.scheduler.handleInterrupt();
     }
     pub fn executeGoCmd(p_self: *engine, cmdBuffer: []const u8) bool {
+        if (p_self.scheduler.inDatagen) {
+            return false;
+        }
         const goArg = parseGoCmd(cmdBuffer);
 
         p_self.scheduler.reset();
@@ -585,7 +608,6 @@ pub const engine = struct {
             };
             p_self.respond("engineOp incrementalLoop .ADDTHREAD");
         }
-
         return schedulerl.dispatchUciGoCmd(p_self, goArg);
     }
     pub fn executeBenchmarkCmd(p_self: *engine, cmdBuffer: []const u8) bool {
@@ -808,6 +830,8 @@ pub fn getEngineCmdType(cmd: []const u8) e_engineCmd {
         return .PRINT;
     } else if (utilsl.startsWith(cmd, "benchmark", .ignoreCase)) {
         return .BENCHMARK;
+    } else if (utilsl.startsWith(cmd, "datagen", .ignoreCase)) {
+        return .DATAGEN;
     }
     return .NOOP;
 }

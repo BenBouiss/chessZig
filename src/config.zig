@@ -39,7 +39,10 @@ pub const USE_NNUE = false;
 //pub const NET_PATH = "extern/simple_128_hl_8_output_buckets-140/quantised.bin";
 //pub const NET_PATH = "extern/simple_128_hl_8_output_buckets-320/quantised.bin";
 //pub const NET_PATH = "extern/simple_1024_hl_8_output_buckets-110/quantised.bin";
-pub const NET_PATH = "extern/2_output_buckets-10/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets-310/quantised.bin";
+pub const NET_PATH = "extern/2_output_buckets_1024hl_8bucket-20/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets_1024l_8bucket_ownData-20/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets_1024l_8bucket_ownData_2_outcome-20/quantised.bin";
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
@@ -73,29 +76,30 @@ pub const TEXEL_PAWN_PASSED_IDX = 9;
 pub const TEXEL_PAWN_PHALANX_IDX = 10;
 pub const TEXEL_PAWN_CONNECTED_IDX = 11;
 
+// king proximity
+pub const TEXEL_KING_DISTANCE_IDX = 12;
+//
 // safety
+pub const TEXEL_SAFETY_IDX = 13;
 //pub const TEXEL_SAFETY_PAWN_PROX_IDX = 15;
 //pub const TEXEL_SAFETY_BISHOP_PROX_IDX = 16;
 //pub const TEXEL_SAFETY_KNIGHT_PROX_IDX = 17;
 //pub const TEXEL_SAFETY_ROOK_PROX_IDX = 18;
 //pub const TEXEL_SAFETY_QUEEN_PROX_IDX = 19;
 
-// king proximity
-pub const TEXEL_KING_DISTANCE_IDX = 12;
-
 // counts
-pub const TEXEL_PAWN_COUNT_IDX = 13;
-pub const TEXEL_BISHOP_COUNT_IDX = 14;
-pub const TEXEL_KNIGHT_COUNT_IDX = 15;
-pub const TEXEL_ROOK_COUNT_IDX = 16;
-pub const TEXEL_QUEEN_COUNT_IDX = 17;
+pub const TEXEL_PAWN_COUNT_IDX = 14;
+pub const TEXEL_BISHOP_COUNT_IDX = 15;
+pub const TEXEL_KNIGHT_COUNT_IDX = 16;
+pub const TEXEL_ROOK_COUNT_IDX = 17;
+pub const TEXEL_QUEEN_COUNT_IDX = 18;
 
 // PSQT
-pub const TEXEL_PAWN_PSQT_IDX = 18;
-pub const TEXEL_BISHOP_PSQT_IDX = 82;
-pub const TEXEL_KNIGHT_PSQT_IDX = 146;
-pub const TEXEL_ROOK_PSQT_IDX = 210;
-pub const TEXEL_QUEEN_PSQT_IDX = 274;
-pub const TEXEL_KING_PSQT_IDX = 338;
+pub const TEXEL_PAWN_PSQT_IDX = 19;
+pub const TEXEL_BISHOP_PSQT_IDX = 83;
+pub const TEXEL_KNIGHT_PSQT_IDX = 147;
+pub const TEXEL_ROOK_PSQT_IDX = 211;
+pub const TEXEL_QUEEN_PSQT_IDX = 275;
+pub const TEXEL_KING_PSQT_IDX = 339;
 
 pub const N_TERMS = TEXEL_KING_PSQT_IDX + 64; // see below

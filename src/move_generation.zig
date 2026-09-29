@@ -9,9 +9,9 @@ const typel = @import("type.zig");
 const heuristicl = @import("heuristic.zig");
 const configl = @import("config.zig");
 const weightl = @import("weights.zig");
-const historyl = @import("history.zig");
 const magicl = @import("magic.zig");
 const alphaBetal = @import("alphaBeta.zig");
+const threadingl = @import("threading.zig");
 
 const moveContainer = movel.moveContainer;
 const moveBBState = movel.moveBBState;
@@ -35,6 +35,29 @@ pub const safetyArea: [64]u64 = initSafetyArea();
 
 pub const diagonalBB: [64]u64 = initDiagonal(false);
 pub const antiDiagonalBB: [64]u64 = initDiagonal(true);
+
+pub const antiDiagIdxs: [64]scoreType = [_]scoreType{
+    7,  6,  5,  4,  3,  2, 1, 0,
+    8,  7,  6,  5,  4,  3, 2, 1,
+    9,  8,  7,  6,  5,  4, 3, 2,
+    10, 9,  8,  7,  6,  5, 4, 3,
+    11, 10, 9,  8,  7,  6, 5, 4,
+    12, 11, 10, 9,  8,  7, 6, 5,
+    13, 12, 11, 10, 9,  8, 7, 6,
+    14, 13, 12, 11, 10, 9, 8, 7,
+};
+
+pub const diagIdxs: [64]scoreType = [_]scoreType{
+    0, 1, 2, 3,  4,  5,  6,  7,
+    1, 2, 3, 4,  5,  6,  7,  8,
+    2, 3, 4, 5,  6,  7,  8,  9,
+    3, 4, 5, 6,  7,  8,  9,  10,
+    4, 5, 6, 7,  8,  9,  10, 11,
+    5, 6, 7, 8,  9,  10, 11, 12,
+    6, 7, 8, 9,  10, 11, 12, 13,
+    7, 8, 9, 10, 11, 12, 13, 14,
+};
+
 // https://www.chessprogramming.org/Square_Attacked_By#Obstructed
 
 // https://www.chessprogramming.org/King_Safety will be defined
@@ -816,9 +839,9 @@ pub const typeMoveGenerator = struct {
         p_self.badCaptures.moves.len = 0;
     }
 
-    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, prevLineMove: IMove, hashMove: IMove, seeThreshold: scoreType, skipQuiet: bool, ss: *alphaBetal.searchStack) ?struct { movel.IMove, scoreType } {
+    pub fn pickNext(p_self: *typeMoveGenerator, state: *const boardl.boardState, ply: typel.depthT, prevLineMove: IMove, hashMove: IMove, seeThreshold: scoreType, skipQuiet: bool, ss: *const alphaBetal.searchStack, threadD: *const threadingl.threadData) ?struct { movel.IMove, scoreType } {
         const white = state.whiteToMove();
-        const currS = ss.getFrame(ply);
+        const currS = ss.getFrameCst(ply);
         if (p_self.phase == .TTMOVE) {
             p_self.phase = .GENERATECAPTURES;
             if (hashMove.isValid() and !(hashMove.isQuietMove() and skipQuiet)) {
@@ -840,7 +863,7 @@ pub const typeMoveGenerator = struct {
                         const cPiece: u8 = @intFromEnum(state.getPiece(to));
                         const fpiece: u8 = @intFromEnum(state.getFromPiece(move));
                         //p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + (heuristicl.SEE_values[cPiece] * 100 - @divFloor(heuristicl.SEE_values[fpiece], 100));
-                        p_self.captures.scores[i] = historyl.captureHistory[fpiece][cPiece][to] + heuristicl.SEE_values[cPiece] - heuristicl.SEE_values[fpiece];
+                        p_self.captures.scores[i] = threadD.captureHistory[fpiece][cPiece][to] + heuristicl.SEE_values[cPiece] - heuristicl.SEE_values[fpiece];
                     }
                 }
             }
@@ -866,18 +889,18 @@ pub const typeMoveGenerator = struct {
         if (p_self.phase == .GENERATEQUIETS) {
             if (!p_self.computedQuiets and !skipQuiet) {
                 p_self.generateMove(.QUIET, state);
-                const prevMove = ss.getPrevFrame(ply, 1).playedMove;
-                const prevPiece = @intFromEnum(ss.getPrevFrame(ply, 1).pieceMoved);
+                const prevMove = ss.getPrevFrameCst(ply, 1).playedMove;
+                const prevPiece = @intFromEnum(ss.getPrevFrameCst(ply, 1).pieceMoved);
                 const prevMoveTo = prevMove.getTo();
                 const prevV = prevMove.isValid();
 
-                const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
-                const prevPrevPiece = @intFromEnum(ss.getPrevFrame(ply, 2).pieceMoved);
+                const prevPrevMove = ss.getPrevFrameCst(ply, 2).playedMove;
+                const prevPrevPiece = @intFromEnum(ss.getPrevFrameCst(ply, 2).pieceMoved);
                 const prevPrevMoveTo = prevPrevMove.getTo();
                 const prevPrevV = prevPrevMove.isValid();
 
-                const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
-                const prevPiece4 = @intFromEnum(ss.getPrevFrame(ply, 4).pieceMoved);
+                const prevMove4 = ss.getPrevFrameCst(ply, 4).playedMove;
+                const prevPiece4 = @intFromEnum(ss.getPrevFrameCst(ply, 4).pieceMoved);
                 const prevMove4To = prevMove4.getTo();
                 const prevV4 = prevMove4.isValid();
 
@@ -896,16 +919,16 @@ pub const typeMoveGenerator = struct {
                         const to = move.getTo();
                         const from = move.getFrom();
                         const p: u8 = @intFromEnum(state.getPiece(from));
-                        var score = historyl.historyHeuristic[offset][from][to];
+                        var score = threadD.historyHeuristic[offset][from][to];
                         if (prevV) {
-                            score += historyl.continuationHeuristic[prevPiece][prevMoveTo][p][to];
+                            score += threadD.continuationHeuristic[prevPiece][prevMoveTo][p][to];
                         }
                         if (prevPrevV) {
-                            score += historyl.continuationHeuristic[prevPrevPiece][prevPrevMoveTo][p][to];
+                            score += threadD.continuationHeuristic[prevPrevPiece][prevPrevMoveTo][p][to];
                         }
 
                         if (prevV4) {
-                            score += historyl.continuationHeuristic[prevPiece4][prevMove4To][p][to];
+                            score += threadD.continuationHeuristic[prevPiece4][prevMove4To][p][to];
                         }
                         //p_self.quiets.scores[i] = std.math.clamp(score, -configl.MAX_CONTINUATION_HEURISTIC_VALUE, configl.MAX_CONTINUATION_HEURISTIC_VALUE);
                         p_self.quiets.scores[i] = score;

@@ -39,9 +39,7 @@ pub const string = struct {
         if (slice.len > p_self.capacity) {
             return string_err.nei_error;
         }
-        for (0..slice.len) |i| {
-            p_self.data[i] = slice[i];
-        }
+        @memcpy(p_self.data[0..slice.len], slice);
         p_self.len = slice.len;
     }
     pub fn put(p_self: *string, letter: u8) bool {
@@ -150,7 +148,7 @@ pub const string = struct {
     pub inline fn splitGen(self: *const string, e: u8) utilsl.splitGenerator {
         return utilsl.splitGenerator(u8).init(self._slice(), e);
     }
-    pub fn clearRetainingCapacity(self: *string) void {
+    pub inline fn clearRetainingCapacity(self: *string) void {
         self.len = 0;
     }
 };

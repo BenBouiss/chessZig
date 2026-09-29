@@ -148,8 +148,8 @@ pub fn appendAll(alloc: std.mem.Allocator) !void {
     add_param(alloc, &global_connectionPawnVal[1], -200, 200, "global_connectionPawnVal_EG");
 
     // king
-    add_param(alloc, &global_KingProximityVal[0], -200, 200, "global_KingProximityVal_MG");
-    add_param(alloc, &global_KingProximityVal[1], -200, 200, "global_KingProximityVal_EG");
+    add_param(alloc, &global_KingProximityVal, 0, 100, "global_KingProximityVal");
+    add_param(alloc, &global_KingTropism, 0, 100, "global_KingTropism");
 
     // material
     add_param(alloc, &global_materialBishopPair[0], -200, 300, "global_materialBishopPair_MG");
@@ -298,7 +298,9 @@ pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 3, 11 };
 pub var global_connectionPawnVal: [2]scoreType = .{ 5, 10 };
 
 // king
-pub var global_KingProximityVal: [2]scoreType = .{ 5, 0 };
+pub var global_KingProximityVal: scoreType = 5;
+pub var global_KingTropism: scoreType = 8;
+pub var global_KingPawnlessFlank: [2]scoreType = .{ 8, 32 };
 
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = @splat(pawnScoreArr);

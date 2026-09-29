@@ -1021,24 +1021,25 @@ pub const boardState = struct {
     }
 };
 
-pub const viriGame = struct {
+pub const viriGame = extern struct {
     b: packedBoard align(1),
     bestMove: viriPackedMove align(1),
     pad: u32 align(1) = 0,
 };
 // ref https://github.com/cosmobobak/viriformat
-pub const packedBoard = struct {
-    occ: u64 align(1) = chessl.ONE,
-    pieces: [16]u8 align(1) = @splat(0),
+pub const packedBoard = extern struct {
+    occ: u64 = 0,
+    pieces: [16]u8 = @splat(0),
     enP_side: u8 = 0,
 
     halfMove: u8 = 0,
-    fullMove: u16 align(1) = 0,
-    score: i16 align(1) = 0,
+    fullMove: u16 = 0,
+    score: i16 = 0,
     outcome: u8 = 0, // 0 b, 1 draw, 2 w
     pad: u8 = 0,
     pub fn init(state: *const boardState) packedBoard {
         var ret: packedBoard = .{ .occ = state.b.occupiedBB(), .halfMove = state.frame.halfMoveClock, .fullMove = state.b.turnCount };
+        std.debug.assert(ret.occ != 0);
         var offset: usize = 0;
         for (0..64) |sq| {
             const p = state.getPiece(@intCast(sq));
@@ -1059,27 +1060,27 @@ pub const packedBoard = struct {
                     }
                 }
             }
-            const val: u8 = _p | (@as(u8, chessl.whiteBoolToInt(!w)) << 3);
+            const val: u8 = _p | (@as(u8, chessl.whiteBoolToInt(w)) << 3);
 
             if (offset % 2 == 0) {
-                ret.pieces[offset >> 1] = val;
+                ret.pieces[@divFloor(offset, 2)] = val;
             } else {
-                ret.pieces[offset >> 1] |= (val << 4);
+                ret.pieces[@divFloor(offset, 2)] |= (val << 4);
             }
             offset += 1;
         }
-        const w: u8 = chessl.whiteBoolToInt(!state.whiteToMove());
+        const w: u8 = chessl.whiteBoolToInt(state.whiteToMove());
         const enP: u8 = if (state.frame.enPassantIdx == 0) 64 else @intCast(state.frame.enPassantIdx);
         ret.enP_side = (w << 7) | enP;
         return ret;
     }
 };
-pub const viriPackedMove = struct {
-    move: viriMove align(1) = .{},
-    score: i16 align(1) = 0,
+pub const viriPackedMove = extern struct {
+    move: viriMove = .{},
+    score: i16 = 0,
 };
-pub const viriMove = struct {
-    m_move: u16 align(1) = 0,
+pub const viriMove = extern struct {
+    m_move: u16 = 0,
     // 6 bit from, 6 bit to, 2 bit promo piece, 2 bit enP capture=1, castling = 2, promotions 3
     pub fn init(move: IMove) viriMove {
         var to = move.getTo();
@@ -1120,28 +1121,5 @@ pub const castleS = struct {
                 return .{ .kingFrom = .e8, .kingTo = .c8, .rookFrom = .a8, .rookTo = .d8 };
             }
         }
-    }
-};
-pub const boardStack = struct {
-    stack: [movel.MAX_MATCH_LENGTH]boardFrame = undefined,
-    len: usize = 0,
-
-    pub inline fn push(p_self: *boardStack, frame: boardFrame) void {
-        if (comptime useDebug) {
-            if (p_self.len == movel.MAX_MATCH_LENGTH) {
-                @panic("Board stack is full, forgot to pop?");
-            }
-        }
-        p_self.stack[p_self.len] = frame;
-        p_self.len += 1;
-    }
-    pub inline fn pop(p_self: *boardStack) boardFrame {
-        if (comptime useDebug) {
-            if (p_self.len == 0) {
-                @panic("Popping from empty boardframe, forgot to push?");
-            }
-        }
-        p_self.len -= 1;
-        return p_self.stack[p_self.len];
     }
 };
