@@ -200,7 +200,7 @@ pub const Hash_bucket = struct {
         return true;
     }
 
-    pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, p_state: *const boardl.boardState, nNodes: scoreType) getResult {
+    pub fn getEntryMatchNext(p_self: *Hash_bucket, hash: u64, p_state: *const boardl.boardState, nSearches: u8) getResult {
         const _hash = keyToUpperKey(hash);
         var next: usize = 0;
         var worstQuality: scoreType = 0;
@@ -214,7 +214,7 @@ pub const Hash_bucket = struct {
                 hashTable.stat.miss += 1;
                 return .{ .entry = null, .nextIdx = @intCast(i), .nextPerfectHit = false };
             }
-            const quality = qualityHeuristic(entry, nNodes);
+            const quality = qualityHeuristic(entry, nSearches);
             if (i == 0 or quality < worstQuality) {
                 worstQuality = quality;
                 next = i;
@@ -322,9 +322,9 @@ pub const Hash_table = struct {
         }
     }
 
-    pub fn probeMatch(p_self: *Hash_table, key: u64, p_state: *const boardl.boardState, nNodes: scoreType) probeResult {
+    pub fn probeMatch(p_self: *Hash_table, key: u64, p_state: *const boardl.boardState) probeResult {
         const p_bucket = p_self.getBucketFromFullHashIndex(key);
-        const res = p_bucket.getEntryMatchNext(key, p_state, nNodes);
+        const res = p_bucket.getEntryMatchNext(key, p_state, p_self.gen);
         return .{ .writer = .{ .bucket = p_bucket, .idx = res.nextIdx, .nextPerfectHit = res.nextPerfectHit }, .entry = res.entry };
     }
     pub fn storeEntry(p_self: *Hash_table, entry: Hash_entry, key: u64) bool {

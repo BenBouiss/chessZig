@@ -25,6 +25,7 @@ const stopWatch = timel.stopWatch;
 
 pub var globalPoolDG: threadPool = .{};
 const MAX_THREADS: usize = 64;
+const maxViriLength: usize = @sizeOf(packedBoard) + movel.MAX_MATCH_LENGTH * @sizeOf(boardl.viriPackedMove) + @sizeOf(u32);
 
 const threadPool = struct {
     threads: [MAX_THREADS]threadCtx = @splat(.{}),
@@ -107,7 +108,6 @@ pub fn _threadLoop(ctx: *threadCtx, logger: logl.boardLogFiles, threadId: usize,
         var boardBuffer: [movel.MAX_MATCH_LENGTH]viriGame = undefined;
         var nboard: usize = 0;
         var result: u8 = 1; // 0 black, 1 draw, 2 win
-
         var randMove = randomMove(&state, rand);
         while (randMove.isValid() and !state.isStaleMate() and !ctx.pool.schedule.interrupt) {
             const res = schedulerl._startSearch(&state, &info, .{ .reportProgress = false, .dataGen = true }, typel.MAX_PLY, .{ .softNodeLim = 5_000, .criticalNodeLim = 50_000, .timeMs = 100_000_000 }, tt, &d);
@@ -157,7 +157,6 @@ pub fn _threadLoop(ctx: *threadCtx, logger: logl.boardLogFiles, threadId: usize,
             if (randMove.isValid()) {
                 state.makeMove(randMove);
             }
-            //randMove = randomMove(&state, rand);
         }
         for (0..nboard) |i| {
             boardBuffer[i].b.outcome = result;

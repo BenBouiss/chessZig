@@ -45,10 +45,10 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
     var ret = evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB);
 
-    ret += evaluate_pieces(p_state);
-    ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
+    ret += evaluate_pieces(p_state, &allwhiteMoveBB, &allblackMoveBB);
     ret += evaluate_king(p_state, (computeTaperedV(ret, phase) + p_state.frame.psqtEval) > 0);
+    ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
 
     return computeTaperedV(ret, phase) + p_state.frame.psqtEval;
 }
@@ -96,7 +96,7 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
         .PSQT = p_state.frame.psqtEval,
         .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0), phase),
-        .Material = computeTaperedV(evaluate_pieces(p_state), phase),
+        .Material = computeTaperedV(evaluate_pieces(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
         .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
     };
@@ -160,12 +160,32 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
     return .{ (isoS * weightl.global_IsolatedPawnVal[MG]) + (doS * weightl.global_StackedPawnVal[MG]) + (paS * weightl.global_PassedPawnVal[MG]) + (duoS * weightl.global_phalanxDuoPawnVal[MG]) + (connectS * weightl.global_connectionPawnVal[MG]), (isoS * weightl.global_IsolatedPawnVal[EG]) + (doS * weightl.global_StackedPawnVal[EG]) + (paS * weightl.global_PassedPawnVal[EG]) + (duoS * weightl.global_phalanxDuoPawnVal[EG]) + (connectS * weightl.global_connectionPawnVal[EG]) };
 }
 pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
-    _ = p_state;
     // going to use "raw" mobility only taking board coverage
-    const moveW: i64 = @intCast(p_whiteMoveBB.count());
-    const moveB: i64 = @intCast(p_blackMoveBB.count());
+    //const moveW: i64 = @intCast(p_whiteMoveBB.count());
+    //const moveB: i64 = @intCast(p_blackMoveBB.count());
+    _ = p_state;
+    const wPTb = ~p_whiteMoveBB.pawnAttacks;
+    const bPTb = ~p_blackMoveBB.pawnAttacks;
 
-    const v = @as(scoreType, @intCast(moveW - moveB));
+    const moveW: scoreType = (chess.popcount_t(p_whiteMoveBB.pawnMoves, scoreType) +
+        chess.popcount_t(p_whiteMoveBB.pawnAttacks, scoreType) +
+        chess.popcount_t(p_whiteMoveBB.promotionMoves, scoreType) +
+        chess.popcount_t(p_whiteMoveBB.bishopMoves & bPTb, scoreType) +
+        chess.popcount_t(p_whiteMoveBB.knightMoves & bPTb, scoreType) +
+        chess.popcount_t(p_whiteMoveBB.rookMoves & bPTb, scoreType) +
+        chess.popcount_t(p_whiteMoveBB.queenMoves & bPTb, scoreType) +
+        chess.popcount_t(p_whiteMoveBB.kingMoves, scoreType));
+
+    const moveB: scoreType = (chess.popcount_t(p_blackMoveBB.pawnMoves, scoreType) +
+        chess.popcount_t(p_blackMoveBB.pawnAttacks, scoreType) +
+        chess.popcount_t(p_blackMoveBB.promotionMoves, scoreType) +
+        chess.popcount_t(p_blackMoveBB.bishopMoves & wPTb, scoreType) +
+        chess.popcount_t(p_blackMoveBB.knightMoves & wPTb, scoreType) +
+        chess.popcount_t(p_blackMoveBB.rookMoves & wPTb, scoreType) +
+        chess.popcount_t(p_blackMoveBB.queenMoves & wPTb, scoreType) +
+        chess.popcount_t(p_blackMoveBB.kingMoves, scoreType));
+
+    const v = moveW - moveB;
     const moveAmountScore: scoreVect = .{ weightl.global_MobilityVal[MG] * v, weightl.global_MobilityVal[EG] * v };
     return moveAmountScore;
 }
@@ -187,19 +207,34 @@ pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scor
     const wKingTropism = chess.kingPawnTropism(wP, wKing);
     const bKingTropism = chess.kingPawnTropism(bP, bKing);
     const tropismDelta = -weightl.global_KingTropism * (wKingTropism - bKingTropism);
+    _ = whiteWinning;
     var ret: scoreVect = .{ 0, tropismDelta };
-    const distance = wKing.computeMHDistance(bKing);
-    const bonus = 2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) distance else -distance;
-    ret += .{ 0, bonus * weightl.global_KingProximityVal };
+    const distW = wKing.computeMHDistance(squarel.centerSqInfo);
+    const distB = bKing.computeMHDistance(squarel.centerSqInfo);
+    // maximize the distance to center in MG then minimize in EG
+    ret += .{ (distB - distW) * weightl.global_KingProximityVal[EG], (distW - distB) * weightl.global_KingProximityVal[EG] };
     const deltaPawnless: scoreType = @as(scoreType, @intFromBool(chess.kingPawnlessFlank(wP, wKing))) - @as(scoreType, @intFromBool(chess.kingPawnlessFlank(bP, bKing)));
     ret -= .{
         weightl.global_KingPawnlessFlank[MG] * deltaPawnless,
         weightl.global_KingPawnlessFlank[EG] * deltaPawnless,
     };
+    // pawn shield
+    // https://chessprogramming.org/King_Safety#pawn-shield
+    // check the location of a pawn shield near the possible castling destinations.
+    // pawn shield means original square for pawns or only 1 up move (eg a3)
+    // penalize open file near king
+
+    const openFiles = chess.openFile(p_state.getPieceBB_t(.PAWN));
+    const wKingBB = wKing.getBB();
+    const bKingBB = bKing.getBB();
+    const nOpenW: scoreType = @as(scoreType, @intFromBool((openFiles >> 1) & wKingBB != 0)) + @as(scoreType, @intFromBool((openFiles << 1) & wKingBB != 0));
+    const nOpenB: scoreType = @as(scoreType, @intFromBool((openFiles >> 1) & bKingBB != 0)) + @as(scoreType, @intFromBool((openFiles << 1) & bKingBB != 0));
+    ret -= .{ (nOpenW - nOpenB) * weightl.global_KingOpenFile, 0 };
+    // pawn location = safety area at the corners & and check the intersect for how many pawns? and no openfile
 
     return ret;
 }
-pub inline fn evaluate_pieces(p_state: *const boardl.boardState) scoreVect {
+pub inline fn evaluate_pieces(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // counting negative for white as the best safety is not attackers => 0 heuristic
     // https://chessprogramming.org/Evaluation_of_Pieces
     // pawn:
@@ -209,8 +244,8 @@ pub inline fn evaluate_pieces(p_state: *const boardl.boardState) scoreVect {
     //  - outpost knight destination that are not attacked but defended by own pawn
     //  - trapped knight in A8/H8/A7/H7 or A1/H1/A2/H2
     //  - remove pawn attacked squares from knight mobility
-    //  - bonus if knight defended by pawn
-    //  - malus if undefended (1)
+    //  -  bonus if knight defended by pawn
+    //  - malus if undefended (1) (hanging but not attacked ?)
     //
     // bishop:
     //  - bonus if control of a potential queening square
@@ -219,32 +254,64 @@ pub inline fn evaluate_pieces(p_state: *const boardl.boardState) scoreVect {
     //
     // rook:
     //  - increase val with less pawns
-    //  - openfile
-    //  - 7th or 8th rank
+    //  - [x] openfile
+    //  - [x] 7th or 8th rank
     //  - rook behind passed pawns
-    //  - small bonus if rook on same file as queen
-    //  - bonus if rooks "doubled"(rooks defending each other)
+    //  - [x] small bonus if rook on same file as queen
+    //  - [x] bonus if rooks "doubled"(rooks defending each other)
     //
     //  queen:
     //  ?
     //
     // king:
     //  - outside of this evaluate_king
-    //
+
+    // TODO: reuse the one used in the evaluate_structure somehow
+    //const wAttack = p_whiteMoveBB.getAttackedMask(chess.UNIVERSE);
+    //const bAttack = p_blackMoveBB.getAttackedMask(chess.UNIVERSE);
+
+    // knight
+    const wKnight = p_state.getPieceBB(.nWhiteKnight);
+    const bKnight = p_state.getPieceBB(.nBlackKnight);
+    const deltaTrapped: scoreType = chess.popcount_t(wKnight & chess.maskKnightTrapped, scoreType) - chess.popcount_t(bKnight & chess.maskKnightTrapped, scoreType);
+    const deltaDefendedByPawn: scoreType = chess.popcount_t(wKnight & p_whiteMoveBB.pawnAttacks, scoreType) - chess.popcount_t(bKnight & p_blackMoveBB.pawnAttacks, scoreType);
+    const knightS: scoreVect = .{ -deltaTrapped * weightl.global_KnightTrapped[MG] + deltaDefendedByPawn * weightl.global_KnightDefendedByPawn[MG], -deltaTrapped * weightl.global_KnightTrapped[EG] + deltaDefendedByPawn * weightl.global_KnightDefendedByPawn[EG] };
 
     // bishop
     const nPairs: scoreType = @as(scoreType, @intFromBool(p_state.getPieceCount(.nWhiteBishop) == 2)) - @as(scoreType, @intFromBool(p_state.getPieceCount(.nBlackBishop) == 2));
     const bishopS: scoreVect = .{ nPairs * weightl.global_materialBishopPair[MG], nPairs * weightl.global_materialBishopPair[EG] };
 
     // rook
-    const nOpenRookW: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.WHITE), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE), true)));
-    const nOpenRookB: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.BLACK), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK), false)));
+    const wRook = p_state.getPieceBB(.nWhiteRook);
+    const bRook = p_state.getPieceBB(.nBlackRook);
+    const wQueen = p_state.getPieceBB(.nWhiteQueen);
+    const bQueen = p_state.getPieceBB(.nBlackQueen);
+
+    const openFiles = chess.openFile(p_state.getPieceBB_t(.PAWN));
+
+    const nOpenRookW: scoreType = chess.popcount_t(chess.semiOpenFileRooks(wRook, p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE), true), scoreType) + 2 * chess.popcount_t(openFiles & wRook, scoreType);
+    const nOpenRookB: scoreType = chess.popcount_t(chess.semiOpenFileRooks(bRook, p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK), false), scoreType) + 2 * chess.popcount_t(openFiles & bRook, scoreType);
     const deltaOpenRook = nOpenRookW - nOpenRookB;
-    const rookS: scoreVect = .{ weightl.global_OpenFileRookVal[MG] * deltaOpenRook, weightl.global_OpenFileRookVal[EG] * deltaOpenRook };
+    const deltaRankRook: scoreType = chess.popcount_t(wRook & chess.blackFirstRanks, scoreType) - chess.popcount_t(bRook & chess.whiteFirstRanks, scoreType);
+
+    const deltaDoubleRook: scoreType = @as(scoreType, @intFromBool(wRook & p_whiteMoveBB.rookMoves != 0)) - @as(scoreType, @intFromBool(bRook & p_blackMoveBB.rookMoves != 0));
+
+    const deltaRookQueenFile: scoreType = @as(scoreType, @intFromBool(chess.fillFile(wRook) & bQueen != 0)) - @as(scoreType, @intFromBool(chess.fillFile(bRook) & wQueen != 0));
+
+    const rookS: scoreVect = .{
+        weightl.global_OpenFileRookVal[MG] * deltaOpenRook +
+            weightl.global_RookLastRanks[MG] * deltaRankRook +
+            weightl.global_Rookdoubled[MG] * deltaDoubleRook +
+            weightl.global_RookOnQueenFile[MG] * deltaRookQueenFile,
+        weightl.global_OpenFileRookVal[EG] * deltaOpenRook +
+            weightl.global_RookLastRanks[EG] * deltaRankRook +
+            weightl.global_Rookdoubled[EG] * deltaDoubleRook +
+            weightl.global_RookOnQueenFile[EG] * deltaRookQueenFile,
+    };
 
     // pawn
     const pawnsS = evaluate_pawnStructure(p_state);
-    return pawnsS + bishopS + rookS;
+    return pawnsS + knightS + bishopS + rookS;
 }
 
 pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
@@ -252,17 +319,17 @@ pub fn evaluate_safety(p_state: *const boardl.boardState, p_whiteMoveBB: *const 
     const kingWSafety = chess.safetyArea(p_state.b.wKingSq);
     const kingBSafety = chess.safetyArea(p_state.b.bKingSq);
 
-    const wKnight: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.knightMoves));
-    const bKnight: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.knightMoves));
+    const wKnight: scoreType = chess.popcount_t(kingBSafety & p_whiteMoveBB.knightMoves, scoreType);
+    const bKnight: scoreType = chess.popcount_t(kingWSafety & p_blackMoveBB.knightMoves, scoreType);
 
-    const wBishop: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.bishopMoves));
-    const bBishop: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.bishopMoves));
+    const wBishop: scoreType = chess.popcount_t(kingBSafety & p_whiteMoveBB.bishopMoves, scoreType);
+    const bBishop: scoreType = chess.popcount_t(kingWSafety & p_blackMoveBB.bishopMoves, scoreType);
 
-    const wRook: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.rookMoves));
-    const bRook: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.rookMoves));
+    const wRook: scoreType = chess.popcount_t(kingBSafety & p_whiteMoveBB.rookMoves, scoreType);
+    const bRook: scoreType = chess.popcount_t(kingWSafety & p_blackMoveBB.rookMoves, scoreType);
 
-    const wQueen: scoreType = @intCast(chess.ipopcount(kingBSafety & p_whiteMoveBB.queenMoves));
-    const bQueen: scoreType = @intCast(chess.ipopcount(kingWSafety & p_blackMoveBB.queenMoves));
+    const wQueen: scoreType = chess.popcount_t(kingBSafety & p_whiteMoveBB.queenMoves, scoreType);
+    const bQueen: scoreType = chess.popcount_t(kingWSafety & p_blackMoveBB.queenMoves, scoreType);
     const wScore = (wBishop + wKnight) * 2 + wRook * 3 + wQueen * 5;
     const bScore = (bBishop + bKnight) * 2 + bRook * 3 + bQueen * 5;
     const ret: scoreType = weightl.SAFETY_ARR[@intCast(wScore)] - weightl.SAFETY_ARR[@intCast(bScore)];
@@ -277,17 +344,17 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
 
     const w_pieceCenterProt = p_whiteMoveBB.collapse() & (chess.centerBB);
     const b_pieceCenterProt = p_blackMoveBB.collapse() & (chess.centerBB);
-    const s2 = @as(scoreType, @intCast(chess.ipopcount(w_pieceCenterProt) - chess.ipopcount(b_pieceCenterProt)));
+    const s2 = chess.popcount_t(w_pieceCenterProt, scoreType) - chess.popcount_t(b_pieceCenterProt, scoreType);
     const wAttack = p_whiteMoveBB.getAttackedMask(chess.UNIVERSE);
     const bAttack = p_blackMoveBB.getAttackedMask(chess.UNIVERSE);
     const wHanging = p_state.occupiedBB_col(.WHITE) & (~wAttack) & (bAttack);
     const bHanging = p_state.occupiedBB_col(.BLACK) & (~bAttack) & (wAttack);
-    const s3: scoreType = @intCast(chess.ipopcount(wHanging) - chess.ipopcount(bHanging));
+    const s3: scoreType = chess.popcount_t(wHanging, scoreType) - chess.popcount_t(bHanging, scoreType);
 
     const nonPawns = ~p_state.getPieceBB_t(.PAWN);
     const wBigThreat = p_state.occupiedBB_col(.BLACK) & (wAttack) & nonPawns;
     const bBigThreat = p_state.occupiedBB_col(.WHITE) & (bAttack) & nonPawns;
-    const deltaThreat: scoreType = @intCast(chess.ipopcount(wBigThreat) - chess.ipopcount(bBigThreat));
+    const deltaThreat: scoreType = chess.popcount_t(wBigThreat, scoreType) - chess.popcount_t(bBigThreat, scoreType);
 
     return .{ weightl.global_StructureProtectionVal[MG] * s + weightl.global_centerProtectionVal[MG] * s2 + weightl.global_HangingVal[MG] * s3 + weightl.global_pieceThreatScore[MG] * deltaThreat, weightl.global_StructureProtectionVal[EG] * s + weightl.global_HangingVal[EG] * s3 + weightl.global_pieceThreatScore[EG] * deltaThreat };
 }
@@ -559,28 +626,30 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector, skip
     const blackMoveBB = allblackMoveBB.andFn(~p_state.occupiedBB_col(.BLACK));
 
     // mobility
-    const moveW: scoreType = @intCast(allwhiteMoveBB.count());
-    const moveB: scoreType = @intCast(allblackMoveBB.count());
+    const wPTb = ~allwhiteMoveBB.pawnAttacks;
+    const bPTb = ~allblackMoveBB.pawnAttacks;
+
+    const moveW: scoreType = (chess.popcount_t(allwhiteMoveBB.pawnMoves, scoreType) +
+        chess.popcount_t(allwhiteMoveBB.pawnAttacks, scoreType) +
+        chess.popcount_t(allwhiteMoveBB.promotionMoves, scoreType) +
+        chess.popcount_t(allwhiteMoveBB.bishopMoves & bPTb, scoreType) +
+        chess.popcount_t(allwhiteMoveBB.knightMoves & bPTb, scoreType) +
+        chess.popcount_t(allwhiteMoveBB.rookMoves & bPTb, scoreType) +
+        chess.popcount_t(allwhiteMoveBB.queenMoves & bPTb, scoreType) +
+        chess.popcount_t(allwhiteMoveBB.kingMoves, scoreType));
+
+    const moveB: scoreType = (chess.popcount_t(allblackMoveBB.pawnMoves, scoreType) +
+        chess.popcount_t(allblackMoveBB.pawnAttacks, scoreType) +
+        chess.popcount_t(allblackMoveBB.promotionMoves, scoreType) +
+        chess.popcount_t(allblackMoveBB.bishopMoves & wPTb, scoreType) +
+        chess.popcount_t(allblackMoveBB.knightMoves & wPTb, scoreType) +
+        chess.popcount_t(allblackMoveBB.rookMoves & wPTb, scoreType) +
+        chess.popcount_t(allblackMoveBB.queenMoves & wPTb, scoreType) +
+        chess.popcount_t(allblackMoveBB.kingMoves, scoreType));
 
     p_out.appendCoeff(.{ .wcoeff = moveW, .bcoeff = moveB });
     std.debug.assert(idx == configl.TEXEL_MOVE_COUNT_IDX);
     idx += 1;
-
-    const nOpenRookW: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.WHITE), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE), true)));
-    const nOpenRookB: scoreType = @intCast(chess.ipopcount(chess.openFileRooks(p_state.getPieceBB_t(.ROOK) & p_state.occupiedBB_col(.BLACK), p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK), false)));
-
-    p_out.appendCoeff(.{ .wcoeff = nOpenRookW, .bcoeff = nOpenRookB });
-    std.debug.assert(idx == configl.TEXEL_OPEN_ROOK_IDX);
-    idx += 1;
-
-    // MATERIAL
-    const pairW: scoreType = @as(scoreType, @intFromBool(p_state.getPieceCount(.nWhiteBishop) == 2));
-    const pairB: scoreType = @as(scoreType, @intFromBool(p_state.getPieceCount(.nBlackBishop) == 2));
-
-    p_out.appendCoeff(.{ .wcoeff = pairW, .bcoeff = pairB });
-    std.debug.assert(idx == configl.TEXEL_DOUBLE_BISHOP_IDX);
-    idx += 1;
-    // TODO: skipping safety for now
 
     // structure
     const w_pieceProtect = allwhiteMoveBB.andFn(p_state.occupiedBB_col(.WHITE));
@@ -614,7 +683,8 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector, skip
     std.debug.assert(idx == configl.TEXEL_BIG_PIECE_THREAT_IDX);
     idx += 1;
 
-    // pawn structure
+    // eval pieces
+    // pawn
     const wp = p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE);
     const bp = p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK);
 
@@ -653,15 +723,89 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector, skip
     std.debug.assert(idx == configl.TEXEL_PAWN_CONNECTED_IDX);
     idx += 1;
 
+    // knight
+    const wKnight = p_state.getPieceBB(.nWhiteKnight);
+    const bKnight = p_state.getPieceBB(.nBlackKnight);
+    const deltaTrapped: scoreType = chess.popcount_t(wKnight & chess.maskKnightTrapped, scoreType) - chess.popcount_t(bKnight & chess.maskKnightTrapped, scoreType);
+    const deltaDefendedByPawn: scoreType = chess.popcount_t(wKnight & allwhiteMoveBB.pawnAttacks, scoreType) - chess.popcount_t(bKnight & allblackMoveBB.pawnAttacks, scoreType);
+
+    p_out.appendCoeff(.{ .wcoeff = -deltaTrapped, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_KNIGHT_TRAPPED_IDX);
+    idx += 1;
+
+    p_out.appendCoeff(.{ .wcoeff = deltaDefendedByPawn, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_KNIGHT_DEFENDED_BY_P_IDX);
+    idx += 1;
+
+    // bishop
+    const nPairs: scoreType = @as(scoreType, @intFromBool(p_state.getPieceCount(.nWhiteBishop) == 2)) - @as(scoreType, @intFromBool(p_state.getPieceCount(.nBlackBishop) == 2));
+    p_out.appendCoeff(.{ .wcoeff = nPairs, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_BISHOP_PAIR_IDX);
+    idx += 1;
+
+    // rook
+    const wRook = p_state.getPieceBB(.nWhiteRook);
+    const bRook = p_state.getPieceBB(.nBlackRook);
+    const wQueen = p_state.getPieceBB(.nWhiteQueen);
+    const bQueen = p_state.getPieceBB(.nBlackQueen);
+    const openFiles = chess.openFile(p_state.getPieceBB_t(.PAWN));
+    const nOpenRookW: scoreType = chess.popcount_t(chess.semiOpenFileRooks(wRook, p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE), true), scoreType) + 2 * chess.popcount_t(openFiles & wRook, scoreType);
+    const nOpenRookB: scoreType = chess.popcount_t(chess.semiOpenFileRooks(bRook, p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK), false), scoreType) + 2 * chess.popcount_t(openFiles & bRook, scoreType);
+    const deltaOpenRook = nOpenRookW - nOpenRookB;
+    const deltaRankRook: scoreType = chess.popcount_t(wRook & chess.blackFirstRanks, scoreType) - chess.popcount_t(bRook & chess.whiteFirstRanks, scoreType);
+
+    const deltaDoubleRook: scoreType = @as(scoreType, @intFromBool(wRook & allwhiteMoveBB.rookMoves != 0)) - @as(scoreType, @intFromBool(bRook & allblackMoveBB.rookMoves != 0));
+
+    const deltaRookQueenFile: scoreType = @as(scoreType, @intFromBool(chess.fillFile(wRook) & bQueen != 0)) - @as(scoreType, @intFromBool(chess.fillFile(bRook) & wQueen != 0));
+
+    p_out.appendCoeff(.{ .wcoeff = deltaOpenRook, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_ROOK_OPEN_FILE_IDX);
+    idx += 1;
+
+    p_out.appendCoeff(.{ .wcoeff = deltaRankRook, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_ROOK_LAST_RANKS_IDX);
+    idx += 1;
+
+    p_out.appendCoeff(.{ .wcoeff = deltaDoubleRook, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_ROOK_DOUBLED_IDX);
+    idx += 1;
+
+    p_out.appendCoeff(.{ .wcoeff = deltaRookQueenFile, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_ROOK_ON_QUEEN_FILE_IDX);
+    idx += 1;
+
+    // king
     const wKing = squareInfo.init(p_state.b.wKingSq);
     const bKing = squareInfo.init(p_state.b.bKingSq);
+    const wKingTropism = chess.kingPawnTropism(wp, wKing);
+    const bKingTropism = chess.kingPawnTropism(bp, bKing);
+    const tropismDelta = -weightl.global_KingTropism * (wKingTropism - bKingTropism);
 
-    const s = evaluate(p_state);
-    const whiteWinning: bool = s > 0;
-    const distance = wKing.computeMHDistance(bKing);
-    const bonus = if (p_state.isEndGame()) (2 * (squarel.maxBenDistance - distance) + 5 * if (whiteWinning) distance else -distance) else 0;
-    p_out.appendCoeff(.{ .wcoeff = bonus, .bcoeff = 0 });
+    const distW = wKing.computeMHDistance(squarel.centerSqInfo);
+    const distB = bKing.computeMHDistance(squarel.centerSqInfo);
+
+    p_out.appendCoeff(.{ .wcoeff = tropismDelta, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_KING_TROPISM_IDX);
+    idx += 1;
+
+    p_out.appendCoeff(.{ .wcoeff = (distB - distW), .bcoeff = 0 });
     std.debug.assert(idx == configl.TEXEL_KING_DISTANCE_IDX);
+    idx += 1;
+
+    const deltaPawnless: scoreType = -@as(scoreType, @intFromBool(chess.kingPawnlessFlank(wp, wKing))) - @as(scoreType, @intFromBool(chess.kingPawnlessFlank(bp, bKing)));
+
+    p_out.appendCoeff(.{ .wcoeff = deltaPawnless, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_KING_PAWNLESS_FLANK_IDX);
+    idx += 1;
+
+    const wKingBB = wKing.getBB();
+    const bKingBB = bKing.getBB();
+
+    const nOpenW: scoreType = @as(scoreType, @intFromBool((openFiles >> 1) & wKingBB != 0)) + @as(scoreType, @intFromBool((openFiles << 1) & wKingBB != 0));
+    const nOpenB: scoreType = @as(scoreType, @intFromBool((openFiles >> 1) & bKingBB != 0)) + @as(scoreType, @intFromBool((openFiles << 1) & bKingBB != 0));
+
+    p_out.appendCoeff(.{ .wcoeff = nOpenB - nOpenW, .bcoeff = 0 });
+    std.debug.assert(idx == configl.TEXEL_KING_OPEN_FILE_IDX);
     idx += 1;
 
     const safe = evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);

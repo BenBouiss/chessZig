@@ -4,8 +4,8 @@ name="current";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_29_09_26_1";
-name="current + no endgame king";
+path="engines/bin/engine_04_10_26";
+name="current + twk - texel";
 "setoption name reportProgress value false";
 
 [match]

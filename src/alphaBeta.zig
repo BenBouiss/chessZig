@@ -52,7 +52,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     if (ply > p_info.seldepth) {
         p_info.seldepth = ply;
     }
-    const ttRes = tt.probeMatch(p_state.frame.key, p_state, @intCast(p_info.searchStat.n_nodeExplored));
+    const ttRes = tt.probeMatch(p_state.frame.key, p_state);
     var writer = ttRes.writer;
     var ttHit: bool = false;
 
@@ -269,7 +269,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
     var hashDepth: depthT = 0;
     var hashType: hashl.nodeType = .UPPER;
 
-    const ttRes = tt.probeMatch(p_state.frame.key, p_state, @intCast(p_info.searchStat.n_nodeExplored));
+    const ttRes = tt.probeMatch(p_state.frame.key, p_state);
     var writer = ttRes.writer;
     var ttHit: bool = false;
     if (ttRes.entry) |_entry| {

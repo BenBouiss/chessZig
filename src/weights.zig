@@ -104,6 +104,7 @@ pub fn add_param(alloc: std.mem.Allocator, addr: *scoreType, min: scoreType, max
     const p: param_entry = .{ .addr = addr, .opt = .{ .argType = .SPIN, .optionType = .INVALID, .name = name, .info = enginel.optionInfo{ .spin = .{ .default = addr.*, .min = min, .max = max } } } };
     tunerOpts.append(alloc, p) catch unreachable;
 }
+
 pub fn add_param_1d(comptime size: usize, values: *[size]scoreType, min: scoreType, max: scoreType, name: []const u8) !void {
     for (0..size) |i| {
         const n = try std.fmt.allocPrint(mainl.getGlobalGPA(), "{s}_{d}", .{ name, i });
@@ -113,47 +114,76 @@ pub fn add_param_1d(comptime size: usize, values: *[size]scoreType, min: scoreTy
     }
 }
 
+const WEIGHT_MIN: scoreType = 1;
 // global things here
 pub fn appendAll(alloc: std.mem.Allocator) !void {
     modif_val();
-    add_param(alloc, &global_MobilityVal[0], -200, 200, "global_MobilityVal_MG");
-    add_param(alloc, &global_MobilityVal[1], -200, 200, "global_MobilityVal_EG");
-
-    add_param(alloc, &global_OpenFileRookVal[0], -200, 200, "global_OpenFileRookVal_MG");
-    add_param(alloc, &global_OpenFileRookVal[1], -200, 200, "global_OpenFileRookVal_EG");
+    add_param(alloc, &global_MobilityVal[0], WEIGHT_MIN, 200, "global_MobilityVal_MG");
+    add_param(alloc, &global_MobilityVal[1], WEIGHT_MIN, 200, "global_MobilityVal_EG");
 
     // structure
-    add_param(alloc, &global_StructureProtectionVal[0], -200, 200, "global_StructureProtectionVal_MG");
-    add_param(alloc, &global_StructureProtectionVal[1], -200, 200, "global_StructureProtectionVal_EG");
+    add_param(alloc, &global_StructureProtectionVal[0], WEIGHT_MIN, 200, "global_StructureProtectionVal_MG");
+    add_param(alloc, &global_StructureProtectionVal[1], WEIGHT_MIN, 200, "global_StructureProtectionVal_EG");
 
-    add_param(alloc, &global_centerProtectionVal[0], -200, 200, "global_centerProtectionVal_MG");
-    add_param(alloc, &global_centerProtectionVal[1], -200, 200, "global_centerProtectionVal_EG");
+    add_param(alloc, &global_centerProtectionVal[0], WEIGHT_MIN, 200, "global_centerProtectionVal_MG");
+    add_param(alloc, &global_centerProtectionVal[1], WEIGHT_MIN, 200, "global_centerProtectionVal_EG");
 
-    add_param(alloc, &global_HangingVal[0], -200, 300, "global_HangingVal_MG");
-    add_param(alloc, &global_HangingVal[1], -200, 300, "global_HangingVal_EG");
+    add_param(alloc, &global_HangingVal[0], -200, -WEIGHT_MIN, "global_HangingVal_MG");
+    add_param(alloc, &global_HangingVal[1], -200, -WEIGHT_MIN, "global_HangingVal_EG");
 
-    add_param(alloc, &global_pieceThreatScore[0], -200, 200, "global_pieceThreatScore_MG");
-    add_param(alloc, &global_pieceThreatScore[1], -200, 200, "global_pieceThreatScore_EG");
+    add_param(alloc, &global_pieceThreatScore[0], WEIGHT_MIN, 200, "global_pieceThreatScore_MG");
+    add_param(alloc, &global_pieceThreatScore[1], WEIGHT_MIN, 200, "global_pieceThreatScore_EG");
+
+    // pieces
 
     // pawn structure
-    add_param(alloc, &global_IsolatedPawnVal[0], -200, 200, "global_IsolatedPawnVal_MG");
-    add_param(alloc, &global_IsolatedPawnVal[1], -200, 200, "global_IsolatedPawnVal_EG");
-    add_param(alloc, &global_StackedPawnVal[0], -200, 200, "global_StackedPawnVal_MG");
-    add_param(alloc, &global_StackedPawnVal[1], -200, 200, "global_StackedPawnVal_EG");
-    add_param(alloc, &global_PassedPawnVal[0], -200, 200, "global_PassedPawnVal_MG");
-    add_param(alloc, &global_PassedPawnVal[1], -200, 200, "global_PassedPawnVal_EG");
-    add_param(alloc, &global_phalanxDuoPawnVal[0], -200, 200, "global_phalanxDuoPawnVal_MG");
-    add_param(alloc, &global_phalanxDuoPawnVal[1], -200, 200, "global_phalanxDuoPawnVal_EG");
-    add_param(alloc, &global_connectionPawnVal[0], -200, 200, "global_connectionPawnVal_MG");
-    add_param(alloc, &global_connectionPawnVal[1], -200, 200, "global_connectionPawnVal_EG");
+    add_param(alloc, &global_IsolatedPawnVal[0], -200, -WEIGHT_MIN, "global_IsolatedPawnVal_MG");
+    add_param(alloc, &global_IsolatedPawnVal[1], -200, -WEIGHT_MIN, "global_IsolatedPawnVal_EG");
+    add_param(alloc, &global_StackedPawnVal[0], -200, -WEIGHT_MIN, "global_StackedPawnVal_MG");
+    add_param(alloc, &global_StackedPawnVal[1], -200, -WEIGHT_MIN, "global_StackedPawnVal_EG");
+    add_param(alloc, &global_PassedPawnVal[0], WEIGHT_MIN, 200, "global_PassedPawnVal_MG");
+    add_param(alloc, &global_PassedPawnVal[1], WEIGHT_MIN, 200, "global_PassedPawnVal_EG");
+    add_param(alloc, &global_phalanxDuoPawnVal[0], WEIGHT_MIN, 200, "global_phalanxDuoPawnVal_MG");
+    add_param(alloc, &global_phalanxDuoPawnVal[1], WEIGHT_MIN, 200, "global_phalanxDuoPawnVal_EG");
+    add_param(alloc, &global_connectionPawnVal[0], WEIGHT_MIN, 200, "global_connectionPawnVal_MG");
+    add_param(alloc, &global_connectionPawnVal[1], WEIGHT_MIN, 200, "global_connectionPawnVal_EG");
+
+    // knight
+    add_param(alloc, &global_KnightTrapped[0], WEIGHT_MIN, 100, "global_KnightTrapped_MG");
+    add_param(alloc, &global_KnightTrapped[1], WEIGHT_MIN, 100, "global_KnightTrapped_EG");
+
+    add_param(alloc, &global_KnightDefendedByPawn[0], WEIGHT_MIN, 100, "global_KnightTrapped_MG");
+    add_param(alloc, &global_KnightDefendedByPawn[1], WEIGHT_MIN, 100, "global_KnightTrapped_EG");
+
+    // bishop
+    add_param(alloc, &global_materialBishopPair[0], WEIGHT_MIN, 300, "global_materialBishopPair_MG");
+    add_param(alloc, &global_materialBishopPair[1], WEIGHT_MIN, 300, "global_materialBishopPair_EG");
+
+    // rook
+    add_param(alloc, &global_OpenFileRookVal[0], WEIGHT_MIN, 200, "global_OpenFileRookVal_MG");
+    add_param(alloc, &global_OpenFileRookVal[1], WEIGHT_MIN, 200, "global_OpenFileRookVal_EG");
+
+    add_param(alloc, &global_RookLastRanks[0], WEIGHT_MIN, 200, "global_RookLastRanks_MG");
+    add_param(alloc, &global_RookLastRanks[1], WEIGHT_MIN, 200, "global_RookLastRanks_EG");
+
+    add_param(alloc, &global_Rookdoubled[0], WEIGHT_MIN, 200, "global_Rookdoubled_MG");
+    add_param(alloc, &global_Rookdoubled[1], WEIGHT_MIN, 200, "global_Rookdoubled_EG");
+
+    add_param(alloc, &global_RookOnQueenFile[0], WEIGHT_MIN, 200, "global_RookOnQueenFile_MG");
+    add_param(alloc, &global_RookOnQueenFile[1], WEIGHT_MIN, 200, "global_RookOnQueenFile_EG");
 
     // king
-    add_param(alloc, &global_KingProximityVal, 0, 100, "global_KingProximityVal");
-    add_param(alloc, &global_KingTropism, 0, 100, "global_KingTropism");
 
-    // material
-    add_param(alloc, &global_materialBishopPair[0], -200, 300, "global_materialBishopPair_MG");
-    add_param(alloc, &global_materialBishopPair[1], -200, 300, "global_materialBishopPair_EG");
+    add_param(alloc, &global_KingProximityVal[0], WEIGHT_MIN, 200, "global_KingProximityVal_MG");
+    add_param(alloc, &global_KingProximityVal[1], WEIGHT_MIN, 200, "global_KingProximityVal_EG");
+
+    add_param(alloc, &global_KingTropism, WEIGHT_MIN, 200, "global_KingTropism");
+
+    add_param(alloc, &global_KingPawnlessFlank[0], WEIGHT_MIN, 200, "global_KingPawnlessFlank_MG");
+    add_param(alloc, &global_KingPawnlessFlank[1], WEIGHT_MIN, 200, "global_KingPawnlessFlank_EG");
+
+    add_param(alloc, &global_KingOpenFile, WEIGHT_MIN, 200, "global_KingOpenFile");
+
     // LMR
     add_param(alloc, &lmr_scoreThreshold, 0, 20000, "lmr_scoreThreshold");
     add_param(alloc, &lmr_expectedCutOff, 0, 2000, "lmr_expectedCutOff");
@@ -279,10 +309,6 @@ pub fn appendAll(alloc: std.mem.Allocator) !void {
 
 // mobility
 pub var global_MobilityVal: [2]scoreType = .{ 6, 11 };
-pub var global_OpenFileRookVal: [2]scoreType = .{ 47, 15 };
-
-// material
-pub var global_materialBishopPair: [2]scoreType = .{ 55, 62 };
 
 // ============ structure ============
 pub var global_StructureProtectionVal: [2]scoreType = .{ 18, 19 };
@@ -290,6 +316,7 @@ pub var global_centerProtectionVal: [2]scoreType = .{ 1, 2 };
 pub var global_HangingVal: [2]scoreType = .{ -32, -32 };
 pub var global_pieceThreatScore: [2]scoreType = .{ 48, 13 };
 
+// pieces
 // ============ pawn structure ============
 pub var global_IsolatedPawnVal: [2]scoreType = .{ -2, 0 };
 pub var global_StackedPawnVal: [2]scoreType = .{ -7, -2 };
@@ -297,10 +324,24 @@ pub var global_PassedPawnVal: [2]scoreType = .{ 2, 20 };
 pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 3, 11 };
 pub var global_connectionPawnVal: [2]scoreType = .{ 5, 10 };
 
+// knight
+pub var global_KnightTrapped: [2]scoreType = .{ 4, 4 };
+pub var global_KnightDefendedByPawn: [2]scoreType = .{ 4, 4 };
+
+// bishop
+pub var global_materialBishopPair: [2]scoreType = .{ 55, 62 };
+
+// rook
+pub var global_OpenFileRookVal: [2]scoreType = .{ 47, 15 };
+pub var global_RookLastRanks: [2]scoreType = .{ 32, 32 };
+pub var global_Rookdoubled: [2]scoreType = .{ 16, 16 };
+pub var global_RookOnQueenFile: [2]scoreType = .{ 8, 8 };
+
 // king
-pub var global_KingProximityVal: scoreType = 5;
+pub var global_KingProximityVal: [2]scoreType = .{ 5, 5 };
 pub var global_KingTropism: scoreType = 8;
 pub var global_KingPawnlessFlank: [2]scoreType = .{ 8, 32 };
+pub var global_KingOpenFile: scoreType = 8;
 
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = @splat(pawnScoreArr);

@@ -14,8 +14,6 @@ const boardl = @import("../board.zig");
 const std = @import("std");
 
 test "en passant checking" {
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
     chessl.initAll(false);
     var tmp = try chessl.getBoardFromFen("5bnr/5ppp/1Q6/2Bkp3/3pP3/3P4/5PPP/4KBNR b H e3 0 39");
     const allMoves = moveGenl.generateLegalMoves(&tmp);
@@ -27,8 +25,6 @@ test "en passant checking" {
     std.log.info("[TEST]: En passant checking passed\n", .{});
 }
 test "misc move amount check" {
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
     chessl.initAll(false);
     var tmp = try chessl.getBoardFromFen("8/5pk1/7p/7P/4r1PK/8/5P2/4b3 w - - 1 1");
     const allMoves = moveGenl.generateLegalMoves(&tmp);
@@ -39,8 +35,6 @@ test "misc move amount check" {
     std.log.info("[TEST]: En passant checking passed\n", .{});
 }
 test "en passant pinned" {
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
     chessl.initAll(false);
     var tmp = try chessl.getBoardFromFen("4Q3/7p/8/8/4RPpk/4B2q/P7/5RK b - f3 0 69");
     const allMoves = moveGenl.generateLegalMoves(&tmp);
@@ -112,8 +106,6 @@ test "book algebraic" {
 }
 
 test "draw detection" {
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
     chessl.initAll(false);
     var tmp = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     try chessl.applyUciMoves(&tmp, "position startpos e2e3 e7e5 d1f3 c7c6 d2d4 d8e7 c1d2 e5d4 f1d3 e7e5 f3g3 e5g3 h2g3 d4e3 d2e3 f8b4 e3d2 b4d2 b1d2 g8f6 d2c4 d7d5 c4d6 e8e7 d6c8 h8c8 f2f4 e7e6 g1f3 c6c5 f3g5 e6e7 c2c3 h7h6 g5f3 b8c6 d3b5 a7a6 b5a4 c6a5 f3e5 e7e6 g3g4 a5c4 e5c4 d5c4 e1c1 e6e7 g4g5 h6g5 f4g5 f6g4 d1d7 e7e6 d7b7 c8d8 h1f1 d8d6 f1f7 e6d5 a4d1 g4e5 d1f3 e5f3 g2f3 g7g6 b7e7 a8h8 f7h7 h8h7 e7h7 d5e5 h7f7 d6b6 c1b1 b6c6 b1c1 c6b6 c1b1 b6c6 b1c1", false);
@@ -137,6 +129,7 @@ pub const benchmarkEntries = [_][]const u8{
 };
 
 test "pseudo legal move generator" {
+    chessl.initAll(false);
     for (0..benchmarkEntries.len) |i| {
         const state = try chessl.getBoardFromFen(benchmarkEntries[i]);
         var gen: moveGenl.typeMoveGenerator = .{};

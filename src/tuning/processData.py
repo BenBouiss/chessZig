@@ -26,7 +26,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CHUNK_SIZE = 8192
 MAX_TOKEN_SIZE = 32
 
-MAX_DEVIATION = 400
 
 baseMaterial = [
     100.0,
@@ -37,7 +36,9 @@ baseMaterial = [
     0.0,
     0.0,
 ]
-baseMisc = [6.0, 47.0, 55.0, 18.0, 1.0, 32.0, 48.0, 2.0, 7.0, 2.0, 3.0, 5.0, 5.0, 1.0]
+# fmt: off
+baseMisc = [6.0, 18, 1, -32, 48, -2, -7, 2.0, 3, 5.0, 4.0, 4.0, 55.0, 47, 32, 16, 8, 5, 8, 8, 8, 1.0]
+
 
 phaseArr = [
     0.0,
@@ -75,8 +76,6 @@ PIECES_STR = [
 ]
 MISCS_STR = [
     "global_MobilityVal",
-    "global_OpenFileRookVal",
-    "global_materialBishopPair",
     "global_StructureProtectionVal",
     "global_centerProtectionVal",
     "global_HangingVal",
@@ -86,10 +85,23 @@ MISCS_STR = [
     "global_PassedPawnVal",
     "global_phalanxDuoPawnVal",
     "global_connectionPawnVal",
+    "global_KnightTrapped",
+    "global_KnightDefendedByPawn",
+    "global_materialBishopPair",
+    "global_OpenFileRookVal",
+    "global_RookLastRanks",
+    "global_Rookdoubled",
+    "global_RookOnQueenFile",
     "global_KingProximityVal",
+    "global_KingTropism",
+    "global_KingPawnlessFlank",
+    "global_KingOpenFile",
     "global_SafetyVal",
 ]
-MISCS_COLS: list[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16]
+
+# fmt: off
+MISCS_COLS: list[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24]
+# skips outcome and phase as already contained in other csv file
 # all the miscs str from above plus last one for eval
 
 
@@ -551,7 +563,7 @@ def train(opt: trainingOptions):
             {
                 "params": [model.psqt_mg, model.psqt_eg, model.misc_mg, model.misc_eg],
                 "lr": 1.5,
-                "weight_decay": 0.0001,
+                #"weight_decay": 0.0001,
             },
             {"params": [model.K], "lr": 0.01},
         ],
@@ -578,19 +590,20 @@ def train(opt: trainingOptions):
 
             optimizer.zero_grad()
             if opt.optimizeOutcome:
-                outputs = model(pieces, squares, colors, miscs)
-                loss = (
-                    criterion(outputs, evals)
-                    + 0.05 * material_consistency_loss(model)
-                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
-                )
-            else:
                 outputs = model.forwardS(pieces, squares, colors, miscs)
                 loss = (
                     criterion(outputs, outcomes)
                     + 0.05 * material_consistency_loss(model)
                     + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
                 )
+            else:
+                outputs = model(pieces, squares, colors, miscs)
+                loss = (
+                    criterion(outputs/100, evals/100)
+                    + 0.05 * material_consistency_loss(model)
+                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
+                )
+                
             loss.backward()
             optimizer.step()  # Update the parameters
             train_loss += loss.item()
@@ -612,16 +625,16 @@ def train(opt: trainingOptions):
             evals = evals.float().to(DEVICE)
 
             if opt.optimizeOutcome:
-                outputs = model(pieces, squares, colors, miscs)
+                outputs = model.forwardS(pieces, squares, colors, miscs)
                 val_loss += (
-                    criterion(outputs, evals).item()
+                    criterion(outputs, outcomes).item()
                     + +0.05 * material_consistency_loss(model)
                     + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
                 )
             else:
-                outputs = model.forwardS(pieces, squares, colors, miscs)
+                outputs = model(pieces, squares, colors, miscs)
                 val_loss += (
-                    criterion(outputs, outcomes).item()
+                    criterion(outputs/100, evals/100).item()
                     + +0.05 * material_consistency_loss(model)
                     + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
                 )
@@ -646,6 +659,7 @@ def material_consistency_loss(model: zugNet):
     return (diff_mg**2).sum() + (diff_eg**2).sum()
 
 
+MAX_DEVIATION = 200
 def psqt_deviation_loss(
     psqts_mg, psqts_eg, max_deviation=MAX_DEVIATION, temperature=5.0
 ):
@@ -949,24 +963,24 @@ if __name__ == "__main__":
         nLim=nPos,
         maxPositionPerSave=1_000_000,
     )
-    # ensurePath(saves)
-    # process_book_to_npz(path, miscPath, 0.2, saves)
-    # processPackedDataPath(saves.trainPath, "out/bin/torch/train")
-    # processPackedDataPath(saves.validPath, "out/bin/torch/valid")
+    ensurePath(saves)
+    #process_book_to_npz(path, miscPath, 0.2, saves)
+    #processPackedDataPath(saves.trainPath, "out/bin/torch/train")
+    #processPackedDataPath(saves.validPath, "out/bin/torch/valid")
 
-    # train(
-    #    trainingOptions(
-    #        trainingPath="out/bin/torch/valid",
-    #        validationPath="out/bin/torch/valid",
-    #        checkpointsPath="out/bin/torch/checkpoint",
-    #        chunksize=512,
-    #        optimizeOutcome=True,
-    #    )
-    # )
+    #train(
+    #   trainingOptions(
+    #       trainingPath="out/bin/torch/valid",
+    #       validationPath="out/bin/torch/valid",
+    #       checkpointsPath="out/bin/torch/checkpoint",
+    #       chunksize=512,
+    #       optimizeOutcome=False,
+    #   )
+    #)
 
     b = sys.argv[1]
     print(f"Found argument {b} with type {type(b)}")
     print_checkpoint(b, True)
     print_folder_pt(b)
 
-    print_stuff()
+    #print_stuff()

@@ -2,7 +2,7 @@ UCI complient chess engine project to try out the zig programming language.
 
 Multiple files exist in the build/ directory due to a bug with the zig build command on wsl. The current work around is to set the env variable ZIG_LOCAL_CACHE_DIR to somewhere in the linux filesystem part and the the windows part.
 
-Running for zig version 0.16
+Running for zig version 0.17
 Make and run:
 ```
  ./build/build.sh && ./zig-out/bin/engine
@@ -22,6 +22,7 @@ Sources:
 - https://github.com/jw1912/bullet/ NNUE trainer
 - https://github.com/aqrit/sse2zig SSE stuffs
 - https://github.com/Adam-Kulju/Patricia/ 
+- https://www.kaggle.com/datasets/adamkulju/willowdata data used to train the nnue
 
 ## Supported UCI commands:
 

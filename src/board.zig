@@ -1026,6 +1026,11 @@ pub const viriGame = extern struct {
     bestMove: viriPackedMove align(1),
     pad: u32 align(1) = 0,
 };
+pub const viriMatch = extern struct {
+    b: packedBoard align(1),
+    bestMove: []const viriPackedMove align(1),
+    pad: u32 align(1) = 0,
+};
 // ref https://github.com/cosmobobak/viriformat
 pub const packedBoard = extern struct {
     occ: u64 = 0,

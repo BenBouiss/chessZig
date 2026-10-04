@@ -49,17 +49,23 @@ pub const notAFile: u64 = 0xfefefefefefefefe; // ~0x0101010101010101
 pub const notABFile: u64 = 0xfcfcfcfcfcfcfcfc;
 pub const notGHFile: u64 = 0x3f3f3f3f3f3f3f3f;
 pub const notHFile: u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
-pub const maskABCFile: u64 = 0x707070707070707; // ~0x8080808080808080
-pub const maskABCDFile: u64 = 0xF0F0F0F0F0F0F0F; // ~0x8080808080808080
+pub const maskABCFile: u64 = 0x707070707070707; //
+pub const maskABCDFile: u64 = 0xF0F0F0F0F0F0F0F; //
 //
-pub const maskFGHFile: u64 = 0xE0E0E0E0E0E0E0E0; // ~0x8080808080808080
-pub const maskEFGHFile: u64 = 0xF0F0F0F0F0F0F0F0; // ~0x8080808080808080
+pub const maskFGHFile: u64 = 0xE0E0E0E0E0E0E0E0; //
+pub const maskEFGHFile: u64 = 0xF0F0F0F0F0F0F0F0; //
+
+//
+pub const maskKnightTrapped: u64 = 0x8181000000008181; //
 //
 pub const whitePawnPromoRank: u64 = 0xFF00000000000000;
 pub const blackPawnPromoRank: u64 = 0xFF;
 
 pub const whitePawnDoubleRank: u64 = 0xFF00;
 pub const blackPawnDoubleRank: u64 = 0xFF000000000000;
+
+pub const whiteFirstRanks: u64 = whitePawnPromoRank | whitePawnDoubleRank;
+pub const blackFirstRanks: u64 = blackPawnPromoRank | blackPawnDoubleRank;
 
 pub const whitePawnEnpassantRank: u64 = 0xFF0000000000;
 pub const blackPawnEnpassantRank: u64 = 0xFF0000;
@@ -176,12 +182,15 @@ pub fn rotate180(bb: u64) u64 {
     return x;
 }
 
-pub inline fn ipopcount(x: u64) i8 {
-    return @intCast(popcount(x));
+pub inline fn ipopcount(bb: u64) i8 {
+    return @as(i8, @popCount(bb));
 }
 
 pub inline fn popcount(bb: u64) u8 {
     return @as(u8, @popCount(bb));
+}
+pub inline fn popcount_t(bb: u64, comptime T: type) T {
+    return @as(T, @popCount(bb));
 }
 pub inline fn bitscan(bb: u64) u8 {
     // assumes bb is non empty
@@ -657,7 +666,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
     std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.b.turnCount, p_board_state.moveHistory.len, moves.len });
-    //moves.print();
+    moves.print();
     printBoardValidity(p_board_state);
     if (p_board_state.b.turnCount > 0) {
         std.debug.print("Previous move: {s}\n", .{p_board_state.frame.lastMove.getStr()});
@@ -886,13 +895,13 @@ pub inline fn getSqRank(sq: e_square) u8 {
     return @intFromEnum(sq) >> 3;
 }
 pub inline fn getSqIdxRank(sq: u8) u8 {
-    return (sq) >> 3;
+    return sq >> 3;
 }
 pub inline fn getSqFile(sq: e_square) u8 {
     return @intFromEnum(sq) & 7;
 }
 pub inline fn getSqIdxFile(sq: u8) u8 {
-    return (sq) & 7;
+    return sq & 7;
 }
 pub inline fn getSqFromCoord(rank: u8, file: u8) e_square {
     return @enumFromInt((rank << 3) + file);
@@ -961,8 +970,9 @@ pub fn kingPawnTropism(pawn: u64, sqKing: squareInfo) i32 {
     while (bb != 0) {
         const sq = bitscan(bb);
         bb &= bb - 1;
-        const _sq: squareInfo = .init(@enumFromInt(sq));
-        const v: scoreType = @intCast(@max(@abs(sqKing.file - _sq.file), @abs(sqKing.rank - _sq.rank)));
+        const rank: i8 = @intCast(getSqIdxRank(sq));
+        const file: i8 = @intCast(getSqIdxFile(sq));
+        const v: scoreType = @intCast(@max(@abs(sqKing.file - file), @abs(sqKing.rank - rank)));
         ret = @min(ret, v);
     }
     return ret;
@@ -1008,9 +1018,13 @@ pub fn duoPhalanx(pawn: u64) u64 {
     return duoWest | duoEast;
 }
 
-pub inline fn openFileRooks(rooks: u64, pawns: u64, white: bool) u64 {
+pub inline fn semiOpenFileRooks(rooks: u64, pawns: u64, white: bool) u64 {
     const obstruct = if (white) (moveGenl.southOne(moveGenl.southOccl(pawns, UNIVERSE))) else (moveGenl.northOne(moveGenl.northOccl(pawns, UNIVERSE)));
     return rooks & (~obstruct);
+}
+pub inline fn openFile(pawns: u64) u64 {
+    const obstruct = moveGenl.southOne(moveGenl.southOccl(pawns, UNIVERSE)) | moveGenl.northOne(moveGenl.northOccl(pawns, UNIVERSE));
+    return ~obstruct;
 }
 
 pub inline fn _AllAttackPawnMask(bb_piece: u64, white: bool) u64 {
@@ -1520,7 +1534,11 @@ pub fn test_safe() !void {
     //    std.debug.print("{} \n", .{sq});
     //    print_bitboard(safetyArea(sq));
     //}
-    print_bitboard(safetyArea(.c3));
+    print_bitboard(safetyArea(.a1));
+    print_bitboard(safetyArea(.h1));
+
+    print_bitboard(safetyArea(.a8));
+    print_bitboard(safetyArea(.h8));
 }
 
 pub fn main(alloc: std.mem.Allocator) !void {

@@ -55,7 +55,14 @@ pub const _network = extern struct {
 };
 
 //https://www.chessprogramming.org/NNUE
-pub const network = extern struct {
+
+pub const e_network = extern struct {
+    accWeights: [INPUT_SIZE]accumulator align(64) = std.mem.zeroes([INPUT_SIZE]accumulator),
+    accBiases: [HL_SIZE]i16 = @splat(0),
+    b_outputWeights: [OUTPUT_BUCKETS][2 * HL_SIZE]i16 = std.mem.zeroes([OUTPUT_BUCKETS][2 * HL_SIZE]i16),
+    b_outputBiase: [OUTPUT_BUCKETS]i16 = @splat(0),
+};
+pub const network = struct {
     accWeights: [INPUT_SIZE]vectAcum align(64) = std.mem.zeroes([INPUT_SIZE]vectAcum),
     accBiases: [HL_SIZE]i16 = @splat(0),
     b_outputWeights: [OUTPUT_BUCKETS][2 * HL_SIZE]i16 = std.mem.zeroes([OUTPUT_BUCKETS][2 * HL_SIZE]i16),
@@ -69,8 +76,14 @@ pub const network = extern struct {
         return ret.*;
     }
     pub fn initCplt() network {
-        const net: *network = @ptrCast(@alignCast(@constCast(embeded_net)));
-        return net.*;
+        const net: *e_network = @ptrCast(@alignCast(@constCast(embeded_net)));
+        // due to 0.17 shenanigans cant directely use a extrn struct containing a vector member
+        var ret: network = .{};
+        ret.accBiases = net.accBiases;
+        ret.accWeights = @bitCast(net.accWeights);
+        ret.b_outputBiase = net.b_outputBiase;
+        ret.b_outputWeights = net.b_outputWeights;
+        return ret;
     }
 };
 

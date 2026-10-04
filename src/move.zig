@@ -31,6 +31,10 @@ pub inline fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];
 }
+pub inline fn build_move_in_v(from: u8, to: u8, flag: u8, p_out: *moveContainer) void {
+    p_out.moves[p_out.len] = .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
+    p_out.len += 1;
+}
 
 pub const moveInfo = struct {
     fromP: e_piece = .nEmptySquare,
@@ -531,7 +535,7 @@ pub const line = struct {
     }
     pub inline fn setLineFromPV(self: *line, pv: *const line) void {
         self.len = pv.len;
-        @memcpy(self.moves[0..self.len], &pv.moves);
+        @memcpy(self.moves[0..self.len], pv.moves[0..self.len]);
     }
     pub fn onBestMove(self: *line, move: IMove, other: ?*const line) void {
         if (other) |child| {

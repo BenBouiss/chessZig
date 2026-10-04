@@ -9,3 +9,4 @@ export ZIG_LOCAL_CACHE_DIR="$tmp_folder/.zig-cache"
 export ZIG_GLOBAL_CACHE_DIR="$tmp_folder/.zig-cache"
 
 zig build test -Doptimize=ReleaseSafe --summary all -freference-trace=13
+#zig build test --summary all -freference-trace=13
