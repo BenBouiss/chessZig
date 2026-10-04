@@ -1,5 +1,3 @@
-
-#me="$(whoami)"
 me="$USER"
 tmp_folder="/home/$me/.zig-tmp"
 mkdir -p "$tmp_folder"
