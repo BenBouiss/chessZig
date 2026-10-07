@@ -32,7 +32,6 @@ const e_color = typel.e_color;
 const e_square = squarel.e_square;
 
 pub const NUMBER_PLAYER: u8 = 2;
-pub const ROW_SIZE: u8 = 8;
 pub const N_SQUARES: u8 = 64;
 pub const MAX_POSSIBLE_MOVE: u8 = 218;
 pub const N_PIECES = 12;
@@ -162,7 +161,7 @@ pub inline fn isMateWin(score: scoreType) bool {
     return score >= weightl.simpleCheckMateThreshold;
 }
 pub inline fn isMateLose(score: scoreType) bool {
-    return score <= (-weightl.simpleCheckMateThreshold);
+    return score <= -weightl.simpleCheckMateThreshold;
 }
 
 /// https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#Rotating
@@ -183,14 +182,14 @@ pub fn rotate180(bb: u64) u64 {
 }
 
 pub inline fn ipopcount(bb: u64) i8 {
-    return @as(i8, @popCount(bb));
+    return @as(i8, @intCast(@popCount(bb)));
 }
 
 pub inline fn popcount(bb: u64) u8 {
-    return @as(u8, @popCount(bb));
+    return @as(u8, @intCast(@popCount(bb)));
 }
 pub inline fn popcount_t(bb: u64, comptime T: type) T {
-    return @as(T, @popCount(bb));
+    return @as(T, @intCast(@popCount(bb)));
 }
 pub inline fn bitscan(bb: u64) u8 {
     // assumes bb is non empty
@@ -606,7 +605,7 @@ pub fn sanityCheckBoardState(p_board_state: *const boardl.boardState) void {
         std.debug.print("PieceArray: {any}\n", .{p_board_state.b.pieceArray});
         for (0..8) |i| {
             for (0..8) |j| {
-                std.debug.print("{}, ", .{p_board_state.b.pieceArray[(7 - i) * ROW_SIZE + j]});
+                std.debug.print("{}, ", .{p_board_state.b.pieceArray[(7 - i) * 8 + j]});
             }
             std.debug.print("\n", .{});
         }
@@ -1518,15 +1517,18 @@ pub fn _algebraicLineToIMoveMatch(line: []const u8, tmpBoard: *boardl.boardState
     return ret;
 }
 
-pub fn algebraicLineToBoardstate(line: *const stringl.string) !boardl.boardState {
+pub fn algebraicLineToBoardstate(line: []const u8) !boardl.boardState {
     var tmpBoard = try getBoardFromFen(DEFAULT_FEN);
-    _ = try _algebraicLineToIMoveMatch(line._slice(), &tmpBoard);
+    _ = try _algebraicLineToIMoveMatch(line, &tmpBoard);
     sanityCheckBoardState(&tmpBoard);
     return tmpBoard;
 }
 
-pub inline fn initAll(verbose: bool) void {
-    magicl._initMagic(&magicl.magicTable, verbose);
+pub inline fn initAll() void {
+    magicl._initMagic();
+    if (build_options.useTune) {
+        weightl.modif_val();
+    }
 }
 pub fn test_safe() !void {
     //for (0..64) |i| {
@@ -1542,7 +1544,6 @@ pub fn test_safe() !void {
 }
 
 pub fn main(alloc: std.mem.Allocator) !void {
-    //mainl.initAll(alloc, true);
     //try test_avx();
     _ = alloc;
     try test_safe();

@@ -160,7 +160,7 @@ pub const boardState = struct {
         var emptyNumber: u8 = 0;
         var board_offset = chessl.N_SQUARES - 8;
         for (0..chessl.N_SQUARES) |i| {
-            if (i % chessl.ROW_SIZE == 0 and i != 0) {
+            if (i % 8 == 0 and i != 0) {
                 if (emptyNumber != 0) {
                     ret[miscOffset] = '0' + emptyNumber;
                     emptyNumber = 0;
@@ -902,14 +902,10 @@ pub const boardState = struct {
         const nBBishop = p_self.getPieceCount(.nBlackBishop);
         const nBKnight = p_self.getPieceCount(.nBlackKnight);
 
-        //const nBMinor = nBBishop + nBKnight;
-        //if ((nBMinor == 0 and nWBishop == 2) or (nWMinor == 0 and nBBishop == 2)) {
-        //    return false;
-        //}
-        //if ((nBMinor == 0 and nWKnight == 3) or (nWMinor == 0 and nBKnight == 3)) {
-        //    return false;
-        //}
         if ((nWBishop >= 2 or nWKnight >= 2) or (nBBishop >= 2 or nBKnight >= 2)) {
+            return false;
+        }
+        if ((nWBishop == 1 and nWKnight >= 1) or (nBBishop == 1 and nBKnight >= 1)) {
             return false;
         }
         return true;
@@ -929,6 +925,11 @@ pub const boardState = struct {
         }
         // TODO: add the cases KBB vs K or others
         // or a better way
+        const nknight = p_self.getPieceCount(@enumFromInt(@intFromEnum(e_piece.nWhiteKnight) + color_offset));
+        const nbishop = p_self.getPieceCount(@enumFromInt(@intFromEnum(e_piece.nWhiteBishop) + color_offset));
+        if (nbishop >= 2 or nknight >= 2 or (nknight == 1 and nbishop == 1)) {
+            return false;
+        }
         return true;
     }
 

@@ -152,8 +152,8 @@ pub fn appendAll(alloc: std.mem.Allocator) !void {
     add_param(alloc, &global_KnightTrapped[0], WEIGHT_MIN, 100, "global_KnightTrapped_MG");
     add_param(alloc, &global_KnightTrapped[1], WEIGHT_MIN, 100, "global_KnightTrapped_EG");
 
-    add_param(alloc, &global_KnightDefendedByPawn[0], WEIGHT_MIN, 100, "global_KnightTrapped_MG");
-    add_param(alloc, &global_KnightDefendedByPawn[1], WEIGHT_MIN, 100, "global_KnightTrapped_EG");
+    add_param(alloc, &global_KnightDefendedByPawn[0], WEIGHT_MIN, 100, "global_KnightDefendedByPawn_MG");
+    add_param(alloc, &global_KnightDefendedByPawn[1], WEIGHT_MIN, 100, "global_KnightDefendedByPawn_EG");
 
     // bishop
     add_param(alloc, &global_materialBishopPair[0], WEIGHT_MIN, 300, "global_materialBishopPair_MG");
@@ -177,12 +177,16 @@ pub fn appendAll(alloc: std.mem.Allocator) !void {
     add_param(alloc, &global_KingProximityVal[0], WEIGHT_MIN, 200, "global_KingProximityVal_MG");
     add_param(alloc, &global_KingProximityVal[1], WEIGHT_MIN, 200, "global_KingProximityVal_EG");
 
-    add_param(alloc, &global_KingTropism, WEIGHT_MIN, 200, "global_KingTropism");
+    //add_param(alloc, &global_KingTropism, WEIGHT_MIN, 200, "global_KingTropism");
+    add_param(alloc, &global_KingTropism[0], WEIGHT_MIN, 200, "global_KingTropism_MG");
+    add_param(alloc, &global_KingTropism[1], WEIGHT_MIN, 200, "global_KingTropism_EG");
 
     add_param(alloc, &global_KingPawnlessFlank[0], WEIGHT_MIN, 200, "global_KingPawnlessFlank_MG");
     add_param(alloc, &global_KingPawnlessFlank[1], WEIGHT_MIN, 200, "global_KingPawnlessFlank_EG");
 
-    add_param(alloc, &global_KingOpenFile, WEIGHT_MIN, 200, "global_KingOpenFile");
+    //add_param(alloc, &global_KingOpenFile, WEIGHT_MIN, 200, "global_KingOpenFile");
+    add_param(alloc, &global_KingOpenFile[0], WEIGHT_MIN, 200, "global_KingOpenFile_MG");
+    add_param(alloc, &global_KingOpenFile[1], WEIGHT_MIN, 200, "global_KingOpenFile_EG");
 
     // LMR
     add_param(alloc, &lmr_scoreThreshold, 0, 20000, "lmr_scoreThreshold");
@@ -308,40 +312,41 @@ pub fn appendAll(alloc: std.mem.Allocator) !void {
 //pub var _global_QueenVal: scoreType = simpleQueenScore;
 
 // mobility
-pub var global_MobilityVal: [2]scoreType = .{ 6, 11 };
+pub var global_MobilityVal: [2]scoreType = .{ 11, 4 };
 
 // ============ structure ============
-pub var global_StructureProtectionVal: [2]scoreType = .{ 18, 19 };
-pub var global_centerProtectionVal: [2]scoreType = .{ 1, 2 };
-pub var global_HangingVal: [2]scoreType = .{ -32, -32 };
-pub var global_pieceThreatScore: [2]scoreType = .{ 48, 13 };
+pub var global_StructureProtectionVal: [2]scoreType = .{ 7, 10 };
+pub var global_centerProtectionVal: [2]scoreType = .{ 7, 6 };
+pub var global_HangingVal: [2]scoreType = .{ -32, -24 };
+pub var global_pieceThreatScore: [2]scoreType = .{ 36, 19 };
 
 // pieces
 // ============ pawn structure ============
-pub var global_IsolatedPawnVal: [2]scoreType = .{ -2, 0 };
-pub var global_StackedPawnVal: [2]scoreType = .{ -7, -2 };
-pub var global_PassedPawnVal: [2]scoreType = .{ 2, 20 };
-pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 3, 11 };
-pub var global_connectionPawnVal: [2]scoreType = .{ 5, 10 };
+pub var global_IsolatedPawnVal: [2]scoreType = .{ -2, -3 };
+pub var global_StackedPawnVal: [2]scoreType = .{ -8, -5 };
+pub var global_PassedPawnVal: [2]scoreType = .{ 3, 20 };
+pub var global_phalanxDuoPawnVal: [2]scoreType = .{ 8, 9 };
+pub var global_connectionPawnVal: [2]scoreType = .{ 4, 1 };
 
 // knight
-pub var global_KnightTrapped: [2]scoreType = .{ 4, 4 };
+pub var global_KnightTrapped: [2]scoreType = .{ 4, 5 };
 pub var global_KnightDefendedByPawn: [2]scoreType = .{ 4, 4 };
 
 // bishop
-pub var global_materialBishopPair: [2]scoreType = .{ 55, 62 };
+pub var global_materialBishopPair: [2]scoreType = .{ 76, 62 };
 
 // rook
-pub var global_OpenFileRookVal: [2]scoreType = .{ 47, 15 };
-pub var global_RookLastRanks: [2]scoreType = .{ 32, 32 };
-pub var global_Rookdoubled: [2]scoreType = .{ 16, 16 };
-pub var global_RookOnQueenFile: [2]scoreType = .{ 8, 8 };
+pub var global_OpenFileRookVal: [2]scoreType = .{ 25, 3 };
+pub var global_RookLastRanks: [2]scoreType = .{ 31, 34 };
+pub var global_Rookdoubled: [2]scoreType = .{ 16, 8 };
+pub var global_RookOnQueenFile: [2]scoreType = .{ 11, 5 };
 
 // king
-pub var global_KingProximityVal: [2]scoreType = .{ 5, 5 };
-pub var global_KingTropism: scoreType = 8;
-pub var global_KingPawnlessFlank: [2]scoreType = .{ 8, 32 };
-pub var global_KingOpenFile: scoreType = 8;
+pub var global_KingProximityVal: [2]scoreType = .{ 12, 3 };
+pub var global_KingTropism: [2]scoreType = .{ 0, 5 };
+//pub var global_KingTropism: scoreType = 8;
+pub var global_KingPawnlessFlank: [2]scoreType = .{ 18, 31 };
+pub var global_KingOpenFile: [2]scoreType = .{ 26, 8 };
 
 // PSQT
 pub var global_Pawn_PSQT: [2][64]scoreType = @splat(pawnScoreArr);
@@ -467,6 +472,7 @@ pub var singularExtensionMinDepth: scoreType = 9;
 pub var singularExtensionDeltaTTDepth: scoreType = 2;
 pub var singularMarginDoubleExt: scoreType = 46;
 
+/// not used
 pub var corrHistMax: scoreType = 911;
 pub var corrHistW: scoreType = 82;
 // replace the array with y = a*x + b with x = depth

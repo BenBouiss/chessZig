@@ -18,6 +18,7 @@ Sources:
 - https://github.com/nescitus/cpw-engine/
 - https://github.com/abulmo/hqperft
 - https://github.com/AndyGrant/Ethereal/tree/master for the texel paper
+- https://github.com/P1X3R/texel_zugblitz texel implementation
 - https://github.com/jnlt3/weather-factory Tuning tool
 - https://github.com/jw1912/bullet/ NNUE trainer
 - https://github.com/aqrit/sse2zig SSE stuffs

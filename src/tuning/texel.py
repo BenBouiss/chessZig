@@ -275,6 +275,7 @@ class trainingOptions:
         optimizeOutcome: bool = True,
         patience: int = 32,
         min_delta: float = 0.0000001,
+        resetLR: bool = False,
     ):
         assert os.path.exists(trainingPath), f"file {trainingPath} not found"
         if not os.path.isdir(trainingPath):
@@ -300,6 +301,7 @@ class trainingOptions:
         self.chunksize = chunksize
         self.validationPath = validationPath
         self.checkpointsPath = checkpointsPath
+        self.resetLR = resetLR
 
     def makeFreezeMask(self) -> torch.Tensor:
         mask = [1.0] * (cst.total_idx)

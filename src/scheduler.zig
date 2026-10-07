@@ -248,7 +248,8 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
         }
         const nratio: f64 = @as(f64, @floatFromInt(threadD.nodeCount[validDecision.getFrom()][validDecision.getTo()])) / @as(f64, @floatFromInt(p_info.searchStat.n_nodeExplored + 1));
         const lim = 1.5 - nratio;
-        tm.softTimeLimit = @intFromFloat(@min(@as(f64, @floatFromInt(tm.originalSoftTimeLim)) * lim, @as(f64, @floatFromInt(p_info.criticalTimeMs))));
+        //tm.softTimeLimit = @intFromFloat(@min(@as(f64, @floatFromInt(tm.originalSoftTimeLim)) * lim, @as(f64, @floatFromInt(p_info.criticalTimeMs))));
+        tm.softTimeLimit = @intFromFloat(@as(f64, @floatFromInt(tm.originalSoftTimeLim)) * lim);
 
         if (features.reportProgress and !features.dataGen) {
             sendPartial(p_info, tm.timeSinceStartMs(), depth, innerLoopRep);

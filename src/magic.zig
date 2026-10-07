@@ -3,7 +3,7 @@ const squarel = @import("square.zig");
 
 const std = @import("std");
 
-// TODO Implement fancy bitboard https://www.chessprogramming.org/Magic_Bitboards
+// TODO: Implement fancy bitboard https://www.chessprogramming.org/Magic_Bitboards
 // related(?) link: http://pradu.us/old/Nov27_2008/Buzz/
 
 pub const magic_err = error{noMagicFound};
@@ -48,14 +48,10 @@ pub fn initCst() magicRecord {
     initRookBishopMoves(&ret);
     return ret;
 }
-pub fn _initMagic(p_magic: *magicRecord, verbose: bool) void {
-    p_magic.* = magicRecord.init();
-
-    initRookBishopMagicCached(p_magic);
-    initRookBishopMoves(p_magic);
-    if (verbose) {
-        std.debug.print("[PRE] Finished magic\n", .{});
-    }
+pub fn _initMagic() void {
+    magicTable = magicRecord.init();
+    initRookBishopMagicCached(&magicTable);
+    initRookBishopMoves(&magicTable);
     return;
 }
 

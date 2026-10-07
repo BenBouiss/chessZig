@@ -563,14 +563,13 @@ pub const engine = struct {
     fn initInternals(p_self: *engine) !void {
         p_self.status.initializedInternals = true;
         try p_self.initOptions();
-        magicl._initMagic(&magicl.magicTable, p_self.status.debugMode);
+        chess.initAll();
         p_self.refreshInternals();
     }
     pub fn refreshInternals(p_self: *engine) void {
         if (p_self.scheduler._threadPool.running) {
             p_self.scheduler._threadPool.resetDatas();
         }
-
         _ = p_self.updateHash(p_self.options.hashTableSize) catch {};
     }
 

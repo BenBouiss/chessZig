@@ -162,7 +162,7 @@ pub const openingDatabase = struct {
         const ent = p_self.getItem(flag, randIdx) orelse return bookErr.noValidEntryErr;
         switch (ent.t) {
             .line => {
-                return try chessl.algebraicLineToBoardstate(&ent.v);
+                return try chessl.algebraicLineToBoardstate(ent.v._slice());
             },
             .fen => {
                 return try chessl.getBoardFromFen(ent.v._slice());
@@ -203,17 +203,17 @@ pub const openingDatabase = struct {
 pub fn readEntriesPgn(db: *openingDatabase, alloc: std.mem.Allocator, path: []const u8) !void {
     const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
     defer file.close(mainl.getGlobalIo());
-    var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+    var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0);
     var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     const buffer_size = 1024;
     var currentEntriesType: outcomeFlag = .draw;
     var emptySpaces: u8 = 0;
-    var lineBuffer: [configl.MAX_MATCH_STR_LENGTH]u8 = std.mem.zeroes([configl.MAX_MATCH_STR_LENGTH]u8);
+    var lineBuffer: [configl.MAX_MATCH_STR_LENGTH]u8 = @splat(0);
     var lineStr = string.initFromBuffer(&lineBuffer);
     lineStr.clearRetainingCapacity();
     while (true) {
-        var _buffer: [buffer_size]u8 = std.mem.zeroes([buffer_size]u8);
+        var _buffer: [buffer_size]u8 = @splat(0);
         var w: std.Io.Writer = .fixed(&_buffer);
         var s = string.initFromBuffer(&_buffer);
 
@@ -274,13 +274,13 @@ pub fn test_read(path: *string) !void {
     //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
     const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
     defer file.close(mainl.getGlobalIo());
-    var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
+    var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0);
     var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
     const reader = &f_reader.interface;
     const buffer_size = 1024;
     // in this only to depth 8, thus it should not be that big
     while (true) {
-        var _buffer: [buffer_size]u8 = std.mem.zeroes([buffer_size]u8);
+        var _buffer: [buffer_size]u8 = @splat(0);
         var w: std.Io.Writer = .fixed(&_buffer);
         var s = string.initFromBuffer(&_buffer);
         const size = reader.streamDelimiter(&w, '\n') catch {

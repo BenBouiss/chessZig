@@ -230,7 +230,7 @@ pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const boardState, p_moveBB
             push_promotion(@intCast(from), to, p_out);
         }
 
-        bb = p_moveBB.pawnMoves & if (comptime white) (validPawnLoc << 8) else (validPawnLoc >> 8);
+        bb = p_moveBB.pawnMoves & if (comptime white) (unPinnedBB << 8) else (unPinnedBB >> 8);
         while (bb != chess.EMPTY) {
             const to: u8 = chess.bitscan(bb);
             bb &= bb - 1;
@@ -271,9 +271,6 @@ pub fn cst_moveGenBBToMoveContainer_ordered(p_board: *const boardState, p_moveBB
                 const moveBB = chess.xToBitboard(from) | if (comptime white) (chess.xToBitboard(to) >> 8) else (chess.xToBitboard(to) << 8);
                 const rankAttack = chess.getQueenAttacks(occ ^ moveBB, kingSq) & kingSqInfo.getRankBB();
                 const offender: u64 = (p_board.getPieceBB_t(.ROOK) | p_board.getPieceBB_t(.QUEEN)) & emptyOrEnem;
-                //std.debug.print("[DEBUG] move gen: offender, att from king \n", .{});
-                //chess.print_bitboard(offender);
-                //chess.print_bitboard(rankAttack);
                 // check that a pP or Pp on the board does not block a sliding piece
                 if ((offender & rankAttack) == 0) {
                     movel.build_move_in_v(from, to, @intFromEnum(e_moveFlags.ENPASSANT), p_out);
@@ -1324,8 +1321,7 @@ pub fn initDiagonal(anti: bool) [64]u64 {
 }
 pub fn main() !void {
     //const state = try chess.getBoardFromFen("r7/p1pp1QB1/qn6/3p4/4n3/7p/PPP2PPP/R3K2R b HA - 0 17");
-
-    magicl._initMagic(&magicl.magicTable, false);
+    chess.initAll();
     //const state = try chess.getBoardFromFen("8/q7/8/3K4/8/8/2pN3p/8 b - - 3 113");
     //const state = try chess.getBoardFromFen("8/8/4b1kp/8/6r1/1p3K2/8/8 b - - 3 110");
     const state = try chess.getBoardFromFen("r1br2k1/1pq2ppp/p1n1pn2/b7/N7/1B2PNP1/PPQB1P1P/R2R2K1 b - - 2 23");

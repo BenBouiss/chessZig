@@ -37,7 +37,8 @@ baseMaterial = [
     0.0,
 ]
 # fmt: off
-baseMisc = [6.0, 18, 1, -32, 48, -2, -7, 2.0, 3, 5.0, 4.0, 4.0, 55.0, 47, 32, 16, 8, 5, 8, 8, 8, 1.0]
+#baseMisc = [6.0, 18, 1, -32, 48, -2, -7, 2.0, 3, 5.0, 4.0, 4.0, 55.0, 47, 32, 16, 8, 5, 8, 8, 8, 1.0]
+baseMisc = [6.0, 18, 1, -32, 48, -2, -7, 2.0, 3, 5.0, 4.0, 4.0, 55.0, 47, 32, 16, 8, 5, 8, 8, 8]
 
 
 phaseArr = [
@@ -96,11 +97,11 @@ MISCS_STR = [
     "global_KingTropism",
     "global_KingPawnlessFlank",
     "global_KingOpenFile",
-    "global_SafetyVal",
+    #"global_SafetyVal",
 ]
 
 # fmt: off
-MISCS_COLS: list[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24]
+MISCS_COLS: list[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24]
 # skips outcome and phase as already contained in other csv file
 # all the miscs str from above plus last one for eval
 
@@ -429,6 +430,8 @@ def loadDatasets(dirPath: str) -> TensorDataset:
 
 DEFAULT_FEN: str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 [1.0]"
 
+torch.set_num_threads(os.cpu_count() or 1)
+torch.set_num_interop_threads(1)
 
 class zugNet(nn.Module):
     def __init__(
@@ -465,7 +468,8 @@ class zugNet(nn.Module):
             self.misc_mg += torch.randn_like(self.misc_mg) * self.NOISE
             self.misc_eg += torch.randn_like(self.misc_eg) * self.NOISE
 
-        self.K = nn.Parameter(torch.tensor([0.0090], dtype=torch.float32))
+        #self.K = nn.Parameter(torch.tensor([0.0090], dtype=torch.float32))
+        self.K = 1.19
 
     def forward(
         self,
@@ -484,8 +488,11 @@ class zugNet(nn.Module):
         eg = self.psqt_eg.view(-1)[idx]
 
         sign = 1.0 - 2.0 * colors.float()
-        mg_val = (mg * sign * mask).sum(dim=1) + (self.misc_mg * miscs).sum(dim=1)
-        eg_val = (eg * sign * mask).sum(dim=1) + (self.misc_eg * miscs).sum(dim=1)
+        #mg_val = (mg * sign * mask).sum(dim=1) + (self.misc_mg * miscs[:, :-1]).sum(dim=1)
+        #eg_val = (eg * sign * mask).sum(dim=1) + (self.misc_eg * miscs[:, :-1]).sum(dim=1)
+
+        mg_val = (mg * sign * mask).sum(dim=1) + (self.misc_mg * miscs[:, :-1]).sum(dim=1) + miscs[:, -1]
+        eg_val = (eg * sign * mask).sum(dim=1) + (self.misc_eg * miscs[:, :-1]).sum(dim=1) + miscs[:, -1]
 
         phase = (self.phaseArr[pieces.long()] * mask).sum(dim=1)
         phase = (phase / self.maxPhase).clamp(0.0, 1.0)
@@ -532,7 +539,7 @@ def print_board(name: str, l: list[int]):
     print("};")
 
 
-def train(opt: trainingOptions):
+def train(opt: trainingOptions, takeLastCheckpoint: bool = False):
     assert opt.validationPath is not None
     assert opt.checkpointsPath is not None
 
@@ -561,18 +568,27 @@ def train(opt: trainingOptions):
     optimizer = torch.optim.Adam(
         [
             {
-                "params": [model.psqt_mg, model.psqt_eg, model.misc_mg, model.misc_eg],
-                "lr": 1.5,
+                "params": [model.psqt_mg, model.psqt_eg],
+                "lr": DEFAULT_LR,
                 #"weight_decay": 0.0001,
             },
-            {"params": [model.K], "lr": 0.01},
+{
+                "params": [model.misc_mg, model.misc_eg],
+                "lr": DEFAULT_LR,
+                #"weight_decay": 0.0001,
+            },
+
+            #{"params": [model.K], "lr": DEFAULT_LR},
         ],
     )
-    currBest, epoch = loadCheckpoint(model, optimizer, opt.checkpointsPath)
+    currBest, epoch = loadCheckpoint(model, optimizer, opt.checkpointsPath, takeLast=takeLastCheckpoint)
     if epoch == -1:
         epoch = 0
 
     scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+    if (opt.resetLR):
+        for p in optimizer.param_groups:
+            p["lr"] = DEFAULT_LR
     while True:
         model.train()
         pbar = tqdm(train_loader, desc=f"Epoch {epoch:03d}", unit="batch", leave=False)
@@ -591,29 +607,25 @@ def train(opt: trainingOptions):
             optimizer.zero_grad()
             if opt.optimizeOutcome:
                 outputs = model.forwardS(pieces, squares, colors, miscs)
-                loss = (
-                    criterion(outputs, outcomes)
-                    + 0.05 * material_consistency_loss(model)
-                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
-                )
             else:
                 outputs = model(pieces, squares, colors, miscs)
-                loss = (
-                    criterion(outputs/100, evals/100)
-                    + 0.05 * material_consistency_loss(model)
-                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
-                )
-                
+            loss = (
+                criterion(outputs, evals)
+                + 0.05 * material_consistency_loss(model)
+                + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
+            )
             loss.backward()
             optimizer.step()  # Update the parameters
             train_loss += loss.item()
 
-        train_loss /= len(train_loader)
+        train_loss  /= len(valid_loader)
+
         validPbar = tqdm(
             valid_loader, desc=f"Epoch {epoch:03d}", unit="batch", leave=False
         )
         model.eval()
         val_loss = 0
+        raw_val_loss = 0
         for batch_idx, (pieces, colors, squares, miscs, outcomes, evals) in enumerate(
             validPbar
         ):
@@ -626,22 +638,21 @@ def train(opt: trainingOptions):
 
             if opt.optimizeOutcome:
                 outputs = model.forwardS(pieces, squares, colors, miscs)
-                val_loss += (
-                    criterion(outputs, outcomes).item()
-                    + +0.05 * material_consistency_loss(model)
-                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
-                )
             else:
                 outputs = model(pieces, squares, colors, miscs)
-                val_loss += (
-                    criterion(outputs/100, evals/100).item()
-                    + +0.05 * material_consistency_loss(model)
-                    + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
-                )
+
+            val_loss += (
+                criterion(outputs, evals).item()
+                + 0.05 * material_consistency_loss(model)
+                + 0.05 * psqt_deviation_loss(model.psqt_mg, model.psqt_eg)
+            )
+            raw_val_loss += criterion(outputs, evals).item()
         val_loss /= len(valid_loader)
+        raw_val_loss /= len(valid_loader)
+
         if val_loss < currBest:
             print(
-                f"New best loss found at epoch {epoch} prev {currBest} new {val_loss} current lr {scheduler.get_last_lr()}"
+                f"New best loss found at epoch {epoch} prev {currBest} new {val_loss} current lr {scheduler.get_last_lr()} raw val loss {raw_val_loss}"
             )
             currBest = val_loss
         else:
@@ -655,11 +666,10 @@ def material_consistency_loss(model: zugNet):
     eg_means = model.psqt_eg.mean(dim=1).to(DEVICE)
     diff_mg = mg_means[:6] - model.materialScores[:6]
     diff_eg = eg_means[:6] - model.materialScores[:6]
-
     return (diff_mg**2).sum() + (diff_eg**2).sum()
 
-
-MAX_DEVIATION = 200
+MAX_DEVIATION = 400
+DEFAULT_LR = 0.1
 def psqt_deviation_loss(
     psqts_mg, psqts_eg, max_deviation=MAX_DEVIATION, temperature=5.0
 ):
@@ -696,7 +706,7 @@ def saveCheckpoint(
 
 
 def loadCheckpoint(
-    model: zugNet, optimizer: torch.optim.Optimizer, checkpointDirPath: str
+    model: zugNet, optimizer: torch.optim.Optimizer, checkpointDirPath: str, takeLast: bool = False
 ) -> tuple[float, int]:
     files = glob.glob(os.path.join(checkpointDirPath, "*.pt"))
     bestLoss = float("inf")
@@ -707,7 +717,7 @@ def loadCheckpoint(
     for f in files:
         r = torch.load(f)
         l = float(r["val_loss"].detach())
-        if bestLoss > l:
+        if bestLoss > l or takeLast and (r["epoch"] > bestEpoch):
             bestLoss = l
             bestR = r
             bestEpoch = r["epoch"]
@@ -716,32 +726,6 @@ def loadCheckpoint(
     model.load_state_dict(bestR["model"])
     optimizer.load_state_dict(bestR["optimizer"])
     return (bestLoss, bestEpoch)
-
-
-# for ep in range(opt.epoch):
-#    (X, Y) = next(iter(train_loader))
-#    for batch in range(len(X)):
-#        optimizer.zero_grad()
-#        outputs = model(X[batch])
-#        loss = criterion(outputs, Y[batch])
-#        loss.backward()
-#        optimizer.step()  # Update the parameters
-
-#    # if opt.lrScheduler:
-#    #    scheduler.step()
-
-#    if ep % 10 == 0:
-#        if opt.validationPath is not None:
-#            Xvalid, Yvalid = next(iter(valid_loader))
-#            outputs = model(Xvalid[0])
-#            validationLoss = criterion(outputs, Yvalid[0])
-#        else:
-#            validationLoss = None
-
-#        print(
-#            f"Epoch: {ep}: loss = {loss.item()} validation loss = {validationLoss} {scheduler.get_last_lr()}"
-#        )
-
 
 def print_checkpoint(path: str, variablePrint: bool = False) -> None:
     assert os.path.exists(path)
@@ -974,8 +958,10 @@ if __name__ == "__main__":
     #       validationPath="out/bin/torch/valid",
     #       checkpointsPath="out/bin/torch/checkpoint",
     #       chunksize=512,
-    #       optimizeOutcome=False,
-    #   )
+    #       optimizeOutcome=True,
+    #       #resetLR = True,
+    #   ),
+    ##takeLastCheckpoint=True
     #)
 
     b = sys.argv[1]

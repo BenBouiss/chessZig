@@ -11,7 +11,7 @@ test "entry retrievale" {
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    chessl.initAll(false);
+    chessl.initAll();
     hashl._initOrReallocHashTable(arena, 25, false);
     const m: u64 = (chessl.ONE << hashl.KEY_SHIFT);
     for (0..50) |i| {
@@ -42,7 +42,7 @@ test "entry overwrite" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-    chessl.initAll(false);
+    chessl.initAll();
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
 
@@ -69,7 +69,7 @@ test "entry replacement" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-    chessl.initAll(false);
+    chessl.initAll();
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
     const d = [_]u8{ 16, 4 };
@@ -99,7 +99,7 @@ const fenNode = struct {
 // check that key is always same of same fen
 test "zobrist key consistency" {
     const alloc = std.heap.page_allocator;
-    chessl.initAll(false);
+    chessl.initAll();
     //
     const path = "opening/8moves_v3.pgn";
     if (!filel.fileExists(path)) {

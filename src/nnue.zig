@@ -349,8 +349,5 @@ pub fn main(alloc: std.mem.Allocator) !void {
     std.debug.print("align of network {d} bytes \n", .{@alignOf(network)});
     try deb(alloc);
 
-    const e = @embedFile("extern/feanor.nnue");
-    std.debug.print("{d} \n", .{e.len});
-
     return;
 }

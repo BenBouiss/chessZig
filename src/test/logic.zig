@@ -132,7 +132,7 @@ test "safety area" {
 test "pins" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
-    chessl.initAll(false);
+    chessl.initAll();
     const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     var board = chessl.getBoardFromFen(fen) catch unreachable;
     chessl.getCheckers(&board, true);

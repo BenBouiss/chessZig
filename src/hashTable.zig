@@ -59,7 +59,6 @@ pub inline fn qualityHeuristic(entry: Hash_entry, nNodes: scoreType) scoreType {
 pub const nodeType = enum(u2) { INVALID, UPPER, ALL, LOWER };
 
 const NODETYPE_mask = 0x3; //000000xx
-const AGE_MASK = 252;
 const AGE_SHIFT = 2;
 
 const MAX_AGE: u8 = 64;
@@ -269,7 +268,7 @@ pub const Hash_table = struct {
         ret.initialized = true;
 
         if (verbose) {
-            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Total allocated size {d} bytes for {d} entries\n", .{ ret.size, ret.closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, ret.size * ITEM_PER_BUCKET * @sizeOf(Hash_entry), ret.size * ITEM_PER_BUCKET });
+            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Total allocated size {d} bytes for {d} entries align({d})\n", .{ ret.size, ret.closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, ret.size * ITEM_PER_BUCKET * @sizeOf(Hash_entry), ret.size * ITEM_PER_BUCKET, @alignOf(Hash_bucket) });
             ret.getBucket(0).printSize();
         }
         return ret;
@@ -364,7 +363,7 @@ pub const Hash_table = struct {
     }
     pub inline fn prefetchHash(self: *Hash_table, hash: u64) void {
         const index = self.getHashIndex(hash);
-        @prefetch(&self.entries[index], .{ .cache = .data, .locality = 0, .rw = .read });
+        @prefetch(&self.entries[index], .{ .cache = .data, .locality = 3, .rw = .read });
     }
 };
 

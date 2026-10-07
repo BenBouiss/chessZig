@@ -36,7 +36,6 @@ pub const inputChannel = struct {
     cmdSize: []usize = undefined,
     currentIdx: usize = 0,
     nextIdx: usize = 0,
-    len: usize = INPUTCHANNEL_LEN,
     l: lockl.lock = .{},
 
     pub fn init(alloc: std.mem.Allocator) !inputChannel {
@@ -1430,7 +1429,9 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
         if (itr == 256) {
             itr = 0;
             if (turnTimer.timeSinceStartMs() > inactivityMs) {
-                std.debug.print("[WARNING] inactivity? {d} ms thresh {d} ms \n", .{ turnTimer.timeSinceStartMs(), inactivityMs });
+                const p = match.playerToMove();
+
+                std.debug.print("[WARNING] inactivity? {d} ms thresh {d} ms playing engine '{s}'\n", .{ turnTimer.timeSinceStartMs(), inactivityMs, ctx.pool.setting.engineNames[p.engineUsed]._slice() });
                 match.printTimes(turnTimer);
                 inactivityMs += inactivityMs;
             }
@@ -1505,9 +1506,6 @@ pub fn main(init: std.process.Init) !void {
 
     const path = args[1];
 
-    if (build_options.useTune) {
-        weightl.modif_val();
-    }
-    chessl.initAll(false);
+    chessl.initAll();
     try startPool(path, init.gpa);
 }
