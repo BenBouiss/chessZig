@@ -48,7 +48,7 @@ pub fn evaluate(p_state: *const boardl.boardState) scoreType {
 
     ret += evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB);
     ret += evaluate_pieces(p_state, &allwhiteMoveBB, &allblackMoveBB);
-    ret += evaluate_king(p_state, (computeTaperedV(ret, phase) + p_state.frame.psqtEval) > 0);
+    ret += evaluate_king(p_state);
     ret += evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB);
 
     return computeTaperedV(ret, phase) + p_state.frame.psqtEval;
@@ -93,10 +93,9 @@ pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     const phase: scoreType = p_state.getPhase();
 
     var ret: heuristicComponents = .{
-        //.PSQT = evaluate_PSQT(p_state, values, _phase),
         .PSQT = p_state.frame.psqtEval,
         .Mobility = computeTaperedV(evaluate_mobility(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
-        .King = computeTaperedV(evaluate_king(p_state, p_state.frame.psqtEval > 0), phase),
+        .King = computeTaperedV(evaluate_king(p_state), phase),
         .Material = computeTaperedV(evaluate_pieces(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
         .Safety = computeTaperedV(evaluate_safety(p_state, &whiteMoveBB, &blackMoveBB), phase),
         .Structure = computeTaperedV(evaluate_structure(p_state, &allwhiteMoveBB, &allblackMoveBB), phase),
@@ -138,27 +137,28 @@ pub fn evaluate_pawnStructure(p_state: *const boardl.boardState) scoreVect {
     // in an effort to have the weights all positive I swapped the diff, (nBlackIsolated - nWhiteIsolated) * (w>0) means that white is advantaged (s>0) if (nBlackIsolated > nWhiteIsolated) and black is advantaged(s<0) if (nBlackIsolated < nWhiteIsolated)
     // same for doubled as doubled and isolated are seen as negative attributes hence why I chose negative weights to penalize the respective sides.
 
-    const nWhiteIsolated: i8 = chess.ipopcount(chess.isolatedPawns(wp));
-    const nBlackIsolated: i8 = chess.ipopcount(chess.isolatedPawns(bp));
-    const isoS: scoreType = @intCast(nWhiteIsolated - nBlackIsolated);
+    const isoS = chess.popcount_t(chess.isolatedPawns(wp), scoreType) - chess.popcount_t(chess.isolatedPawns(bp), scoreType);
 
-    const nWhiteDoubled: i8 = chess.ipopcount(chess.stackedPawns(wp));
-    const nBlackDoubled: i8 = chess.ipopcount(chess.stackedPawns(bp));
-    const doS: scoreType = @intCast(nWhiteDoubled - nBlackDoubled);
+    const doS = chess.popcount_t(chess.stackedPawns(wp), scoreType) - chess.popcount_t(chess.stackedPawns(bp), scoreType);
 
-    const nWhitePassed: i8 = chess.ipopcount(chess.passedPawns(wp, bp));
-    const nBlackPassed: i8 = chess.ipopcount(chess.passedPawns(bp, wp));
-    const paS: scoreType = @intCast(nWhitePassed - nBlackPassed);
+    const paS = chess.popcount_t(chess.passedPawns(wp, bp), scoreType) - chess.popcount_t(chess.passedPawns(bp, wp), scoreType);
 
-    const nWhiteDuo: i8 = chess.ipopcount(chess.duoPhalanx(wp));
-    const nBlackDuo: i8 = chess.ipopcount(chess.duoPhalanx(bp));
-    const duoS: scoreType = @intCast(nWhiteDuo - nBlackDuo);
+    const duoS = chess.popcount_t(chess.duoPhalanx(wp), scoreType) - chess.popcount_t(chess.duoPhalanx(bp), scoreType);
 
-    const nWhiteConn: i8 = chess.ipopcount(wp & chess.getPawnAttacksFromBB(wp, true));
-    const nBlackConn: i8 = chess.ipopcount(bp & chess.getPawnAttacksFromBB(bp, false));
-    const connectS: scoreType = @intCast(nWhiteConn - nBlackConn);
+    const connectS = chess.popcount_t(wp & chess.getPawnAttacksFromBB(wp, true), scoreType) - chess.popcount_t(bp & chess.getPawnAttacksFromBB(bp, false), scoreType);
 
-    return .{ (isoS * weightl.global_IsolatedPawnVal[MG]) + (doS * weightl.global_StackedPawnVal[MG]) + (paS * weightl.global_PassedPawnVal[MG]) + (duoS * weightl.global_phalanxDuoPawnVal[MG]) + (connectS * weightl.global_connectionPawnVal[MG]), (isoS * weightl.global_IsolatedPawnVal[EG]) + (doS * weightl.global_StackedPawnVal[EG]) + (paS * weightl.global_PassedPawnVal[EG]) + (duoS * weightl.global_phalanxDuoPawnVal[EG]) + (connectS * weightl.global_connectionPawnVal[EG]) };
+    return .{
+        isoS * weightl.global_IsolatedPawnVal[MG] +
+            doS * weightl.global_StackedPawnVal[MG] +
+            paS * weightl.global_PassedPawnVal[MG] +
+            duoS * weightl.global_phalanxDuoPawnVal[MG] +
+            connectS * weightl.global_connectionPawnVal[MG],
+        isoS * weightl.global_IsolatedPawnVal[EG] +
+            doS * weightl.global_StackedPawnVal[EG] +
+            paS * weightl.global_PassedPawnVal[EG] +
+            duoS * weightl.global_phalanxDuoPawnVal[EG] +
+            connectS * weightl.global_connectionPawnVal[EG],
+    };
 }
 pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *const moveBBState, p_blackMoveBB: *const moveBBState) scoreVect {
     // going to use "raw" mobility only taking board coverage
@@ -192,7 +192,7 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     const moveAmountScore: scoreVect = .{ weightl.global_MobilityVal[MG] * v, weightl.global_MobilityVal[EG] * v };
     return moveAmountScore;
 }
-pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scoreVect {
+pub fn evaluate_king(p_state: *const boardl.boardState) scoreVect {
     // features
     // in mg king safety
     //  - pawn shield, if no shield or openfile near king, penalty
@@ -210,7 +210,6 @@ pub fn evaluate_king(p_state: *const boardl.boardState, whiteWinning: bool) scor
     const wKingTropism = chess.kingPawnTropism(wP, wKing);
     const bKingTropism = chess.kingPawnTropism(bP, bKing);
     const tropismDelta = -(wKingTropism - bKingTropism);
-    _ = whiteWinning;
     var ret: scoreVect = .{ tropismDelta * weightl.global_KingTropism[MG], tropismDelta * weightl.global_KingTropism[EG] };
     const distW = wKing.computeMHDistance(squarel.centerSqInfo);
     const distB = bKing.computeMHDistance(squarel.centerSqInfo);
@@ -343,7 +342,7 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
     // use the c_moveBBstate & c_occupied, this returns the safety of each individual pieces against capture
     const w_pieceProtect = p_whiteMoveBB.andFn(p_state.occupiedBB_col(.WHITE));
     const b_pieceProtect = p_blackMoveBB.andFn(p_state.occupiedBB_col(.BLACK));
-    const s = @as(scoreType, @intCast(w_pieceProtect.count())) - @as(scoreType, @intCast(b_pieceProtect.count()));
+    const s = w_pieceProtect.count() - b_pieceProtect.count();
 
     const w_pieceCenterProt = p_whiteMoveBB.collapse() & (chess.centerBB);
     const b_pieceCenterProt = p_blackMoveBB.collapse() & (chess.centerBB);
@@ -351,8 +350,8 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
     const wAttack = p_whiteMoveBB.getAttackedMask(chess.UNIVERSE);
     const bAttack = p_blackMoveBB.getAttackedMask(chess.UNIVERSE);
 
-    const wHanging = p_state.occupiedBB_col(.WHITE) & (~wAttack) & (bAttack);
-    const bHanging = p_state.occupiedBB_col(.BLACK) & (~bAttack) & (wAttack);
+    const wHanging = p_state.occupiedBB_col(.WHITE) & (~wAttack) & bAttack;
+    const bHanging = p_state.occupiedBB_col(.BLACK) & (~bAttack) & wAttack;
     const s3: scoreType = chess.popcount_t(wHanging, scoreType) - chess.popcount_t(bHanging, scoreType);
 
     const nonPawns = ~p_state.getPieceBB_t(.PAWN);
@@ -361,7 +360,6 @@ pub fn evaluate_structure(p_state: *const boardl.boardState, p_whiteMoveBB: *con
     const deltaThreat: scoreType = chess.popcount_t(wBigThreat, scoreType) - chess.popcount_t(bBigThreat, scoreType);
 
     return .{
-        //
         weightl.global_StructureProtectionVal[MG] * s +
             weightl.global_centerProtectionVal[MG] * s2 +
             weightl.global_HangingVal[MG] * s3 +
@@ -429,12 +427,6 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
         sV -= victimScs;
     }
     return computeTapered(sV[0], sV[1], phase);
-
-    //const ret = sV[0] + computeTapered(sV[1], sV[2], phase);
-    //if (comptime white) {
-    //    return ret;
-    //}
-    //return -ret;
 }
 
 pub fn materialImbalance(p_state: *const boardl.boardState) scoreType {
@@ -671,7 +663,7 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector, skip
     const w_pieceProtect = allwhiteMoveBB.andFn(p_state.occupiedBB_col(.WHITE));
     const b_pieceProtect = allblackMoveBB.andFn(p_state.occupiedBB_col(.BLACK));
 
-    p_out.appendCoeff(.{ .wcoeff = @intCast(w_pieceProtect.count()), .bcoeff = @intCast(b_pieceProtect.count()) });
+    p_out.appendCoeff(.{ .wcoeff = w_pieceProtect.count(), .bcoeff = b_pieceProtect.count() });
     std.debug.assert(idx == configl.TEXEL_PROTECTION_COUNT_IDX);
     idx += 1;
 
@@ -704,15 +696,15 @@ pub fn getCoeffsFromBoard(p_state: *boardl.boardState, p_out: *coeffVector, skip
     const wp = p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.WHITE);
     const bp = p_state.getPieceBB_t(.PAWN) & p_state.occupiedBB_col(.BLACK);
 
-    const nWhiteIsolated: scoreType = @intCast(chess.ipopcount(chess.isolatedPawns(wp)));
-    const nBlackIsolated: scoreType = @intCast(chess.ipopcount(chess.isolatedPawns(bp)));
+    const nWhiteIsolated = chess.popcount_t(chess.isolatedPawns(wp), scoreType);
+    const nBlackIsolated = chess.popcount_t(chess.isolatedPawns(bp), scoreType);
 
     p_out.appendCoeff(.{ .wcoeff = nWhiteIsolated, .bcoeff = nBlackIsolated });
     std.debug.assert(idx == configl.TEXEL_PAWN_ISOL_IDX);
     idx += 1;
 
-    const nWhiteDoubled: scoreType = @intCast(chess.ipopcount(chess.stackedPawns(wp)));
-    const nBlackDoubled: scoreType = @intCast(chess.ipopcount(chess.stackedPawns(bp)));
+    const nWhiteDoubled = chess.popcount_t(chess.stackedPawns(wp), scoreType);
+    const nBlackDoubled = chess.popcount_t(chess.stackedPawns(bp), scoreType);
 
     p_out.appendCoeff(.{ .wcoeff = nWhiteDoubled, .bcoeff = nBlackDoubled });
     std.debug.assert(idx == configl.TEXEL_PAWN_STACKED_IDX);

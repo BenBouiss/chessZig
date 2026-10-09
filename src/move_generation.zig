@@ -33,8 +33,7 @@ pub const arrRectangular: [64][64]u64 = initInbetween();
 pub const kingTable: [64]u64 = initKingAttacks();
 pub const safetyArea: [64]u64 = initSafetyArea();
 
-pub const diagonalBB: [64]u64 = initDiagonal(false);
-pub const antiDiagonalBB: [64]u64 = initDiagonal(true);
+pub const diagonalsBB: [64]u64 = initDiagonal();
 
 pub const antiDiagIdxs: [64]scoreType = [_]scoreType{
     7,  6,  5,  4,  3,  2, 1, 0,
@@ -812,7 +811,6 @@ pub const typeMoveGenerator = struct {
     pub fn reset(p_self: *typeMoveGenerator) void {
         p_self.phase = .TTMOVE;
         p_self.idx = 0;
-        // TODO: also reset the badCaptures as is, the badCaptures keeps growing after probcut
         p_self.badCaptures.moves.len = 0;
     }
 
@@ -1013,11 +1011,11 @@ pub fn _generateMoveT(out: *moveContainer, comptime t: typel.e_moveGenFlag, comp
     } else {
         king_generatePieceMove(out, t, white, p_state, targets);
     }
+    // for some reason pre eliminating already known non legal moves (eg diagonal pin for horizontale pieces) which causes a ordering round + call to board.legal(move) which fails leads to worse performance compared to standard engine. Maybe this is too heavy ?
     //const kingSq = if (comptime white) p_state.b.wKingSq else p_state.b.bKingSq;
-    //const kingSqInfo = squarel.squareInfo.init(kingSq);
-    //const pinned = ;
-    //const pinHV = pinned & kingSqInfo.getHorizontalBB();
-    //const pinDiag = pinned & kingSqInfo.getDiagonalsBB();
+    //const kingSqInfo: squarel.squareInfo = .init(kingSq);
+    //const pinHV = p_state.frame.pinnedBB & kingSqInfo.getHorizontalBB();
+    //const pinDiag = p_state.frame.pinnedBB & kingSqInfo.getDiagonalsBB();
 
     generatePawnt(out, white, t, p_state, occ, targets);
 
@@ -1064,10 +1062,10 @@ pub fn king_generatePieceMove(out: *moveContainer, comptime t: typel.e_moveGenFl
     const sqX: u8 = @intFromEnum(sq);
     const att = chess.getKingAttacks(sq);
     if (comptime t == .CAPTURE or t == .ALL) {
-        genericStagedMovePushCapture(out, att & targets, @intFromEnum(sq));
+        genericStagedMovePushCapture(out, att & targets, sqX);
     }
     if (comptime t == .QUIET or t == .ALL) {
-        genericStagedMovePushQuiet(out, att & targets, @intFromEnum(sq));
+        genericStagedMovePushQuiet(out, att & targets, sqX);
         if (!p_state.isChecked()) {
             if (p_state.canKingSideCastle(white)) {
                 movel.build_move_in_v(sqX, sqX + 2, @intFromEnum(e_moveFlags.KINGCASTLE), out);
@@ -1088,51 +1086,50 @@ pub fn generatePawnt(out: *moveContainer, comptime white: bool, comptime t: type
         const mask = chess.maskOutPawnQuietMove(white, targets);
         var bbProm = p & mask & if (comptime white) chess.blackPawnDoubleRank else chess.whitePawnDoubleRank;
         while (bbProm != 0) {
-            const sq = chess.bitscan(bbProm);
+            const from = chess.bitscan(bbProm);
             bbProm &= bbProm - 1;
-            push_promotion(sq, if (comptime white) (sq + 8) else (sq - 8), out);
+            push_promotion(from, if (comptime white) (from + 8) else (from - 8), out);
         }
-        var bb: u64 = p & mask & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
-        while (bb != 0) {
-            const sq = chess.bitscan(bb);
-            bb &= bb - 1;
-            movel.build_move_in_v(sq, if (comptime white) (sq + 8) else (sq - 8), @intFromEnum(e_moveFlags.QUIETMOVE), out);
+        var bbOnePush: u64 = p & mask & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
+        while (bbOnePush != 0) {
+            const from = chess.bitscan(bbOnePush);
+            bbOnePush &= bbOnePush - 1;
+            movel.build_move_in_v(from, if (comptime white) (from + 8) else (from - 8), @intFromEnum(e_moveFlags.QUIETMOVE), out);
         }
 
-        bb = p & chess.maskOutPawnDoublePush(white, realEmpty & targets);
-        while (bb != 0) {
-            const sq = chess.bitscan(bb);
-            const dest = if (comptime white) (sq + 16) else (sq - 16);
-            bb &= bb - 1;
-            movel.build_move_in_v(sq, dest, @intFromEnum(e_moveFlags.DOUBLEPAWN), out);
+        var bbDouble = p & chess.maskOutPawnDoublePush(white, realEmpty & targets);
+        while (bbDouble != 0) {
+            const from = chess.bitscan(bbDouble);
+            const to = if (comptime white) (from + 16) else (from - 16);
+            bbDouble &= bbDouble - 1;
+            movel.build_move_in_v(from, to, @intFromEnum(e_moveFlags.DOUBLEPAWN), out);
         }
     }
     if (comptime t == .CAPTURE or t == .ALL) {
         var bbProm = p & if (comptime white) chess.blackPawnDoubleRank else chess.whitePawnDoubleRank;
         while (bbProm != 0) {
-            const sq = chess.bitscan(bbProm);
+            const from = chess.bitscan(bbProm);
             bbProm &= bbProm - 1;
-            var att = chess.getPawnAttacks(@enumFromInt(sq), white) & targets;
+            var att = chess.getPawnAttacks(@enumFromInt(from), white) & targets;
             while (att != 0) {
                 const victim = chess.bitscan(att);
                 att &= att - 1;
-                push_promotion_capture(sq, victim, out);
+                push_promotion_capture(from, victim, out);
             }
         }
-
         var bb: u64 = p & if (comptime white) ~chess.blackPawnDoubleRank else ~chess.whitePawnDoubleRank;
         while (bb != 0) {
-            const sq = chess.bitscan(bb);
+            const from = chess.bitscan(bb);
             bb &= bb - 1;
-            const att = chess.getPawnAttacks(@enumFromInt(sq), white) & targets;
-            genericStagedMovePushCapture(out, att, sq);
+            const att = chess.getPawnAttacks(@enumFromInt(from), white) & targets;
+            genericStagedMovePushCapture(out, att, from);
         }
         if (p_state.frame.enPassantIdx != 0) {
             var validPs = chess.getPawnAttacks(@enumFromInt(p_state.frame.enPassantIdx), !white) & p & (~pinned);
             while (validPs != 0) {
-                const sq = chess.bitscan(validPs);
+                const from = chess.bitscan(validPs);
                 validPs &= validPs - 1;
-                movel.build_move_in_v(sq, p_state.frame.enPassantIdx, @intFromEnum(e_moveFlags.ENPASSANT), out);
+                movel.build_move_in_v(from, p_state.frame.enPassantIdx, @intFromEnum(e_moveFlags.ENPASSANT), out);
             }
         }
     }
@@ -1302,19 +1299,28 @@ pub fn initSafetyArea() [64]u64 {
     }
     return ret;
 }
-pub fn initDiagonal(anti: bool) [64]u64 {
+pub fn initDiagonal() [64]u64 {
     @setEvalBranchQuota(100000);
     //const baseSq: i8 = 28;
     var ret: [64]u64 = @splat(0);
 
-    const maindia: u64 = if (anti) (0x0102040810204080) else (0x8040201008040201);
+    const antimaindia: u64 = 0x0102040810204080;
+    const maindia: u64 = 0x8040201008040201;
     for (0..ret.len) |i| {
         const _i: i8 = @intCast(i);
-        const diag: i8 = if (anti) (7 - (_i & 7) - (_i >> 3)) else ((_i & 7) - (_i >> 3));
-        if (diag >= 0) {
-            ret[i] = maindia >> @intCast(diag << 3);
+        // anti diagonal
+        const antidiag: i8 = (7 - (_i & 7) - (_i >> 3));
+        if (antidiag >= 0) {
+            ret[i] |= antimaindia >> @intCast(antidiag << 3);
         } else {
-            ret[i] = maindia << @intCast((-diag) << 3);
+            ret[i] |= antimaindia << @intCast((-antidiag) << 3);
+        }
+        // diagonal
+        const diag: i8 = (_i & 7) - (_i >> 3);
+        if (diag >= 0) {
+            ret[i] |= maindia >> @intCast(diag << 3);
+        } else {
+            ret[i] |= maindia << @intCast((-diag) << 3);
         }
     }
     return ret;

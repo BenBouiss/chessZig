@@ -10,20 +10,11 @@ pub const squareInfo = struct {
     pub inline fn init(sq: e_square) squareInfo {
         return .{ .sq = sq, .file = @intCast(chess.getSqFile(sq)), .rank = @intCast(chess.getSqRank(sq)) };
     }
-    pub inline fn copy(self: squareInfo) squareInfo {
-        return .{ .sq = self.sq, .file = self.file, .rank = self.rank, .diagonal = self.diagonal, .antidiagonal = self.antidiagonal };
-    }
     pub fn print(self: squareInfo) void {
         std.debug.print("{} ", .{self.sq});
     }
     pub inline fn getBB(self: squareInfo) u64 {
         return chess.ONE << @intCast(@intFromEnum(self.sq));
-    }
-    pub inline fn getDiagBB(self: squareInfo) u64 {
-        return chess.diagonalMask(self.sq);
-    }
-    pub inline fn getAntiDiagBB(self: squareInfo) u64 {
-        return chess.antiDiagonalMask(self.sq);
     }
     pub inline fn getFileBB(self: squareInfo) u64 {
         return chess.fileMaskFromFileN(@intCast(self.file));
@@ -32,16 +23,16 @@ pub const squareInfo = struct {
         return chess.rankMaskFromRankN(@intCast(self.rank));
     }
     pub inline fn getAllAttackingSquares(self: squareInfo) u64 {
-        return self.getDiagBB() | self.getAntiDiagBB() | self.getRankBB() | self.getFileBB() | chess.knightAttacks(self.getBB());
+        return self.getDiagonalsBB() | self.getRankBB() | self.getFileBB() | chess.knightAttacks(self.getBB());
     }
     pub inline fn visibilitySquares(self: squareInfo) u64 {
-        return self.getDiagBB() | self.getAntiDiagBB() | self.getRankBB() | self.getFileBB();
+        return self.getDiagonalsBB() | self.getRankBB() | self.getFileBB();
     }
     pub inline fn getHorizontalBB(self: squareInfo) u64 {
         return self.getRankBB() | self.getFileBB();
     }
     pub inline fn getDiagonalsBB(self: squareInfo) u64 {
-        return self.getDiagBB() | self.getAntiDiagBB();
+        return chess.diagonalMask(self.sq);
     }
     pub inline fn computeMHDistance(self: squareInfo, other: squareInfo) i8 {
         const deltaF: i8 = self.file - other.file;

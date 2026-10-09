@@ -54,6 +54,12 @@ pub fn lowerLetter(letter: u8) u8 {
     }
     return letter;
 }
+pub fn upperLetter(letter: u8) u8 {
+    if ((letter >= 97) and (letter <= 122)) {
+        return letter - 32;
+    }
+    return letter;
+}
 pub fn startsWith(a: []const u8, b: []const u8, comptime token: strTokens) bool {
     if (b.len > a.len) {
         return false;

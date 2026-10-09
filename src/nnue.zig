@@ -14,6 +14,8 @@ const movel = @import("move.zig");
 const ssel = @import("intrinsics/sse.zig");
 const mathl = @import("math.zig");
 
+const build_options = @import("build_options");
+
 const scoreType = typel.scoreType;
 const e_color = typel.e_color;
 const accumulator: type = [HL_SIZE]i16;
@@ -300,10 +302,13 @@ pub fn updateNnueOnMove(p_state: *boardl.boardState, move: movel.IMove, stack: *
 }
 
 pub inline fn evaluate(bucketId: usize, white: bool, pair: *const accumulatorPair) scoreType {
-    //std.debug.print("align {d} {any}\n", .{ @alignOf(@TypeOf(nnueNet.buckets)), nnueNet.getBucket(bucketId).outputWeights });
-    //std.debug.print("align {d}\n", .{@alignOf(network)});
-    //return if (white) ___forward(nnueNet.getBucket(bucketId), &pair.w, &pair.b) else ___forward(nnueNet.getBucket(bucketId), &pair.b, &pair.w);
-    return if (white) ___forward(bucketId, &pair.w, &pair.b) else ___forward(bucketId, &pair.b, &pair.w);
+    if (comptime build_options.useSSE2) {
+        return if (white) ___forward(bucketId, &pair.w, &pair.b) else ___forward(bucketId, &pair.b, &pair.w);
+    }
+    if (comptime build_options.useSSE) {
+        return if (white) __forward(bucketId, &pair.w, &pair.b) else __forward(bucketId, &pair.b, &pair.w);
+    }
+    return if (white) _forward(bucketId, &pair.w, &pair.b) else _forward(bucketId, &pair.b, &pair.w);
 }
 //pub const BAD_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w HAha - 0 1";
 pub const BAD_FEN = "1n3R2/r2N4/4kB1p/1P6/8/p4NPB/P1P2P1P/3R2K1 b - - 3 57";

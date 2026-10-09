@@ -181,10 +181,6 @@ pub fn rotate180(bb: u64) u64 {
     return x;
 }
 
-pub inline fn ipopcount(bb: u64) i8 {
-    return @as(i8, @intCast(@popCount(bb)));
-}
-
 pub inline fn popcount(bb: u64) u8 {
     return @as(u8, @intCast(@popCount(bb)));
 }
@@ -194,7 +190,7 @@ pub inline fn popcount_t(bb: u64, comptime T: type) T {
 pub inline fn bitscan(bb: u64) u8 {
     // assumes bb is non empty
     var ret: u32 = undefined;
-    _ = intrinsicsl._BitScanForward64(&ret, bb);
+    intrinsicsl._BitScanForward64(&ret, bb);
     return @intCast(ret);
 }
 
@@ -262,9 +258,6 @@ fn getPieceFromStr(letter: u8) e_piece {
 }
 pub inline fn getStrFromPiece(piece: e_piece) u8 {
     return arr_piece_str[@intFromEnum(piece)];
-}
-pub inline fn getStrFromPieceCapital(piece: e_piece) u8 {
-    return arr_piece_str[@intFromEnum(piece) % N_PIECES_TYPES];
 }
 
 pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
@@ -355,9 +348,9 @@ pub fn getBoardFromFen_enPassant(p_state: *boardl.boardState, turnToken: []const
     }
     return true;
 }
-pub inline fn getBoardFromFen_clockMove(turnToken: []const u8) u16 {
+pub inline fn getBoardFromFen_clockMove(turnToken: []const u8) u8 {
     std.debug.assert(turnToken.len != 0);
-    const nbr = std.fmt.parseInt(u16, turnToken, 10) catch {
+    const nbr = std.fmt.parseInt(u8, turnToken, 10) catch {
         return 0;
     };
     return nbr;
@@ -372,8 +365,8 @@ pub fn getBoardFromFen(fen: []const u8) debug_err!boardl.boardState {
     _ = try getBoardFromFen_turn(&board, gen.next().?);
     _ = getBoardFromFen_castle(&board, gen.next().?);
     _ = getBoardFromFen_enPassant(&board, gen.next().?);
-    board.frame.halfMoveClock = @intCast(getBoardFromFen_clockMove(gen.next().?));
-    board.b.turnCount = @intCast(getBoardFromFen_clockMove(gen.next().?));
+    board.frame.halfMoveClock = getBoardFromFen_clockMove(gen.next().?);
+    board.b.turnCount = getBoardFromFen_clockMove(gen.next().?);
     onMoveStaged(&board, board.whiteToMove());
     if (comptime !configl.USE_NNUE) {
         board.frame.psqtEval = heuristicl.evaluate_PSQT(&board, board.getPhase());
@@ -737,11 +730,7 @@ pub fn knightAttacks(knights: u64) u64 {
 }
 
 pub inline fn diagonalMask(sq: e_square) u64 {
-    return moveGenl.diagonalBB[@intFromEnum(sq)];
-}
-
-pub inline fn antiDiagonalMask(sq: e_square) u64 {
-    return moveGenl.antiDiagonalBB[@intFromEnum(sq)];
+    return moveGenl.diagonalsBB[@intFromEnum(sq)];
 }
 
 pub inline fn fileMaskFromFileN(file: u8) u64 {
@@ -1301,7 +1290,7 @@ pub const algebraicTarget = struct {
             var buffer: [10]u8 = @splat(0);
             var n: usize = 0;
             if (self.piece != .nEmptySquare) {
-                buffer[n] = getStrFromPieceCapital(self.piece);
+                buffer[n] = utils.upperLetter(getStrFromPiece(self.piece));
                 n += 1;
             }
             if (self.file != 9) {
@@ -1322,7 +1311,7 @@ pub const algebraicTarget = struct {
             n += 2;
             if (self.promoPiece != .nEmptySquare) {
                 buffer[n] = '=';
-                buffer[n + 1] = getStrFromPieceCapital(self.promoPiece);
+                buffer[n + 1] = utils.upperLetter(getStrFromPiece(self.piece));
                 n += 2;
             }
             try writer.print("{s} ", .{utils.trimStr(&buffer)});

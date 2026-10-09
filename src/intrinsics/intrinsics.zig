@@ -8,7 +8,7 @@ const moveGenl = @import("../move_generation.zig");
 
 const ssel = @import("sse.zig");
 
-pub inline fn _BitScanForward64(index: *u32, Mask: u64) u8 {
+pub inline fn _BitScanForward64(index: *u32, Mask: u64) void {
     var Ret: u64 = undefined;
     asm volatile (
         \\bsfq %[Mask], %[Ret]
@@ -16,10 +16,6 @@ pub inline fn _BitScanForward64(index: *u32, Mask: u64) u8 {
         : [Mask] "mr" (Mask),
     );
     index.* = @intCast(Ret);
-    if (Mask == 0) {
-        return 0;
-    }
-    return 1;
 }
 
 pub inline fn _BitScanForwardReverse64(index: *u32, Mask: u64) u8 {

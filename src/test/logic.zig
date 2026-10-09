@@ -147,3 +147,10 @@ test "pins" {
     try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(typel.e_moveFlags.QUIETMOVE)), false));
     try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(typel.e_moveFlags.QUIETMOVE)), false));
 }
+test "upper lower" {
+    try std.testing.expectEqual('a', utilsl.lowerLetter('A'));
+    try std.testing.expectEqual('z', utilsl.lowerLetter('Z'));
+
+    try std.testing.expectEqual('A', utilsl.upperLetter('a'));
+    try std.testing.expectEqual('Z', utilsl.upperLetter('z'));
+}

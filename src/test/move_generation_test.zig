@@ -71,7 +71,6 @@ test "perft - startpos" {
     var board = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     var threaded: std.Io.Threaded = .init_single_threaded;
     const io = threaded.io();
-    //try std.testing.expect(!hashl.isHashTable_init());
     for (1..perft_MAX_DEPTH + 1) |depth| {
         const _start = std.Io.Timestamp.now(io, .real).toMicroseconds();
         const res = perftl.perftThreadStart(&board, arena, @intCast(depth), perft_THREAD, perft_BATCHED) catch {

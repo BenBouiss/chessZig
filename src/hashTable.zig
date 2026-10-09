@@ -245,7 +245,6 @@ pub const hashTableStat = struct {
 pub const Hash_table = struct {
     entries: []Hash_bucket,
     MBsize: u32 = 0,
-    closestBit: u8 = 0,
     size: u64 = 0,
     initialized: bool = false,
     stat: hashTableStat = .{},
@@ -255,20 +254,16 @@ pub const Hash_table = struct {
     pub fn init(alloc: std.mem.Allocator, MBsize: u32, verbose: bool) !Hash_table {
         var ret: Hash_table = undefined;
         ret.MBsize = MBsize;
-
         var total_size: u64 = @intCast(MBsize * 1024 * 1024);
         total_size = @divFloor(total_size, @sizeOf(Hash_entry) * ITEM_PER_BUCKET);
-
-        ret.closestBit = chess.l_getMsbIdx(total_size) - 1;
-        ret.size = chess.xToBitboard(ret.closestBit);
+        const closestBit = chess.l_getMsbIdx(total_size) - 1;
+        ret.size = chess.xToBitboard(closestBit);
         ret.mask = ret.size - 1;
-        ret.entries = (try alloc.alloc(Hash_bucket, ret.size));
-
+        ret.entries = try alloc.alloc(Hash_bucket, ret.size);
         ret.zero();
         ret.initialized = true;
-
         if (verbose) {
-            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Total allocated size {d} bytes for {d} entries align({d})\n", .{ ret.size, ret.closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, ret.size * ITEM_PER_BUCKET * @sizeOf(Hash_entry), ret.size * ITEM_PER_BUCKET, @alignOf(Hash_bucket) });
+            std.debug.print("[PRE] Initializing hash table with a size of {d} buckets closest bit {d} for input of {d}MB = {d} msb total size {d}! Total allocated size {d} bytes for {d} entries align({d})\n", .{ ret.size, closestBit, MBsize, chess.l_getMsbIdx(total_size), total_size, ret.size * ITEM_PER_BUCKET * @sizeOf(Hash_entry), ret.size * ITEM_PER_BUCKET, @alignOf(Hash_bucket) });
             ret.getBucket(0).printSize();
         }
         return ret;
@@ -308,17 +303,6 @@ pub const Hash_table = struct {
     pub inline fn getBucketFromFullHashIndex(self: *Hash_table, hash: u64) *Hash_bucket {
         const index = self.getHashIndex(hash);
         return self.getBucket(index);
-    }
-
-    pub fn overwriteEvaluationEntries(p_self: *Hash_table, p_entry: *Hash_entry, eval: scoreType) void {
-        const index = p_entry.key;
-        var p_bucket = p_self.getBucketFromFullHashIndex(index);
-        for (0..ITEM_PER_BUCKET) |i| {
-            var ent = &p_bucket.entries[i];
-            if (ent.key == p_entry.key) {
-                ent.staticEval = eval;
-            }
-        }
     }
 
     pub fn probeMatch(p_self: *Hash_table, key: u64, p_state: *const boardl.boardState) probeResult {
@@ -420,9 +404,6 @@ pub const Zobrist_Keys = struct {
 
 pub var hashTable: Hash_table = .{ .entries = undefined };
 
-pub fn isHashTable_init() bool {
-    return hashTable.initialized;
-}
 pub fn _initOrReallocHashTable(alloc: std.mem.Allocator, sizeHashTable: u32, verbose: bool) void {
     // size in MB
 
