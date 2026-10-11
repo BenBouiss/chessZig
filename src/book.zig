@@ -64,6 +64,7 @@ pub const openingDatabase = struct {
         ret.blackEntries = try .initCapacity(alloc, 4);
         ret.initialized = true;
         if (utilsl.contains(path, ".pgn", .ignoreCase)) {
+            //try readEntriesPgn(&ret, alloc, path);
             try readEntriesPgn(&ret, alloc, path);
         } else if (utilsl.contains(path, ".epd", .ignoreCase)) {
             try readEntriesEpd(&ret, alloc, path);
@@ -201,61 +202,61 @@ pub const openingDatabase = struct {
     }
 };
 pub fn readEntriesPgn(db: *openingDatabase, alloc: std.mem.Allocator, path: []const u8) !void {
-    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
-    defer file.close(mainl.getGlobalIo());
-    var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0);
-    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
-    const reader = &f_reader.interface;
-    const buffer_size = 1024;
-    var currentEntriesType: outcomeFlag = .draw;
-    var emptySpaces: u8 = 0;
+    const buffer = try filel.allocFullFile(alloc, path);
+    defer alloc.free(buffer);
+
     var lineBuffer: [configl.MAX_MATCH_STR_LENGTH]u8 = @splat(0);
     var lineStr = string.initFromBuffer(&lineBuffer);
     lineStr.clearRetainingCapacity();
-    while (true) {
-        var _buffer: [buffer_size]u8 = @splat(0);
-        var w: std.Io.Writer = .fixed(&_buffer);
-        var s = string.initFromBuffer(&_buffer);
 
-        const size = reader.streamDelimiter(&w, '\n') catch {
-            break;
-        };
-        reader.toss(1);
+    var sBuffer: [configl.MAX_MATCH_STR_LENGTH]u8 = @splat(0);
+    var s = string.initFromBuffer(&sBuffer);
+    var currentEntriesType: outcomeFlag = .draw;
+    var lineStarted: bool = false;
 
-        s.len = size - 1;
-        if (size == 1) {
-            emptySpaces += 1;
-            if (emptySpaces == 2) {
-                // save to db
-                db.addEntry(alloc, currentEntriesType, &lineStr, .line) catch {
-                    @panic("Cant add entries to database");
-                };
-                lineStr.clearRetainingCapacity();
-                emptySpaces = 0;
-                continue;
-            }
-        }
+    var itr = std.mem.tokenizeAny(u8, buffer, "\r\n");
+    while (itr.next()) |line| {
+        s.copyFromSlice(utilsl.trimStr(line)) catch unreachable;
         if (s.containsE("result", .ignoreCase)) {
             const outCome = s.extractFromBounds("\"", "\"") catch {
                 continue;
             };
             currentEntriesType = getOutcomeFlag(outCome);
-        } else if (emptySpaces != 0) {
+            continue;
+        }
+        if (s.containsE("[", .ignoreCase) and lineStarted) {
+            db.addEntry(alloc, currentEntriesType, &lineStr, .line) catch {
+                @panic("Cant add entries to database");
+            };
+            lineStr.clearRetainingCapacity();
+            lineStarted = false;
+            currentEntriesType = .draw;
+            continue;
+        }
+        if (s.startsWith("1.", .ignoreCase)) {
+            lineStarted = true;
+        }
+
+        if (lineStarted) {
             // save to str
-            _ = lineStr.put(' ');
-            try lineStr.extendWithResize(alloc, s._slice()[0 .. size - 1]);
+            if (lineStr.len != 0) {
+                _ = lineStr.put(' ');
+            }
+            try lineStr.extendWithResize(alloc, s._slice());
         }
     }
+    if (lineStarted) {
+        db.addEntry(alloc, currentEntriesType, &lineStr, .line) catch {
+            @panic("Cant add entries to database");
+        };
+    }
 }
+
 pub fn readEntriesEpd(db: *openingDatabase, alloc: std.mem.Allocator, path: []const u8) !void {
     var read: u64 = 0;
-    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
-    const file_size = try file.length(mainl.getGlobalIo());
-    var buffer: []u8 = try alloc.alloc(u8, file_size);
-    defer file.close(mainl.getGlobalIo());
+    const buffer = try filel.allocFullFile(alloc, path);
     defer alloc.free(buffer);
 
-    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer[0..buffer.len], 0);
     var itr = std.mem.tokenizeAny(u8, buffer, "\n");
     var strBuffer: [chessl.MAX_FEN_LENGTH]u8 = @splat(0);
 
@@ -270,25 +271,14 @@ pub fn readEntriesEpd(db: *openingDatabase, alloc: std.mem.Allocator, path: []co
     }
 }
 
-pub fn test_read(path: *string) !void {
-    //const file = try std.fs.cwd().openFile(path._slice(), .{ .mode = .read_only });
-    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path._slice(), .{});
-    defer file.close(mainl.getGlobalIo());
-    var buffer: [configl.MAX_USER_INPUT]u8 = @splat(0);
-    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
-    const reader = &f_reader.interface;
-    const buffer_size = 1024;
-    // in this only to depth 8, thus it should not be that big
-    while (true) {
-        var _buffer: [buffer_size]u8 = @splat(0);
-        var w: std.Io.Writer = .fixed(&_buffer);
-        var s = string.initFromBuffer(&_buffer);
-        const size = reader.streamDelimiter(&w, '\n') catch {
-            break;
-        };
-        reader.toss(1);
-
-        std.debug.print("Found {d} bytes in the file '{s}'\n", .{ size, s._slice()[0 .. size - 1] });
+pub fn test_read(alloc: std.mem.Allocator, path: []const u8) !void {
+    //
+    var book: openingDatabase = .{ .initialized = true };
+    defer book.free(alloc);
+    try readEntriesPgn(&book, alloc, path);
+    book.printInfo();
+    for (book.drawnEntries.items) |e| {
+        std.debug.print("{s}\n", .{e.v._slice()});
     }
 }
 const boardFrameStack = struct {
@@ -360,9 +350,9 @@ pub fn test_draw(path: *string, alloc: std.mem.Allocator) !void {
 
 pub fn main(alloc: std.mem.Allocator) !void {
     //
-    //const path = "opening/8moves_v3.pgn";
+    const path = "opening/8moves_v3.pgn";
     //const path = "../bin/CCRL-4040.[2370489].pgn";
-    const path = "opening/UHO_Lichess_4852_v1.epd";
+    //const path = "opening/UHO_Lichess_4852_v1.epd";
     var s = try stringl.string.initFromSlice(alloc, path);
     defer s.free(alloc);
     //hashl.zobristKeys.free(alloc);
@@ -370,9 +360,9 @@ pub fn main(alloc: std.mem.Allocator) !void {
         std.debug.print("File {s} does not exists \n", .{s._slice()});
         return;
     }
-    try test_db(&s, alloc, true);
+    //try test_db(&s, alloc, true);
 
     std.log.info("[TEST]: Reading random algebraic position passed", .{});
-    //try test_read(path);
+    try test_read(alloc, path);
     //try test_draw(path, alloc);
 }

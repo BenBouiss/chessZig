@@ -996,7 +996,7 @@ pub const boardState = struct {
             }
         }
 
-        const movesBB = chessl.getRelevantMove(p, @enumFromInt(from), occ) catch {
+        const movesBB = chessl.getRelevantMove(p, @enumFromInt(from), occ, true) catch {
             return false;
         };
         if ((toBB & movesBB) == 0) {

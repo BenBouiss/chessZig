@@ -134,7 +134,6 @@ pub const string = struct {
         if (!p_self.containsE(rBound, .ignoreCase)) {
             return string_err.itemNotFound_error;
         }
-
         const startIndex = try p_self.find(lBound);
         const endIndex = utilsl.findM(u8, p_self._slice()[startIndex + 1 ..], rBound);
         if (endIndex < 0) {
@@ -150,6 +149,9 @@ pub const string = struct {
     }
     pub inline fn clearRetainingCapacity(self: *string) void {
         self.len = 0;
+    }
+    pub fn format(self: string, writer: *std.Io.Writer) !void {
+        writer.print("{s}", .{self._slice()});
     }
 };
 pub fn freeArrayList_string(alloc: std.mem.Allocator, arr: *std.ArrayList(string)) void {

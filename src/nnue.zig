@@ -227,7 +227,7 @@ pub fn __forward(n: *const network, buck: usize, stm_acc: *const accumulator, ns
         sum = ssel._mm256_add_epi32(sum, opp_results);
     }
     const _sum = ssel.__m256i_cast_8x32i(sum);
-    const s: scoreType = @divFloor(_sum[0] + _sum[1] + _sum[2] + _sum[3] + _sum[4] + _sum[5] + _sum[6] + _sum[7], QA) + n.b_outputBiase[buck];
+    const s: scoreType = @divFloor(@reduce(.Add, _sum), QA) + n.b_outputBiase[buck];
     return @divFloor(s * networkScale, QAQB);
 }
 pub fn ___forward(buck: usize, stm_acc: *const accumulator, nstm_acc: *const accumulator) i32 {
@@ -251,7 +251,7 @@ pub fn ___forward(buck: usize, stm_acc: *const accumulator, nstm_acc: *const acc
         sum = ssel._mm512_add_epi32(sum, opp_results);
     }
     const _sum = ssel.__m512i_cast_16x32i(sum);
-    const s: scoreType = @divFloor(_sum[0] + _sum[1] + _sum[2] + _sum[3] + _sum[4] + _sum[5] + _sum[6] + _sum[7] + _sum[8] + _sum[9] + _sum[10] + _sum[11] + _sum[12] + _sum[13] + _sum[14] + _sum[15], QA) + nnueNet.b_outputBiase[buck];
+    const s: scoreType = @divFloor(@reduce(.Add, _sum), QA) + nnueNet.b_outputBiase[buck];
     return @divFloor(s * networkScale, QAQB);
 }
 

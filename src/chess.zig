@@ -187,11 +187,14 @@ pub inline fn popcount(bb: u64) u8 {
 pub inline fn popcount_t(bb: u64, comptime T: type) T {
     return @as(T, @intCast(@popCount(bb)));
 }
+//pub inline fn bitscan(bb: u64) u8 {
+//    // assumes bb is non empty
+//    var ret: u32 = undefined;
+//    intrinsicsl._BitScanForward64(&ret, bb);
+//    return @intCast(ret);
+//}
 pub inline fn bitscan(bb: u64) u8 {
-    // assumes bb is non empty
-    var ret: u32 = undefined;
-    intrinsicsl._BitScanForward64(&ret, bb);
-    return @intCast(ret);
+    return @intCast(@ctz(bb));
 }
 
 pub inline fn r_bitscan(bb: u64) u8 {
@@ -776,7 +779,8 @@ pub inline fn getPawnAttacksFromBB(bb: u64, comptime white: bool) u64 {
 pub inline fn getKingAttacks(sq: e_square) u64 {
     return moveGenl.kingTable[@intFromEnum(sq)];
 }
-pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
+
+pub fn getRelevantMove(piece: e_piece, sq: e_square, occ: u64, comptime all: bool) !u64 {
     switch (piece) {
         .nWhiteKing, .nBlackKing => {
             return getKingAttacks(sq);
@@ -791,40 +795,17 @@ pub fn getRelevantAttacks(piece: e_piece, sq: e_square, occ: u64) !u64 {
             return knightAttacks(sqToBitboard(sq));
         },
         .nWhitePawn => {
-            return getPawnAttacks(sq, true);
-        },
-        .nBlackPawn => {
-            return getPawnAttacks(sq, false);
-        },
-        .nWhiteQueen, .nBlackQueen => {
-            return getQueenAttacks(occ, sq);
-        },
-        .nWhite, .nBlack, .nEmptySquare => {
-            std.debug.print("[PANIC] getRelevantAttacks for piece {} at {d}\n", .{ piece, sq });
-            return debug_err.valueErr;
-        },
-    }
-}
-pub fn getRelevantMove(piece: e_piece, sq: e_square, occ: u64) !u64 {
-    switch (piece) {
-        .nWhiteKing, .nBlackKing => {
-            return getKingAttacks(sq);
-        },
-        .nWhiteBishop, .nBlackBishop => {
-            return getBishopAttacks(occ, sq);
-        },
-        .nWhiteRook, .nBlackRook => {
-            return getRookAttacks(occ, sq);
-        },
-        .nWhiteKnight, .nBlackKnight => {
-            return knightAttacks(sqToBitboard(sq));
-        },
-        .nWhitePawn => {
+            if (comptime !all) {
+                return getPawnAttacks(sq, true);
+            }
             const sPush = (sqToBitboard(sq) << 8) & (~occ);
             const dPush = (sPush << 8) & (~occ);
             return (getPawnAttacks(sq, true) & occ) | (sPush | dPush);
         },
         .nBlackPawn => {
+            if (comptime !all) {
+                return getPawnAttacks(sq, false);
+            }
             const sPush = (sqToBitboard(sq) >> 8) & (~occ);
             const dPush = (sPush >> 8) & (~occ);
             return (getPawnAttacks(sq, false) & occ) | (sPush | dPush);
@@ -986,10 +967,10 @@ pub fn kingPawnStorm(oppPawn: u64, sqKing: squareInfo, comptime white: bool) sco
     return @intCast(popcount(safe & (safe >> 16) & oppPawn));
 }
 pub inline fn pawnWithEastNeighbor(pawn: u64) u64 {
-    return (moveGenl.westOne(pawn)) & pawn;
+    return moveGenl.westOne(pawn) & pawn;
 }
 pub inline fn pawnWithWestNeighbor(pawn: u64) u64 {
-    return (moveGenl.eastOne(pawn)) & pawn;
+    return moveGenl.eastOne(pawn) & pawn;
 }
 // https://www.chessprogramming.org/Duo_Trio_Quart_(Bitboards)
 pub fn duoPhalanx(pawn: u64) u64 {
@@ -1208,10 +1189,10 @@ pub fn getAllMoveMaskFromX(p_board: *const boardl.boardState, white: bool, X: e_
     ret |= getKingAttacks(X) & (p_board.getPieceBB_t(.KING) & occ);
     if (white) {
         ret |= (destBB >> 8) & pBB;
-        ret |= (((destBB >> 8) & (~p_board.b.occupiedBB())) >> 8) & ((pBB & whitePawnDoubleRank));
+        ret |= (((destBB >> 8) & (~p_board.b.occupiedBB())) >> 8) & (pBB & whitePawnDoubleRank);
     } else {
-        ret |= (destBB << 8) & (pBB);
-        ret |= (((destBB << 8) & (~p_board.b.occupiedBB())) << 8) & ((pBB & blackPawnDoubleRank));
+        ret |= (destBB << 8) & pBB;
+        ret |= (((destBB << 8) & (~p_board.b.occupiedBB())) << 8) & (pBB & blackPawnDoubleRank);
     }
 
     return ret;
@@ -1285,7 +1266,6 @@ pub const algebraicTarget = struct {
         } else if (self.queenSideC) {
             try writer.print("O-O-O ", .{});
         } else {
-            //
             // {piece}{file}{rank}{takes}{to(2)}{promotion(2)}{checks} {outcome}
             var buffer: [10]u8 = @splat(0);
             var n: usize = 0;
@@ -1486,16 +1466,19 @@ pub fn _algebraicLineToIMoveMatch(line: []const u8, tmpBoard: *boardl.boardState
     var ret: matchMoveContainer = undefined;
     ret.len = 0;
     while (gen.next()) |str| {
-        const offset: usize = 0;
+        var offset: usize = 0;
         if (utils.contains(str, "1/2-1/2", .ignoreCase) or utils.contains(str, "1-0", .ignoreCase) or utils.contains(str, "0-1", .ignoreCase)) {
             break;
         }
         if (utils.contains(str, ".", .ignoreCase)) {
-            continue;
+            if (str[str.len - 1] == '.') {
+                continue;
+            }
+            offset = @intCast(utils.findM(u8, str, ".") + 1);
         }
 
         const move = algebraicToIMove(tmpBoard, str[offset..]) catch |err| {
-            std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: {s} for token {s}\n", .{ line, str });
+            std.debug.print("[PANIC] algebraicLineToIMoveMatch: error found in move decoding line: '{s}' for token {s}\n", .{ line, str });
             return err;
         };
         if (move.isValid()) {

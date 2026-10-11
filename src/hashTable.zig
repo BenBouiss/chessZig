@@ -65,8 +65,8 @@ const MAX_AGE: u8 = 64;
 const MAX_AGE_AND: u8 = 63;
 
 pub const Hash_entry = struct {
-    // 16 + 16 + 16 + 8 + 8 + 8
-    // = 72bit = 9 bytes
+    // 16 + 16 + 16 + 16 + 8 + 8
+    // = 80bit = 10 bytes
     key: subKeyType align(1) = 0,
     staticEval: i16 align(1) = 0,
     searchScore: i16 align(1) = 0,
@@ -160,7 +160,6 @@ pub const Hash_bucket = struct {
 
         _ = p_self;
     }
-
     pub fn len(self: Hash_bucket) u8 {
         var ret: u8 = 0;
         for (0..ITEM_PER_BUCKET) |i| {
@@ -250,6 +249,7 @@ pub const Hash_table = struct {
     stat: hashTableStat = .{},
     mask: u64 = 0,
     gen: u8 = 0,
+    totalgen: usize = 0,
 
     pub fn init(alloc: std.mem.Allocator, MBsize: u32, verbose: bool) !Hash_table {
         var ret: Hash_table = undefined;
@@ -277,6 +277,7 @@ pub const Hash_table = struct {
         }
         p_self.stat = .{};
         p_self.gen = 0;
+        p_self.totalgen = 0;
     }
     pub fn free(p_self: *Hash_table, alloc: std.mem.Allocator, verbose: bool) void {
         if (verbose) {
@@ -291,6 +292,7 @@ pub const Hash_table = struct {
     pub inline fn nextGeneration(self: *Hash_table) void {
         // to be used at each node root
         self.gen = (self.gen + 1) & MAX_AGE_AND;
+        self.totalgen += 1;
     }
 
     pub inline fn getHashIndex(self: Hash_table, hash: u64) u64 {
@@ -488,5 +490,5 @@ pub fn printTTStats() void {
     std.log.info("TT: most entries in a bucket {d}", .{util});
 
     std.log.info("TT: insertions {d} hit {d} miss {d} miss insertion {d}", .{ hashTable.stat.insertion, hashTable.stat.hit, hashTable.stat.miss, hashTable.stat.missInsertion });
-    std.log.info("TT: gen {d}", .{hashTable.gen});
+    std.log.info("TT: gen {d} total gen {d}", .{ hashTable.gen, hashTable.totalgen });
 }

@@ -31,6 +31,17 @@ pub fn makedirR(path: []const u8) !void {
     try std.Io.Dir.createDirPath(.cwd(), mainl.getGlobalIo(), path);
     return;
 }
+pub fn allocFullFile(alloc: std.mem.Allocator, path: []const u8) ![]u8 {
+    if (!fileExists(path)) {
+        return file_err.fileNotFound_error;
+    }
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
+    defer file.close(mainl.getGlobalIo());
+    const file_size = try file.length(mainl.getGlobalIo());
+    const buffer = try alloc.alloc(u8, file_size);
+    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer, 0);
+    return buffer;
+}
 
 pub fn getTokensFromFileAlloc(alloc: std.mem.Allocator, path: []const u8, sep: u8, maxsize: i64, nskips: usize) anyerror!std.ArrayList(string) {
     if (!fileExists(path)) {

@@ -376,9 +376,7 @@ pub var global_King_PSQT: [2][64]scoreType = .{ [_]scoreType{
 
 //https://www.chessprogramming.org/Late_Move_Reductions
 // LMR positive (more reduction)
-//pub var lmr_scoreThreshold: scoreType = configl.MAX_HIST_HEURISTIC_VALUE + 1;
 pub var lmr_scoreThreshold: scoreType = 990;
-//pub var lmr_scoreThreshold: scoreType = 806 * 2;
 pub var lmr_expectedCutOff: scoreType = 234;
 pub var lmr_notImproving: scoreType = 1272;
 pub var lmr_hashMoveCapture: scoreType = 1049;
@@ -390,13 +388,11 @@ pub var lmr_hashMoveIsGood: scoreType = 1024;
 
 // LMR negative (less reduction)
 pub var lmr_inCheck: scoreType = -1024;
-// try add_param(&lmr_inCheck, 0, 0, 0, "lmr_inCheck");
 pub var lmr_givesCheck: scoreType = -779;
 pub var lmr_killerMove: scoreType = -1105;
 pub var lmr_threatening: scoreType = -281;
 pub var lmr_inPvMode: scoreType = -85;
 pub var lmr_isPromotion: scoreType = -379;
-
 pub var lmr_histDiv: scoreType = 9848;
 
 // margins
@@ -411,8 +407,6 @@ pub var rfpCoeff: scoreType = 84; // depth * c
 pub var rfpConst: scoreType = 79;
 
 pub var captureExtensionThresh: scoreType = 265;
-//pub var captureExtensionThresh: scoreType = 28 * 16;
-//pub var captureExtensionThresh: scoreType = 28 * 4;
 
 pub var aspirationCoefficient: scoreType = 39;
 pub var aspirationMinDepthVar: scoreType = 6;
@@ -441,22 +435,17 @@ pub var futilityDepth: scoreType = 9;
 pub var futilityCoeff: scoreType = 175; // depth * c
 pub var futilityConst: scoreType = 232;
 
-pub var historyMaxDepth: scoreType = 5; //coeff * d + c
+pub var historyMaxDepth: scoreType = 5; // coeff * d + c
 //
-pub var historyThreshCoeff: scoreType = -741; //coeff * d + c
+pub var historyThreshCoeff: scoreType = -741; // coeff * d + c
 pub var historyThreshConst: scoreType = -84;
-//pub var historyThreshConst: scoreType = (-150) * 16;
-//pub var historyThreshConst: scoreType = (-150) * 4;
 pub var historyMinExplore: scoreType = 12;
 
 pub var historyBonusCoeff: scoreType = 303;
 pub var historyBonusMax: scoreType = 16166;
-//pub var historyBonusMax: scoreType = 3000;
-//pub var historyBonusBetaDiff: scoreType = 300;
 
 pub var lmpMaxDepth: scoreType = 3;
 pub var lmpBase: scoreType = 1;
-//pub var lmpImproving: scoreType = 4;
 
 pub var moveReductionAmount: scoreType = 2;
 pub var moveQsearchAmount: scoreType = 1;
@@ -475,8 +464,6 @@ pub var singularMarginDoubleExt: scoreType = 46;
 /// not used
 pub var corrHistMax: scoreType = 911;
 pub var corrHistW: scoreType = 82;
-// replace the array with y = a*x + b with x = depth
-//pub var futilityMargin: [4]scoreType = .{ 16, 165, 332, 509 };
 pub var bestMoveMax: scoreType = 8;
 
 pub var nodeFactor1: scoreType = 149;
@@ -488,5 +475,26 @@ pub var tmBmCoeff: scoreType = 6;
 pub const searchMoveBufferSize: usize = 64;
 
 pub fn modif_val() void {
+    //global_MobilityVal = .{ 7, 12 };
+    //global_StructureProtectionVal = .{ 9, 3 };
+    //global_centerProtectionVal = .{ 5, 3 };
+    //global_HangingVal = .{ -20, -34 };
+    //global_pieceThreatScore = .{ 25, 13 };
+    //global_IsolatedPawnVal = .{ -2, -3 };
+    //global_StackedPawnVal = .{ -12, -1 };
+    //global_PassedPawnVal = .{ 7, 31 };
+    //global_phalanxDuoPawnVal = .{ 3, 1 };
+    //global_connectionPawnVal = .{ 1, 8 };
+    //global_KnightTrapped = .{ 3, 3 };
+    //global_KnightDefendedByPawn = .{ 1, 6 };
+    //global_materialBishopPair = .{ 75, 96 };
+    //global_OpenFileRookVal = .{ 16, 3 };
+    //global_RookLastRanks = .{ 15, 29 };
+    //global_Rookdoubled = .{ 3, 9 };
+    //global_RookOnQueenFile = .{ 13, 12 };
+    //global_KingProximityVal = .{ 6, 1 };
+    //global_KingTropism = .{ 8, 2 };
+    //global_KingPawnlessFlank = .{ 17, 50 };
+    //global_KingOpenFile = .{ 50, 7 };
     //
 }

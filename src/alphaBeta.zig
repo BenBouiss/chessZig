@@ -220,11 +220,11 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
         if (matBalance >= 100) {
             return -25;
         }
-        return 25;
-        //} else if (matBalance <= -100) {
-        //    return 25;
-        //}
-        //return 0;
+        //return 25;
+        else if (matBalance <= -100) {
+            return 25;
+        }
+        return 0;
     }
     if (outOfTime(p_info) or ply >= typel.MAX_PLY) {
         return correct_eval(p_state, ss, heuristicl.c_evaluate(p_state, white, threadD.nnueStack.getCurrent()), ply, threadD);

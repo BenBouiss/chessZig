@@ -772,7 +772,7 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove, isHashMov
     }
     const occ = p_state.b.occupiedBB();
     const _occ = occ ^ fromBB;
-    const att = chess.getRelevantAttacks(piece, @enumFromInt(toSq), _occ) catch {
+    const att = chess.getRelevantMove(piece, @enumFromInt(toSq), _occ, false) catch {
         std.debug.print("[PANIC] panic with move {s} is hash move {}\n", .{ move.getStr(), isHashMove });
         chess.print_boardstate(p_state);
         chess.sanityCheckBoardState(p_state);
