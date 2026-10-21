@@ -136,6 +136,14 @@ pub const status = struct {
     pub inline fn castlingKey(self: status) u8 {
         return (self.val);
     }
+    pub fn format(self: status, writer: *std.Io.Writer) !void {
+        try writer.print("wQ {} wK {} bQ {} bK {}", .{
+            self.WCastlingQ(),
+            self.WCastlingK(),
+            self.BCastlingQ(),
+            self.BCastlingK(),
+        });
+    }
 };
 pub inline fn isLeftRook(rook: u64) bool {
     return (rook & LEFT_ROOKS) != 0;

@@ -8,6 +8,7 @@ const mainl = @import("main.zig");
 const string = stringl.string;
 
 pub const file_err = error{
+    itemNotFound_error,
     fileNotFound_error,
     mem_error,
     fileAlreadyExists_error,
@@ -29,7 +30,10 @@ pub fn dirExists(path: []const u8) bool {
 pub fn makedirR(path: []const u8) !void {
     try std.Io.Dir.createDir(.cwd(), mainl.getGlobalIo(), path, @enumFromInt(0));
     try std.Io.Dir.createDirPath(.cwd(), mainl.getGlobalIo(), path);
-    return;
+}
+pub fn parentDir(path: []const u8) ?[]const u8 {
+    const end = std.mem.findLast(u8, path, "/") orelse return null;
+    return path[0..end];
 }
 pub fn allocFullFile(alloc: std.mem.Allocator, path: []const u8) ![]u8 {
     if (!fileExists(path)) {
@@ -131,4 +135,30 @@ pub fn joinPath(alloc: std.mem.Allocator, p1: []const u8, p2: []const u8) !strin
     }
     _ = ret.extend(_p2);
     return ret;
+}
+
+pub fn fileReader(comptime SIZE: usize) type {
+    return struct {
+        buf: [SIZE]u8 = @splat(0),
+        filename: string,
+        f: std.Io.File,
+        reader: std.Io.File.Reader,
+        const Self = @This();
+        pub fn init(filename: string, io: std.Io) !Self {
+            const file = try std.Io.Dir.openFile(.cwd(), io, filename._slice(), .{});
+            var ret: Self = .{ .f = file, .reader = undefined, .filename = filename };
+            ret.reader = file.reader(io, &ret.buf);
+            return ret;
+        }
+        pub fn nextLine(self: *Self) ?[]u8 {
+            self.reader.interface.buffer = &self.buf;
+            return self.reader.interface.takeDelimiter('\n') catch |e| {
+                std.debug.print("newline caught {}\n", .{e});
+                return null;
+            };
+        }
+        pub fn close(self: *Self, io: std.Io) void {
+            self.f.close(io);
+        }
+    };
 }

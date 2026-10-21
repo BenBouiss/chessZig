@@ -511,7 +511,6 @@ pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) psqtVect {
     }
 }
 pub inline fn getPieceInfos_cst(comptime piece: e_pieceType, sq: u8) psqtVect {
-    //pub inline fn getPieceInfos_cst(comptime piece: typel.e_pieceType, sq: u8) [3]typel.scoreType {
     switch (piece) {
         .PAWN => {
             return .{ weightl.global_Pawn_PSQT[MG][sq], weightl.global_Pawn_PSQT[EG][sq] };
@@ -997,7 +996,7 @@ pub fn saveCoefficientToFile(logFile: *logl.logging(CSV_ENTRY_SIZE), entries: []
         if (t == .CSV) {
             const body: csvBody = .{ .entry = &entries[i], .n_params = nParams };
             var buffer: [CSV_ENTRY_SIZE]u8 = @splat(0);
-            const body_str = try std.fmt.bufPrint(&buffer, "{f}", .{body});
+            const body_str = try std.fmt.bufPrint(&buffer, "{f}\n", .{body});
             try logFile.append(body_str);
         } else if (t == .BOOK) {
             var buffer: [CSV_ENTRY_SIZE]u8 = std.mem.zeroes([CSV_ENTRY_SIZE]u8);
@@ -1217,24 +1216,16 @@ pub fn lowestAttackDefPiece(p_state: *const boardl.boardState, attDef: u64, whit
 const CSV_ENTRY_SIZE: usize = 1024;
 
 pub fn saveTexelCsv(alloc: std.mem.Allocator) !void {
-    //var savePath: string = try string.initFromSlice(alloc, "out/csv/CCRL-4040.[2370489]_13990894pos_eval.csv");
-    //var name: string = try string.initFromSlice(alloc, "opening/CCRL-4040.[2370489]_shuffled.book");
-
-    var name: string = try string.initFromSlice(alloc, "out/book/CCRL-4040.[2370489]_filtered_5388899Pos.book");
-    var savePath: string = try string.initFromSlice(alloc, "out/csv/CCRL-4040.[2370489]_filtered_5388899Pos_evalCoeff_t.csv");
-    defer name.free(alloc);
-    defer savePath.free(alloc);
+    const name: string = string.initViewFromSlice("out/book/CCRL-4040.[2370489]_filtered_5388899Pos.book");
+    const savePath: string = string.initViewFromSlice("out/csv/CCRL-4040.[2370489]_filtered_5388899Pos_evalCoeff_t.csv");
 
     var logFile = try logl.logging(CSV_ENTRY_SIZE).init(alloc, 100_000, savePath, true);
     try test_save(alloc, &logFile, name, .CSV, true);
     try logFile.free(alloc);
 }
 pub fn saveTexelBook(alloc: std.mem.Allocator) !void {
-    var savePath: string = try string.initFromSlice(alloc, "out/book/CCRL-4040.[2370489]_filtered.book");
-    var name: string = try string.initFromSlice(alloc, "opening/CCRL-4040.[2370489]_shuffled.book");
-
-    defer name.free(alloc);
-    defer savePath.free(alloc);
+    const savePath: string = string.initViewFromSlice("out/book/CCRL-4040.[2370489]_filtered.book");
+    const name: string = string.initViewFromSlice("opening/CCRL-4040.[2370489]_shuffled.book");
 
     var logFile = try logl.logging(CSV_ENTRY_SIZE).init(alloc, 100_000, savePath, true);
     try test_save(alloc, &logFile, name, .BOOK, true);

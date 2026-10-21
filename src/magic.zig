@@ -28,41 +28,22 @@ const magic_entry = struct {
     magic: u64 = 0,
 };
 
-pub var magicTable: magicRecord = undefined;
-//pub const magicTable: magicRecord = initCst();
+pub var rookMoves: [chess.N_SQUARES][ROOK_MOVE_SIZE]u64 = undefined;
+pub var bishopMoves: [chess.N_SQUARES][BISHOP_MOVE_SIZE]u64 = undefined;
 
-pub const magicRecord = struct {
-    isInitialized: bool = false,
-    rookMagic: [chess.N_SQUARES]magic_entry = std.mem.zeroes([chess.N_SQUARES]magic_entry),
-    bishopMagic: [chess.N_SQUARES]magic_entry = std.mem.zeroes([chess.N_SQUARES]magic_entry),
-    rookMoves: [chess.N_SQUARES][ROOK_MOVE_SIZE]u64,
-    bishopMoves: [chess.N_SQUARES][BISHOP_MOVE_SIZE]u64,
-    pub fn init() magicRecord {
-        return .{ .isInitialized = true, .rookMoves = undefined, .bishopMoves = undefined };
-    }
-};
-pub fn initCst() magicRecord {
-    var ret = magicRecord.init();
-
-    initRookBishopMagicCached(&ret);
-    initRookBishopMoves(&ret);
-    return ret;
-}
 pub fn _initMagic() void {
-    magicTable = magicRecord.init();
-    initRookBishopMagicCached(&magicTable);
-    initRookBishopMoves(&magicTable);
+    initRookMoves();
+    initBishopMoves();
     return;
 }
-
-pub fn initRookBishopMagicCached(p_record: *magicRecord) void {
-    for (0..64) |sq| {
-        const magic: magic_entry = .{ .mask = ROOK_MAGIC_MASK[sq], .magic = ROOK_MAGIC_KEYS[sq] };
-        p_record.rookMagic[sq] = magic;
+pub fn initRookMoves() void {
+    for (0..chess.N_SQUARES) |sq| {
+        rookGenerateMoves(@enumFromInt(sq), .{ .magic = ROOK_MAGIC_KEYS[sq], .mask = ROOK_MAGIC_MASK[sq] }, &rookMoves[sq]);
     }
-    for (0..64) |sq| {
-        const magic: magic_entry = .{ .mask = BISHOP_MAGIC_MASK[sq], .magic = BISHOP_MAGIC_KEYS[sq] };
-        p_record.bishopMagic[sq] = magic;
+}
+pub fn initBishopMoves() void {
+    for (0..chess.N_SQUARES) |sq| {
+        bishopGenerateMoves(@enumFromInt(sq), .{ .magic = BISHOP_MAGIC_KEYS[sq], .mask = BISHOP_MAGIC_MASK[sq] }, &bishopMoves[sq]);
     }
 }
 
@@ -87,15 +68,6 @@ pub fn rookGenerateMoves(sq: squarel.e_square, magic: magic_entry, p_out: *[ROOK
     }
 }
 
-pub fn initRookBishopMoves(p_record: *magicRecord) void {
-    for (0..chess.N_SQUARES) |sq| {
-        rookGenerateMoves(@enumFromInt(sq), p_record.rookMagic[sq], &(p_record.rookMoves[sq]));
-        bishopGenerateMoves(@enumFromInt(sq), p_record.bishopMagic[sq], &(p_record.bishopMoves[sq]));
-    }
-
-    return;
-}
-
 pub fn rookMagicIndex(entry: magic_entry, blockers: u64) u64 {
     const _blockers = blockers & entry.mask;
     const hash = _blockers *% entry.magic;
@@ -108,21 +80,19 @@ pub fn bishopMagicIndex(entry: magic_entry, blockers: u64) u64 {
 }
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
-    const magic = magicTable.rookMagic[@intFromEnum(sq)];
-    const _blockers = blockers & magic.mask;
-    const hash = (_blockers *% magic.magic) >> 52;
-    return magicTable.rookMoves[@intFromEnum(sq)][hash];
+    const _blockers = blockers & ROOK_MAGIC_MASK[@intFromEnum(sq)];
+    const hash = (_blockers *% ROOK_MAGIC_KEYS[@intFromEnum(sq)]) >> 52;
+    return rookMoves[@intFromEnum(sq)][hash];
 }
 
 pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
-    const magic = magicTable.bishopMagic[@intFromEnum(sq)];
     // precomputed then indexing removes the memcpy(of the entire table) of indexing then computing then indexing a second time leading to better perf
     // prev: p_magicTable.bishopMoves[@intFromEnum(sq)][(hash >> @intCast(64 - BISHOP_FIXED_BIT))]; or something similar
     // from: Compiler explorer
 
-    const _blockers = blockers & magic.mask;
-    const hash = (_blockers *% magic.magic) >> 55;
-    return magicTable.bishopMoves[@intFromEnum(sq)][hash];
+    const _blockers = blockers & BISHOP_MAGIC_MASK[@intFromEnum(sq)];
+    const hash = (_blockers *% BISHOP_MAGIC_KEYS[@intFromEnum(sq)]) >> 55;
+    return bishopMoves[@intFromEnum(sq)][hash];
 }
 
 pub fn randomU64() u64 {

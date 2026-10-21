@@ -155,7 +155,7 @@ pub const boardState = struct {
     }
 
     pub fn get_fen(self: *const boardState) [chessl.MAX_FEN_LENGTH]u8 {
-        var ret = std.mem.zeroes([chessl.MAX_FEN_LENGTH]u8);
+        var ret: [chessl.MAX_FEN_LENGTH]u8 = @splat(0);
         var miscOffset: u8 = 0;
         var emptyNumber: u8 = 0;
         var board_offset = chessl.N_SQUARES - 8;
@@ -263,17 +263,7 @@ pub const boardState = struct {
         if (p_self.b.occupiedBB() & one_mask != 0) {
             return false;
         }
-
-        p_self.b.pieceBB[@intFromEnum(chessl.e_pieceTo_e_pieceType(piece))] |= one_mask;
-        p_self.b.pieceCount[@intFromEnum(piece)] += 1;
-        p_self.b.pieceArray[@intFromEnum(square)] = piece;
-        if (@intFromEnum(piece) < chessl.N_PIECES_TYPES) {
-            p_self.b.c_occupiedBB[@intFromEnum(e_color.WHITE)] |= one_mask;
-            p_self.frame.phase += typel.phases_arr[@intFromEnum(piece)];
-        } else {
-            p_self.b.c_occupiedBB[@intFromEnum(e_color.BLACK)] |= one_mask;
-            p_self.frame.phase += typel.phases_arr[@intFromEnum(piece) - chessl.N_PIECES_TYPES];
-        }
+        p_self.b.placePiece(piece, @intFromEnum(square));
         if (piece == .nWhiteKing) {
             p_self.b.wKingSq = square;
         } else if (piece == .nBlackKing) {
@@ -1020,6 +1010,17 @@ pub const boardState = struct {
     pub inline fn isStaleMate(p_self: *const boardState) bool {
         return p_self.isStaleMateRepetition() or p_self.isInsufficientMaterial();
     }
+    pub fn equal(p_self: *const boardState, other: *const boardState) bool {
+        if (p_self.frame.halfMoveClock != other.frame.halfMoveClock or p_self.frame.stat.val != other.frame.stat.val or p_self.frame.enPassantIdx != other.frame.enPassantIdx) {
+            std.debug.print("[DEBUG] boardState.equal(): small check failed {} {} {} bin {b} {b}\n", .{ p_self.frame.halfMoveClock != other.frame.halfMoveClock, p_self.frame.stat.val != other.frame.stat.val, p_self.frame.enPassantIdx != other.frame.enPassantIdx, p_self.frame.stat.val, other.frame.stat.val });
+            return false;
+        }
+        if (!std.meta.eql(p_self.b, other.b)) {
+            std.debug.print("[DEBUG] boardState.equal(): meta check failed\n", .{});
+            return false;
+        }
+        return true;
+    }
 };
 
 pub const viriGame = extern struct {
@@ -1037,10 +1038,9 @@ pub const packedBoard = extern struct {
     occ: u64 = 0,
     pieces: [16]u8 = @splat(0),
     enP_side: u8 = 0,
-
     halfMove: u8 = 0,
     fullMove: u16 = 0,
-    score: i16 = 0,
+    score: i16 = 0, // can left at 0
     outcome: u8 = 0, // 0 b, 1 draw, 2 w
     pad: u8 = 0,
     pub fn init(state: *const boardState) packedBoard {
@@ -1058,10 +1058,12 @@ pub const packedBoard = extern struct {
             if (chessl.isRookPiece(p)) {
                 if (w) {
                     if (sq == 0 and state.frame.stat.canQueensideCastle(true) or (sq == 7 and state.frame.stat.canKingsideCastle(true))) {
+                        //std.debug.print("rook 6 encode w {} \n", .{w});
                         _p = 6;
                     }
                 } else {
                     if (sq == 56 and state.frame.stat.canQueensideCastle(false) or (sq == 63 and state.frame.stat.canKingsideCastle(false))) {
+                        //std.debug.print("rook 6 encode w {} \n", .{w});
                         _p = 6;
                     }
                 }
@@ -1079,6 +1081,63 @@ pub const packedBoard = extern struct {
         const enP: u8 = if (state.frame.enPassantIdx == 0) 64 else @intCast(state.frame.enPassantIdx);
         ret.enP_side = (w << 7) | enP;
         return ret;
+    }
+    pub fn toBoard(self: packedBoard) boardState {
+        var ret: boardState = .{};
+        var occ = self.occ;
+        const pieces: [32]u4 = @bitCast(self.pieces);
+        for (pieces, 0..) |p, i| {
+            if (occ == 0) {
+                if (p == 0) {
+                    _ = i;
+                    //std.debug.print("[DEBUG] toBoard breaking at {d}\n", .{i});
+                    break;
+                }
+                @panic("pieces still there but no occ ");
+            }
+            const w = (p & 8) == 0;
+            var pieceT = p & 7;
+            std.debug.assert(pieceT != 7);
+            const sq = chessl.bitscan(occ);
+            occ &= (occ - 1);
+
+            if (pieceT == 6) {
+                //std.debug.print("rook 6 w {} \n", .{w});
+                // piece is rook and can castle
+                if (w) {
+                    if (sq == 0) {
+                        ret.frame.stat.setWCastlingQ(true);
+                    } else if (sq == 7) {
+                        ret.frame.stat.setWCastlingK(true);
+                    }
+                } else {
+                    if (sq == 56) {
+                        ret.frame.stat.setBCastlingQ(true);
+                    } else if (sq == 63) {
+                        ret.frame.stat.setBCastlingK(true);
+                    }
+                }
+                pieceT = @intFromEnum(e_pieceType.ROOK);
+            }
+            std.debug.assert(ret.placePiece(chessl.makePiece(@enumFromInt(pieceT), w), @enumFromInt(sq)));
+        }
+        ret.frame.halfMoveClock = self.halfMove;
+        ret.b.turnCount = self.fullMove;
+        ret.b._whiteToMove = self.whiteToMove();
+        const enP = self.enPassantSq();
+        if (enP == 64) {
+            ret.frame.enPassantIdx = 0;
+        } else {
+            ret.frame.enPassantIdx = enP;
+        }
+
+        return ret;
+    }
+    pub fn whiteToMove(self: packedBoard) bool {
+        return (self.enP_side & 128) == 0;
+    }
+    pub fn enPassantSq(self: packedBoard) u8 {
+        return self.enP_side & 127;
     }
 };
 pub const viriPackedMove = extern struct {
@@ -1106,6 +1165,30 @@ pub const viriMove = extern struct {
             flag |= @as(u6, 1 << 2);
         }
         return .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
+    }
+    pub fn toIMove(self: viriMove) IMove {
+        // cant know if capture without a state
+        const from: u8 = @intCast((self.m_move) & 63);
+        const to: u8 = @intCast((self.m_move >> 6) & 63);
+        const flag: u8 = @intCast((self.m_move >> 12) & 0x3);
+        const promo: u8 = flag & 0x3;
+        const special: u8 = (flag >> 2) & 0x3;
+        var newFlag: u8 = 0;
+        if (special == 1) {
+            // enP
+            newFlag |= @intFromEnum(typel.e_moveFlags.ENPASSANT);
+        } else if (special == 2) {
+            // castling
+            if (to > from) {
+                newFlag |= @intFromEnum(typel.e_moveFlags.KINGCASTLE);
+            } else {
+                newFlag |= @intFromEnum(typel.e_moveFlags.QUEENCASTLE);
+            }
+        } else if (special == 3) {
+            // promotion
+            newFlag |= @intFromEnum(typel.e_moveFlags.KNIGHTPROMO) + promo;
+        }
+        return movel.build_move(from, to, newFlag);
     }
 };
 pub const castleS = struct {

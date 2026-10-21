@@ -82,8 +82,8 @@ pub fn build(b: *std.Build) void {
     const engine = b.addExecutable(.{
         .name = "engine",
         .root_module = b.createModule(.{
-            //.unwind_tables = .none,
-            //.strip = true,
+            //.unwind_tables = if (optimize == .fast) .none else (null),
+            //.strip = if (optimize == .fast) true else (null),
 
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
@@ -103,26 +103,17 @@ pub fn build(b: *std.Build) void {
     const chess = b.addExecutable(.{
         .name = "chess",
         .root_module = b.createModule(.{
+            //.unwind_tables = if (optimize == .fast) .none else (null),
+            //.strip = if (optimize == .fast) true else (null),
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
             //.link_libc = true,
         }),
     });
-    const evaluate = b.addExecutable(.{
-        .name = "evaluate",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/evaluateEngine.zig"),
-            .target = target,
-            .optimize = optimize,
-            //.link_libc = true,
-        }),
-    });
 
-    //std.debug.print("{s}\n", .{engine.rootModuleTarget().dynamic_linker.buffer});
     engine.root_module.addOptions("build_options", build_options);
     chess.root_module.addOptions("build_options", build_options);
-    evaluate.root_module.addOptions("build_options", build_options);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -130,7 +121,6 @@ pub fn build(b: *std.Build) void {
     // by passing `--prefix` or `-p`.
     b.installArtifact(engine);
     b.installArtifact(chess);
-    b.installArtifact(evaluate);
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).
@@ -157,7 +147,6 @@ pub fn build(b: *std.Build) void {
 
     // zig 0.17
     run_cmd.addPassthruArgs();
-
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.

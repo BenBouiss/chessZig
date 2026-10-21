@@ -32,30 +32,7 @@ const boardState = boardl.boardState;
 pub const arrRectangular: [64][64]u64 = initInbetween();
 pub const kingTable: [64]u64 = initKingAttacks();
 pub const safetyArea: [64]u64 = initSafetyArea();
-
 pub const diagonalsBB: [64]u64 = initDiagonal();
-
-pub const antiDiagIdxs: [64]scoreType = [_]scoreType{
-    7,  6,  5,  4,  3,  2, 1, 0,
-    8,  7,  6,  5,  4,  3, 2, 1,
-    9,  8,  7,  6,  5,  4, 3, 2,
-    10, 9,  8,  7,  6,  5, 4, 3,
-    11, 10, 9,  8,  7,  6, 5, 4,
-    12, 11, 10, 9,  8,  7, 6, 5,
-    13, 12, 11, 10, 9,  8, 7, 6,
-    14, 13, 12, 11, 10, 9, 8, 7,
-};
-
-pub const diagIdxs: [64]scoreType = [_]scoreType{
-    0, 1, 2, 3,  4,  5,  6,  7,
-    1, 2, 3, 4,  5,  6,  7,  8,
-    2, 3, 4, 5,  6,  7,  8,  9,
-    3, 4, 5, 6,  7,  8,  9,  10,
-    4, 5, 6, 7,  8,  9,  10, 11,
-    5, 6, 7, 8,  9,  10, 11, 12,
-    6, 7, 8, 9,  10, 11, 12, 13,
-    7, 8, 9, 10, 11, 12, 13, 14,
-};
 
 // https://www.chessprogramming.org/Square_Attacked_By#Obstructed
 
@@ -755,6 +732,8 @@ pub fn moveDeliverCheck(p_state: *const boardState, move: movel.IMove, isHashMov
         //if ((chess.inBetweenX(from, to) & (chess.inBetweenX(from, otherKing) | fromBB)) == 0) {
         //    return true;
         //}
+        // FIXME: this does not work as the pinnedBB only accounts pin for the current king to move meaning the induced check will be for us (not good)
+        //
         // a pawn or king can move along a pin (given by same piece color ie: white queen behind white king) without delivering check however any other piece will induce a check
         return !chess.isPawnPiece(piece) and !chess.isKingPiece(piece);
     }

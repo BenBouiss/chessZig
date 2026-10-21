@@ -40,7 +40,8 @@ pub const USE_NNUE = false;
 //pub const NET_PATH = "extern/simple_128_hl_8_output_buckets-320/quantised.bin";
 //pub const NET_PATH = "extern/simple_1024_hl_8_output_buckets-110/quantised.bin";
 //pub const NET_PATH = "extern/2_output_buckets-310/quantised.bin";
-pub const NET_PATH = "extern/2_output_buckets_1024hl_8bucket-20/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets_1024hl_8bucket-20/quantised.bin";
+pub const NET_PATH = "extern/2_output_buckets_256l_8bucket_ownData_2_outcome-100/quantised.bin";
 //pub const NET_PATH = "extern/2_output_buckets_1024l_8bucket_ownData-20/quantised.bin";
 //pub const NET_PATH = "extern/2_output_buckets_1024l_8bucket_ownData_2_outcome-20/quantised.bin";
 

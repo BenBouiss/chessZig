@@ -21,6 +21,9 @@ pub const string = struct {
         try ret.copyFromSlice(slice);
         return ret;
     }
+    pub fn initViewFromSlice(slice: []const u8) string {
+        return .{ .len = slice.len, .capacity = slice.len, .data = @constCast(slice), .freed = true };
+    }
 
     pub fn initZero(alloc: std.mem.Allocator, cap: usize) !string {
         var ret: string = undefined;
@@ -67,10 +70,7 @@ pub const string = struct {
             _ = p_self.put(letter);
         }
     }
-    pub fn extendWithResizeStr(p_self: *string, alloc: std.mem.Allocator, other: *string) !void {
-        try p_self.extendWithResize(alloc, other._slice());
-    }
-    pub fn _slice(p_self: *const string) []const u8 {
+    pub inline fn _slice(p_self: *const string) []const u8 {
         return p_self.data[0..p_self.len];
     }
     pub fn free(p_self: *string, alloc: std.mem.Allocator) void {
@@ -78,9 +78,6 @@ pub const string = struct {
     }
     pub inline fn startsWith(p_self: *const string, other: []const u8, comptime token: utilsl.strTokens) bool {
         return utilsl.startsWith(p_self._slice(), other, token);
-    }
-    pub inline fn startsWithStr(p_self: *const string, other: *string, comptime token: utilsl.strTokens) bool {
-        return p_self.startsWith(other._slice(), token);
     }
     pub fn endsWith(p_self: *const string, other: []const u8) bool {
         if (other.len > p_self.len) {
@@ -94,9 +91,6 @@ pub const string = struct {
             }
         }
         return true;
-    }
-    pub inline fn endsWithStr(p_self: *const string, other: *string) bool {
-        return p_self.endsWith(other._slice());
     }
     pub inline fn copy(p_self: *const string, alloc: std.mem.Allocator) !string {
         return string.initFromSlice(alloc, p_self._slice());
@@ -151,7 +145,7 @@ pub const string = struct {
         self.len = 0;
     }
     pub fn format(self: string, writer: *std.Io.Writer) !void {
-        writer.print("{s}", .{self._slice()});
+        try writer.print("{s}", .{self._slice()});
     }
 };
 pub fn freeArrayList_string(alloc: std.mem.Allocator, arr: *std.ArrayList(string)) void {

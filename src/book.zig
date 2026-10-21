@@ -296,8 +296,8 @@ const boardFrameStack = struct {
     }
 };
 
-pub fn test_db(path: *string, alloc: std.mem.Allocator, full: bool) !void {
-    var db = try openingDatabase.init(alloc, path._slice(), 42, false);
+pub fn test_db(path: []const u8, alloc: std.mem.Allocator, full: bool) !void {
+    var db = try openingDatabase.init(alloc, path, 42, false);
     defer db.free(alloc);
     db.printInfo();
     var openings: std.ArrayList(entry) = .empty;
@@ -353,14 +353,12 @@ pub fn main(alloc: std.mem.Allocator) !void {
     const path = "opening/8moves_v3.pgn";
     //const path = "../bin/CCRL-4040.[2370489].pgn";
     //const path = "opening/UHO_Lichess_4852_v1.epd";
-    var s = try stringl.string.initFromSlice(alloc, path);
-    defer s.free(alloc);
     //hashl.zobristKeys.free(alloc);
-    if (!filel.fileExists(s._slice())) {
-        std.debug.print("File {s} does not exists \n", .{s._slice()});
+    if (!filel.fileExists(path)) {
+        std.debug.print("File {s} does not exists \n", .{path});
         return;
     }
-    //try test_db(&s, alloc, true);
+    //try test_db(path, alloc, true);
 
     std.log.info("[TEST]: Reading random algebraic position passed", .{});
     try test_read(alloc, path);

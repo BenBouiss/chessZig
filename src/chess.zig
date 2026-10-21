@@ -73,6 +73,7 @@ pub const centerBB: u64 = 0x183C3C180000;
 // 8 pieces per row + 7 '/' = 71
 // turn + 4 castling rights + enPassant sq + 3 spaces = 80
 // round that up to 100? the match score can be ommited?
+// TODO: check this out
 pub const MAX_FEN_LENGTH: u8 = 120;
 pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1";
 //pub const DEFAULT_BOARD = getBoardFromFen(DEFAULT_FEN) catch unreachable;
@@ -81,7 +82,7 @@ const arr_piece_str = [_]u8{ 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', '
 
 //pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
 
-pub const debug_err = error{ fenErr, earlyReturn, valueErr, memErr };
+pub const debug_err = error{ fenErr, earlyReturn, valueErr, memErr, argErr };
 
 pub fn strFromLERF(sq: e_square) [2]u8 {
     const sq_i: u8 = @intFromEnum(sq);
@@ -660,8 +661,8 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
     std.debug.print("Fen code: {s}\n", .{fen});
 
     const moves = moveGenl.generateLegalMoves(p_board_state);
-    std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d}\n", .{ p_board_state.b.turnCount, p_board_state.moveHistory.len, moves.len });
-    moves.print();
+    std.debug.print("Turn number: {d}, move stored: {d}, legal moves {d} castling {f}\n", .{ p_board_state.b.turnCount, p_board_state.moveHistory.len, moves.len, p_board_state.frame.stat });
+    //moves.print();
     printBoardValidity(p_board_state);
     if (p_board_state.b.turnCount > 0) {
         std.debug.print("Previous move: {s}\n", .{p_board_state.frame.lastMove.getStr()});
@@ -831,13 +832,23 @@ pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_p
         return @enumFromInt(@intFromEnum(piece) - N_PIECES_TYPES);
     }
 }
+pub inline fn makePiece(piece: e_pieceType, white: bool) e_piece {
+    if (white) {
+        return @enumFromInt(@intFromEnum(piece));
+    } else {
+        return @enumFromInt(@intFromEnum(piece) + N_PIECES_TYPES);
+    }
+}
 pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
     return @enumFromInt(whiteBoolToInt(whiteToMove));
 }
 
-/// returns 0 for white to move 1 else
+/// returns 0 for white to move 1 for black
 pub inline fn whiteBoolToInt(w: bool) u8 {
     return @as(u8, (@intFromBool(!w)));
+}
+pub inline fn whiteintToBool(w: u8) bool {
+    return w == @intFromEnum(e_color.WHITE);
 }
 pub inline fn cst_whiteBoolToInt(comptime w: bool) u8 {
     if (comptime w) return @intFromEnum(e_color.WHITE);
@@ -1334,15 +1345,15 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove
     const isCapture = utils.contains(moveStr, "x", .ignoreCase);
     if (utils.contains(moveStr, "O-O-O", .ignoreCase)) {
         if (white) {
-            return movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.c1), @intFromEnum(e_moveFlags.QUEENCASTLE));
+            return movel.e_build_move(.e1, .c1, .QUEENCASTLE);
         } else {
-            return movel.build_move(@intFromEnum(e_square.e8), @intFromEnum(e_square.c8), @intFromEnum(e_moveFlags.QUEENCASTLE));
+            return movel.e_build_move(.e8, .c8, .QUEENCASTLE);
         }
     } else if (utils.contains(moveStr, "O-O", .ignoreCase)) {
         if (white) {
-            return movel.build_move(@intFromEnum(e_square.e1), @intFromEnum(e_square.g1), @intFromEnum(e_moveFlags.KINGCASTLE));
+            return movel.e_build_move(.e1, .g1, .KINGCASTLE);
         } else {
-            return movel.build_move(@intFromEnum(e_square.e8), @intFromEnum(e_square.g8), @intFromEnum(e_moveFlags.KINGCASTLE));
+            return movel.e_build_move(.e8, .g8, .KINGCASTLE);
         }
     } else if (utils.contains(moveStr, "-", .ignoreCase)) {
         return debug_err.valueErr;
@@ -1436,30 +1447,9 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove
 
         ret.setFlag(flag);
     }
-
     return ret;
 }
 
-pub fn test_avx() !void {
-    const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2RKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
-    //const fen = DEFAULT_FEN;
-    var state = try getBoardFromFen(fen);
-    const bb = moveGenl.avx2DumbFill(&state, true).collapse();
-    const _bb = moveGenl.avx2DumbFill(&state, false).collapse();
-    print_board(&state);
-    print_bitboard(bb);
-    print_bitboard(_bb);
-
-    const _pinners = moveGenl.getPinned_avx2(&state, false);
-    print_bitboard(_pinners);
-
-    const pinners = moveGenl.getPinned_avx2(&state, true);
-    print_bitboard(pinners);
-
-    getCheckers(&state, true);
-    print_bitboard(state.frame.pinnedBB);
-    print_boardstate(&state);
-}
 pub fn _algebraicLineToIMoveMatch(line: []const u8, tmpBoard: *boardl.boardState) !matchMoveContainer {
     var gen = utils.splitGenerator(u8).init(line, ' ');
 
@@ -1514,10 +1504,46 @@ pub fn test_safe() !void {
     print_bitboard(safetyArea(.a8));
     print_bitboard(safetyArea(.h8));
 }
+pub fn test_avx() !void {
+    const fen = "k1p4R/1q2q1rq/8/Q2PPP2/q2RKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
+    //const fen = DEFAULT_FEN;
+    var state = try getBoardFromFen(fen);
+    const bb = moveGenl.avx2DumbFill(&state, true).collapse();
+    const _bb = moveGenl.avx2DumbFill(&state, false).collapse();
+    print_board(&state);
+    print_bitboard(bb);
+    print_bitboard(_bb);
+
+    const _pinners = moveGenl.getPinned_avx2(&state, false);
+    print_bitboard(_pinners);
+
+    const pinners = moveGenl.getPinned_avx2(&state, true);
+    print_bitboard(pinners);
+
+    getCheckers(&state, true);
+    print_bitboard(state.frame.pinnedBB);
+    print_boardstate(&state);
+}
 
 pub fn main(alloc: std.mem.Allocator) !void {
     //try test_avx();
     _ = alloc;
     try test_safe();
+    const state = try getBoardFromFen("7K/5Q2/8/8/8/5P2/5k2/8 w - - 0 1");
+    const move: IMove = movel.e_build_move(.f3, .f4, .QUIETMOVE);
+    print_boardstate(&state);
+    std.debug.print("move {s} delivers check {} \n", .{ move.getStr(), moveGenl.moveDeliverCheck(&state, move, false) });
+
+    const state2 = try getBoardFromFen("7K/8/8/8/8/8/1Q2Pk2/8 w - - 0 1");
+    const move2: IMove = movel.e_build_move(.e2, .e3, .QUIETMOVE);
+    print_boardstate(&state2);
+    std.debug.print("move {s} delivers check {} \n", .{ move2.getStr(), moveGenl.moveDeliverCheck(&state2, move2, false) });
+
+    const a = "abcdefg";
+    var str: stringl.string = .initViewFromSlice(a);
+    std.debug.print("{f}\n", .{str});
+    const b = "1234567";
+    str = .initViewFromSlice(b);
+    std.debug.print("{f}\n", .{str});
     return;
 }

@@ -1,13 +1,13 @@
 [engine1]
 //path="engines/bin/engine_08_10_26";
 //name="current";
-path="engines/bin/engine_11_10_26";
+path="engines/bin/engine_11_10_26_1";
 name="current";
 "setoption name reportProgress value false";
 
 [engine2]
-path="engines/bin/engine_11_10_26_1";
-name="new bitscan @ctz";
+path="engines/bin/engine_13_10_26";
+name="current + nnue";
 "setoption name reportProgress value false";
 
 [match]

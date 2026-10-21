@@ -7,3 +7,4 @@ export ZIG_LOCAL_CACHE_DIR="$tmp_folder/.zig-cache"
 export ZIG_GLOBAL_CACHE_DIR="$tmp_folder/.zig-cache"
 
 zig build -Doptimize=ReleaseFast -DuseTune=true -freference-trace=15 #-DuseAVX2=true
+#zig build -Doptimize=ReleaseSmall -DuseTune=true -freference-trace=15 #-DuseAVX2=true

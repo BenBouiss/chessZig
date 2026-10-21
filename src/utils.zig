@@ -172,12 +172,12 @@ pub fn splitGenerator(comptime T: type) type {
             const text = p_self.get(idx) orelse return null;
             switch (@typeInfo(o)) {
                 .int => {
-                    return std.fmt.parseInt(o, text, 10) catch {
+                    return std.fmt.parseInt(o, stripStr(text), 10) catch {
                         return null;
                     };
                 },
                 .float => {
-                    return std.fmt.parseFloat(o, text) catch {
+                    return std.fmt.parseFloat(o, stripStr(text)) catch {
                         return null;
                     };
                 },

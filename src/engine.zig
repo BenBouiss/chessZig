@@ -403,8 +403,8 @@ pub const engine = struct {
         // format: datagen {book_path} {thread}
 
         var gen = utilsl.splitGenerator(u8).init(cmdBuffer, ' ');
-        if (gen.len() != 3) {
-            std.debug.print("Expected format datagen {{book_path}} {{nThreads}}\n", .{});
+        if (gen.len() < 2) {
+            std.debug.print("Expected format datagen {{nThreads}} {{book_path}}(optional) \n", .{});
             return false;
         }
         p_self.scheduler.inDatagen = true;
@@ -563,6 +563,7 @@ pub const engine = struct {
     fn initInternals(p_self: *engine) !void {
         p_self.status.initializedInternals = true;
         try p_self.initOptions();
+        historyl.initLMR();
         chess.initAll();
         p_self.refreshInternals();
     }

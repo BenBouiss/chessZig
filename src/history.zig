@@ -19,11 +19,10 @@ const e_square = typel.e_square;
 //  [nextPiece][nextTo][prevPiece][prevTo]
 pub const pieceHistory: type = [13][64]scoreType;
 
-pub const lmrBase: [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType = initLMR();
+pub const lmrBase: [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType = _initMoveOrdering();
 
-pub fn _initMoveOrdering() void {}
-pub fn initLMR() [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType {
-    @setEvalBranchQuota(1000000);
+pub fn _initMoveOrdering() [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType {
+    @setEvalBranchQuota(10_000_000);
     var ret: [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType);
     for (1..typel.MAX_PLY) |d| {
         for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
@@ -33,6 +32,16 @@ pub fn initLMR() [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType {
         }
     }
     return ret;
+}
+pub fn initLMR() void {
+    return;
+    //for (1..typel.MAX_PLY) |d| {
+    //    for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
+    //        // patricia version
+    //        const s: f32 = 1024 * (0.4 + (std.math.log(f32, std.math.e, @floatFromInt(d)) * std.math.log(f32, std.math.e, @floatFromInt(i + 1)) / 2));
+    //        lmrBase[d][i] = @as(scoreType, @intFromFloat(s));
+    //    }
+    //}
 }
 pub inline fn pawnHashIndexToIdx(hash: u64) u64 {
     return hash % 16384;

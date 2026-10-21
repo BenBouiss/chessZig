@@ -96,9 +96,7 @@ test "book algebraic" {
     var io = std.Io.Threaded.init(arena, .{});
     mainl.GLOBAL_CTX.setIO(io.io());
     const path = "opening/8moves_v3.pgn";
-    var s = try stringl.string.initFromSlice(arena, path);
-    defer s.free(arena);
-    try bookl.test_db(&s, arena, true);
+    try bookl.test_db(path, arena, true);
 
     defer hashl._freeHash(arena, false);
     std.log.info("[TEST]: Reading random algebraic position passed\n", .{});

@@ -322,8 +322,8 @@ const engine_info = struct {
             .stderr = .inherit,
         };
         ret.proc = try std.process.spawn(mainl.getGlobalIo(), opt);
-        ret.f_writer = (ret.proc.stdin.?.writer(mainl.getGlobalIo(), &ret._writerBuffer));
-        ret.f_reader = (ret.proc.stdout.?.reader(mainl.getGlobalIo(), &ret._readerBuffer));
+        ret.f_writer = ret.proc.stdin.?.writer(mainl.getGlobalIo(), &ret._writerBuffer);
+        ret.f_reader = ret.proc.stdout.?.reader(mainl.getGlobalIo(), &ret._readerBuffer);
         ret.path = try .initFromSlice(alloc, path);
         ret.alive = true;
 
@@ -1496,16 +1496,10 @@ pub fn matchLoop(ctx: *threadCtx, inputs: []*inputChannel, match: *matchStruct) 
         try std.Io.sleep(mainl.getGlobalIo(), .{ .nanoseconds = @divFloor(std.time.ns_per_ms, 16) }, .awake);
     }
 }
-pub fn main(init: std.process.Init) !void {
+
+pub fn main(alloc: std.mem.Allocator, path: []const u8) !void {
 
     // 1st arg is the zig file, 2nd is the .info file for the evaluation
-    mainl.GLOBAL_CTX.setInit(init);
-    const args = try init.minimal.args.toSlice(init.gpa);
-    defer init.gpa.free(args);
-    std.debug.assert(args.len > 1);
-
-    const path = args[1];
-
     chessl.initAll();
-    try startPool(path, init.gpa);
+    try startPool(path, alloc);
 }

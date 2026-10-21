@@ -16,12 +16,18 @@ const moveGenl = @import("move_generation.zig");
 const string = stringl.string;
 const file_err = filel.file_err;
 
-pub const fileFormat = enum { bulletFF, viriFF };
-pub const boardLogFiles = union(fileFormat) { bulletFF: *logging(FEN_EVAL_ENTRY_SIZE), viriFF: *logging(@sizeOf(boardl.viriGame)) };
+//<FEN> | <score> | <result>
+pub const FEN_EVAL_ENTRY_SIZE: usize = chessl.MAX_FEN_LENGTH + 6 + 6 + 3 + 1;
+//pub const FEN_EVAL_ENTRY_SIZE: usize = chessl.MAX_FEN_LENGTH + 6 + 6 + 3 + 1 + 6;
+pub const e_fileFormat = enum { bulletFF, viriFF };
+pub const fileFormatLogger = union(e_fileFormat) {
+    bulletFF: *logging(FEN_EVAL_ENTRY_SIZE),
+    viriFF: *logging(@sizeOf(boardl.viriGame)),
+};
 
 pub fn logging(comptime SIZE: usize) type {
     return struct {
-        scratchArr: [][SIZE + 1]u8,
+        scratchArr: [][SIZE]u8,
         insertions: usize = 0,
         totalSaved: u64 = 0,
         totalSize: usize = 0,
@@ -35,7 +41,7 @@ pub fn logging(comptime SIZE: usize) type {
                 const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), filename._slice(), .{ .read = true });
                 defer file.close(mainl.getGlobalIo());
             }
-            const arr = try alloc.alloc([SIZE + 1]u8, totalSize);
+            const arr = try alloc.alloc([SIZE]u8, totalSize);
             for (0..arr.len) |i| {
                 arr[i] = @splat(0);
             }
@@ -54,7 +60,6 @@ pub fn logging(comptime SIZE: usize) type {
             @memcpy(p_self.scratchArr[p_self.insertions][0..item.len], item);
             if (p_self.textMode) {
                 @memset(p_self.scratchArr[p_self.insertions][item.len..], 0);
-                p_self.scratchArr[p_self.insertions][item.len] = '\n';
             }
 
             p_self.insertions += 1;
@@ -68,9 +73,6 @@ pub fn logging(comptime SIZE: usize) type {
                 const msg = if (p_self.textMode) utilsl.trimStr(p_self.scratchArr[i][0..SIZE]) else (p_self.scratchArr[i][0..SIZE]);
                 _ = try file.writePositionalAll(mainl.getGlobalIo(), msg, base + inserted);
                 inserted += @intCast(msg.len);
-                if (!p_self.textMode) {
-                    std.debug.assert(msg.len == SIZE);
-                }
             }
             p_self.totalSaved += p_self.insertions;
             p_self.insertions = 0;
@@ -90,15 +92,104 @@ pub fn logging(comptime SIZE: usize) type {
             p_self.freed = true;
             p_self.l.releaseLock();
         }
+        //pub fn shuffle(p_self: *self, random: std.Random)
     };
 }
+pub const logging1D = struct {
+    scratchArr: []u8,
+    size: usize = 0,
+    insertions: usize = 0,
+    totalSaved: u64 = 0,
+    totalSize: usize = 0,
+    base: u64 = 0,
+    filename: stringl.string,
+    l: lockl.lock = .{},
+    freed: bool = false,
+    textMode: bool = true,
+    tightLayout: bool = false,
+    const self = @This();
+    pub fn init(alloc: std.mem.Allocator, size: usize, totalSize: usize, filename: string, textMode: bool, tightLayout: bool) !self {
+        if (!filel.fileExists(filename._slice())) {
+            const parent = filel.parentDir(filename._slice());
+            if (parent) |p| {
+                if (!filel.dirExists(p)) {
+                    try std.Io.Dir.createDirPath(.cwd(), mainl.getGlobalIo(), p);
+                }
+            }
+            const file = try std.Io.Dir.createFile(.cwd(), mainl.getGlobalIo(), filename._slice(), .{ .read = true });
+            defer file.close(mainl.getGlobalIo());
+        }
+        const arr = try alloc.alloc(u8, size * totalSize);
+        @memset(arr[0..], 0);
+
+        return .{ .filename = filename, .insertions = 0, .size = size, .totalSize = totalSize, .scratchArr = arr, .textMode = textMode, .tightLayout = tightLayout };
+    }
+    pub fn append(p_self: *self, item: []const u8) !void {
+        p_self.l.acquireLock();
+        defer p_self.l.releaseLock();
+        if (p_self.insertions == p_self.totalSize) {
+            try p_self.commit();
+        }
+        if (item.len > p_self.size) {
+            return file_err.mem_error;
+        }
+        if (!p_self.tightLayout or p_self.textMode) {
+            @memcpy(p_self.scratchArr[p_self.base .. p_self.base + item.len], item);
+            if (p_self.textMode) {
+                @memset(p_self.scratchArr[p_self.base + item.len .. p_self.base + item.len + (p_self.size - item.len)], 0);
+            }
+        } else {
+            @memcpy(p_self.scratchArr[p_self.base .. p_self.base + item.len], item);
+        }
+        p_self.base += item.len;
+        p_self.insertions += 1;
+    }
+    pub fn commit(p_self: *self) !void {
+        const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), p_self.filename._slice(), .{ .mode = .write_only });
+        const base = try file.length(mainl.getGlobalIo());
+        defer file.close(mainl.getGlobalIo());
+        if (p_self.textMode) {
+            var inserted: u64 = 0;
+            for (0..p_self.insertions) |i| {
+                const msg = utilsl.trimStr(p_self.scratchArr[i * p_self.size .. (i + 1) * p_self.size]);
+                _ = try file.writePositionalAll(mainl.getGlobalIo(), msg, base + inserted);
+                inserted += @intCast(msg.len);
+            }
+        } else {
+            if (p_self.tightLayout) {
+                _ = try file.writePositionalAll(mainl.getGlobalIo(), p_self.scratchArr[0..p_self.base], base);
+            } else {
+                _ = try file.writePositionalAll(mainl.getGlobalIo(), p_self.scratchArr[0 .. p_self.insertions * p_self.size], base);
+            }
+        }
+        p_self.totalSaved += p_self.insertions;
+        p_self.insertions = 0;
+        p_self.base = 0;
+    }
+    pub fn write(p_self: *self, msg: []const u8) !void {
+        const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), p_self.filename._slice(), .{ .mode = .write_only });
+        defer file.close(mainl.getGlobalIo());
+        const base = file.length(mainl.getGlobalIo()) catch unreachable;
+        _ = file.writePositionalAll(mainl.getGlobalIo(), utilsl.trimStr(msg), base) catch unreachable;
+    }
+    pub fn free(p_self: *self, alloc: std.mem.Allocator) !void {
+        p_self.l.acquireLock();
+        if (p_self.insertions != 0) {
+            try p_self.commit();
+        }
+        alloc.free(p_self.scratchArr);
+        p_self.freed = true;
+        p_self.l.releaseLock();
+    }
+    //pub fn shuffle(p_self: *self, random: std.Random)
+
+};
 //
 
-const FEN_EVAL_ENTRY_SIZE: usize = chessl.MAX_FEN_LENGTH + 1 + 24;
 const INPOSITION_SAVE_FREQ: u64 = 4;
 const FEN_SAVE_FREQ: u64 = 2;
 // [fen] [eval](5-6 size); + more just in case
-pub fn parseLogFile(alloc: std.mem.Allocator, path: []const u8, logFile: boardLogFiles, outFile: fileFormat) !void {
+pub fn parseLogFile(alloc: std.mem.Allocator, path: []const u8, logFile: fileFormatLogger, outFile: e_fileFormat) !void {
     var tokens = try filel.getTokensFromFile(alloc, path, '\n');
     defer stringl.freeArrayList_string(alloc, &tokens);
     var finalPositionFlag: bool = false;
@@ -179,7 +270,7 @@ pub fn parseAlgebraicStringList(alloc: std.mem.Allocator, logFile: *logging(FEN_
             //}
             var buffer: [FEN_EVAL_ENTRY_SIZE]u8 = @splat(0);
             const fen = tmp.get_fen();
-            const written = try std.fmt.bufPrint(&buffer, "{s} [{d:.1}];", .{ utilsl.trimStr(&fen), outcomes });
+            const written = try std.fmt.bufPrint(&buffer, "{s} [{d:.1}];\n", .{ utilsl.trimStr(&fen), outcomes });
             try logFile.append(written);
         }
         try logFile.commit();
@@ -248,14 +339,13 @@ pub fn str_incrementalMoveContainer(logFile: *logging(FEN_EVAL_ENTRY_SIZE), move
         //const score = -35;
         var buffer: [FEN_EVAL_ENTRY_SIZE]u8 = @splat(0);
         const fen = state.get_fen();
-        const written = try std.fmt.bufPrint(&buffer, "{s} {d} {d};", .{ utilsl.trimStr(&fen), score, outcome });
+        const written = try std.fmt.bufPrint(&buffer, "{s} {d} {d};\n", .{ utilsl.trimStr(&fen), score, outcome });
         try logFile.append(written);
     }
     try logFile.commit();
 }
 pub fn parsingLog(alloc: std.mem.Allocator) !void {
-    var savePath: string = try string.initFromSlice(alloc, "out/csv/res_1781964187051005583.book");
-    defer savePath.free(alloc);
+    const savePath: string = string.initViewFromSlice("out/csv/res_1781964187051005583.book");
     var logFile = try logging(FEN_EVAL_ENTRY_SIZE).init(alloc, 100, savePath, true);
     const name: []const u8 = "out/logs/evaluate/match_logs_1781964187051005583.txt";
     try parseLogFile(alloc, name, .{ .bulletFF = &logFile }, .bulletFF);
@@ -371,10 +461,8 @@ pub fn thread_parsingLog_binF(alloc: std.mem.Allocator, fileBatch: []const []con
     try logFile.free(alloc);
 }
 pub fn parsingBook(alloc: std.mem.Allocator) !void {
-    var savePath: string = try string.initFromSlice(alloc, "out/csv/CCRL-4040.[2370489]_2.book");
-    var name: string = try string.initFromSlice(alloc, "../bin/CCRL-4040.[2370489].pgn");
-    defer name.free(alloc);
-    defer savePath.free(alloc);
+    const savePath: string = string.initViewFromSlice("out/csv/CCRL-4040.[2370489]_2.book");
+    const name: string = string.initViewFromSlice("../bin/CCRL-4040.[2370489].pgn");
 
     var logFile = try logging(FEN_EVAL_ENTRY_SIZE).init(alloc, 1_000_000, savePath, true);
     try parseBook(alloc, &logFile, &name);
@@ -397,8 +485,7 @@ pub fn transmutePtr(comptime T: type, x: *T) []u8 {
 }
 
 pub fn test_viriBin(alloc: std.mem.Allocator) !void {
-    var savePath: string = try string.initFromSlice(alloc, "out/data.bin");
-    defer savePath.free(alloc);
+    const savePath: string = try string.initViewFromSlice("out/data.bin");
     const outPath = "out/d.bin";
 
     var logFile = try logging(@sizeOf(boardl.viriGame)).init(alloc, 10, savePath, false);

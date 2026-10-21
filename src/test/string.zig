@@ -14,10 +14,8 @@ const extractTestCases = [_][2][]const u8{
 test "extract" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
-    const arena = arena_allocator.allocator();
     for (extractTestCases) |s| {
-        var str = string.initFromSlice(arena, s[0]) catch unreachable;
-        defer str.free(arena);
+        const str = string.initViewFromSlice(s[0]);
         const ext = str.extractFromBounds("\"", "\"") catch unreachable;
         try std.testing.expect(utilsl.equal(u8, ext, s[1]));
     }
