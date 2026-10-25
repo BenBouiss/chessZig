@@ -13,24 +13,19 @@ pub const string = struct {
     data: []u8,
     freed: bool = false,
     pub fn initFromSlice(alloc: std.mem.Allocator, slice: []const u8) !string {
-        var ret: string = undefined;
-        ret.len = slice.len;
-        ret.capacity = slice.len;
+        var ret: string = .{ .len = slice.len, .capacity = slice.len, .data = undefined, .freed = false };
         ret.data = try alloc.alloc(u8, ret.capacity);
-        ret.freed = false;
         try ret.copyFromSlice(slice);
         return ret;
     }
+    /// Gives a now memory owned string view of the slice
     pub fn initViewFromSlice(slice: []const u8) string {
         return .{ .len = slice.len, .capacity = slice.len, .data = @constCast(slice), .freed = true };
     }
 
     pub fn initZero(alloc: std.mem.Allocator, cap: usize) !string {
-        var ret: string = undefined;
+        var ret: string = .{ .len = 0, .capacity = cap, .freed = false, .data = undefined };
         ret.data = try alloc.alloc(u8, cap);
-        ret.capacity = cap;
-        ret.len = 0;
-        ret.freed = false;
         return ret;
     }
     pub inline fn initFromBuffer(buffer: []u8) string {
@@ -122,10 +117,7 @@ pub const string = struct {
         return @intCast(ret);
     }
     pub fn extractFromBounds(p_self: *const string, lBound: []const u8, rBound: []const u8) string_err![]const u8 {
-        if (!p_self.containsE(lBound, .ignoreCase)) {
-            return string_err.itemNotFound_error;
-        }
-        if (!p_self.containsE(rBound, .ignoreCase)) {
+        if (!p_self.containsE(lBound, .ignoreCase) or !p_self.containsE(rBound, .ignoreCase)) {
             return string_err.itemNotFound_error;
         }
         const startIndex = try p_self.find(lBound);
@@ -159,17 +151,17 @@ pub fn mergePaths(alloc: std.mem.Allocator, s1: *string, s2: *string) !string {
     const slashCount: usize = @intFromBool(s1.endsWith("/")) + @intFromBool(s2.startsWith("/", .standardToken));
     var ret: string = undefined;
     if (slashCount == 0) {
-        const merged = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ s1._slice(), s2._slice() });
+        const merged = try std.fmt.allocPrint(alloc, "{f}/{f}", .{ s1, s2 });
         ret = string.initFromBuffer(&merged);
         return ret;
     }
     if (slashCount == 1) {
-        const merged = try std.fmt.allocPrint(alloc, "{s}{s}", .{ s1._slice(), s2._slice() });
+        const merged = try std.fmt.allocPrint(alloc, "{f}{f}", .{ s1, s2 });
         ret = string.initFromBuffer(&merged);
         return ret;
     }
     if (slashCount == 2) {
-        const merged = try std.fmt.allocPrint(alloc, "{s}{s}", .{ s1._slice(), s2._slice()[1..s2.len] });
+        const merged = try std.fmt.allocPrint(alloc, "{f}{s}", .{ s1, s2._slice()[1..s2.len] });
         ret = string.initFromBuffer(&merged);
         return ret;
     }

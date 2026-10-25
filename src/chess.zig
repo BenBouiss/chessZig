@@ -80,12 +80,10 @@ pub const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 
 
 const arr_piece_str = [_]u8{ 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k', '_', '1', '2' };
 
-//pub const e_direction = enum(u8) { NORTH = 0, SOUTH = 1, WEST = 2, EAST = 3, NORTHWEST = 4, SOUTHEAST = 5, NORTHEAST = 6, SOUTHWEST = 7 };
-
-pub const debug_err = error{ fenErr, earlyReturn, valueErr, memErr, argErr };
+pub const debug_err = error{ fenErr, valueErr, memErr, argErr };
 
 pub fn strFromLERF(sq: e_square) [2]u8 {
-    const sq_i: u8 = @intFromEnum(sq);
+    const sq_i: u8 = @backingInt(sq);
     return [2]u8{ 'a' + sq_i % 8, '1' + sq_i / 8 };
 }
 
@@ -96,29 +94,29 @@ pub fn stringToLERF(sq: *const [2]u8) e_square {
     if ((sq[1] < '1') or (sq[1] > '9')) {
         return .invalid;
     }
-    return @enumFromInt((sq[0] - 'a') + ((sq[1] - '1') << 3));
+    return @fromBackingInt(@intCast((sq[0] - 'a') + ((sq[1] - '1') << 3)));
 }
 pub fn flagPromotionToPiece(flag: u8, white: bool) e_piece {
     const color_offset = getColorPieceOffset(white);
-    if ((flag == @intFromEnum(e_moveFlags.KNIGHTPROMO)) or (flag == @intFromEnum(e_moveFlags.KNIGHTPROMOCAPTURE))) {
-        return @enumFromInt(@intFromEnum(e_piece.nWhiteKnight) + color_offset);
-    } else if ((flag == @intFromEnum(e_moveFlags.BISHOPPROMO)) or (flag == @intFromEnum(e_moveFlags.BISHOPPROMOCAPTURE))) {
-        return @enumFromInt(@intFromEnum(e_piece.nWhiteBishop) + color_offset);
-    } else if ((flag == @intFromEnum(e_moveFlags.ROOKPROMO)) or (flag == @intFromEnum(e_moveFlags.ROOKPROMOCAPTURE))) {
-        return @enumFromInt(@intFromEnum(e_piece.nWhiteRook) + color_offset);
-    } else if ((flag == @intFromEnum(e_moveFlags.QUEENPROMO)) or (flag == @intFromEnum(e_moveFlags.QUEENPROMOCAPTURE))) {
-        return @enumFromInt(@intFromEnum(e_piece.nWhiteQueen) + color_offset);
+    if ((flag == @backingInt(e_moveFlags.KNIGHTPROMO)) or (flag == @backingInt(e_moveFlags.KNIGHTPROMOCAPTURE))) {
+        return @fromBackingInt(@intCast(@backingInt(e_piece.nWhiteKnight) + color_offset));
+    } else if ((flag == @backingInt(e_moveFlags.BISHOPPROMO)) or (flag == @backingInt(e_moveFlags.BISHOPPROMOCAPTURE))) {
+        return @fromBackingInt(@intCast(@backingInt(e_piece.nWhiteBishop) + color_offset));
+    } else if ((flag == @backingInt(e_moveFlags.ROOKPROMO)) or (flag == @backingInt(e_moveFlags.ROOKPROMOCAPTURE))) {
+        return @fromBackingInt(@intCast(@backingInt(e_piece.nWhiteRook) + color_offset));
+    } else if ((flag == @backingInt(e_moveFlags.QUEENPROMO)) or (flag == @backingInt(e_moveFlags.QUEENPROMOCAPTURE))) {
+        return @fromBackingInt(@intCast(@backingInt(e_piece.nWhiteQueen) + color_offset));
     }
     return e_piece.nEmptySquare;
 }
 pub fn flagPromotionToPieceType(flag: u8) typel.e_pieceType {
-    if ((flag == @intFromEnum(e_moveFlags.KNIGHTPROMO)) or (flag == @intFromEnum(e_moveFlags.KNIGHTPROMOCAPTURE))) {
+    if ((flag == @backingInt(e_moveFlags.KNIGHTPROMO)) or (flag == @backingInt(e_moveFlags.KNIGHTPROMOCAPTURE))) {
         return .KNIGHT;
-    } else if ((flag == @intFromEnum(e_moveFlags.BISHOPPROMO)) or (flag == @intFromEnum(e_moveFlags.BISHOPPROMOCAPTURE))) {
+    } else if ((flag == @backingInt(e_moveFlags.BISHOPPROMO)) or (flag == @backingInt(e_moveFlags.BISHOPPROMOCAPTURE))) {
         return .BISHOP;
-    } else if ((flag == @intFromEnum(e_moveFlags.ROOKPROMO)) or (flag == @intFromEnum(e_moveFlags.ROOKPROMOCAPTURE))) {
+    } else if ((flag == @backingInt(e_moveFlags.ROOKPROMO)) or (flag == @backingInt(e_moveFlags.ROOKPROMOCAPTURE))) {
         return .ROOK;
-    } else if ((flag == @intFromEnum(e_moveFlags.QUEENPROMO)) or (flag == @intFromEnum(e_moveFlags.QUEENPROMOCAPTURE))) {
+    } else if ((flag == @backingInt(e_moveFlags.QUEENPROMO)) or (flag == @backingInt(e_moveFlags.QUEENPROMOCAPTURE))) {
         return .QUEEN;
     }
     // TODO: check
@@ -141,7 +139,7 @@ pub fn letterPromoToFlag(letter: u8) e_moveFlags {
 }
 
 pub inline fn sqToBitboard(sq: e_square) u64 {
-    return ONE << @intCast(@intFromEnum(sq));
+    return ONE << @intCast(@backingInt(sq));
 }
 pub inline fn xToBitboard(x: u8) u64 {
     return ONE << @intCast(x);
@@ -254,14 +252,14 @@ fn getPieceFromStr(letter: u8) e_piece {
     var count: i8 = 0;
     for (arr_piece_str) |arr_l| {
         if (letter == arr_l) {
-            return @enumFromInt(count);
+            return @fromBackingInt(@intCast(count));
         }
         count += 1;
     }
     return e_piece.nEmptySquare;
 }
 pub inline fn getStrFromPiece(piece: e_piece) u8 {
-    return arr_piece_str[@intFromEnum(piece)];
+    return arr_piece_str[@backingInt(piece)];
 }
 
 pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
@@ -294,7 +292,7 @@ pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
         }
         const tmp_enum = getPieceFromStr(letter);
 
-        if (!ret.placePiece(tmp_enum, @enumFromInt(board_offset))) {
+        if (!ret.placePiece(tmp_enum, @fromBackingInt(@intCast(board_offset)))) {
             std.debug.print("[DEBUG] getBoardFromFen_pieces: Fen problem with piece placement {s}\n", .{fen});
             print_board(&ret);
         }
@@ -348,7 +346,7 @@ pub fn getBoardFromFen_enPassant(p_state: *boardl.boardState, turnToken: []const
     } else {
         std.debug.assert(turnToken.len == 2);
         const sq = stringToLERF(turnToken[0..2]);
-        p_state.frame.enPassantIdx = @intFromEnum(sq);
+        p_state.frame.enPassantIdx = @backingInt(sq);
     }
     return true;
 }
@@ -404,9 +402,9 @@ pub fn applyUciMoves(p_board: *boardl.boardState, uciStr: []const u8, debug: boo
         }
         var flag: u8 = 0;
         if (cmd.len > 4 and cmd[4] != 0) {
-            flag |= @intFromEnum(letterPromoToFlag(cmd[4]));
+            flag |= @backingInt(letterPromoToFlag(cmd[4]));
         }
-        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), flag);
+        var move = movel.build_move(@backingInt(from), @backingInt(to), flag);
         fillMoveFromState(p_board, &move);
         p_board.makeMove(move);
         if (debug) {
@@ -429,9 +427,9 @@ pub fn getFirstMoveFromStr(p_state: *boardl.boardState, strBuffer: []const u8) I
         if (from == .invalid or to == .invalid) {
             continue;
         }
-        var move = movel.build_move(@intFromEnum(from), @intFromEnum(to), 0);
+        var move = movel.build_move(@backingInt(from), @backingInt(to), 0);
         if (cmd.len == 5 and cmd[4] != 0) {
-            move.setFlag(@intFromEnum(letterPromoToFlag(cmd[4])));
+            move.setFlag(@backingInt(letterPromoToFlag(cmd[4])));
         }
         fillMoveFromState(p_state, &move);
         return move;
@@ -462,10 +460,10 @@ pub inline fn inBetweenX(from: u8, to: u8) u64 {
     return moveGenl.arrRectangular[from][to];
 }
 pub inline fn inBetween(from: e_square, to: e_square) u64 {
-    return moveGenl.arrRectangular[@intFromEnum(from)][@intFromEnum(to)];
+    return moveGenl.arrRectangular[@backingInt(from)][@backingInt(to)];
 }
 pub inline fn safetyArea(sq: e_square) u64 {
-    return moveGenl.safetyArea[@intFromEnum(sq)];
+    return moveGenl.safetyArea[@backingInt(sq)];
 }
 
 pub inline fn getColorPieceOffset(white: bool) u8 {
@@ -475,7 +473,7 @@ pub inline fn getColorPieceOffset(white: bool) u8 {
     return N_PIECES_TYPES;
 }
 pub inline fn isPieceWhite(piece: e_piece) bool {
-    return @intFromEnum(piece) < N_PIECES_TYPES;
+    return @backingInt(piece) < N_PIECES_TYPES;
 }
 pub inline fn e_colorFromPiece(piece: e_piece) e_color {
     return boolTo_e_color(isPieceWhite(piece));
@@ -489,21 +487,21 @@ pub fn updateKeyOnMove(move: IMove, fromPiece: e_piece, info: *const boardl.boar
     var _fromPiece = fromPiece;
 
     if (isPawnPiece(_fromPiece)) {
-        ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to];
+        ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@backingInt(_fromPiece)][to];
     } else {
-        ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to];
+        ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[@backingInt(_fromPiece)][to];
     }
     // make the piece at the dest appear
-    ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][to];
+    ret.key ^= hashl.zobristKeys.pieceKeys[@backingInt(_fromPiece)][to];
     if (move.isPromotion()) {
         _fromPiece = if (comptime white) .nWhitePawn else .nBlackPawn;
     }
     // removed the starting piece
-    ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from];
+    ret.key ^= hashl.zobristKeys.pieceKeys[@backingInt(_fromPiece)][from];
     if (isPawnPiece(_fromPiece)) {
-        ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from];
+        ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@backingInt(_fromPiece)][from];
     } else {
-        ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[@intFromEnum(_fromPiece)][from];
+        ret.nonPawnKey[offset] ^= hashl.zobristKeys.pieceKeys[@backingInt(_fromPiece)][from];
     }
 
     if (comptime capture) {
@@ -511,20 +509,20 @@ pub fn updateKeyOnMove(move: IMove, fromPiece: e_piece, info: *const boardl.boar
         if (move.isEnpassant()) {
             const victimSq: e_square = enPassantVictimSq(from, to);
             const p: e_piece = if (comptime white) .nBlackPawn else .nWhitePawn;
-            ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)];
-            ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(p)][@intFromEnum(victimSq)];
+            ret.key ^= hashl.zobristKeys.pieceKeys[@backingInt(p)][@backingInt(victimSq)];
+            ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@backingInt(p)][@backingInt(victimSq)];
         } else {
-            ret.key ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to];
+            ret.key ^= hashl.zobristKeys.pieceKeys[@backingInt(info.victim)][to];
             if (isPawnPiece(info.victim)) {
-                ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to];
+                ret.pawnKey ^= hashl.zobristKeys.pieceKeys[@backingInt(info.victim)][to];
             } else {
-                ret.nonPawnKey[offset ^ 1] ^= hashl.zobristKeys.pieceKeys[@intFromEnum(info.victim)][to];
+                ret.nonPawnKey[offset ^ 1] ^= hashl.zobristKeys.pieceKeys[@backingInt(info.victim)][to];
             }
         }
     } else {
         // check castling
         if (move.isCastle()) {
-            const r: u8 = if (comptime white) @intFromEnum(e_piece.nWhiteRook) else @intFromEnum(e_piece.nBlackRook);
+            const r: u8 = if (comptime white) @backingInt(e_piece.nWhiteRook) else @backingInt(e_piece.nBlackRook);
             if (move.isQueenSideCastle()) {
                 const v = hashl.zobristKeys.pieceKeys[r][to - 2] ^ hashl.zobristKeys.pieceKeys[r][to + 1];
                 ret.key ^= v;
@@ -656,7 +654,7 @@ pub fn print_boardstate(p_board_state: *const boardl.boardState) void {
         std.debug.print("Current turn: Black\n", .{});
     }
     print_board(p_board_state);
-    std.debug.print("Zobrist key: 0x{x} | Pawn key: 0x{x} | Non-Pawn keys: w: 0x{x}, b: 0x{x}]\n", .{ p_board_state.frame.key, p_board_state.frame.pawnKey, p_board_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)], p_board_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)] });
+    std.debug.print("Zobrist key: 0x{x} | Pawn key: 0x{x} | Non-Pawn keys: w: 0x{x}, b: 0x{x}]\n", .{ p_board_state.frame.key, p_board_state.frame.pawnKey, p_board_state.frame.nonPawnKey[@backingInt(e_color.WHITE)], p_board_state.frame.nonPawnKey[@backingInt(e_color.BLACK)] });
     const fen = p_board_state.get_fen();
     std.debug.print("Fen code: {s}\n", .{fen});
 
@@ -734,7 +732,7 @@ pub fn knightAttacks(knights: u64) u64 {
 }
 
 pub inline fn diagonalMask(sq: e_square) u64 {
-    return moveGenl.diagonalsBB[@intFromEnum(sq)];
+    return moveGenl.diagonalsBB[@backingInt(sq)];
 }
 
 pub inline fn fileMaskFromFileN(file: u8) u64 {
@@ -778,7 +776,7 @@ pub inline fn getPawnAttacksFromBB(bb: u64, comptime white: bool) u64 {
 }
 
 pub inline fn getKingAttacks(sq: e_square) u64 {
-    return moveGenl.kingTable[@intFromEnum(sq)];
+    return moveGenl.kingTable[@backingInt(sq)];
 }
 
 pub fn getRelevantMove(piece: e_piece, sq: e_square, occ: u64, comptime all: bool) !u64 {
@@ -821,26 +819,26 @@ pub fn getRelevantMove(piece: e_piece, sq: e_square, occ: u64, comptime all: boo
     }
 }
 pub inline fn e_pieceTo_e_pieceType(piece: e_piece) e_pieceType {
-    const _p = @intFromEnum(piece);
-    return @enumFromInt(_p % N_PIECES_TYPES);
+    const _p = @backingInt(piece);
+    return @fromBackingInt(@intCast(_p % N_PIECES_TYPES));
 }
 
 pub inline fn e_pieceTo_e_pieceTypeCst(piece: e_piece, comptime white: bool) e_pieceType {
     if (comptime white) {
-        return @enumFromInt(@intFromEnum(piece));
+        return @fromBackingInt(@intCast(@backingInt(piece)));
     } else {
-        return @enumFromInt(@intFromEnum(piece) - N_PIECES_TYPES);
+        return @fromBackingInt(@intCast(@backingInt(piece) - N_PIECES_TYPES));
     }
 }
 pub inline fn makePiece(piece: e_pieceType, white: bool) e_piece {
     if (white) {
-        return @enumFromInt(@intFromEnum(piece));
+        return @fromBackingInt(@intCast(@backingInt(piece)));
     } else {
-        return @enumFromInt(@intFromEnum(piece) + N_PIECES_TYPES);
+        return @fromBackingInt(@intCast(@backingInt(piece) + N_PIECES_TYPES));
     }
 }
 pub inline fn boolTo_e_color(whiteToMove: bool) e_color {
-    return @enumFromInt(whiteBoolToInt(whiteToMove));
+    return @fromBackingInt(@intCast(whiteBoolToInt(whiteToMove)));
 }
 
 /// returns 0 for white to move 1 for black
@@ -848,15 +846,15 @@ pub inline fn whiteBoolToInt(w: bool) u8 {
     return @as(u8, (@intFromBool(!w)));
 }
 pub inline fn whiteintToBool(w: u8) bool {
-    return w == @intFromEnum(e_color.WHITE);
+    return w == @backingInt(e_color.WHITE);
 }
 pub inline fn cst_whiteBoolToInt(comptime w: bool) u8 {
-    if (comptime w) return @intFromEnum(e_color.WHITE);
-    return @intFromEnum(e_color.BLACK);
+    if (comptime w) return @backingInt(e_color.WHITE);
+    return @backingInt(e_color.BLACK);
 }
 
 pub inline fn invert_e_color(side: e_color) e_color {
-    return @enumFromInt((@intFromEnum(side) ^ 1));
+    return @fromBackingInt(@intCast((@backingInt(side) ^ 1)));
 }
 
 pub inline fn xrayRookAttacks(occ: u64, blockers: u64, rookSq: e_square) u64 {
@@ -872,19 +870,19 @@ pub inline fn xrayBishopAttacks(occ: u64, blockers: u64, bishopSq: e_square) u64
 }
 
 pub inline fn getSqRank(sq: e_square) u8 {
-    return @intFromEnum(sq) >> 3;
+    return @backingInt(sq) >> 3;
 }
 pub inline fn getSqIdxRank(sq: u8) u8 {
     return sq >> 3;
 }
 pub inline fn getSqFile(sq: e_square) u8 {
-    return @intFromEnum(sq) & 7;
+    return @backingInt(sq) & 7;
 }
 pub inline fn getSqIdxFile(sq: u8) u8 {
     return sq & 7;
 }
 pub inline fn getSqFromCoord(rank: u8, file: u8) e_square {
-    return @enumFromInt((rank << 3) + file);
+    return @fromBackingInt(@intCast((rank << 3) + file));
 }
 pub inline fn enPassantVictimSq(from: u8, to: u8) e_square {
     return getSqFromCoord(getSqIdxRank(from), getSqIdxFile(to));
@@ -1020,7 +1018,7 @@ pub fn _AllAttackBishopMask(bb_piece: u64, occ_bb: u64) u64 {
     while (_bb_piece != 0) {
         const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-        ret |= getBishopAttacks(occ_bb, @enumFromInt(sq));
+        ret |= getBishopAttacks(occ_bb, @fromBackingInt(@intCast(sq)));
     }
     return ret;
 }
@@ -1031,7 +1029,7 @@ pub fn _AllAttackRookMask(bb_piece: u64, occ_bb: u64) u64 {
     while (_bb_piece != 0) {
         const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-        ret |= getRookAttacks(occ_bb, @enumFromInt(sq));
+        ret |= getRookAttacks(occ_bb, @fromBackingInt(@intCast(sq)));
     }
     return ret;
 }
@@ -1042,7 +1040,7 @@ pub fn _AllAttackQueenMask(bb_piece: u64, occ_bb: u64) u64 {
     while (_bb_piece != 0) {
         const sq = bitscan(_bb_piece);
         _bb_piece &= _bb_piece - 1;
-        const sq_e: e_square = @enumFromInt(sq);
+        const sq_e: e_square = @fromBackingInt(@intCast(sq));
         ret |= getRookAttacks(occ_bb, sq_e);
         ret |= getBishopAttacks(occ_bb, sq_e);
     }
@@ -1116,7 +1114,7 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
     while (_check != EMPTY) {
         const checksq = bitscan(_check);
         _check &= _check - 1;
-        directChecks |= inBetween(@enumFromInt(checksq), king_E);
+        directChecks |= inBetween(@fromBackingInt(@intCast(checksq)), king_E);
     }
     directChecks |= getPawnAttacks(king_E, white) & p;
     directChecks |= knightAttacks(sqToBitboard(king_E)) & n;
@@ -1131,7 +1129,7 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
         while (pinner != EMPTY) {
             const pinsq = bitscan(pinner);
             pinner &= pinner - 1;
-            pinned |= inBetween(@enumFromInt(pinsq), king_E);
+            pinned |= inBetween(@fromBackingInt(@intCast(pinsq)), king_E);
         }
 
         const bBlockers = (occ & cachedBishAtt) ^ occ;
@@ -1139,7 +1137,7 @@ pub fn getCheckers_cst(p_board: *boardl.boardState, comptime white: bool) void {
         while (pinner != EMPTY) {
             const pinsq = bitscan(pinner);
             pinner &= pinner - 1;
-            pinned |= inBetween(@enumFromInt(pinsq), king_E);
+            pinned |= inBetween(@fromBackingInt(@intCast(pinsq)), king_E);
         }
         p_board.frame.pinnedBB = pinned;
     }
@@ -1152,26 +1150,26 @@ pub fn fillMoveFromState(p_state: *const boardl.boardState, move: *IMove) void {
     const f_piece = p_state.getPiece(fromIdx);
     var flag: u8 = move.getFlag();
     if (c_piece != .nEmptySquare) {
-        flag |= @intFromEnum(e_moveFlags.CAPTURE);
+        flag |= @backingInt(e_moveFlags.CAPTURE);
     }
     if (isKingPiece(f_piece)) {
         var diff: i8 = @intCast(fromIdx);
         diff -= @intCast(toIdx);
         if (@abs(diff) == 2) {
             if (fromIdx > toIdx) {
-                flag |= @intFromEnum(e_moveFlags.QUEENCASTLE);
+                flag |= @backingInt(e_moveFlags.QUEENCASTLE);
             } else {
-                flag |= @intFromEnum(e_moveFlags.KINGCASTLE);
+                flag |= @backingInt(e_moveFlags.KINGCASTLE);
             }
         }
     } else if (isPawnPiece(f_piece)) {
         var diff: i8 = @intCast(fromIdx);
         diff -= @intCast(toIdx);
         if (@abs(diff) == 16) {
-            flag |= @intFromEnum(e_moveFlags.DOUBLEPAWN);
+            flag |= @backingInt(e_moveFlags.DOUBLEPAWN);
         }
         if ((getSqIdxFile(fromIdx) != getSqIdxFile(toIdx)) and (c_piece == .nEmptySquare)) {
-            flag |= @intFromEnum(e_moveFlags.ENPASSANT);
+            flag |= @backingInt(e_moveFlags.ENPASSANT);
             if (p_state.whiteToMove()) {
                 c_piece = .nBlackPawn;
             } else {
@@ -1194,7 +1192,7 @@ pub fn getAllMoveMaskFromX(p_board: *const boardl.boardState, white: bool, X: e_
 
     const pBB = p_board.getPieceBB_t(.PAWN) & occ;
 
-    if (p_board.getPiece(@intFromEnum(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @intFromEnum(X) and isCapture) {
+    if (p_board.getPiece(@backingInt(X)) != .nEmptySquare or p_board.frame.enPassantIdx == @backingInt(X) and isCapture) {
         ret |= (_AllAttackPawnMask(destBB, !white) & pBB);
     }
     ret |= getKingAttacks(X) & (p_board.getPieceBB_t(.KING) & occ);
@@ -1235,8 +1233,8 @@ pub const algebraicTarget = struct {
         const white = state.whiteToMove();
         const promoPiece: e_piece = if (move.isPromotion()) (flagPromotionToPiece(move.getFlag(), white)) else (.nEmptySquare);
         const isCapture: bool = move.isCapture();
-        var potentialFromBB = getAllMoveMaskFromX(state, white, @enumFromInt(to), isCapture);
-        var ret: algebraicTarget = .{ .to = @enumFromInt(to), .isCapture = isCapture, .promoPiece = promoPiece, .checks = moveGenl.moveDeliverCheck(state, move, false) };
+        var potentialFromBB = getAllMoveMaskFromX(state, white, @fromBackingInt(@intCast(to)), isCapture);
+        var ret: algebraicTarget = .{ .to = @fromBackingInt(@intCast(to)), .isCapture = isCapture, .promoPiece = promoPiece, .checks = moveGenl.moveDeliverCheck(state, move, false) };
         if ((potentialFromBB & (potentialFromBB - 1) != 0 or (promoPiece == .nEmptySquare) or isCapture) and !isPawnPiece(fromPiece)) {
             // get piece
             const pieceBB = state.getPieceBB(fromPiece);
@@ -1387,7 +1385,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove
         const letter = moveStr[letterIdx];
         if (algebraicIsLetterPiece(letter)) {
             const piece = getPieceFromStr(letter);
-            potentialFromBB &= (p_state.b.pieceBB[@intFromEnum(e_pieceTo_e_pieceType(piece))]);
+            potentialFromBB &= (p_state.b.pieceBB[@backingInt(e_pieceTo_e_pieceType(piece))]);
         } else if (algebraicIsLetterFile(letter)) {
             const fileNbr: u8 = letter - 'a';
             potentialFromBB &= fileMaskFromFileN(fileNbr);
@@ -1407,7 +1405,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove
             _bb &= _bb - 1;
             const _fromBB = xToBitboard(_sq);
             if ((_fromBB & p_state.frame.pinnedBB) != 0) {
-                if (((inBetween(kingSq, toSq) | toBB) & ((inBetween(kingSq, @enumFromInt(_sq)) | _fromBB)) == 0)) {
+                if (((inBetween(kingSq, toSq) | toBB) & ((inBetween(kingSq, @fromBackingInt(@intCast(_sq))) | _fromBB)) == 0)) {
                     potentialFromBB ^= _fromBB;
                 }
             }
@@ -1430,7 +1428,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove
         }
     }
     const fromSq = bitscan(potentialFromBB);
-    var ret: IMove = movel.build_move(fromSq, @intFromEnum(toSq), 0);
+    var ret: IMove = movel.build_move(fromSq, @backingInt(toSq), 0);
 
     fillMoveFromState(p_state, &ret);
     if (utils.contains(moveStr, "=", .ignoreCase)) {
@@ -1443,7 +1441,7 @@ pub fn algebraicToIMove(p_state: *boardl.boardState, moveStr: []const u8) !IMove
         //};
         const prom = moveStr[@intCast(eqIdx + 1)];
         var flag = ret.getFlag();
-        flag |= @intFromEnum(letterPromoToFlag(prom));
+        flag |= @backingInt(letterPromoToFlag(prom));
 
         ret.setFlag(flag);
     }

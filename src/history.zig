@@ -23,7 +23,7 @@ pub const lmrBase: [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType = _initMov
 
 pub fn _initMoveOrdering() [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType {
     @setEvalBranchQuota(10_000_000);
-    var ret: [typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType = std.mem.zeroes([typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType);
+    var ret = std.mem.zeroes([typel.MAX_PLY][chessl.MAX_POSSIBLE_MOVE]scoreType);
     for (1..typel.MAX_PLY) |d| {
         for (0..chessl.MAX_POSSIBLE_MOVE) |i| {
             // patricia version
