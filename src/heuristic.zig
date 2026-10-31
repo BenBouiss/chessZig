@@ -26,7 +26,6 @@ const IMove = movel.IMove;
 const moveBBState = movel.moveBBState;
 const scoreType: type = typel.scoreType;
 pub const scoreVect: type = @Vector(2, scoreType);
-pub const psqtVect: type = @Vector(2, scoreType);
 const milliDepth = typel.milliDepth;
 
 const MG = typel.MG;
@@ -87,8 +86,8 @@ pub const heuristicComponents = struct {
 pub fn evaluate_debug(p_state: *const boardl.boardState) heuristicComponents {
     const allwhiteMoveBB = moveGenl._cst_moveGenBB_all(p_state, true);
     const allblackMoveBB = moveGenl._cst_moveGenBB_all(p_state, false);
-    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.WHITE)]);
-    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@intFromEnum(e_color.BLACK)]);
+    const whiteMoveBB = allwhiteMoveBB.andFn(~p_state.b.c_occupiedBB[@backingInt(e_color.WHITE)]);
+    const blackMoveBB = allblackMoveBB.andFn(~p_state.b.c_occupiedBB[@backingInt(e_color.BLACK)]);
 
     const phase: scoreType = p_state.getPhase();
 
@@ -124,7 +123,7 @@ pub fn evaluate_PSQT(p_state: *const boardl.boardState, _phase: scoreType) score
         const sq = chess.bitscan(_bb);
         _bb &= _bb - 1;
         const piece = p_state.getPiece(@intCast(sq));
-        const sV: psqtVect = getPieceInfos(piece, @enumFromInt(sq));
+        const sV: scoreVect = getPieceInfos(piece, @fromBackingInt(@intCast(sq)));
         score_mg += sV[0];
         score_eg += sV[1];
     }
@@ -400,30 +399,30 @@ pub fn updatePSQTOnMove(comptime white: bool, comptime isCapture: bool, move: IM
     var fromPiece = toPiece;
     const from = move.getFrom();
     const to = move.getTo();
-    var sV: psqtVect = getPieceInfos(fromPiece, @enumFromInt(to));
+    var sV: scoreVect = getPieceInfos(fromPiece, @fromBackingInt(@intCast(to)));
     if (isPromo) {
         fromPiece = if (comptime white) .nWhitePawn else .nBlackPawn;
     }
-    sV -= getPieceInfos(fromPiece, @enumFromInt(from));
+    sV -= getPieceInfos(fromPiece, @fromBackingInt(@intCast(from)));
 
     if (comptime !isCapture) {
         if (isCastle) {
             const toBis: u8 = if (comptime white) to else (chess.flipSq(to));
             if (move.isQueenSideCastle()) {
-                const prev: psqtVect = getPieceInfos_cst(.ROOK, toBis - 2);
-                const next: psqtVect = getPieceInfos_cst(.ROOK, toBis + 1);
+                const prev: scoreVect = getPieceInfos_cst(.ROOK, toBis - 2);
+                const next: scoreVect = getPieceInfos_cst(.ROOK, toBis + 1);
                 //sV = if (comptime white) (sV + next - prev) else (sV + prev - next);
                 sV = (sV + next - prev);
             } else {
-                const prev: psqtVect = getPieceInfos_cst(.ROOK, toBis + 1);
-                const next: psqtVect = getPieceInfos_cst(.ROOK, toBis - 1);
+                const prev: scoreVect = getPieceInfos_cst(.ROOK, toBis + 1);
+                const next: scoreVect = getPieceInfos_cst(.ROOK, toBis - 1);
                 sV = (sV + next - prev);
             }
         }
     } else {
         // is capture
-        const victimSq: typel.e_square = if (move.isEnpassant()) chess.enPassantVictimSq(from, to) else (@enumFromInt(to));
-        const victimScs: psqtVect = getPieceInfos(info.victim, victimSq);
+        const victimSq: typel.e_square = if (move.isEnpassant()) chess.enPassantVictimSq(from, to) else (@fromBackingInt(@intCast(to)));
+        const victimScs: scoreVect = getPieceInfos(info.victim, victimSq);
         sV -= victimScs;
     }
     return computeTapered(sV[0], sV[1], phase);
@@ -466,51 +465,51 @@ pub inline fn getPieceCountValues() [chess.N_PIECES]scoreType {
 }
 // other more complex values may be inserted below
 //pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) [2]typel.scoreType {
-pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) psqtVect {
+pub fn getPieceInfos(piece: e_piece, sq: typel.e_square) scoreVect {
     switch (piece) {
         .nEmptySquare, .nWhite, .nBlack => {
             //return .{ 0, 0 };
             return @splat(0);
         },
         .nWhitePawn => {
-            return getPieceInfos_cst(.PAWN, @intFromEnum(sq));
+            return getPieceInfos_cst(.PAWN, @backingInt(sq));
         },
         .nBlackPawn => {
-            return -getPieceInfos_cst(.PAWN, chess.flipSq(@intFromEnum(sq)));
+            return -getPieceInfos_cst(.PAWN, chess.flipSq(@backingInt(sq)));
         },
         .nWhiteBishop => {
-            return getPieceInfos_cst(.BISHOP, @intFromEnum(sq));
+            return getPieceInfos_cst(.BISHOP, @backingInt(sq));
         },
         .nBlackBishop => {
-            return -getPieceInfos_cst(.BISHOP, chess.flipSq(@intFromEnum(sq)));
+            return -getPieceInfos_cst(.BISHOP, chess.flipSq(@backingInt(sq)));
         },
         .nWhiteKnight => {
-            return getPieceInfos_cst(.KNIGHT, @intFromEnum(sq));
+            return getPieceInfos_cst(.KNIGHT, @backingInt(sq));
         },
         .nBlackKnight => {
-            return -getPieceInfos_cst(.KNIGHT, chess.flipSq(@intFromEnum(sq)));
+            return -getPieceInfos_cst(.KNIGHT, chess.flipSq(@backingInt(sq)));
         },
         .nWhiteRook => {
-            return getPieceInfos_cst(.ROOK, @intFromEnum(sq));
+            return getPieceInfos_cst(.ROOK, @backingInt(sq));
         },
         .nBlackRook => {
-            return -getPieceInfos_cst(.ROOK, chess.flipSq(@intFromEnum(sq)));
+            return -getPieceInfos_cst(.ROOK, chess.flipSq(@backingInt(sq)));
         },
         .nWhiteQueen => {
-            return getPieceInfos_cst(.QUEEN, @intFromEnum(sq));
+            return getPieceInfos_cst(.QUEEN, @backingInt(sq));
         },
         .nBlackQueen => {
-            return -getPieceInfos_cst(.QUEEN, chess.flipSq(@intFromEnum(sq)));
+            return -getPieceInfos_cst(.QUEEN, chess.flipSq(@backingInt(sq)));
         },
         .nWhiteKing => {
-            return getPieceInfos_cst(.KING, @intFromEnum(sq));
+            return getPieceInfos_cst(.KING, @backingInt(sq));
         },
         .nBlackKing => {
-            return -getPieceInfos_cst(.KING, chess.flipSq(@intFromEnum(sq)));
+            return -getPieceInfos_cst(.KING, chess.flipSq(@backingInt(sq)));
         },
     }
 }
-pub inline fn getPieceInfos_cst(comptime piece: e_pieceType, sq: u8) psqtVect {
+pub inline fn getPieceInfos_cst(comptime piece: e_pieceType, sq: u8) scoreVect {
     switch (piece) {
         .PAWN => {
             return .{ weightl.global_Pawn_PSQT[MG][sq], weightl.global_Pawn_PSQT[EG][sq] };
@@ -913,8 +912,8 @@ pub const coeffVector = struct {
     len: usize = 0,
 
     pub fn appendCoeff(p_self: *coeffVector, item: coeffs) void {
-        p_self.items[@intFromEnum(e_color.WHITE)].val[p_self.len] = item.wcoeff;
-        p_self.items[@intFromEnum(e_color.BLACK)].val[p_self.len] = item.bcoeff;
+        p_self.items[@backingInt(e_color.WHITE)].val[p_self.len] = item.wcoeff;
+        p_self.items[@backingInt(e_color.BLACK)].val[p_self.len] = item.bcoeff;
         p_self.len += 1;
     }
 
@@ -962,7 +961,7 @@ pub const csvBody = struct {
     pub fn format(self: csvBody, writer: *std.Io.Writer) !void {
         const tuple = self.entry.tuples;
         for (0..self.n_params) |i| {
-            const val = tuple.items[@intFromEnum(e_color.WHITE)].val[i] - tuple.items[@intFromEnum(e_color.BLACK)].val[i];
+            const val = tuple.items[@backingInt(e_color.WHITE)].val[i] - tuple.items[@backingInt(e_color.BLACK)].val[i];
             try writer.print("{d},", .{val});
         }
 
@@ -1071,7 +1070,7 @@ pub fn SEE(p_state: *const boardl.boardState, move: IMove) scoreType {
     }
     const to = move.getTo();
     const from = move.getFrom();
-    return _SEE_loop(p_state, @enumFromInt(to), @enumFromInt(from), p_state.whiteToMove());
+    return _SEE_loop(p_state, @fromBackingInt(@intCast(to)), @fromBackingInt(@intCast(from)), p_state.whiteToMove());
 }
 
 // source: https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
@@ -1098,8 +1097,8 @@ pub fn _SEE_loop(p_state: *const boardl.boardState, toSq: squarel.e_square, from
     var gain: [32]scoreType = undefined;
     var d: usize = 0;
 
-    const target = p_state.getPiece(@intFromEnum(toSq));
-    const aPiece = p_state.getPiece(@intFromEnum(fromSq));
+    const target = p_state.getPiece(@backingInt(toSq));
+    const aPiece = p_state.getPiece(@backingInt(fromSq));
     gain[d] = e_pieceToHeuristic(target);
     var turn = white;
     var _aPiece = aPiece;
@@ -1132,13 +1131,13 @@ pub fn SEE_threshold(p_state: *const boardl.boardState, move: IMove, threshold: 
 
     const to = move.getTo();
     const from = move.getFrom();
-    var gain: scoreType = SEE_values[@intFromEnum(p_state.getPiece(to))] - threshold;
+    var gain: scoreType = SEE_values[@backingInt(p_state.getPiece(to))] - threshold;
     if (gain < 0) return false;
 
-    gain -= SEE_values[@intFromEnum(p_state.getPiece(from))];
+    gain -= SEE_values[@backingInt(p_state.getPiece(from))];
     if (gain >= 0) return true;
 
-    const toSq: typel.e_square = @enumFromInt(to);
+    const toSq: typel.e_square = @fromBackingInt(@intCast(to));
     const horizPiece = (p_state.getPieceBB_t(.ROOK) | p_state.getPieceBB_t(.QUEEN));
 
     const diagPiece = (p_state.getPieceBB_t(.BISHOP) | p_state.getPieceBB_t(.QUEEN));
@@ -1161,7 +1160,7 @@ pub fn SEE_threshold(p_state: *const boardl.boardState, move: IMove, threshold: 
             if (p != 0) {
                 const pIdx = chess.bitscan(p);
                 occ ^= chess.xToBitboard(pIdx);
-                attType = @enumFromInt(i);
+                attType = @fromBackingInt(@intCast(i));
                 break;
             }
         }
@@ -1171,7 +1170,7 @@ pub fn SEE_threshold(p_state: *const boardl.boardState, move: IMove, threshold: 
         if (attType == .ROOK or attType == .QUEEN) {
             attadef |= chess.getRookAttacks(occ, toSq) & horizPiece;
         }
-        gain = -gain - SEE_values[@intFromEnum(attType)] - 1;
+        gain = -gain - SEE_values[@backingInt(attType)] - 1;
         if (gain >= 0) {
             return white == p_state.whiteToMove();
         }
@@ -1206,7 +1205,7 @@ pub fn lowestAttackDefPiece(p_state: *const boardl.boardState, attDef: u64, whit
         if (pieceH < retHeur) {
             retHeur = pieceH;
             ret.piece = piece;
-            ret.sq = @enumFromInt(targetSq);
+            ret.sq = @fromBackingInt(@intCast(targetSq));
         }
     }
     return ret;

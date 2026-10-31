@@ -76,14 +76,14 @@ pub const Hash_entry = struct {
     // age + bound
     val: u8 = 0,
     pub fn init(key: subKeyType, bestMove: movel.IMove, depth: u8, a: u8, node: nodeType, eval: i16, s: i16) Hash_entry {
-        const val: u8 = @as(u8, @intFromEnum(node)) | (a << AGE_SHIFT);
+        const val: u8 = @as(u8, @backingInt(node)) | (a << AGE_SHIFT);
         return .{ .key = key, .bestMove = bestMove, ._depth = depth, .val = val, .staticEval = eval, .searchScore = s };
     }
     pub inline fn valid(self: Hash_entry) bool {
         return self.nodeT() != .INVALID;
     }
     pub inline fn nodeT(self: Hash_entry) nodeType {
-        return @enumFromInt(self.val & NODETYPE_mask);
+        return @fromBackingInt(@intCast(self.val & NODETYPE_mask));
     }
     pub inline fn age(self: Hash_entry) u8 {
         return self.val >> AGE_SHIFT;
@@ -462,12 +462,12 @@ pub fn fullComputeZobristKeys(p_board: *const boardl.boardState) keySet {
         const piece = p_board.getPiece(@intCast(i));
         const color = chess.e_colorFromPiece(piece);
         if (piece != .nEmptySquare) {
-            ret.key ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i];
+            ret.key ^= zobristKeys.pieceKeys[@backingInt(piece)][i];
 
-            ret.nonPawnKey[@intFromEnum(color)] ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i];
+            ret.nonPawnKey[@backingInt(color)] ^= zobristKeys.pieceKeys[@backingInt(piece)][i];
         }
         if (chess.isPawnPiece(piece)) {
-            ret.pawnKey ^= zobristKeys.pieceKeys[@intFromEnum(piece)][i];
+            ret.pawnKey ^= zobristKeys.pieceKeys[@backingInt(piece)][i];
         }
     }
     ret.key ^= zobristKeys.castlingKeys[p_board.frame.stat.castlingKey()];

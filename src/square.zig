@@ -14,7 +14,7 @@ pub const squareInfo = struct {
         std.debug.print("{} ", .{self.sq});
     }
     pub inline fn getBB(self: squareInfo) u64 {
-        return chess.ONE << @intCast(@intFromEnum(self.sq));
+        return chess.ONE << @intCast(@backingInt(self.sq));
     }
     pub inline fn getFileBB(self: squareInfo) u64 {
         return chess.fileMaskFromFileN(@intCast(self.file));

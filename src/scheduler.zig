@@ -131,20 +131,17 @@ pub fn dispatchUciGoCmd(p_engine: *enginel.engine, config: enginel.goArgStruct) 
     if (p_engine.state.whiteToMove()) {
         pack.time.timeMs = config.wtime;
         pack.time.incMs = config.winc;
-        pack.time.softNodeLim = config.nodes;
-        pack.time.criticalNodeLim = config.nodes;
     } else {
         pack.time.timeMs = config.btime;
         pack.time.incMs = config.binc;
-        pack.time.softNodeLim = config.nodes;
-        pack.time.criticalNodeLim = config.nodes;
     }
+    pack.time.softNodeLim = config.nodes;
+    pack.time.criticalNodeLim = config.nodes;
     p_engine.scheduler._threadPool.submit(pack) catch {
         p_engine.respond("engineOp threadPoolSubmit failed crashing");
         _ = p_engine.executeQuitProcedure();
         @panic(":)");
     };
-
     return true;
 }
 pub fn startSearch(p_state: *boardl.boardState, features: searchFeatures, maxDepth: depthT, t: timeInfo, tt: *Hash_table) result {
@@ -209,16 +206,13 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
     var validDecision: IMove = p_info.currentBest.move;
     var samePrevBestMove: scoreType = 0;
     var prevBest: IMove = .{};
-    var innerLoopRep: usize = 0;
 
     while (p_info.alive and canExtendSearch(tm, depth, maxDepth, score, &features, p_info.searchStat.n_nodeExplored)) {
         depth += 1;
         var _depth = depth;
         score = alphaBetal.searchEntrypoint(p_state, p_info, _depth, &ss, alpha, beta, threadD, tt);
-        innerLoopRep = 0;
 
         while (p_info.alive and (score <= alpha or score >= beta)) {
-            innerLoopRep += 1;
             if (score <= alpha) {
                 beta = @divFloor(alpha + beta, 2);
                 alpha -= delta;
@@ -252,7 +246,7 @@ pub fn aspirationWindow(tm: *timeManager, p_state: *boardl.boardState, p_info: *
         tm.softTimeLimit = @intFromFloat(@as(f64, @floatFromInt(tm.originalSoftTimeLim)) * lim);
 
         if (features.reportProgress and !features.dataGen) {
-            sendPartial(p_info, tm.timeSinceStartMs(), depth, innerLoopRep);
+            sendPartial(p_info, tm.timeSinceStartMs(), depth);
         }
         if (depth > weightl.aspirationMinDepthVar) {
             //alpha = score - delta;
@@ -279,12 +273,12 @@ pub fn canExtendSearch(timer: *const timeManager, depth: depthT, maxDepth: depth
     return timer.timeSinceStartMs() < timer.softTimeLimit;
 }
 
-pub fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64, depth: depthT, innerLoop: usize) void {
-    var msgBuffer: [2 * configl.MAX_USER_INPUT]u8 = undefined;
+pub fn sendPartial(p_info: *const threadingl.threadInfo, timeSinceStartMs: i64, depth: depthT) void {
+    var msgBuffer: [configl.MAX_USER_INPUT]u8 = undefined;
     const nNodes: i64 = @intCast(p_info.searchStat.n_nodeExplored);
     const nps = @divFloor(nNodes * 1000, (1 + timeSinceStartMs));
 
-    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} loop {d} score cp {d} nodes {d} nps {d} currmove {s} pv {f}\n", .{ depth, p_info.seldepth, innerLoop, p_info.currentBest.score, nNodes, nps, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch {
+    const final_info = std.fmt.bufPrint(&msgBuffer, "info depth {d} seldepth {d} score cp {d} nodes {d} nps {d} currmove {s} pv {f}\n", .{ depth, p_info.seldepth, p_info.currentBest.score, nNodes, nps, utilsl.trimStr(&p_info.currentBest.move.getStr()), p_info.currentBest.line }) catch {
         @panic("hehehehe");
     };
     respondNoEng(utilsl.trimStr(final_info)) catch unreachable;

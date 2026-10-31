@@ -113,23 +113,23 @@ pub const accumulatorPairStack = struct {
 // 64 * P + sq
 
 pub inline fn networkIndex(piece: typel.e_pieceType, color: e_color, sq: typel.e_square) usize {
-    return @as(usize, @intFromEnum(color)) * 64 * 6 + @as(usize, @intFromEnum(piece)) * 64 + @as(usize, @intFromEnum(sq));
+    return @as(usize, @backingInt(color)) * 64 * 6 + @as(usize, @backingInt(piece)) * 64 + @as(usize, @backingInt(sq));
 }
 
 pub inline fn networkIndexPair(piece: typel.e_pieceType, sq: typel.e_square, side: e_color) [2]usize {
-    return [2]usize{ networkIndex(piece, side, sq), networkIndex(piece, @enumFromInt(1 - @intFromEnum(side)), @enumFromInt(chessl.flipSq(@intFromEnum(sq)))) };
+    return [2]usize{ networkIndex(piece, side, sq), networkIndex(piece, @fromBackingInt(@intCast(1 - @backingInt(side))), @fromBackingInt(@intCast(chessl.flipSq(@backingInt(sq))))) };
 }
 pub fn quiet_Add_Sub(next: *accumulatorPair, prev: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color) void {
     const sub = networkIndexPair(fromP, fromSq, side);
     const add = networkIndexPair(toP, toSq, side);
 
     next.w = (@as(@Vector(HL_SIZE, i16), prev.w) +
-        nnueNet.accWeights[add[@intFromEnum(e_color.WHITE)]] -
-        nnueNet.accWeights[sub[@intFromEnum(e_color.WHITE)]]);
+        nnueNet.accWeights[add[@backingInt(e_color.WHITE)]] -
+        nnueNet.accWeights[sub[@backingInt(e_color.WHITE)]]);
 
     next.b = (@as(@Vector(HL_SIZE, i16), prev.b) +
-        nnueNet.accWeights[add[@intFromEnum(e_color.BLACK)]] -
-        nnueNet.accWeights[sub[@intFromEnum(e_color.BLACK)]]);
+        nnueNet.accWeights[add[@backingInt(e_color.BLACK)]] -
+        nnueNet.accWeights[sub[@backingInt(e_color.BLACK)]]);
 }
 pub fn castling_Add_Add_Sub_Sub(next: *accumulatorPair, prev: *accumulatorPair, side: e_color, info: boardl.castleS) void {
     const kSub = networkIndexPair(.KING, info.kingFrom, side);
@@ -139,16 +139,16 @@ pub fn castling_Add_Add_Sub_Sub(next: *accumulatorPair, prev: *accumulatorPair, 
     const rAdd = networkIndexPair(.ROOK, info.rookTo, side);
 
     next.w = (@as(@Vector(HL_SIZE, i16), prev.w) +
-        nnueNet.accWeights[kAdd[@intFromEnum(e_color.WHITE)]] +
-        nnueNet.accWeights[rAdd[@intFromEnum(e_color.WHITE)]] -
-        nnueNet.accWeights[kSub[@intFromEnum(e_color.WHITE)]] -
-        nnueNet.accWeights[rSub[@intFromEnum(e_color.WHITE)]]);
+        nnueNet.accWeights[kAdd[@backingInt(e_color.WHITE)]] +
+        nnueNet.accWeights[rAdd[@backingInt(e_color.WHITE)]] -
+        nnueNet.accWeights[kSub[@backingInt(e_color.WHITE)]] -
+        nnueNet.accWeights[rSub[@backingInt(e_color.WHITE)]]);
 
     next.b = (@as(@Vector(HL_SIZE, i16), prev.b) +
-        nnueNet.accWeights[kAdd[@intFromEnum(e_color.BLACK)]] +
-        nnueNet.accWeights[rAdd[@intFromEnum(e_color.BLACK)]] -
-        nnueNet.accWeights[kSub[@intFromEnum(e_color.BLACK)]] -
-        nnueNet.accWeights[rSub[@intFromEnum(e_color.BLACK)]]);
+        nnueNet.accWeights[kAdd[@backingInt(e_color.BLACK)]] +
+        nnueNet.accWeights[rAdd[@backingInt(e_color.BLACK)]] -
+        nnueNet.accWeights[kSub[@backingInt(e_color.BLACK)]] -
+        nnueNet.accWeights[rSub[@backingInt(e_color.BLACK)]]);
 }
 pub fn capture_Add_Sub_Sub(next: *accumulatorPair, prev: *accumulatorPair, fromP: typel.e_pieceType, toP: typel.e_pieceType, fromSq: typel.e_square, toSq: typel.e_square, side: e_color, cPiece: typel.e_pieceType, captureSq: typel.e_square) void {
     const sub = networkIndexPair(fromP, fromSq, side);
@@ -156,14 +156,14 @@ pub fn capture_Add_Sub_Sub(next: *accumulatorPair, prev: *accumulatorPair, fromP
     const victimSub = networkIndexPair(cPiece, captureSq, chessl.invert_e_color(side));
 
     next.w = (@as(@Vector(HL_SIZE, i16), prev.w) +
-        nnueNet.accWeights[add[@intFromEnum(e_color.WHITE)]] -
-        nnueNet.accWeights[sub[@intFromEnum(e_color.WHITE)]] -
-        nnueNet.accWeights[victimSub[@intFromEnum(e_color.WHITE)]]);
+        nnueNet.accWeights[add[@backingInt(e_color.WHITE)]] -
+        nnueNet.accWeights[sub[@backingInt(e_color.WHITE)]] -
+        nnueNet.accWeights[victimSub[@backingInt(e_color.WHITE)]]);
 
     next.b = (@as(@Vector(HL_SIZE, i16), prev.b) +
-        nnueNet.accWeights[add[@intFromEnum(e_color.BLACK)]] -
-        nnueNet.accWeights[sub[@intFromEnum(e_color.BLACK)]] -
-        nnueNet.accWeights[victimSub[@intFromEnum(e_color.BLACK)]]);
+        nnueNet.accWeights[add[@backingInt(e_color.BLACK)]] -
+        nnueNet.accWeights[sub[@backingInt(e_color.BLACK)]] -
+        nnueNet.accWeights[victimSub[@backingInt(e_color.BLACK)]]);
 }
 
 // easier to vectorize compared to below
@@ -254,9 +254,9 @@ pub fn computeAccPair(net: *const network, board: *const boardl.boardState) accu
         if (p == .nEmptySquare) {
             continue;
         }
-        const add = networkIndexPair(chessl.e_pieceTo_e_pieceType(p), @enumFromInt(sq), chessl.e_colorFromPiece(p));
-        ret.w = @as(@Vector(HL_SIZE, i16), ret.w) + net.accWeights[add[@intFromEnum(e_color.WHITE)]];
-        ret.b = @as(@Vector(HL_SIZE, i16), ret.b) + net.accWeights[add[@intFromEnum(e_color.BLACK)]];
+        const add = networkIndexPair(chessl.e_pieceTo_e_pieceType(p), @fromBackingInt(@intCast(sq)), chessl.e_colorFromPiece(p));
+        ret.w = @as(@Vector(HL_SIZE, i16), ret.w) + net.accWeights[add[@backingInt(e_color.WHITE)]];
+        ret.b = @as(@Vector(HL_SIZE, i16), ret.b) + net.accWeights[add[@backingInt(e_color.BLACK)]];
         //for (0..HL_SIZE) |i| {
         //    ret.w[i] += addW[i];
         //    ret.b[i] += addB[i];
@@ -281,13 +281,13 @@ pub fn updateNnueOnMove(p_state: *boardl.boardState, move: movel.IMove, stack: *
     }
     if (isCapture) {
         // is capture
-        const victimSq: typel.e_square = if (move.isEnpassant()) chessl.enPassantVictimSq(from, to) else (@enumFromInt(to));
-        capture_Add_Sub_Sub(stack.getNext(), stack.getCurrent(), fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c, chessl.e_pieceTo_e_pieceType(p_state.frame.victim), victimSq);
+        const victimSq: typel.e_square = if (move.isEnpassant()) chessl.enPassantVictimSq(from, to) else (@fromBackingInt(@intCast(to)));
+        capture_Add_Sub_Sub(stack.getNext(), stack.getCurrent(), fromPiece, _toPiece, @fromBackingInt(@intCast(from)), @fromBackingInt(@intCast(to)), c, chessl.e_pieceTo_e_pieceType(p_state.frame.victim), victimSq);
     } else {
         if (isCastle) {
             castling_Add_Add_Sub_Sub(stack.getNext(), stack.getCurrent(), c, .init(white, move.isKingSideCastle()));
         } else {
-            quiet_Add_Sub(stack.getNext(), stack.getCurrent(), fromPiece, _toPiece, @enumFromInt(from), @enumFromInt(to), c);
+            quiet_Add_Sub(stack.getNext(), stack.getCurrent(), fromPiece, _toPiece, @fromBackingInt(@intCast(from)), @fromBackingInt(@intCast(to)), c);
         }
     }
     stack.len += 1;

@@ -21,7 +21,7 @@ const depthT = typel.depthT;
 const MOVE_STR_MAX_LENGTH = 5;
 
 pub inline fn e_build_move(from: e_square, to: e_square, flag: e_moveFlags) IMove {
-    return .{ .m_move = (@as(u16, @intFromEnum(flag)) << 12) | (@as(u16, @intFromEnum(to)) << 6) | (@as(u16, @intFromEnum(from))) };
+    return .{ .m_move = (@as(u16, @backingInt(flag)) << 12) | (@as(u16, @backingInt(to)) << 6) | (@as(u16, @backingInt(from))) };
 }
 pub inline fn build_move(from: u8, to: u8, flag: u8) IMove {
     return .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
@@ -48,10 +48,10 @@ pub const moveInfo = struct {
     }
 
     pub inline fn isPromotion(self: moveInfo) bool {
-        return (@intFromEnum(self.flag) >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
+        return (@backingInt(self.flag) >= @backingInt(e_moveFlags.KNIGHTPROMO));
     }
     pub inline fn isCapture(self: moveInfo) bool {
-        return (@intFromEnum(self.flag) & @intFromEnum(e_moveFlags.CAPTURE) != 0);
+        return (@backingInt(self.flag) & @backingInt(e_moveFlags.CAPTURE) != 0);
     }
 };
 pub const IMove = extern struct {
@@ -99,7 +99,7 @@ pub const IMove = extern struct {
         return @intCast((self.m_move & (0xF000)) >> 12);
     }
     pub inline fn isCapture(self: IMove) bool {
-        return (self.getFlag() & @intFromEnum(e_moveFlags.CAPTURE) != 0);
+        return (self.getFlag() & @backingInt(e_moveFlags.CAPTURE) != 0);
     }
 
     pub inline fn isQuietMove(self: IMove) bool {
@@ -107,23 +107,23 @@ pub const IMove = extern struct {
     }
 
     pub inline fn isPromotion(self: IMove) bool {
-        return (self.getFlag() >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
+        return (self.getFlag() >= @backingInt(e_moveFlags.KNIGHTPROMO));
     }
     pub inline fn isKingSideCastle(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.KINGCASTLE));
+        return (self.getFlag() == @backingInt(e_moveFlags.KINGCASTLE));
     }
     pub inline fn isQueenSideCastle(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.QUEENCASTLE));
+        return (self.getFlag() == @backingInt(e_moveFlags.QUEENCASTLE));
     }
     pub inline fn isCastle(self: IMove) bool {
         const flag = self.getFlag();
-        return (flag == @intFromEnum(e_moveFlags.KINGCASTLE)) or (flag == @intFromEnum(e_moveFlags.QUEENCASTLE));
+        return (flag == @backingInt(e_moveFlags.KINGCASTLE)) or (flag == @backingInt(e_moveFlags.QUEENCASTLE));
     }
     pub inline fn isEnpassant(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.ENPASSANT));
+        return (self.getFlag() == @backingInt(e_moveFlags.ENPASSANT));
     }
     pub inline fn isDoublePush(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.DOUBLEPAWN));
+        return (self.getFlag() == @backingInt(e_moveFlags.DOUBLEPAWN));
     }
     pub inline fn isValid(self: IMove) bool {
         return (self.m_move != 0);
@@ -133,8 +133,8 @@ pub const IMove = extern struct {
     }
     pub fn getStr(self: IMove) [5]u8 {
         var strM: [5]u8 = undefined;
-        const r1 = chess.strFromLERF(@enumFromInt(self.getFrom()));
-        const r2 = chess.strFromLERF(@enumFromInt(self.getTo()));
+        const r1 = chess.strFromLERF(@fromBackingInt(@intCast(self.getFrom())));
+        const r2 = chess.strFromLERF(@fromBackingInt(@intCast(self.getTo())));
         strM[0] = r1[0];
         strM[1] = r1[1];
         strM[2] = r2[0];

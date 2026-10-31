@@ -199,21 +199,21 @@ const matchResultContainer = struct {
         var engRes = &p_self.items[match.p.engineUsed];
         switch (match.res) {
             .WIN => {
-                engRes.res[@intFromEnum(match.p.color)].win += 1;
+                engRes.res[@backingInt(match.p.color)].win += 1;
             },
             .LOSE => {
-                engRes.res[@intFromEnum(match.p.color)].lose += 1;
+                engRes.res[@backingInt(match.p.color)].lose += 1;
             },
             .DRAW => {
-                engRes.res[@intFromEnum(match.p.color)].draw += 1;
+                engRes.res[@backingInt(match.p.color)].draw += 1;
             },
             .FLAGGED_D => {
-                engRes.res[@intFromEnum(match.p.color)].draw += 1;
-                engRes.res[@intFromEnum(match.p.color)].flagged += 1;
+                engRes.res[@backingInt(match.p.color)].draw += 1;
+                engRes.res[@backingInt(match.p.color)].flagged += 1;
             },
             .FLAGGED_L => {
-                engRes.res[@intFromEnum(match.p.color)].lose += 1;
-                engRes.res[@intFromEnum(match.p.color)].flagged += 1;
+                engRes.res[@backingInt(match.p.color)].lose += 1;
+                engRes.res[@backingInt(match.p.color)].flagged += 1;
             },
             .ERROR => {
                 @panic("");
@@ -451,15 +451,15 @@ const engine_Inventory = struct {
 const matchPlayers = struct {
     inv: [chessl.NUMBER_PLAYER]player = @splat(.{}),
     pub inline fn getPlayerC(self: *matchPlayers, c: e_color) *player {
-        return &self.inv[@intFromEnum(c)];
+        return &self.inv[@backingInt(c)];
     }
     pub inline fn getPlayerWhite(self: *matchPlayers, w: bool) *player {
         return &self.inv[chessl.whiteBoolToInt(w)];
     }
     pub inline fn makeScoreArr(self: *const matchPlayers) [2]matchResult {
         return [2]matchResult{
-            .{ .p = self.inv[@intFromEnum(e_color.WHITE)] },
-            .{ .p = self.inv[@intFromEnum(e_color.BLACK)] },
+            .{ .p = self.inv[@backingInt(e_color.WHITE)] },
+            .{ .p = self.inv[@backingInt(e_color.BLACK)] },
         };
     }
 };
@@ -1104,8 +1104,8 @@ const poolCtx = struct {
 
         var engResults: [2]matchResult = m.players.makeScoreArr();
         const w = m.chessState.whiteToMove();
-        const stm: usize = @intFromEnum(chessl.boolTo_e_color(w));
-        const stnm: usize = @intFromEnum(chessl.boolTo_e_color(!w));
+        const stm: usize = @backingInt(chessl.boolTo_e_color(w));
+        const stnm: usize = @backingInt(chessl.boolTo_e_color(!w));
         switch (m.status) {
             .Continue, .Error, .Dnf => {
                 std.debug.print("err match {d} {}\n", .{ matchId, m.status });
@@ -1229,7 +1229,7 @@ const matchStruct = struct {
         return self.chessState.whiteToMove();
     }
     pub inline fn engineToMove(self: *const matchStruct, engines: *engine_Inventory) *engine_info {
-        const p = self.players.inv[@intFromEnum(self.sideToMove())];
+        const p = self.players.inv[@backingInt(self.sideToMove())];
         return engines.items.items[p.engineUsed];
     }
     pub inline fn playerToMove(self: *matchStruct) *player {

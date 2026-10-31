@@ -181,10 +181,10 @@ pub fn rotate180(bb: u64) u64 {
 }
 
 pub inline fn popcount(bb: u64) u8 {
-    return @as(u8, @intCast(@popCount(bb)));
+    return @popCount(bb);
 }
 pub inline fn popcount_t(bb: u64, comptime T: type) T {
-    return @as(T, @intCast(@popCount(bb)));
+    return @as(T, @popCount(bb));
 }
 //pub inline fn bitscan(bb: u64) u8 {
 //    // assumes bb is non empty
@@ -193,7 +193,7 @@ pub inline fn popcount_t(bb: u64, comptime T: type) T {
 //    return @intCast(ret);
 //}
 pub inline fn bitscan(bb: u64) u8 {
-    return @intCast(@ctz(bb));
+    return @ctz(bb);
 }
 
 pub inline fn r_bitscan(bb: u64) u8 {
@@ -292,7 +292,7 @@ pub fn getBoardFromFen_pieces(fen: []const u8) debug_err!boardl.boardState {
         }
         const tmp_enum = getPieceFromStr(letter);
 
-        if (!ret.placePiece(tmp_enum, @fromBackingInt(@intCast(board_offset)))) {
+        if (!ret.placePiece(tmp_enum, @fromBackingInt(board_offset))) {
             std.debug.print("[DEBUG] getBoardFromFen_pieces: Fen problem with piece placement {s}\n", .{fen});
             print_board(&ret);
         }
@@ -945,7 +945,7 @@ pub fn kingPawnTropism(pawn: u64, sqKing: squareInfo) i32 {
     }
     var bb = pawn;
     var ret: i32 = 7;
-    while (bb != 0) {
+    while (bb != 0 and ret != 1) {
         const sq = bitscan(bb);
         bb &= bb - 1;
         const rank: i8 = @intCast(getSqIdxRank(sq));

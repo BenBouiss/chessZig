@@ -38,33 +38,33 @@ pub fn _initMagic() void {
 }
 pub fn initRookMoves() void {
     for (0..chess.N_SQUARES) |sq| {
-        rookGenerateMoves(@enumFromInt(sq), .{ .magic = ROOK_MAGIC_KEYS[sq], .mask = ROOK_MAGIC_MASK[sq] }, &rookMoves[sq]);
+        rookGenerateMoves(@fromBackingInt(@intCast(sq)), .{ .magic = ROOK_MAGIC_KEYS[sq], .mask = ROOK_MAGIC_MASK[sq] }, &rookMoves[sq]);
     }
 }
 pub fn initBishopMoves() void {
     for (0..chess.N_SQUARES) |sq| {
-        bishopGenerateMoves(@enumFromInt(sq), .{ .magic = BISHOP_MAGIC_KEYS[sq], .mask = BISHOP_MAGIC_MASK[sq] }, &bishopMoves[sq]);
+        bishopGenerateMoves(@fromBackingInt(@intCast(sq)), .{ .magic = BISHOP_MAGIC_KEYS[sq], .mask = BISHOP_MAGIC_MASK[sq] }, &bishopMoves[sq]);
     }
 }
 
 pub fn bishopGenerateMoves(sq: squarel.e_square, magic: magic_entry, p_out: *[BISHOP_MOVE_SIZE]u64) void {
     var b: [BISHOP_MOVE_SIZE]u64 = undefined;
-    const mask = bmask(@intFromEnum(sq));
+    const mask = bmask(@backingInt(sq));
     const n = chess.popcount(mask);
     for (0..BISHOP_MOVE_SIZE) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
         const j = bishopMagicIndex(magic, b[i]);
-        p_out[j] = batt(@intFromEnum(sq), b[i]);
+        p_out[j] = batt(@backingInt(sq), b[i]);
     }
 }
 pub fn rookGenerateMoves(sq: squarel.e_square, magic: magic_entry, p_out: *[ROOK_MOVE_SIZE]u64) void {
     var b: [ROOK_MOVE_SIZE]u64 = undefined;
-    const mask = rmask(@intFromEnum(sq));
+    const mask = rmask(@backingInt(sq));
     const n = chess.popcount(mask);
     for (0..ROOK_MOVE_SIZE) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
         const j = rookMagicIndex(magic, b[i]);
-        p_out[j] = ratt(@intFromEnum(sq), b[i]);
+        p_out[j] = ratt(@backingInt(sq), b[i]);
     }
 }
 
@@ -80,9 +80,9 @@ pub fn bishopMagicIndex(entry: magic_entry, blockers: u64) u64 {
 }
 
 pub fn getRookMoves(sq: squarel.e_square, blockers: u64) u64 {
-    const _blockers = blockers & ROOK_MAGIC_MASK[@intFromEnum(sq)];
-    const hash = (_blockers *% ROOK_MAGIC_KEYS[@intFromEnum(sq)]) >> 52;
-    return rookMoves[@intFromEnum(sq)][hash];
+    const _blockers = blockers & ROOK_MAGIC_MASK[@backingInt(sq)];
+    const hash = (_blockers *% ROOK_MAGIC_KEYS[@backingInt(sq)]) >> 52;
+    return rookMoves[@backingInt(sq)][hash];
 }
 
 pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
@@ -90,9 +90,9 @@ pub fn getBishopMoves(sq: squarel.e_square, blockers: u64) u64 {
     // prev: p_magicTable.bishopMoves[@intFromEnum(sq)][(hash >> @intCast(64 - BISHOP_FIXED_BIT))]; or something similar
     // from: Compiler explorer
 
-    const _blockers = blockers & BISHOP_MAGIC_MASK[@intFromEnum(sq)];
-    const hash = (_blockers *% BISHOP_MAGIC_KEYS[@intFromEnum(sq)]) >> 55;
-    return bishopMoves[@intFromEnum(sq)][hash];
+    const _blockers = blockers & BISHOP_MAGIC_MASK[@backingInt(sq)];
+    const hash = (_blockers *% BISHOP_MAGIC_KEYS[@backingInt(sq)]) >> 55;
+    return bishopMoves[@backingInt(sq)][hash];
 }
 
 pub fn randomU64() u64 {
@@ -276,11 +276,11 @@ pub fn bishop_find_magic(sq: squarel.e_square) !magic_entry {
     var magic: u64 = undefined;
     var j: i32 = 0;
 
-    mask = bmask(@intFromEnum(sq));
+    mask = bmask(@backingInt(sq));
     const n = chess.popcount(mask);
     for (0..(chess.ONE << @intCast(n))) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
-        a[i] = batt(@intFromEnum(sq), b[i]);
+        a[i] = batt(@backingInt(sq), b[i]);
     }
     for (0..100000000) |_| {
         magic = getRandMagicFewBits();
@@ -317,11 +317,11 @@ pub fn rook_find_magic(sq: squarel.e_square) !magic_entry {
     var magic: u64 = undefined;
     var j: i32 = 0;
 
-    mask = rmask(@intFromEnum(sq));
+    mask = rmask(@backingInt(sq));
     const n = chess.popcount(mask);
     for (0..(chess.ONE << @intCast(n))) |i| {
         b[i] = index_to_uint64(@intCast(i), @intCast(n), mask);
-        a[i] = ratt(@intFromEnum(sq), b[i]);
+        a[i] = ratt(@backingInt(sq), b[i]);
     }
     for (0..100000000) |_| {
         magic = getRandMagicFewBits();
@@ -354,7 +354,7 @@ pub fn rook_find_magic(sq: squarel.e_square) !magic_entry {
 pub fn main() void {
     std.debug.print("const uint64 RMagic[64] = \n", .{});
     for (0..64) |sq| {
-        const magic = rook_find_magic(@enumFromInt(sq)) catch |err| {
+        const magic = rook_find_magic(@fromBackingInt(@intCast(sq))) catch |err| {
             std.debug.print("Err: {} no magic key found\n", .{err});
             @panic("");
         };
@@ -364,7 +364,7 @@ pub fn main() void {
 
     std.debug.print("const uint64 BMagic[64] = \n", .{});
     for (0..64) |sq| {
-        const magic = bishop_find_magic(@enumFromInt(sq)) catch |err| {
+        const magic = bishop_find_magic(@fromBackingInt(@intCast(sq))) catch |err| {
             std.debug.print("Err: {} no magic key found\n", .{err});
             @panic("");
         };
