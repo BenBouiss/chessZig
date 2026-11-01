@@ -5,25 +5,7 @@ const debug_err = error{ERR_INPUT};
 pub const strTokens = enum(u8) { standardToken, ignoreCase };
 
 pub fn clear() void {
-    //std.debug.print("Clearing screen \n", .{});
     std.debug.print("\x1B[2J\x1B[H", .{});
-}
-
-pub fn absolute(x: i8) i8 {
-    return std.math.sign(x) * x;
-}
-
-pub fn max(x: i8, y: i8) i8 {
-    if (x < y) {
-        return y;
-    }
-    return x;
-}
-pub fn min(comptime T: type, x: T, y: T) T {
-    if (x < y) {
-        return x;
-    }
-    return y;
 }
 
 pub fn cutArrayListEvenly(comptime T: type, alloc: std.mem.Allocator, arr: std.ArrayList(T), size: usize) !std.ArrayList(std.ArrayList(T)) {
@@ -72,6 +54,29 @@ pub fn lowerLetter(letter: u8) u8 {
     }
     return letter;
 }
+pub fn upperLetter(letter: u8) u8 {
+    if ((letter >= 97) and (letter <= 122)) {
+        return letter - 32;
+    }
+    return letter;
+}
+pub fn startsWith(a: []const u8, b: []const u8, comptime token: strTokens) bool {
+    if (b.len > a.len) {
+        return false;
+    }
+    for (0..b.len) |i| {
+        if (comptime token == .standardToken) {
+            if (a[i] != b[i]) {
+                return false;
+            }
+        } else if (comptime token == .ignoreCase) {
+            if (lowerLetter(a[i]) != lowerLetter(b[i])) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 pub fn contains(a: []const u8, b: []const u8, comptime token: strTokens) bool {
     // checks if the string b is present in a
@@ -110,6 +115,8 @@ pub fn find(comptime T: type, a: []const T, e: T) i32 {
     }
     return -1;
 }
+
+////// find multiple
 pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
     if (e.len > a.len) {
         return -1;
@@ -121,7 +128,6 @@ pub fn findM(comptime T: type, a: []const T, e: []const T) i32 {
         if (count == e.len) {
             return ret;
         }
-
         if (a_e == e[@intCast(count)]) {
             if (count == 0) {
                 ret = @intCast(i);
@@ -145,6 +151,49 @@ pub fn splitGenerator(comptime T: type) type {
 
         pub fn init(a: []const T, sep: T) splitGenerator(T) {
             return .{ .sep = sep, .slice = a, .idx = 0 };
+        }
+        pub fn get(p_self: *self, idx: usize) ?[]const T {
+            const base = p_self.idx;
+            defer {
+                p_self.idx = base;
+            }
+            var id: usize = 0;
+            var ret = p_self.next();
+            while (id != idx) {
+                if (ret == null) {
+                    return null;
+                }
+                ret = p_self.next();
+                id += 1;
+            }
+            return ret;
+        }
+        pub fn get_t(p_self: *self, idx: usize, comptime o: type) ?o {
+            const text = p_self.get(idx) orelse return null;
+            switch (@typeInfo(o)) {
+                .int => {
+                    return std.fmt.parseInt(o, stripStr(text), 10) catch {
+                        return null;
+                    };
+                },
+                .float => {
+                    return std.fmt.parseFloat(o, stripStr(text)) catch {
+                        return null;
+                    };
+                },
+                else => {
+                    return null;
+                },
+            }
+        }
+
+        pub fn reset(p_self: *self) void {
+            p_self.idx = 0;
+        }
+        pub inline fn rewind(p_self: *self) void {
+            if (p_self.idx > 0) {
+                p_self.idx -= 1;
+            }
         }
         pub fn len(p_self: *self) usize {
             var ret: usize = 0;
@@ -184,44 +233,7 @@ pub fn splitGenerator(comptime T: type) type {
         }
     };
 }
-//pub fn linkedListNode(comptime T: type) type {
-//    return struct {
-//        val: T,
-//        next: ?*linkedListNode,
-//    };
-//}
-//
-//pub fn linkedList(comptime T: type) type {
-//    return struct {
-//        head: ?linkedListNode(T),
-//        len: usize = 0,
-//        const self = @This();
-//        pub fn init(alloc: std.mem.Allocator) !void {
-//            _ = alloc;
-//            return;
-//        }
-//        pub fn gotoLast(p_self: *self) ?linkedListNode(T) {
-//            var node = p_self.head;
-//            while (node.next) |new| {
-//                node = new;
-//            }
-//            return node;
-//        }
-//        pub fn push(p_self: *self, alloc: std.mem.Allocator, item: T) !void {
-//            var node = p_self.head;
-//            if (p_self.len != 0) {
-//                node = p_self.gotoLast();
-//            }
-//            var next = try alloc.create(linkedListNode(T));
-//            next.val = item;
-//            node.next = next;
-//            p_self.len += 1;
-//        }
-//        pub fn pop(p_self: *self, alloc: std.mem.Allocator) T {
-//            //
-//        }
-//    };
-//}
+
 pub fn split(comptime T: type, alloc: std.mem.Allocator, a: []const T, e: T) !std.ArrayList([]const T) {
     var ret = try std.ArrayList([]const T).initCapacity(alloc, 4);
     if (a.len == 0) {
@@ -254,14 +266,14 @@ pub fn trimStr(str: []const u8) []const u8 {
     return str;
 }
 pub fn stripStr(str: []const u8) []const u8 {
-    // removes empty spaces at the start / end of the string
+    // removes empty spaces and tabs at the start / end of the string
     if (str.len == 0) {
         return str;
     }
     var firstIndex: usize = 0;
     var endIndex: usize = str.len;
     for (0..str.len) |i| {
-        if (str[i] == ' ') {
+        if (str[i] == ' ' or str[i] == '\t') {
             firstIndex = i;
         } else {
             break;
@@ -269,14 +281,14 @@ pub fn stripStr(str: []const u8) []const u8 {
     }
     for (0..str.len) |i| {
         const _i = str.len - 1 - i;
-        if (str[_i] == ' ') {
+        if (str[_i] == ' ' or str[i] == '\t') {
             endIndex = _i;
         } else {
             break;
         }
     }
     firstIndex += 1;
-    if (str[0] != ' ') {
+    if (str[0] != ' ' and str[0] != '\t') {
         firstIndex = 0;
     }
     return str[firstIndex..endIndex];

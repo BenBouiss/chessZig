@@ -2,51 +2,64 @@ const std = @import("std");
 const build_options = @import("build_options");
 
 const chess = @import("chess.zig");
-const squarel = @import("square.zig");
-const mainl = @import("main.zig");
 const hashl = @import("hashTable.zig");
 const stringl = @import("string.zig");
-const configl = @import("config.zig");
 const typel = @import("type.zig");
+const boardl = @import("board.zig");
+const moveGenl = @import("move_generation.zig");
 
 const utilsl = @import("utils.zig");
 
+const e_moveFlags = typel.e_moveFlags;
 const e_piece = chess.e_piece;
-const e_square = squarel.e_square;
+const e_square = typel.e_square;
 const string = stringl.string;
 const Key = hashl.Key;
 
-const useDebug = build_options.useDebug;
-
-pub const e_moveFlags = enum(u4) { QUIETMOVE = 0, DOUBLEPAWN = 1, KINGCASTLE = 2, QUEENCASTLE = 3, CAPTURE = 4, ENPASSANT = 5, KNIGHTPROMO = 8, BISHOPPROMO = 9, ROOKPROMO = 10, QUEENPROMO = 11, KNIGHTPROMOCAPTURE = 12, BISHOPPROMOCAPTURE = 13, ROOKPROMOCAPTURE = 14, QUEENPROMOCAPTURE = 15 };
+const depthT = typel.depthT;
 
 const MOVE_STR_MAX_LENGTH = 5;
 
-pub fn build_move(from: u8, to: u8, flag: u8) IMove {
-    //var m_move: u16 = (flag);
-    //m_move <<= 6;
-    //m_move |= (to);
-    //m_move <<= 6;
-    //m_move |= (from);
-    //const ret: IMove = .{ .m_move = m_move };
-    //return ret;
+pub inline fn e_build_move(from: e_square, to: e_square, flag: e_moveFlags) IMove {
+    return .{ .m_move = (@as(u16, @backingInt(flag)) << 12) | (@as(u16, @backingInt(to)) << 6) | (@as(u16, @backingInt(from))) };
+}
+pub inline fn build_move(from: u8, to: u8, flag: u8) IMove {
     return .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
 }
-pub fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
+pub inline fn build_move_in(from: u8, to: u8, flag: u8, p_out: *moveContainer) *IMove {
     p_out.moves[p_out.len] = .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
     p_out.len += 1;
     return &p_out.moves[p_out.len - 1];
 }
+pub inline fn build_move_in_v(from: u8, to: u8, flag: u8, p_out: *moveContainer) void {
+    p_out.moves[p_out.len] = .{ .m_move = (@as(u16, @intCast(flag)) << 12) | (@as(u16, @intCast(to)) << 6) | (@as(u16, @intCast(from))) };
+    p_out.len += 1;
+}
 
-pub const IMove = packed struct {
+pub const moveInfo = struct {
+    fromP: e_piece = .nEmptySquare,
+    toP: e_piece = .nEmptySquare,
+    to: u8 = 0,
+    from: u8 = 0,
+    flag: e_moveFlags = .QUIETMOVE,
+
+    pub inline fn isCastle(self: moveInfo) bool {
+        return self.flag == .KINGCASTLE or self.flag == .QUEENCASTLE;
+    }
+
+    pub inline fn isPromotion(self: moveInfo) bool {
+        return (@backingInt(self.flag) >= @backingInt(e_moveFlags.KNIGHTPROMO));
+    }
+    pub inline fn isCapture(self: moveInfo) bool {
+        return (@backingInt(self.flag) & @backingInt(e_moveFlags.CAPTURE) != 0);
+    }
+};
+pub const IMove = extern struct {
     // <flag>: 4 bits, <to>: 6 bits, <from>: 6 bits ["start": 0th bit]
-    //tried to breakdown the m_move, into flag: u8, from: u8, to: u8, performance went down in perft ~130141000 nps at the end from ~155481000.
     m_move: u16 = 0,
 
     pub inline fn setFlag(p_self: *IMove, flag: u8) void {
-        //reset the top 4 bits
         p_self.m_move &= (0xFFF);
-        //const _flag: u16 = @intCast(flag);
         p_self.m_move |= (@as(u16, flag) << 12);
     }
 
@@ -55,7 +68,8 @@ pub const IMove = packed struct {
     }
 
     pub fn isIn(self: IMove, move_arr: moveContainer) bool {
-        for (move_arr.moves) |move| {
+        for (0..move_arr.len) |i| {
+            const move = move_arr.moves[i];
             if (self.equal(move)) {
                 return true;
             }
@@ -85,49 +99,48 @@ pub const IMove = packed struct {
         return @intCast((self.m_move & (0xF000)) >> 12);
     }
     pub inline fn isCapture(self: IMove) bool {
-        return (self.getFlag() & @intFromEnum(e_moveFlags.CAPTURE) != 0);
+        return (self.getFlag() & @backingInt(e_moveFlags.CAPTURE) != 0);
     }
+
     pub inline fn isQuietMove(self: IMove) bool {
-        return self.getFlag() == @intFromEnum(e_moveFlags.QUIETMOVE);
+        return !self.isCapture();
     }
 
     pub inline fn isPromotion(self: IMove) bool {
-        return (self.getFlag() >= @intFromEnum(e_moveFlags.KNIGHTPROMO));
+        return (self.getFlag() >= @backingInt(e_moveFlags.KNIGHTPROMO));
     }
     pub inline fn isKingSideCastle(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.KINGCASTLE));
+        return (self.getFlag() == @backingInt(e_moveFlags.KINGCASTLE));
     }
     pub inline fn isQueenSideCastle(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.QUEENCASTLE));
+        return (self.getFlag() == @backingInt(e_moveFlags.QUEENCASTLE));
     }
     pub inline fn isCastle(self: IMove) bool {
         const flag = self.getFlag();
-        return (flag == @intFromEnum(e_moveFlags.KINGCASTLE)) or (flag == @intFromEnum(e_moveFlags.QUEENCASTLE));
+        return (flag == @backingInt(e_moveFlags.KINGCASTLE)) or (flag == @backingInt(e_moveFlags.QUEENCASTLE));
     }
     pub inline fn isEnpassant(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.ENPASSANT));
+        return (self.getFlag() == @backingInt(e_moveFlags.ENPASSANT));
     }
     pub inline fn isDoublePush(self: IMove) bool {
-        return (self.getFlag() == @intFromEnum(e_moveFlags.DOUBLEPAWN));
+        return (self.getFlag() == @backingInt(e_moveFlags.DOUBLEPAWN));
     }
     pub inline fn isValid(self: IMove) bool {
-        return (self.m_move != 0);
+        return self.m_move != 0;
     }
     pub inline fn copy(self: IMove) IMove {
         return .{ .m_move = self.m_move };
     }
     pub fn getStr(self: IMove) [5]u8 {
-        var strM: [5]u8 = undefined;
-        const r1 = chess.strFromLERF(@enumFromInt(self.getFrom()));
-        const r2 = chess.strFromLERF(@enumFromInt(self.getTo()));
+        var strM: [5]u8 = @splat(0);
+        const r1 = chess.strFromLERF(@fromBackingInt(@intCast(self.getFrom())));
+        const r2 = chess.strFromLERF(@fromBackingInt(@intCast(self.getTo())));
         strM[0] = r1[0];
         strM[1] = r1[1];
         strM[2] = r2[0];
         strM[3] = r2[1];
         if (self.isPromotion()) {
             strM[4] = chess.getStrFromPiece(chess.flagPromotionToPiece(self.getFlag(), false));
-        } else {
-            strM[4] = 0;
         }
         return strM;
     }
@@ -233,88 +246,67 @@ pub const MAX_MATCH_LENGTH_STR: usize = MAX_MATCH_LENGTH * (5 + 1);
 pub const matchMoveContainer = struct {
     moves: [MAX_MATCH_LENGTH]IMove = undefined,
     keyCodes: [MAX_MATCH_LENGTH]u64 = undefined,
-    irreversible: [MAX_MATCH_LENGTH]bool = undefined,
-
-    lastIrreversibleMoveIndex: u16 = 0,
     len: u16 = 0,
 
     pub fn print(p_self: *const matchMoveContainer) void {
         // FOR DEBUG ONLY
-        var line_str = p_self.getLineString(mainl.getGlobalGPA()) catch {
-            return;
-        };
-        defer line_str.free(mainl.getGlobalGPA());
-        std.debug.print("{s}\n", .{line_str._slice()});
-        return;
+        for (0..p_self.len) |i| {
+            const move = p_self.moves[i];
+            //std.debug.print("{s} k=0x{x} ", .{ move.getStr(), p_self.keyCodes[i] });
+            std.debug.print("{s} ", .{move.getStr()});
+        }
+        std.debug.print("\n", .{});
     }
-    pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key, pawnMove: bool) bool {
-        if (comptime useDebug) {
-            if (p_self.len == MAX_MATCH_LENGTH) {
-                @panic("list is full");
-            }
-        }
-        if (move.isCapture() or pawnMove) {
-            p_self.lastIrreversibleMoveIndex = p_self.len;
-            p_self.irreversible[p_self.len] = true;
-        } else {
-            p_self.irreversible[p_self.len] = false;
-        }
+    pub fn append(p_self: *matchMoveContainer, move: IMove, key: Key) bool {
         p_self.moves[p_self.len] = move;
-        p_self.keyCodes[p_self.len] = key.code;
+        if (move.isDoublePush()) {
+            p_self.keyCodes[p_self.len] = key ^ hashl.zobristKeys.enPassantKey;
+        } else {
+            p_self.keyCodes[p_self.len] = key;
+        }
         p_self.len += 1;
         return true;
     }
 
-    pub fn getRepetitions(self: *const matchMoveContainer) u8 {
+    pub fn getRepetitions(self: *const matchMoveContainer, halfMoveClock: u8) u8 {
+        // repetion 3 same hash key repeted
+        // ply 0, 1, 2, 3, 4, 5, 6, 7
+        // key 0, 1, 2, 3, 4, 5, 6, 7
+        // repetion at moves 7:
+        //  key 7 == 5 == 3
+        // real repetition
+        //  key 7 = 3 = -1
+        if (self.len < 8) {
+            return 0;
+        }
         var count: u8 = 0;
-        if (self.len >= (self.lastIrreversibleMoveIndex + 4)) {
-            const keyRepet = self.keyCodes[self.len - 1];
-            for (self.lastIrreversibleMoveIndex..self.len - 1) |i| {
-                if (self.keyCodes[i] == keyRepet) {
-                    count += 1;
-                }
-                if (count >= 2) {
-                    return count;
-                }
+        const iLen: i32 = @intCast(self.len);
+        const end: i32 = @max(iLen - @as(i32, @intCast(halfMoveClock)) - 1, 0);
+        const keyRepet = self.keyCodes[self.len - 1];
+        var i: i32 = iLen - 5;
+        while (i >= 2 and i >= end) : (i -= 2) {
+            if (self.keyCodes[@intCast(i)] == keyRepet) {
+                count += 1;
+            }
+            if (count == 2) {
+                return count;
             }
         }
         return count;
     }
-    pub inline fn checkRepetitions(self: *const matchMoveContainer) bool {
-        const count = self.getRepetitions();
+    pub inline fn checkRepetitions(self: *const matchMoveContainer, halfMoveClock: u8) bool {
+        const count = self.getRepetitions(halfMoveClock);
         return count >= 2;
     }
 
     pub fn popMove(p_self: *matchMoveContainer) IMove {
-        if (comptime useDebug) {
-            if (p_self.len == 0) {
-                @panic("list is empty");
-                //p_self.len = 0;
-                //return .{};
-            }
-        }
         p_self.len -= 1;
-        if (p_self.len == 0) {
-            p_self.lastIrreversibleMoveIndex = 0;
-        } else if (p_self.lastIrreversibleMoveIndex == p_self.len) {
-            p_self.lastIrreversibleMoveIndex = @intCast(p_self.len - 1);
-            while (p_self.lastIrreversibleMoveIndex > 0) : (p_self.lastIrreversibleMoveIndex -= 1) {
-                if (p_self.irreversible[p_self.lastIrreversibleMoveIndex]) {
-                    break;
-                }
-            }
-        }
         return p_self.moves[p_self.len];
     }
     pub inline fn popMoveVoid(p_self: *matchMoveContainer) void {
         _ = p_self.popMove();
     }
     pub inline fn getLastMove(self: matchMoveContainer) IMove {
-        if (comptime useDebug) {
-            if (self.len == 0) {
-                @panic("list is empty");
-            }
-        }
         return self.moves[self.len - 1];
     }
     pub fn getLineFillString(self: matchMoveContainer, lineStr: *string) void {
@@ -328,12 +320,24 @@ pub const matchMoveContainer = struct {
             }
             _ = lineStr.put(' ');
         }
-        return;
     }
     pub fn getLineString(self: matchMoveContainer, alloc: std.mem.Allocator) !string {
         var lineStr: string = try string.initZero(alloc, self.len * (MOVE_STR_MAX_LENGTH + 1));
         self.getLineFillString(&lineStr);
         return lineStr;
+    }
+    pub fn printAlgebraicLineString(self: matchMoveContainer) !void {
+        var tmp = try chess.getBoardFromFen(chess.DEFAULT_FEN);
+        for (0..self.len) |i| {
+            if (i % 2 == 0) {
+                std.debug.print("{d}. ", .{1 + @divFloor(i, 2)});
+            }
+            const move = self.moves[i];
+            const algMove = chess.algebraicTarget.init(move, &tmp);
+            tmp.makeMove(move);
+            std.debug.print("{f} ", .{algMove});
+        }
+        std.debug.print("\n", .{});
     }
     pub fn getLineFromBuffer(self: matchMoveContainer, buffer: []u8) string {
         var lineStr: string = string.initFromBuffer(buffer);
@@ -341,7 +345,7 @@ pub const matchMoveContainer = struct {
         return lineStr;
     }
     pub fn getLineStatic(self: matchMoveContainer) [MAX_MATCH_LENGTH_STR]u8 {
-        var ret: [MAX_MATCH_LENGTH_STR]u8 = std.mem.zeroes([MAX_MATCH_LENGTH_STR]u8);
+        var ret: [MAX_MATCH_LENGTH_STR]u8 = @splat(0);
         var idx: usize = 0;
 
         for (0..self.len) |i| {
@@ -360,6 +364,20 @@ pub const matchMoveContainer = struct {
             //_ = lineStr.put(' ');
         }
         return ret;
+    }
+};
+pub const pieceMoves = struct {
+    t: typel.e_pieceType = .PAWN,
+    count: u8 = 0,
+};
+pub const moveBBState_ext = struct {
+    state: moveBBState = .{},
+    // wont contain king info
+    perPieceMoveCt: [16]pieceMoves = @splat(.{}),
+    pieceCount: u8 = 0,
+    pub inline fn add(self: *moveBBState_ext, item: pieceMoves) void {
+        self.perPieceMoveCt[self.pieceCount] = item;
+        self.pieceCount += 1;
     }
 };
 
@@ -414,7 +432,14 @@ pub const moveBBState = struct {
         return (self.pawnMoves | self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.doubleMoves) == chess.EMPTY;
     }
     pub inline fn getAttackedMask(self: *const moveBBState, occB: u64) u64 {
-        return (self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves) & occB;
+        return (self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | self.kingMoves | self.promotionMoves) & occB;
+    }
+    pub inline fn getAttackedMaskTabou(self: *const moveBBState, occB: u64, att: u64) u64 {
+        return (self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | (self.kingMoves & (~att)) | self.promotionMoves) & occB;
+    }
+    pub inline fn getPawnBBall(self: *const moveBBState, occ: u64) u64 {
+        return ((self.pawnAttacks & (occ)) |
+            self.pawnMoves);
     }
     pub inline fn andFn(self: *const moveBBState, bb: u64) moveBBState {
         return .{ .pawnMoves = self.pawnMoves & bb, .pawnAttacks = self.pawnAttacks & bb, .doubleMoves = self.doubleMoves & bb, .bishopMoves = self.bishopMoves & bb, .knightMoves = self.knightMoves & bb, .rookMoves = self.rookMoves & bb, .queenMoves = self.queenMoves & bb, .kingMoves = self.kingMoves & bb, .enPassantMoves = self.enPassantMoves & bb, .promotionMoves = self.promotionMoves & bb, .queenSideCastlingMoves = self.queenSideCastlingMoves & bb, .kingSideCastlingMoves = self.kingSideCastlingMoves & bb };
@@ -441,7 +466,6 @@ pub const moveBBState = struct {
         p_self.promotionMoves &= bb;
         p_self.queenSideCastlingMoves &= bb;
         p_self.kingSideCastlingMoves &= bb;
-        return;
     }
     pub fn orEq(p_self: *moveBBState, bb: u64) void {
         p_self.pawnMoves |= bb;
@@ -457,7 +481,6 @@ pub const moveBBState = struct {
         p_self.promotionMoves |= bb;
         p_self.queenSideCastlingMoves |= bb;
         p_self.kingSideCastlingMoves |= bb;
-        return;
     }
 
     pub fn print(self: moveBBState) void {
@@ -486,19 +509,19 @@ pub const moveBBState = struct {
         std.debug.print("King moves: \n", .{});
         chess.print_bitboard(self.kingMoves);
     }
-    pub fn count(self: *const moveBBState) u64 {
-        var ret: u64 = @intCast(chess.popcount(self.pawnMoves));
-        ret += @intCast(chess.popcount(self.bishopMoves));
-        ret += @intCast(chess.popcount(self.doubleMoves));
-        ret += @intCast(chess.popcount(self.enPassantMoves));
-        ret += @intCast(chess.popcount(self.kingMoves));
-        ret += @intCast(chess.popcount(self.kingSideCastlingMoves));
-        ret += @intCast(chess.popcount(self.knightMoves));
-        ret += @intCast(chess.popcount(self.pawnAttacks));
-        ret += @intCast(chess.popcount(self.promotionMoves));
-        ret += @intCast(chess.popcount(self.queenMoves));
-        ret += @intCast(chess.popcount(self.queenSideCastlingMoves));
-        ret += @intCast(chess.popcount(self.rookMoves));
+    pub fn count(self: *const moveBBState) typel.scoreType {
+        var ret: typel.scoreType = chess.popcount_t(self.pawnMoves, typel.scoreType);
+        ret += chess.popcount_t(self.bishopMoves, typel.scoreType);
+        ret += chess.popcount_t(self.doubleMoves, typel.scoreType);
+        ret += chess.popcount_t(self.enPassantMoves, typel.scoreType);
+        ret += chess.popcount_t(self.kingMoves, typel.scoreType);
+        ret += chess.popcount_t(self.kingSideCastlingMoves, typel.scoreType);
+        ret += chess.popcount_t(self.knightMoves, typel.scoreType);
+        ret += chess.popcount_t(self.pawnAttacks, typel.scoreType);
+        ret += chess.popcount_t(self.promotionMoves, typel.scoreType);
+        ret += chess.popcount_t(self.queenMoves, typel.scoreType);
+        ret += chess.popcount_t(self.queenSideCastlingMoves, typel.scoreType);
+        ret += chess.popcount_t(self.rookMoves, typel.scoreType);
         return ret;
     }
     pub inline fn rawCount(p_self: *const moveBBState) u64 {
@@ -507,8 +530,14 @@ pub const moveBBState = struct {
 };
 
 pub const line = struct {
-    moves: [configl.MAXIMUM_SEARCH_DEPTH]IMove = undefined,
+    moves: [typel.MAX_PLY]IMove = undefined,
     len: usize = 0,
+    pub inline fn init() line {
+        var ret: line = undefined;
+        ret.len = 0;
+        return ret;
+    }
+
     pub fn format(self: *const line, writer: *std.Io.Writer) !void {
         for (0..self.len) |i| {
             try writer.print("{s} ", .{utilsl.trimStr(&self.moves[i].getStr())});
@@ -520,35 +549,26 @@ pub const line = struct {
         }
         std.debug.print("\n", .{});
     }
-    pub fn setLineFromPV(self: *line, pv: *pvContainer) void {
-        self.len = pv.pv_len[0];
-        for (0..self.len) |i| {
-            self.moves[i] = pv.pv_arr[i][i];
-        }
+    pub inline fn setLineFromPV(self: *line, pv: *const line) void {
+        self.len = pv.len;
+        @memcpy(self.moves[0..self.len], pv.moves[0..self.len]);
     }
-    pub fn copyFromLine(self: *line, other: *line) void {
-        for (0..other.len) |i| {
-            self.moves[i] = other.moves[i];
+    pub fn onBestMove(self: *line, move: IMove, other: ?*const line) void {
+        if (other) |child| {
+            self.len = child.len;
+            @memcpy(self.moves[1 .. child.len + 1], child.moves[0..child.len]);
+        } else {
+            self.len = 0;
         }
-        self.len = other.len;
+        self.moves[0] = move;
+        self.len += 1;
+    }
+    pub inline fn reset(self: *line) void {
+        self.len = 0;
     }
 };
-pub const pvContainer = struct {
-    pv_arr: [configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH][configl.MAXIMUM_SEARCH_DEPTH]IMove),
 
-    pv_len: [configl.MAXIMUM_SEARCH_DEPTH]usize = std.mem.zeroes([configl.MAXIMUM_SEARCH_DEPTH]usize),
-
-    pub inline fn setLen(p_self: *pvContainer, ply: u16) void {
-        p_self.pv_len[ply] = ply;
-    }
-
-    pub fn onBestMove(p_self: *pvContainer, move: IMove, ply: u16) void {
-        // sets the main line (ie: the main diagonal) with the best move found
-        p_self.pv_arr[ply][ply] = move;
-
-        for (ply + 1..p_self.pv_len[ply + 1]) |next_p| {
-            p_self.pv_arr[ply][next_p] = p_self.pv_arr[ply + 1][next_p];
-        }
-        p_self.pv_len[ply] = p_self.pv_len[ply + 1];
-    }
+pub const rootMoveInfo = struct {
+    move: IMove = .{},
+    nodes: u64 = 0,
 };

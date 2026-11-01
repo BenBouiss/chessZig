@@ -13,21 +13,19 @@ pub const string = struct {
     data: []u8,
     freed: bool = false,
     pub fn initFromSlice(alloc: std.mem.Allocator, slice: []const u8) !string {
-        var ret: string = undefined;
-        ret.len = slice.len;
-        ret.capacity = slice.len;
+        var ret: string = .{ .len = slice.len, .capacity = slice.len, .data = undefined, .freed = false };
         ret.data = try alloc.alloc(u8, ret.capacity);
-        ret.freed = false;
         try ret.copyFromSlice(slice);
         return ret;
     }
+    /// Gives a now memory owned string view of the slice
+    pub fn initViewFromSlice(slice: []const u8) string {
+        return .{ .len = slice.len, .capacity = slice.len, .data = @constCast(slice), .freed = true };
+    }
 
     pub fn initZero(alloc: std.mem.Allocator, cap: usize) !string {
-        var ret: string = undefined;
+        var ret: string = .{ .len = 0, .capacity = cap, .freed = false, .data = undefined };
         ret.data = try alloc.alloc(u8, cap);
-        ret.capacity = cap;
-        ret.len = 0;
-        ret.freed = false;
         return ret;
     }
     pub inline fn initFromBuffer(buffer: []u8) string {
@@ -39,9 +37,7 @@ pub const string = struct {
         if (slice.len > p_self.capacity) {
             return string_err.nei_error;
         }
-        for (0..slice.len) |i| {
-            p_self.data[i] = slice[i];
-        }
+        @memcpy(p_self.data[0..slice.len], slice);
         p_self.len = slice.len;
     }
     pub fn put(p_self: *string, letter: u8) bool {
@@ -69,28 +65,14 @@ pub const string = struct {
             _ = p_self.put(letter);
         }
     }
-    pub fn extendWithResizeStr(p_self: *string, alloc: std.mem.Allocator, other: *string) !void {
-        try p_self.extendWithResize(alloc, other._slice());
-    }
-    pub fn _slice(p_self: *const string) []const u8 {
+    pub inline fn _slice(p_self: *const string) []const u8 {
         return p_self.data[0..p_self.len];
     }
     pub fn free(p_self: *string, alloc: std.mem.Allocator) void {
         alloc.free(p_self.data);
     }
-    pub fn startsWith(p_self: *const string, other: []const u8) bool {
-        if (other.len > p_self.len) {
-            return false;
-        }
-        for (0..other.len) |i| {
-            if (p_self.data[i] != other[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-    pub inline fn startsWithStr(p_self: *const string, other: *string) bool {
-        return p_self.startsWith(other._slice());
+    pub inline fn startsWith(p_self: *const string, other: []const u8, comptime token: utilsl.strTokens) bool {
+        return utilsl.startsWith(p_self._slice(), other, token);
     }
     pub fn endsWith(p_self: *const string, other: []const u8) bool {
         if (other.len > p_self.len) {
@@ -104,9 +86,6 @@ pub const string = struct {
             }
         }
         return true;
-    }
-    pub inline fn endsWithStr(p_self: *const string, other: *string) bool {
-        return p_self.endsWith(other._slice());
     }
     pub inline fn copy(p_self: *const string, alloc: std.mem.Allocator) !string {
         return string.initFromSlice(alloc, p_self._slice());
@@ -138,13 +117,9 @@ pub const string = struct {
         return @intCast(ret);
     }
     pub fn extractFromBounds(p_self: *const string, lBound: []const u8, rBound: []const u8) string_err![]const u8 {
-        if (!p_self.containsE(lBound, .ignoreCase)) {
+        if (!p_self.containsE(lBound, .ignoreCase) or !p_self.containsE(rBound, .ignoreCase)) {
             return string_err.itemNotFound_error;
         }
-        if (!p_self.containsE(rBound, .ignoreCase)) {
-            return string_err.itemNotFound_error;
-        }
-
         const startIndex = try p_self.find(lBound);
         const endIndex = utilsl.findM(u8, p_self._slice()[startIndex + 1 ..], rBound);
         if (endIndex < 0) {
@@ -155,8 +130,14 @@ pub const string = struct {
     pub fn split(self: *const string, alloc: std.mem.Allocator, e: u8) !std.ArrayList([]const u8) {
         return try utilsl.split(u8, alloc, self._slice(), e);
     }
-    pub fn clearRetainingCapacity(self: *string) void {
+    pub inline fn splitGen(self: *const string, e: u8) utilsl.splitGenerator {
+        return utilsl.splitGenerator(u8).init(self._slice(), e);
+    }
+    pub inline fn clearRetainingCapacity(self: *string) void {
         self.len = 0;
+    }
+    pub fn format(self: string, writer: *std.Io.Writer) !void {
+        try writer.print("{s}", .{self._slice()});
     }
 };
 pub fn freeArrayList_string(alloc: std.mem.Allocator, arr: *std.ArrayList(string)) void {
@@ -167,20 +148,20 @@ pub fn freeArrayList_string(alloc: std.mem.Allocator, arr: *std.ArrayList(string
 }
 
 pub fn mergePaths(alloc: std.mem.Allocator, s1: *string, s2: *string) !string {
-    const slashCount: usize = @intFromBool(s1.endsWith("/")) + @intFromBool(s2.startsWith("/"));
+    const slashCount: usize = @intFromBool(s1.endsWith("/")) + @intFromBool(s2.startsWith("/", .standardToken));
     var ret: string = undefined;
     if (slashCount == 0) {
-        const merged = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ s1._slice(), s2._slice() });
+        const merged = try std.fmt.allocPrint(alloc, "{f}/{f}", .{ s1, s2 });
         ret = string.initFromBuffer(&merged);
         return ret;
     }
     if (slashCount == 1) {
-        const merged = try std.fmt.allocPrint(alloc, "{s}{s}", .{ s1._slice(), s2._slice() });
+        const merged = try std.fmt.allocPrint(alloc, "{f}{f}", .{ s1, s2 });
         ret = string.initFromBuffer(&merged);
         return ret;
     }
     if (slashCount == 2) {
-        const merged = try std.fmt.allocPrint(alloc, "{s}{s}", .{ s1._slice(), s2._slice()[1..s2.len] });
+        const merged = try std.fmt.allocPrint(alloc, "{f}{s}", .{ s1, s2._slice()[1..s2.len] });
         ret = string.initFromBuffer(&merged);
         return ret;
     }

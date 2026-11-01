@@ -1,158 +1,120 @@
-const build_options = @import("build_options");
-
-const std = @import("std");
-
 pub const NAME = "Ben";
 pub const AUTHOR = "Ben";
 pub const VERSION = "0.0.1";
-pub const SEED: u64 = 42;
-pub const MAX_MATCH_STR_LENGTH: u64 = 24 + 4096 * (5 + 1);
-pub const MAX_USER_INPUT: u64 = MAX_MATCH_STR_LENGTH;
-pub const MAX_LINE_LENGTH: usize = 32;
+pub const SEED = 42;
+pub const MAX_MATCH_STR_LENGTH = 24 + 4096 * (5 + 1);
+pub const MAX_USER_INPUT = MAX_MATCH_STR_LENGTH;
 
-pub const EVALUTATION_GUI_WAIT_MS: u64 = 500;
+pub const EVALUTATION_TIMEOUT_ERROR_MS: u64 = 10_000; // 2 sec
 
 pub const MAX_SPRT_MATCH: usize = 10_000;
-pub const MAX_THREAD: u32 = 64;
+pub const MAX_THREAD = 16;
 pub const MAX_HASHSIZE = 1000; // in MB => 1 GB
 
 pub const DEFAULT_THREAD = 1;
-pub const DEFAULT_HASHTABLE_SIZE = 25; // in MB
+pub const DEFAULT_HASHTABLE_SIZE = 16; // in MB
 
 pub const DEFAULT_TRACKMETRICS = true;
-pub const _DEFAULT_TRACKMETRICS = "true";
-
 pub const DEFAULT_REPORTPROGRESS = true;
-pub const _DEFAULT_REPORTPROGRESS = "true";
-
-pub const DEFAULT_USEHASHTABLE = false;
-pub const _DEFAULT_USEHASHTABLE = "false";
-
-pub const DEFAULT_USE_NULLPRUNE = true;
-pub const _DEFAULT_USE_NULLPRUNE = "true";
-
-pub const ORDERING_LINE_VALUE = 99999;
-
-//https://www.chessprogramming.org/Move_Ordering
-pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
-pub const ORDERING_SEE_MULTI = 10;
-
-pub const KILLER_0_HEURISTIC_VALUE = 900;
-pub const KILLER_1_HEURISTIC_VALUE = 800;
-pub const MAX_HIST_HEURISTIC_VALUE = 700;
-
-pub const DEFAULT_USEQUIESC = true;
-pub const _DEFAULT_USEQUIESC = "true";
-
-pub const DEFAULT_DEPTH: u16 = 4;
-pub const MIN_DEPTH: u16 = 1;
-pub const MAX_DEPTH: u16 = 6;
-pub const MAXIMUM_SEARCH_DEPTH: u16 = 64;
-pub const MAX_QUIESC_DEPTH: u16 = 8;
-
-pub const _DEFAULT_LIMIT_ELO = "false";
-pub const DEFAULT_LIMIT_ELO = false;
-pub const DEFAULT_ELO: u32 = 2500;
-
-pub const _DEFAULT_FIXED_DEPTH = "false";
 pub const DEFAULT_FIXED_DEPTH = false;
-
-pub const _DEFAULT_STATIC_SEARCH = "false";
 pub const DEFAULT_STATIC_SEARCH = false;
 
-pub const DEFAULT_LATE_MOVE_REDUCTION = true;
-pub const _DEFAULT_LATE_MOVE_REDUCTION = "true";
+//https://www.chessprogramming.org/Move_Ordering
+pub const ORDERING_LINE_VALUE = 99_999_999;
+pub const KILLER_0_HEURISTIC_VALUE = 1_999_999;
 
-pub const TT_strat = enum { ALWAYS_REPLACE, ALWAYS_REPLACE_OLDEST, KEEP_DEEPER };
-pub const DEFAULT_TT_STRAT: TT_strat = .ALWAYS_REPLACE_OLDEST;
+pub const ORDERING_PROMOTIONS = KILLER_0_HEURISTIC_VALUE + 1;
 
-pub const DEFAULT_USE_FUTILITY = false;
-pub const _DEFAULT_USE_FUTILITY = "false";
+pub const MAX_HIST_HEURISTIC_VALUE = 16394;
+pub const MAX_CONTINUATION_HEURISTIC_VALUE = 16394;
 
-pub const DEFAULT_USE_RAZORING = false;
-pub const _DEFAULT_USE_RAZORING = "false";
+pub const DEFAULT_ELO = 0;
+pub const MIN_ELO = 0;
+pub const MAX_ELO = 0;
 
-pub const MIN_ELO: u32 = 1000;
-pub const MAX_ELO: u32 = 3000;
+pub const USE_NNUE = false;
+//pub const NET_PATH = "extern/simple-320-colM-128/quantised.bin";
+//pub const NET_PATH = "extern/simple_1024_load100_cosine-120/quantised.bin";
+//pub const NET_PATH = "extern/simple_1024_retrained-120/quantised.bin";
+//pub const NET_PATH = "extern/simple_128_hl_8_output_buckets-140/quantised.bin";
+//pub const NET_PATH = "extern/simple_128_hl_8_output_buckets-320/quantised.bin";
+//pub const NET_PATH = "extern/simple_1024_hl_8_output_buckets-110/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets-310/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets_1024hl_8bucket-20/quantised.bin";
+pub const NET_PATH = "extern/2_output_buckets_256l_8bucket_ownData_2_outcome-100/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets_1024l_8bucket_ownData-20/quantised.bin";
+//pub const NET_PATH = "extern/2_output_buckets_1024l_8bucket_ownData_2_outcome-20/quantised.bin";
 
 // scheduler options
 // maximum allocated time in fraction of the remaining time
-pub var SCHEDULER_MAX_TIME_FRCT: f64 = 0.05;
-pub var SCHEDULER_CRITICAL_TIME_FRCT: f64 = 0.33;
-pub var SCHEDULER_MAX_ENDGAME_DEPTH: u16 = 24;
-
-// estimate of the time increase when increasing the depth by 1
-pub var SCHEDULER_GROWTH_TIME_EST: i64 = 10;
-
-// hashTable constants
-pub const ITEM_PER_BUCKET = 3;
-
-// inactivity timers:
-//
-pub const DEBUG_INACTIVITY_SERVING_S = 30; // 30 seconds in ns
-pub const DEBUG_INACTIVITY_SERVING_NS = DEBUG_INACTIVITY_SERVING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
-//
-pub const DEBUG_INACTIVITY_READING_S = 30; // 30 seconds in ns
-pub const DEBUG_INACTIVITY_READING_NS = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 9); // 30 seconds in ns
-pub const DEBUG_INACTIVITY_READING_US = DEBUG_INACTIVITY_READING_S * std.math.pow(u64, 10, 6); // 30 seconds in us
-//
-
-pub const START_TICKRATE_NS = 2 * std.math.pow(u64, 10, 9); // 2 seconds in ns
-
-pub const INFO_TICKRATE: u16 = 1; // 1 ticks/second
-
-pub const INFO_TICKRATE_NS = (std.math.pow(u64, 10, 9));
-pub const WAIT_TICKRATE_NS = 500_000;
-pub const WR_TICKRATE_NS = 500_000;
-pub const ENGINE_SERVING_TICKRATE_NS = 100_000;
-
-pub const ENGINE_PATH: []const u8 = "zig-out/bin/engine";
+//pub const SCHEDULER_MAX_TIME_DIV = 20;
+pub const SCHEDULER_MAX_TIME_DIV = 20;
+pub const SCHEDULER_MAX_TIME_INC_DIV = 5;
+pub const SCHEDULER_CRITICAL_TIME_DIV = 2;
 
 // Tuner settings
-//pub const N_POSITIONS: usize = 800000;
-pub const N_POSITIONS: usize = 300000;
-//pub const N_POSITIONS: usize = 8;
+pub const N_POSITIONS = 300000;
 
-pub const e_residue_type = enum(u4) { MSE = 0, RMSE };
-pub const TUNE_RESIDUE: e_residue_type = .MSE;
-
-pub const TUNE_NORMAL: bool = true; // 392 weights
-pub const TUNE_SAFETY: bool = true; // > 5 weights
 pub const TUNE_COMPLEXITY: bool = false; // ? weights
-pub const TUNE_PSQT: bool = true; // > 5 weights
-
-//pub const N_TERMS: usize = 392 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
-pub const N_TERMS: usize = 397 + 5 * @as(usize, @intFromBool(TUNE_SAFETY)); // see below
 
 // TEXEL indexes
-pub const TEXEL_PAWN_COUNT_IDX: usize = 0;
-pub const TEXEL_BISHOP_COUNT_IDX: usize = 1;
-pub const TEXEL_KNIGHT_COUNT_IDX: usize = 2;
-pub const TEXEL_ROOK_COUNT_IDX: usize = 3;
-pub const TEXEL_QUEEN_COUNT_IDX: usize = 4;
+// mobility
+pub const TEXEL_MOVE_COUNT_IDX = 0;
 
-pub const TEXEL_MOVE_COUNT_IDX: usize = 5;
-pub const TEXEL_KINGMOVE_COUNT_IDX: usize = 6;
+//structure protection
+pub const TEXEL_PROTECTION_COUNT_IDX = 1;
+pub const TEXEL_CENTER_PROTECTION_IDX = 2;
+pub const TEXEL_HANGING_PIECE_IDX = 3;
+pub const TEXEL_BIG_PIECE_THREAT_IDX = 4;
 
-pub const TEXEL_PROTECTION_COUNT_IDX: usize = 7;
+// pieces
+// pawns
+pub const TEXEL_PAWN_ISOL_IDX = 5;
+pub const TEXEL_PAWN_STACKED_IDX = 6;
+pub const TEXEL_PAWN_PASSED_IDX = 7;
+pub const TEXEL_PAWN_PHALANX_IDX = 8;
+pub const TEXEL_PAWN_CONNECTED_IDX = 9;
 
-pub const TEXEL_PAWN_ISOL_IDX: usize = 8;
-pub const TEXEL_PAWN_STACKED_IDX: usize = 9;
-pub const TEXEL_PAWN_PASSED_IDX: usize = 10;
+// knight
+pub const TEXEL_KNIGHT_TRAPPED_IDX = 10;
+pub const TEXEL_KNIGHT_DEFENDED_BY_P_IDX = 11;
 
-pub const TEXEL_TEMPO_CHECKS_IDX: usize = 11;
+// bishop
+pub const TEXEL_BISHOP_PAIR_IDX = 12;
 
-pub const TEXEL_SAFETY_PAWN_PROX_IDX: usize = 12;
-pub const TEXEL_SAFETY_BISHOP_PROX_IDX: usize = 13;
-pub const TEXEL_SAFETY_KNIGHT_PROX_IDX: usize = 14;
-pub const TEXEL_SAFETY_ROOK_PROX_IDX: usize = 15;
-pub const TEXEL_SAFETY_QUEEN_PROX_IDX: usize = 16;
+// rook
+pub const TEXEL_ROOK_OPEN_FILE_IDX = 13;
+pub const TEXEL_ROOK_LAST_RANKS_IDX = 14;
+pub const TEXEL_ROOK_DOUBLED_IDX = 15;
+pub const TEXEL_ROOK_ON_QUEEN_FILE_IDX = 16;
 
-pub const TEXEL_KING_PROXIMITY_IDX: usize = 17;
+// king
+pub const TEXEL_KING_TROPISM_IDX = 17;
+pub const TEXEL_KING_DISTANCE_IDX = 18;
+pub const TEXEL_KING_PAWNLESS_FLANK_IDX = 19;
+pub const TEXEL_KING_OPEN_FILE_IDX = 20;
+//
+// safety
+pub const TEXEL_SAFETY_IDX = 21;
+//pub const TEXEL_SAFETY_PAWN_PROX_IDX = 15;
+//pub const TEXEL_SAFETY_BISHOP_PROX_IDX = 16;
+//pub const TEXEL_SAFETY_KNIGHT_PROX_IDX = 17;
+//pub const TEXEL_SAFETY_ROOK_PROX_IDX = 18;
+//pub const TEXEL_SAFETY_QUEEN_PROX_IDX = 19;
 
-pub const TEXEL_PAWN_PSQT_IDX: usize = 18;
-pub const TEXEL_BISHOP_PSQT_IDX: usize = 82;
-pub const TEXEL_KNIGHT_PSQT_IDX: usize = 146;
-pub const TEXEL_ROOK_PSQT_IDX: usize = 210;
-pub const TEXEL_QUEEN_PSQT_IDX: usize = 274;
-pub const TEXEL_KING_PSQT_IDX: usize = 338;
+// counts
+pub const TEXEL_PAWN_COUNT_IDX = 22;
+pub const TEXEL_BISHOP_COUNT_IDX = 23;
+pub const TEXEL_KNIGHT_COUNT_IDX = 24;
+pub const TEXEL_ROOK_COUNT_IDX = 25;
+pub const TEXEL_QUEEN_COUNT_IDX = 26;
+
+// PSQT
+pub const TEXEL_PAWN_PSQT_IDX = 27;
+pub const TEXEL_BISHOP_PSQT_IDX = 91;
+pub const TEXEL_KNIGHT_PSQT_IDX = 155;
+pub const TEXEL_ROOK_PSQT_IDX = 219;
+pub const TEXEL_QUEEN_PSQT_IDX = 283;
+pub const TEXEL_KING_PSQT_IDX = 347;
+
+pub const N_TERMS = TEXEL_KING_PSQT_IDX + 64; // see below

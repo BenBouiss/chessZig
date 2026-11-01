@@ -1,17 +1,15 @@
 const chessl = @import("../chess.zig");
 const utilsl = @import("../utils.zig");
-const moveTablel = @import("../moveTables.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
 const heuristicl = @import("../heuristic.zig");
 const filel = @import("../file.zig");
-const mainl = @import("../main.zig");
 const moveGenl = @import("../move_generation.zig");
+const typel = @import("../type.zig");
 
 const std = @import("std");
 
 test "in between" {
-    moveTablel._initTables(false);
     try std.testing.expectEqual(chessl.inBetween(.a1, .a8), 0x1010101010100);
     try std.testing.expectEqual(chessl.inBetween(.f1, .f8), 0x20202020202000);
     try std.testing.expectEqual(chessl.inBetween(.h4, .a4), 0x7e000000);
@@ -47,37 +45,37 @@ test "SEE" {
     _ = arena;
     // source https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm#cite_note-3
     const fen = "1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - - 0 1";
-    var move = movel.build_move(@intFromEnum(squarel.e_square.e1), @intFromEnum(squarel.e_square.e5), @intFromEnum(movel.e_moveFlags.CAPTURE));
+    var move = movel.e_build_move(.e1, .e5, .CAPTURE);
     var state = try chessl.getBoardFromFen(fen);
     try std.testing.expectEqual(heuristicl.SEE(&state, move), 100);
 
     const fen2 = "1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - - 0 1";
-    move = movel.build_move(@intFromEnum(squarel.e_square.d3), @intFromEnum(squarel.e_square.e5), @intFromEnum(movel.e_moveFlags.CAPTURE));
+    move = movel.e_build_move(.d3, .e5, .CAPTURE);
     state = try chessl.getBoardFromFen(fen2);
     try std.testing.expectEqual(heuristicl.SEE(&state, move), -200);
     std.log.info("[TEST]: SEE passed\n", .{});
 }
 
 const testcases = [_][]const u8{
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
-    " rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR  w HAha - 0 0 ",
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR   w   HAha - 0  0  ",
-    "   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 0 ",
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1 ",
+    " rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1 ",
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR  w HAha - 0 1 ",
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR   w   HAha - 0  1  ",
+    "   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1 ",
 };
 
 test "generator" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-
     var tokens = utilsl.split(u8, arena, chessl.DEFAULT_FEN, ' ') catch unreachable;
+
     defer tokens.deinit(arena);
     for (0..testcases.len) |i| {
         const vers = testcases[i];
         var gen = utilsl.splitGenerator(u8).init(vers, ' ');
-        var j: usize = 0;
         try std.testing.expectEqual(tokens.items.len, gen.len());
+        var j: usize = 0;
         while (gen.next()) |tok| : (j += 1) {
             try std.testing.expect(utilsl.equal(u8, tokens.items[j], tok));
         }
@@ -123,20 +121,18 @@ test "stacked pawns" {
 }
 
 test "safety area" {
-    moveTablel._initTables(false);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.e4), 0x927c7cee7c7c92);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a1), 0x907070e);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a4), 0x907070e070709);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.a8), 0xe07070900000000);
-    try std.testing.expectEqual(chessl.safetyArea(squarel.e_square.e8), 0xee7c7c9200000000);
+    try std.testing.expectEqual(0x7c7c6c7c7c00, chessl.safetyArea(squarel.e_square.e4));
+    try std.testing.expectEqual(0x70706, chessl.safetyArea(squarel.e_square.a1));
+    try std.testing.expectEqual(0x70706070700, chessl.safetyArea(squarel.e_square.a4));
+    try std.testing.expectEqual(0x607070000000000, chessl.safetyArea(squarel.e_square.a8));
+    try std.testing.expectEqual(0x6c7c7c0000000000, chessl.safetyArea(squarel.e_square.e8));
 
     std.log.info("[TEST]: safety area passed\n", .{});
 }
 test "pins" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
-    const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
+    chessl.initAll();
     const fen = "k1N4R/1q2q1rq/8/1Q1Pp3/q2PKP1q/3PPP2/4q1q1/1q6 w - - 0 0";
     var board = chessl.getBoardFromFen(fen) catch unreachable;
     chessl.getCheckers(&board, true);
@@ -148,6 +144,19 @@ test "pins" {
     try std.testing.expectEqual(chessl.EMPTY, board.frame.checkersBB);
     try std.testing.expectEqual(0x7e00000000000000, board.frame.pinnedBB);
 
-    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.c8), @intFromEnum(squarel.e_square.d6), @intFromEnum(movel.e_moveFlags.QUIETMOVE))));
-    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.build_move(@intFromEnum(squarel.e_square.b5), @intFromEnum(squarel.e_square.a5), @intFromEnum(movel.e_moveFlags.QUIETMOVE))));
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.e_build_move(.c8, .d6, .QUIETMOVE), false));
+    try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.e_build_move(.b5, .a5, .QUIETMOVE), false));
+
+    //board = try chessl.getBoardFromFen("7K/5Q2/8/8/8/5P2/5k2/8 w - - 0 1");
+    //try std.testing.expect(!moveGenl.moveDeliverCheck(&board, movel.e_build_move(.f3, .f4, .QUIETMOVE), false));
+
+    //board = try chessl.getBoardFromFen("7K/8/8/8/8/8/1Q2Pk2/8 w - - 0 1");
+    //try std.testing.expect(moveGenl.moveDeliverCheck(&board, movel.e_build_move(.e2, .e3, .QUIETMOVE), false));
+}
+test "upper lower" {
+    try std.testing.expectEqual('a', utilsl.lowerLetter('A'));
+    try std.testing.expectEqual('z', utilsl.lowerLetter('Z'));
+
+    try std.testing.expectEqual('A', utilsl.upperLetter('a'));
+    try std.testing.expectEqual('Z', utilsl.upperLetter('z'));
 }

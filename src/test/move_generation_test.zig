@@ -2,29 +2,44 @@ const chessl = @import("../chess.zig");
 const moveGenl = @import("../move_generation.zig");
 const movel = @import("../move.zig");
 const squarel = @import("../square.zig");
-const benchmarkl = @import("../benchmark.zig");
 const hashl = @import("../hashTable.zig");
 const mainl = @import("../main.zig");
-const perftl = @import("../search/perft.zig");
+const perftl = @import("../perft.zig");
 const stringl = @import("../string.zig");
 const bookl = @import("../book.zig");
 const timel = @import("../time.zig");
+const typel = @import("../type.zig");
+const boardl = @import("../board.zig");
 
 const std = @import("std");
 
-const Board_state = chessl.Board_state;
-
 test "en passant checking" {
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
-    const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
-    var tmp: Board_state = try chessl.getBoardFromFen("5bnr/5ppp/1Q6/2Bkp3/3pP3/3P4/5PPP/4KBNR b H e3 0 39");
+    chessl.initAll();
+    var tmp = try chessl.getBoardFromFen("5bnr/5ppp/1Q6/2Bkp3/3pP3/3P4/5PPP/4KBNR b H e3 0 39");
     const allMoves = moveGenl.generateLegalMoves(&tmp);
     try std.testing.expectEqual(allMoves.len, 1);
     const move = allMoves.moves[0];
     try std.testing.expect(move.isEnpassant());
     try std.testing.expectEqual(allMoves.len, 1);
+
+    std.log.info("[TEST]: En passant checking passed\n", .{});
+}
+test "misc move amount check" {
+    chessl.initAll();
+    var tmp = try chessl.getBoardFromFen("8/5pk1/7p/7P/4r1PK/8/5P2/4b3 w - - 1 1");
+    const allMoves = moveGenl.generateLegalMoves(&tmp);
+    const badMove = movel.build_move(@intFromEnum(typel.e_square.f2), @intFromEnum(typel.e_square.f4), @intFromEnum(typel.e_moveFlags.DOUBLEPAWN));
+    try std.testing.expect(!badMove.isIn(allMoves));
+    try std.testing.expectEqual(2, allMoves.len);
+
+    std.log.info("[TEST]: En passant checking passed\n", .{});
+}
+test "en passant pinned" {
+    chessl.initAll();
+    var tmp = try chessl.getBoardFromFen("4Q3/7p/8/8/4RPpk/4B2q/P7/5RK b - f3 0 69");
+    const allMoves = moveGenl.generateLegalMoves(&tmp);
+    const badMove = movel.build_move(@intFromEnum(typel.e_square.g4), @intFromEnum(typel.e_square.f3), @intFromEnum(typel.e_moveFlags.ENPASSANT));
+    try std.testing.expect(!badMove.isIn(allMoves));
 
     std.log.info("[TEST]: En passant checking passed\n", .{});
 }
@@ -49,14 +64,13 @@ test "perft - startpos" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
+    chessl.initAll();
     const perft_THREAD = 1;
     const perft_BATCHED = true;
     const perft_MAX_DEPTH = 6;
-    var board: Board_state = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    var board = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     var threaded: std.Io.Threaded = .init_single_threaded;
     const io = threaded.io();
-    //try std.testing.expect(!hashl.isHashTable_init());
     for (1..perft_MAX_DEPTH + 1) |depth| {
         const _start = std.Io.Timestamp.now(io, .real).toMicroseconds();
         const res = perftl.perftThreadStart(&board, arena, @intCast(depth), perft_THREAD, perft_BATCHED) catch {
@@ -78,33 +92,64 @@ test "book algebraic" {
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    mainl.initAll(arena, false);
+    chessl.initAll();
     var io = std.Io.Threaded.init(arena, .{});
     mainl.GLOBAL_CTX.setIO(io.io());
     const path = "opening/8moves_v3.pgn";
-    var s = try stringl.string.initFromSlice(arena, path);
-    defer s.free(arena);
-    try bookl.test_db(&s, arena, true);
+    try bookl.test_db(path, arena, true);
 
     defer hashl._freeHash(arena, false);
     std.log.info("[TEST]: Reading random algebraic position passed\n", .{});
 }
 
 test "draw detection" {
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
-    const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
-    var tmp: Board_state = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
+    chessl.initAll();
+    var tmp = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     try chessl.applyUciMoves(&tmp, "position startpos e2e3 e7e5 d1f3 c7c6 d2d4 d8e7 c1d2 e5d4 f1d3 e7e5 f3g3 e5g3 h2g3 d4e3 d2e3 f8b4 e3d2 b4d2 b1d2 g8f6 d2c4 d7d5 c4d6 e8e7 d6c8 h8c8 f2f4 e7e6 g1f3 c6c5 f3g5 e6e7 c2c3 h7h6 g5f3 b8c6 d3b5 a7a6 b5a4 c6a5 f3e5 e7e6 g3g4 a5c4 e5c4 d5c4 e1c1 e6e7 g4g5 h6g5 f4g5 f6g4 d1d7 e7e6 d7b7 c8d8 h1f1 d8d6 f1f7 e6d5 a4d1 g4e5 d1f3 e5f3 g2f3 g7g6 b7e7 a8h8 f7h7 h8h7 e7h7 d5e5 h7f7 d6b6 c1b1 b6c6 b1c1 c6b6 c1b1 b6c6 b1c1", false);
     const allMoves = moveGenl.generateLegalMoves(&tmp);
-    const nUntilDraw = tmp.moveHistory.getRepetitions();
+    const nUntilDraw = tmp.moveHistory.getRepetitions(tmp.frame.halfMoveClock);
+    const frame: boardl.boardFrame = .copy(&tmp);
     for (0..allMoves.len) |i| {
         tmp.makeMove(allMoves.moves[i]);
         _ = tmp.undoMove();
-        try std.testing.expectEqual(nUntilDraw, tmp.moveHistory.getRepetitions());
+        tmp.frame = frame;
+        try std.testing.expectEqual(nUntilDraw, tmp.moveHistory.getRepetitions(tmp.frame.halfMoveClock));
     }
     std.log.info("[TEST]: Draw detection case passed\n", .{});
+}
+
+pub const benchmarkEntries = [_][]const u8{
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 ",
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ",
+    "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1",
+    "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9",
+};
+
+test "pseudo legal move generator" {
+    chessl.initAll();
+    for (0..benchmarkEntries.len) |i| {
+        const state = try chessl.getBoardFromFen(benchmarkEntries[i]);
+        var gen: moveGenl.typeMoveGenerator = .{};
+        const count = gen.getMoveCounts(&state);
+        const fmoves = moveGenl.generateLegalMoves(&state);
+        _ = count.compare(moveGenl.genTypeCountFromState(&state)) catch |e| {
+            switch (e) {
+                moveGenl.genError.quietMoveErr => {
+                    gen.generateMove(.QUIET, &state);
+                    gen.quiets.moves.printDifference(fmoves);
+                },
+                moveGenl.genError.captureMoveErr => {
+                    gen.generateMove(.CAPTURE, &state);
+                    gen.captures.moves.printDifference(fmoves);
+                },
+                moveGenl.genError.allMoveErr, moveGenl.genError.evasionMoveErr => {},
+                //moveGenl.genError.evasionMoveErr => {
+                //    gen.generateMove(.EVASION, &state);
+                //    gen._moves.moves.printDifference(fmoves);
+                //},
+            }
+        };
+    }
 }
 
 pub fn main() void {

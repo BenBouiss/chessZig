@@ -6,13 +6,20 @@ pub const stopWatch = struct {
     startTimeUs: i64 = 0,
     started: bool = false,
     savedTimeUs: i64 = 0,
+    _io: std.Io = undefined,
+    pub fn init(comptime started: bool) stopWatch {
+        if (comptime started) {
+            return .{ .startTimeUs = std.Io.Timestamp.now(mainl.getGlobalIo(), .awake).toMicroseconds(), .started = true, .savedTimeUs = 0 };
+        }
+        return .{ .startTimeUs = 0, .started = false, .savedTimeUs = 0 };
+    }
 
     pub fn print(self: *const stopWatch) void {
         std.debug.print("Started: {}, startime: {d}, saved time: {d}, started {d} us ago\n", .{ self.started, self.startTimeUs, self.savedTimeUs, self.timeSinceStartUs() });
     }
     pub inline fn startTimeTick(p_self: *stopWatch) void {
         std.debug.assert(!p_self.started);
-        p_self.startTimeUs = std.Io.Timestamp.now(mainl.getGlobalIo(), .real).toMicroseconds();
+        p_self.startTimeUs = std.Io.Timestamp.now(mainl.getGlobalIo(), .awake).toMicroseconds();
         p_self.started = true;
     }
     pub inline fn stop(p_self: *stopWatch) void {
@@ -22,7 +29,7 @@ pub const stopWatch = struct {
     pub inline fn timeSinceStartUs(p_self: *const stopWatch) i64 {
         std.debug.assert(p_self.startTimeUs != 0);
         if (p_self.started) {
-            return std.Io.Timestamp.now(mainl.getGlobalIo(), .real).toMicroseconds() - p_self.startTimeUs;
+            return std.Io.Timestamp.now(mainl.getGlobalIo(), .awake).toMicroseconds() - p_self.startTimeUs;
         } else {
             std.debug.assert(p_self.savedTimeUs != 0);
             return p_self.savedTimeUs;
@@ -39,6 +46,12 @@ pub const stopWatch = struct {
         p_self.startTimeUs = 0;
         p_self.savedTimeUs = 0;
     }
+    pub inline fn restart(p_self: *stopWatch) void {
+        p_self.startTimeUs = std.Io.Timestamp.now(mainl.getGlobalIo(), .awake).toMicroseconds();
+    }
+    pub inline fn addUs(p_self: *stopWatch, timeUs: i64) void {
+        p_self.savedTimeUs += timeUs;
+    }
 };
 // implement to implement a sort of ping every x seconds, ms...
 // call .tick returns bool
@@ -51,15 +64,11 @@ pub const timer = struct {
         return ret;
     }
     pub fn tick(self: *timer) bool {
-        if (self.sw.timeSinceStartUs() > self.frequencyUs) {
-            self.sw.reset();
-            self.sw.startTimeTick();
+        const delta = self.sw.timeSinceStartUs();
+        if (delta > self.frequencyUs) {
+            self.sw.addUs(delta);
             return true;
         }
         return false;
     }
 };
-
-pub fn main() !void {
-    //
-}

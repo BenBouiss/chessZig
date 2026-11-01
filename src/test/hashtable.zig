@@ -4,32 +4,34 @@ const std = @import("std");
 const stringl = @import("../string.zig");
 const bookl = @import("../book.zig");
 const chessl = @import("../chess.zig");
+const filel = @import("../file.zig");
 
 test "entry retrievale" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    mainl.initAll(arena, false);
+    chessl.initAll();
     hashl._initOrReallocHashTable(arena, 25, false);
-    for (0..100) |i| {
+    const m: u64 = (chessl.ONE << hashl.KEY_SHIFT);
+    for (0..50) |i| {
         const code1: u64 = @intCast(i);
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code1 }, 1, @intCast(i * i));
-        try std.testing.expect(hashl.hashTable.storeEntry(&entry, code1));
+        const entry = hashl.buildEntryFromMatchResult(code1, 1, @intCast(2 * i), 0);
+        try std.testing.expect(hashl.hashTable.storeEntry(entry, code1));
 
-        const code2 = @as(u64, @intCast(i)) + hashl.hashTable.size;
-        const entry2 = hashl.buildEntryFromMatchResult(.{ .code = code2 }, 2, @intCast(i * i * i));
-        try std.testing.expect(hashl.hashTable.storeEntry(&entry2, code2));
+        const code2 = @as(u64, @intCast(i)) + m;
+        const entry2 = hashl.buildEntryFromMatchResult(code2, 2, @intCast(3 * i), 0);
+        try std.testing.expect(hashl.hashTable.storeEntry(entry2, code2));
     }
-    for (0..100) |i| {
-        const entry = hashl.getEntryFromMatch(.{ .code = @intCast(i) }, 1);
+    for (0..50) |i| {
+        const entry = hashl.getEntryFromMatch(@intCast(i), 1);
         try std.testing.expect(entry.?.valid());
 
-        const entry2 = hashl.getEntryFromMatch(.{ .code = @as(u64, @intCast(i)) + hashl.hashTable.size }, 1);
+        const entry2 = hashl.getEntryFromMatch(@as(u64, @intCast(i)) + m, 1);
         try std.testing.expect(entry2.?.valid());
 
         const bucket = hashl.hashTable.getBucketFromFullHashIndex(@intCast(i));
-        try std.testing.expectEqual(bucket.len, 2);
+        try std.testing.expectEqual(bucket.len(), 2);
     }
 
     std.log.info("[TEST]: entry storing passed\n", .{});
@@ -40,26 +42,25 @@ test "entry overwrite" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
+    chessl.initAll();
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
 
-    const m: u64 = @intCast(hashl.hashTable.size);
+    const m: u64 = @intCast((chessl.ONE << hashl.KEY_SHIFT));
     const code: u64 = 4;
-    //const depths = [_]u8{ 1, 4 };
 
     for (0..100) |i| {
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, @intCast(i), @intCast(i));
-        try std.testing.expect(hashl.hashTable.storeEntry(&entry, code));
+        const entry = hashl.buildEntryFromMatchResult(code, @intCast(i), @intCast(i), 0);
+        try std.testing.expect(hashl.hashTable.storeEntry(entry, code));
     }
     const bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
 
-    try std.testing.expectEqual(1, bucket.len);
+    try std.testing.expectEqual(1, bucket.len());
 
-    const entry = hashl.buildEntryFromMatchResult(.{ .code = code + m }, 200, 0);
-    try std.testing.expect(hashl.hashTable.storeEntry(&entry, code + m));
+    const entry = hashl.buildEntryFromMatchResult(code + m, 0, 200, 0);
+    try std.testing.expect(hashl.hashTable.storeEntry(entry, code + m));
 
-    try std.testing.expectEqual(2, bucket.len);
+    try std.testing.expectEqual(2, bucket.len());
 
     std.log.info("[TEST]: entry overwrite passed\n", .{});
 }
@@ -68,17 +69,17 @@ test "entry replacement" {
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
-    mainl.initAll(arena, false);
+    chessl.initAll();
     hashl._initOrReallocHashTable(arena, 25, false);
     defer hashl.hashTable.free(arena, false);
     const d = [_]u8{ 16, 4 };
     const code: u64 = 42;
     for (0..d.len) |i| {
-        const entry = hashl.buildEntryFromMatchResult(.{ .code = code }, d[i], 1);
-        std.debug.assert(hashl.hashTable.storeEntry(&entry, code));
+        const entry = hashl.buildEntryFromMatchResult(code, 1, d[i], 0);
+        std.debug.assert(hashl.hashTable.storeEntry(entry, code));
     }
     const _bucket = hashl.hashTable.getBucketFromFullHashIndex(code);
-    try std.testing.expectEqual(1, _bucket.len);
+    try std.testing.expectEqual(1, _bucket.len());
 
     std.log.info("[TEST]: entry replacement passed\n", .{});
 }
@@ -97,41 +98,43 @@ const fenNode = struct {
 // loop over the opening book, fill a hashMap of fen -> key
 // check that key is always same of same fen
 test "zobrist key consistency" {
-    //var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    //defer arena_allocator.deinit();
-    //const alloc = arena_allocator.allocator();
     const alloc = std.heap.page_allocator;
-    mainl.initAll(alloc, false);
+    chessl.initAll();
     //
     const path = "opening/8moves_v3.pgn";
-    var s = try stringl.string.initFromSlice(alloc, path);
-    defer s.free(alloc);
-    var db = try bookl.openingDatabase.init(alloc, &s, 42);
+    if (!filel.fileExists(path)) {
+        return;
+    }
+
+    var db = try bookl.openingDatabase.init(alloc, path, 42, false);
     defer db.free(alloc);
-    var openings: std.ArrayList(stringl.string) = .empty;
-    openings = db.drawnEntries;
+    const openings = db.drawnEntries;
 
     const base = try chessl.getBoardFromFen(chessl.DEFAULT_FEN);
     var tmp = base.copy();
     var map: std.StringHashMap(u64) = .init(alloc);
     var keys: std.DoublyLinkedList = .{};
     for (0..openings.items.len) |i| {
-        var algeFen = openings.items[i];
+        var algeFen = openings.items[i].v;
 
-        _ = try chessl._algebraicLineToIMoveMatch(alloc, &algeFen, &tmp);
+        _ = try chessl._algebraicLineToIMoveMatch(algeFen._slice(), &tmp);
+        //chessl.print_boardstate(&tmp);
+        //std.debug.print("line {s}\n", .{algeFen._slice()});
+        const set = hashl.fullComputeZobristKeys(&tmp);
+        try std.testing.expectEqual(set.key, tmp.frame.key);
 
         const fen = tmp.get_fen();
 
         if (map.contains(fen[0..fen.len])) {
             const k = map.get(fen[0..fen.len]).?;
-            if (k != tmp.frame.key.code) {
+            if (k != tmp.frame.key) {
                 std.debug.print("error at fen {s}\n", .{fen});
-                try std.testing.expectEqual(k, tmp.frame.key.code);
+                try std.testing.expectEqual(k, tmp.frame.key);
             }
         } else {
             //std.debug.print("put\n", .{});
             const n: *fenNode = try .init(alloc, &fen);
-            try map.put(n.val[0..n.val.len], tmp.frame.key.code);
+            try map.put(n.val[0..n.val.len], tmp.frame.key);
             keys.append(&n.node);
         }
 

@@ -1,0 +1,204 @@
+import matplotlib.pyplot as plt
+import matplotlib
+
+# matplotlib.use("TkAgg")
+from dataclasses import dataclass
+import numpy as np
+import numpy.typing as npt
+import random
+import math
+import copy
+
+MAX_PLY = 255
+
+
+def depthToMilliDepth(md: int) -> int:
+    return md << 10
+
+
+def milliDepthToDepth(md: int) -> int:
+    return md >> 10
+
+
+def lmrFDepth(md: int) -> int:
+    return int(md / 2)
+
+
+@dataclass
+class heuristics:
+    lmr_expectedCutOff: int = 400
+    lmr_notImproving: int = 300
+    lmr_hashMoveCapture: int = 100
+    lmr_baseDeficit: int = 1024
+    lmr_badCapture: int = 25
+    lmr_oldMulti: int = 4
+    lmr_givesCheck: int = -600
+    lmr_killerMove: int = -250
+    lmr_inPvNode: int = -200
+    lmr_isPromotion: int = -150
+    lmr_threatening: int = -100
+
+
+@dataclass
+class modifiers:
+    expectCutOff: bool = False
+    improving: bool = False
+    hashMoveCapture: bool = False
+    badCapture: bool = False
+    # isChecked: bool = False
+    givesCheck: bool = False
+    killerMove: bool = False
+    pvNode: bool = False
+    promotion: bool = False
+    threatening: bool = False
+    indexMove: int = 0
+
+
+def randomModifier() -> modifiers:
+    attr = {}
+    template = modifiers()
+    for x in modifiers.__dataclass_fields__:
+        # isBool = type(template.__dict__[x]) is bool
+        if type(template.__dict__[x]) is bool:
+            attr[x] = random.randint(0, 1) == 0
+        elif type(template.__dict__[x]) is int:
+            attr[x] = random.randint(1, 32)
+
+    return modifiers(**attr)
+
+
+def sampleModifier(n: int, seed: int) -> list[modifiers]:
+    random.seed(seed)
+    ret = []
+    for _ in range(n):
+        ret.append(randomModifier())
+    return ret
+
+
+def computeDepth(values: heuristics, move: modifiers, depth: int) -> int:
+    s: int = values.lmr_baseDeficit
+    if move.pvNode:
+        s += values.lmr_inPvNode
+    if not move.improving:
+        s += values.lmr_notImproving
+    if move.hashMoveCapture:
+        s += values.lmr_hashMoveCapture
+    if move.expectCutOff:
+        s += values.lmr_expectedCutOff
+    if move.givesCheck:
+        s += values.lmr_givesCheck
+    if move.promotion:
+        s += values.lmr_isPromotion
+    if move.killerMove:
+        s += values.lmr_killerMove
+    if move.badCapture:
+        s += values.lmr_badCapture
+    if move.threatening:
+        s += values.lmr_threatening
+    s += values.lmr_oldMulti * move.indexMove
+    fDepth = lmrFDepth(depthToMilliDepth(depth))
+    ret = depth - 1 - min((max(s, 0) * fDepth) >> 20, depth - 1)
+    return ret
+
+
+def linearComputeDepth(values: heuristics, move: modifiers, depth: int) -> int:
+    s: int = values.lmr_baseDeficit
+    if move.pvNode:
+        s += values.lmr_inPvNode
+    if not move.improving:
+        s += values.lmr_notImproving
+    if move.hashMoveCapture:
+        s += values.lmr_hashMoveCapture
+    if move.expectCutOff:
+        s += values.lmr_expectedCutOff
+    if move.givesCheck:
+        s += values.lmr_givesCheck
+    if move.promotion:
+        s += values.lmr_isPromotion
+    if move.killerMove:
+        s += values.lmr_killerMove
+    if move.badCapture:
+        s += values.lmr_badCapture
+    if move.threatening:
+        s += values.lmr_threatening
+    s += values.lmr_oldMulti * move.indexMove
+    s += lmrFDepth(depthToMilliDepth(depth))
+    ret = depth - 1 - min((max(s, 0)) >> 10, depth - 1)
+    return ret
+
+
+def extrapolate(values: heuristics, move: modifiers) -> list[int]:
+    ret = [0] * MAX_PLY
+    for d in range(MAX_PLY):
+        ret[d] = computeDepth(values, move, d)
+    return ret
+
+
+def reduceFraction(values: heuristics, move: modifiers) -> npt.NDArray[np.float64]:
+    defaultReduce = np.array([max(0, d - 1) for d in range(MAX_PLY)])
+    reduced = np.array(extrapolate(values, move))
+    delta = 100 * (defaultReduce - reduced) / (defaultReduce + 1)
+    return delta
+
+
+def testLinspace(arr: npt.NDArray[np.float64]):
+    a = (
+        np.interp(np.arange(0, 100) / 100 * len(arr), np.arange(0, len(arr)), arr)
+        * np.geomspace(0.5, 10, 100)
+    ).astype(int)
+    print(a)
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+
+if __name__ == "__main__":
+    val = heuristics()
+    stdDepths = extrapolate(
+        val,
+        modifiers(
+            expectCutOff=False,
+            improving=True,
+            hashMoveCapture=False,
+            badCapture=False,
+            givesCheck=False,
+            killerMove=False,
+            pvNode=True,
+            promotion=False,
+            threatening=False,
+        ),
+    )
+    prioDepths = extrapolate(
+        val,
+        modifiers(
+            expectCutOff=False,
+            improving=True,
+            hashMoveCapture=False,
+            badCapture=False,
+            givesCheck=True,
+            killerMove=True,
+            pvNode=True,
+            promotion=False,
+            threatening=True,
+        ),
+    )
+    depthExtent = 16
+    fig, ax = plt.subplots()
+    ax.plot(list(range(depthExtent)), label="y=x")
+    ax.plot(stdDepths[:depthExtent], label="std")
+    ax.plot(prioDepths[:depthExtent], label="prio")
+    modifs = sampleModifier(8, 42)
+    for x in modifs:
+        ax.plot(
+            extrapolate(val, x)[:depthExtent],
+            label="random",
+        )
+
+    fig.legend()
+
+    fig.show()
+    plt.show()
+
+    while input("Press q to quit: ") != "q":
+        pass

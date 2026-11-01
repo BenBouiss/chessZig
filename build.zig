@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 // Although this function looks imperative, it does not perform the build
 // directly and instead it mutates the build graph (`b`) that will be then
@@ -11,7 +12,7 @@ pub fn build(b: *std.Build) void {
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
     // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
+
     // Standard optimization options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
@@ -25,13 +26,21 @@ pub fn build(b: *std.Build) void {
     const build_options = b.addOptions();
     // add command line flag
     // and set default value
-    build_options.addOption(bool, "fastBitscan", b.option(bool, "fastBitscan", "Use the branchless version of bitscan and reverse bitscan") orelse false);
-    build_options.addOption(bool, "useMagic", b.option(bool, "useMagic", "Use magic generation for ray pieces") orelse false);
-    build_options.addOption(bool, "useStaged", b.option(bool, "useStaged", "Use the staged move generation") orelse false);
     build_options.addOption(bool, "useDebug", b.option(bool, "useDebug", "Use debugging checks in the gen/make/unmake of move") orelse false);
-    build_options.addOption(bool, "useHash", b.option(bool, "useHash", "Use hashtable for perft") orelse false);
 
     build_options.addOption(bool, "useAVX2", b.option(bool, "useAVX2", "Use avx2 for checkers bitboard generation") orelse false);
+
+    build_options.addOption(bool, "useTune", b.option(bool, "useTune", "Tuning mode for spsa tuning") orelse false);
+
+    build_options.addOption(bool, "useSSE2", b.option(bool, "useSSE2", "Use SSE2 instruction for NNUE opt") orelse true);
+    build_options.addOption(bool, "useSSE", b.option(bool, "useSSE", "Use SSE instruction for NNUE opt") orelse false);
+
+    const windows = b.option(bool, "windows", "Target Microsoft Windows") orelse false;
+
+    //const target = b.standardTargetOptions(.{});
+    const target = b.resolveTargetQuery(.{
+        .os_tag = if (windows) .windows else null,
+    });
 
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
@@ -40,18 +49,19 @@ pub fn build(b: *std.Build) void {
     // to our consumers. We must give it a name because a Zig package can expose
     // multiple modules and consumers will need to be able to specify which
     // module they want to access.
-    const mod = b.addModule("Chess", .{
-        // The root source file is the "entry point" of this module. Users of
-        // this module will only be able to access public declarations contained
-        // in this file, which means that if you have declarations that you
-        // intend to expose to consumers that were defined in other files part
-        // of this module, you will have to make sure to re-export them from
-        // the root file.
-        .root_source_file = b.path("src/root.zig"),
-        // Later on we'll use this module as the root module of a test executable
-        // which requires us to specify a target.
-        .target = target,
-    });
+
+    //const mod = b.addModule("Chess", .{
+    //    // The root source file is the "entry point" of this module. Users of
+    //    // this module will only be able to access public declarations contained
+    //    // in this file, which means that if you have declarations that you
+    //    // intend to expose to consumers that were defined in other files part
+    //    // of this module, you will have to make sure to re-export them from
+    //    // the root file.
+    //    .root_source_file = b.path("src/root.zig"),
+    //    // Later on we'll use this module as the root module of a test executable
+    //    // which requires us to specify a target.
+    //    .target = target,
+    //});
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -72,8 +82,9 @@ pub fn build(b: *std.Build) void {
     const engine = b.addExecutable(.{
         .name = "engine",
         .root_module = b.createModule(.{
-            //.unwind_tables = .none,
-            //.strip = true,
+            //.unwind_tables = if (optimize == .fast) .none else (null),
+            //.strip = if (optimize == .fast) true else (null),
+
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
             // this package, which is why in this case we don't have to give it a name.
@@ -86,41 +97,23 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             // List of modules available for import in source files part of the
             // root module.
-            .imports = &.{
-                // Here "Chess" is the name you will use in your source code to
-                // import this module (e.g. `@import("Chess")`). The name is
-                // repeated because you are allowed to rename your imports, which
-                // can be extremely useful in case of collisions (which can happen
-                // importing modules from different packages).
-                .{ .name = "engine_l", .module = mod },
-            },
+            //.link_libc = true,
         }),
     });
     const chess = b.addExecutable(.{
         .name = "chess",
         .root_module = b.createModule(.{
+            //.unwind_tables = if (optimize == .fast) .none else (null),
+            //.strip = if (optimize == .fast) true else (null),
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{
-                .{ .name = "gui_l", .module = mod },
-            },
+            //.link_libc = true,
         }),
     });
-    const evaluate = b.addExecutable(.{
-        .name = "evaluate",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/evaluateEngine.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "evaluate_l", .module = mod },
-            },
-        }),
-    });
+
     engine.root_module.addOptions("build_options", build_options);
     chess.root_module.addOptions("build_options", build_options);
-    evaluate.root_module.addOptions("build_options", build_options);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -128,7 +121,6 @@ pub fn build(b: *std.Build) void {
     // by passing `--prefix` or `-p`.
     b.installArtifact(engine);
     b.installArtifact(chess);
-    b.installArtifact(evaluate);
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).
@@ -152,22 +144,16 @@ pub fn build(b: *std.Build) void {
 
     // This allows the user to pass arguments to the application in the build
     // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+
+    // zig 0.17
+    run_cmd.addPassthruArgs();
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
-    //const mod_tests = b.addTest(.{
-    //    .root_module = mod,
-    //});
     const mod_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/test.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{
-            .{ .name = "Chess", .module = mod },
-        },
     }) });
 
     mod_tests.root_module.addOptions("build_options", build_options);

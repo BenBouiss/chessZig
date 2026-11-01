@@ -8,8 +8,10 @@ const mainl = @import("main.zig");
 const string = stringl.string;
 
 pub const file_err = error{
+    itemNotFound_error,
     fileNotFound_error,
     mem_error,
+    fileAlreadyExists_error,
 };
 
 pub fn fileExists(path: []const u8) bool {
@@ -28,7 +30,21 @@ pub fn dirExists(path: []const u8) bool {
 pub fn makedirR(path: []const u8) !void {
     try std.Io.Dir.createDir(.cwd(), mainl.getGlobalIo(), path, @enumFromInt(0));
     try std.Io.Dir.createDirPath(.cwd(), mainl.getGlobalIo(), path);
-    return;
+}
+pub fn parentDir(path: []const u8) ?[]const u8 {
+    const end = std.mem.findLast(u8, path, "/") orelse return null;
+    return path[0..end];
+}
+pub fn allocFullFile(alloc: std.mem.Allocator, path: []const u8) ![]u8 {
+    if (!fileExists(path)) {
+        return file_err.fileNotFound_error;
+    }
+    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{});
+    defer file.close(mainl.getGlobalIo());
+    const file_size = try file.length(mainl.getGlobalIo());
+    const buffer = try alloc.alloc(u8, file_size);
+    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer, 0);
+    return buffer;
 }
 
 pub fn getTokensFromFileAlloc(alloc: std.mem.Allocator, path: []const u8, sep: u8, maxsize: i64, nskips: usize) anyerror!std.ArrayList(string) {
@@ -46,7 +62,8 @@ pub fn getTokensFromFileAlloc(alloc: std.mem.Allocator, path: []const u8, sep: u
     var buffer: []u8 = try alloc.alloc(u8, file_size);
     defer alloc.free(buffer);
     //_ = try file.read(buffer[0..buffer.len]);
-    _ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
+    //_ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
+    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer[0..buffer.len], 0);
     const _sep: []const u8 = &[_]u8{sep};
     var flines = std.mem.tokenizeAny(u8, buffer, _sep);
     var count: u64 = 0;
@@ -73,41 +90,7 @@ pub fn getTokensFromFileAlloc(alloc: std.mem.Allocator, path: []const u8, sep: u
     return ret;
 }
 pub fn getTokensFromFile(alloc: std.mem.Allocator, path: []const u8, sep: u8) anyerror!std.ArrayList(string) {
-    if (!fileExists(path)) {
-        return file_err.fileNotFound_error;
-    }
-    var ret = std.ArrayList(string).initCapacity(alloc, 2) catch {
-        return file_err.mem_error;
-    };
-
-    const file = try std.Io.Dir.openFile(.cwd(), mainl.getGlobalIo(), path, .{ .mode = .read_only });
-    defer file.close(mainl.getGlobalIo());
-
-    var buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-    var f_reader = file.reader(mainl.getGlobalIo(), &buffer);
-    const reader = &f_reader.interface;
-    while (true) {
-        var _buffer: [configl.MAX_USER_INPUT]u8 = std.mem.zeroes([configl.MAX_USER_INPUT]u8);
-        var w: std.Io.Writer = .fixed(&_buffer);
-
-        const size = reader.streamDelimiter(&w, sep) catch {
-            break;
-        };
-        reader.toss(1);
-        if (size <= 1) {
-            continue;
-        }
-        const s = string.initFromSlice(alloc, _buffer[0..size]) catch {
-            ret.deinit(alloc);
-            return file_err.mem_error;
-        };
-
-        ret.append(alloc, s) catch {
-            ret.deinit(alloc);
-            return file_err.mem_error;
-        };
-    }
-    return ret;
+    return try getTokensFromFileAlloc(alloc, path, sep, std.math.maxInt(i64), 0);
 }
 pub fn getFileLineSize(alloc: std.mem.Allocator, path: []const u8) anyerror!u64 {
     if (!fileExists(path)) {
@@ -119,7 +102,9 @@ pub fn getFileLineSize(alloc: std.mem.Allocator, path: []const u8) anyerror!u64 
     defer file.close(mainl.getGlobalIo());
     var buffer: []u8 = try alloc.alloc(u8, @intCast(file_size));
     defer alloc.free(buffer);
-    _ = file.readerStreaming(mainl.getGlobalIo(), buffer[0..buffer.len]);
+    _ = try file.readPositionalAll(mainl.getGlobalIo(), buffer[0..buffer.len], 0);
+    //std.debug.print("{s}\n", .{buffer[0..25]});
+
     const _sep: []const u8 = &[_]u8{'\n'};
     var flines = std.mem.tokenizeAny(u8, buffer, _sep);
     var count: u64 = 0;
@@ -128,8 +113,9 @@ pub fn getFileLineSize(alloc: std.mem.Allocator, path: []const u8) anyerror!u64 
     }
     return count;
 }
+
+/// Does not support very weird path
 pub fn joinPath(alloc: std.mem.Allocator, p1: []const u8, p2: []const u8) !stringl.string {
-    // does not support very weird path
     const _p1 = utilsl.stripStr(p1);
     var _p2 = utilsl.stripStr(p2);
 
@@ -150,10 +136,29 @@ pub fn joinPath(alloc: std.mem.Allocator, p1: []const u8, p2: []const u8) !strin
     _ = ret.extend(_p2);
     return ret;
 }
-pub fn main(alloc: std.mem.Allocator, path: []const u8) !void {
-    var tokens = try getTokensFromFile(alloc, path, '\n');
-    defer stringl.freeArrayList_string(alloc, &tokens);
-    for (0..tokens.items.len) |i| {
-        std.debug.print("Token: n°{d}: {s} \n", .{ i, tokens.items[i]._slice() });
-    }
+
+pub fn fileReader(comptime SIZE: usize) type {
+    return struct {
+        buf: [SIZE]u8 = @splat(0),
+        filename: string,
+        f: std.Io.File,
+        reader: std.Io.File.Reader,
+        const Self = @This();
+        pub fn init(filename: string, io: std.Io) !Self {
+            const file = try std.Io.Dir.openFile(.cwd(), io, filename._slice(), .{});
+            var ret: Self = .{ .f = file, .reader = undefined, .filename = filename };
+            ret.reader = file.reader(io, &ret.buf);
+            return ret;
+        }
+        pub fn nextLine(self: *Self) ?[]u8 {
+            self.reader.interface.buffer = &self.buf;
+            return self.reader.interface.takeDelimiter('\n') catch |e| {
+                std.debug.print("newline caught {}\n", .{e});
+                return null;
+            };
+        }
+        pub fn close(self: *Self, io: std.Io) void {
+            self.f.close(io);
+        }
+    };
 }
