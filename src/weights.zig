@@ -118,6 +118,7 @@ const WEIGHT_MIN: scoreType = 1;
 // global things here
 pub fn appendAll(alloc: std.mem.Allocator) !void {
     modif_val();
+    // mobility
     add_param(alloc, &global_MobilityVal[0], WEIGHT_MIN, 200, "global_MobilityVal_MG");
     add_param(alloc, &global_MobilityVal[1], WEIGHT_MIN, 200, "global_MobilityVal_EG");
 

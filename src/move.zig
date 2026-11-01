@@ -126,13 +126,13 @@ pub const IMove = extern struct {
         return (self.getFlag() == @backingInt(e_moveFlags.DOUBLEPAWN));
     }
     pub inline fn isValid(self: IMove) bool {
-        return (self.m_move != 0);
+        return self.m_move != 0;
     }
     pub inline fn copy(self: IMove) IMove {
         return .{ .m_move = self.m_move };
     }
     pub fn getStr(self: IMove) [5]u8 {
-        var strM: [5]u8 = undefined;
+        var strM: [5]u8 = @splat(0);
         const r1 = chess.strFromLERF(@fromBackingInt(@intCast(self.getFrom())));
         const r2 = chess.strFromLERF(@fromBackingInt(@intCast(self.getTo())));
         strM[0] = r1[0];
@@ -141,8 +141,6 @@ pub const IMove = extern struct {
         strM[3] = r2[1];
         if (self.isPromotion()) {
             strM[4] = chess.getStrFromPiece(chess.flagPromotionToPiece(self.getFlag(), false));
-        } else {
-            strM[4] = 0;
         }
         return strM;
     }
@@ -368,6 +366,20 @@ pub const matchMoveContainer = struct {
         return ret;
     }
 };
+pub const pieceMoves = struct {
+    t: typel.e_pieceType = .PAWN,
+    count: u8 = 0,
+};
+pub const moveBBState_ext = struct {
+    state: moveBBState = .{},
+    // wont contain king info
+    perPieceMoveCt: [16]pieceMoves = @splat(.{}),
+    pieceCount: u8 = 0,
+    pub inline fn add(self: *moveBBState_ext, item: pieceMoves) void {
+        self.perPieceMoveCt[self.pieceCount] = item;
+        self.pieceCount += 1;
+    }
+};
 
 pub const moveBBState = struct {
     pawnMoves: u64 = 0,
@@ -424,6 +436,10 @@ pub const moveBBState = struct {
     }
     pub inline fn getAttackedMaskTabou(self: *const moveBBState, occB: u64, att: u64) u64 {
         return (self.pawnAttacks | self.bishopMoves | self.knightMoves | self.rookMoves | self.queenMoves | (self.kingMoves & (~att)) | self.promotionMoves) & occB;
+    }
+    pub inline fn getPawnBBall(self: *const moveBBState, occ: u64) u64 {
+        return ((self.pawnAttacks & (occ)) |
+            self.pawnMoves);
     }
     pub inline fn andFn(self: *const moveBBState, bb: u64) moveBBState {
         return .{ .pawnMoves = self.pawnMoves & bb, .pawnAttacks = self.pawnAttacks & bb, .doubleMoves = self.doubleMoves & bb, .bishopMoves = self.bishopMoves & bb, .knightMoves = self.knightMoves & bb, .rookMoves = self.rookMoves & bb, .queenMoves = self.queenMoves & bb, .kingMoves = self.kingMoves & bb, .enPassantMoves = self.enPassantMoves & bb, .promotionMoves = self.promotionMoves & bb, .queenSideCastlingMoves = self.queenSideCastlingMoves & bb, .kingSideCastlingMoves = self.kingSideCastlingMoves & bb };

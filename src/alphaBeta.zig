@@ -113,7 +113,7 @@ pub fn quiescenceSearch(p_state: *boardl.boardState, p_info: *threadInfo, alpha:
     var currS: *searchFrame = ss.getFrame(ply);
 
     while (gen.pickNext(p_state, ply, .{}, hashMove, weightl.moveGenMinSeeThreshold, !isChecked, ss, threadD)) |res| {
-        if ((@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE) and !isChecked) or movesPlayed > weightl.moveQsearchAmount) {
+        if ((@backingInt(gen.phase) > @backingInt(typel.e_moveGenFlag.CAPTURE) and !isChecked) or movesPlayed > weightl.moveQsearchAmount) {
             break;
         }
 
@@ -403,7 +403,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
     {
         const tresh = p_beta - static_eval;
         while (gen.pickNext(p_state, ply, prevLineMove, hashMove, tresh, true, ss, threadD)) |res| {
-            if (@intFromEnum(gen.phase) > @intFromEnum(typel.e_moveGenFlag.CAPTURE)) {
+            if (@backingInt(gen.phase) > @backingInt(typel.e_moveGenFlag.CAPTURE)) {
                 break;
             }
             const move = res.@"0";
@@ -496,7 +496,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
         const histScore: scoreType = threadD.historyHeuristic[whiteIdx][from][to];
 
         if (isCapture) {
-            if (to == p_state.getLastMove().getTo() and threadD.captureHistory[@intFromEnum(fPiece)][@intFromEnum(cPiece)][to] > weightl.captureExtensionThresh and comptime t == .PV) {
+            if (to == p_state.getLastMove().getTo() and threadD.captureHistory[@backingInt(fPiece)][@backingInt(cPiece)][to] > weightl.captureExtensionThresh and comptime t == .PV) {
                 extension += 1;
             }
         } else {
@@ -673,33 +673,33 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
         const pHash = historyl.pawnHashIndexToIdx(p_state.frame.pawnKey);
         threadD.pawnCorrHist[offset][pHash] = updateCorrhist(threadD.pawnCorrHist[offset][pHash], bonus);
 
-        const npWHash = historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)]);
-        threadD.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][npWHash] = updateCorrhist(threadD.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][npWHash], bonus);
+        const npWHash = historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@backingInt(e_color.WHITE)]);
+        threadD.nonPawnCorrHist[offset][@backingInt(e_color.WHITE)][npWHash] = updateCorrhist(threadD.nonPawnCorrHist[offset][@backingInt(e_color.WHITE)][npWHash], bonus);
 
-        const npBHash = historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)]);
-        threadD.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][npBHash] = updateCorrhist(threadD.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][npBHash], bonus);
+        const npBHash = historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@backingInt(e_color.BLACK)]);
+        threadD.nonPawnCorrHist[offset][@backingInt(e_color.BLACK)][npBHash] = updateCorrhist(threadD.nonPawnCorrHist[offset][@backingInt(e_color.BLACK)][npBHash], bonus);
 
         const prev1 = ss.getPrevFrame(ply, 1);
         const prev2 = ss.getPrevFrame(ply, 2);
         if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
             const to1 = prev1.playedMove.getTo();
             const to2 = prev2.playedMove.getTo();
-            threadD.corrHist[@intFromEnum(prev2.pieceMoved)][to2][@intFromEnum(prev1.pieceMoved)][to1] = updateCorrhist(threadD.corrHist[@intFromEnum(prev2.pieceMoved)][to2][@intFromEnum(prev1.pieceMoved)][to1], bonus);
+            threadD.corrHist[@backingInt(prev2.pieceMoved)][to2][@backingInt(prev1.pieceMoved)][to1] = updateCorrhist(threadD.corrHist[@backingInt(prev2.pieceMoved)][to2][@backingInt(prev1.pieceMoved)][to1], bonus);
         }
     }
     if (hashFlag == .LOWER) {
         if (bestMove.isQuietMove()) {
             currS.killerMove = bestMove;
             const prevMove = ss.getPrevFrame(ply, 1).playedMove;
-            const prevPiece = @intFromEnum(ss.getPrevFrame(ply, 1).pieceMoved);
+            const prevPiece = @backingInt(ss.getPrevFrame(ply, 1).pieceMoved);
             const prevMoveTo = prevMove.getTo();
 
             const prevPrevMove = ss.getPrevFrame(ply, 2).playedMove;
-            const prevPrevPiece = @intFromEnum(ss.getPrevFrame(ply, 2).pieceMoved);
+            const prevPrevPiece = @backingInt(ss.getPrevFrame(ply, 2).pieceMoved);
             const prevPrevMoveTo = prevPrevMove.getTo();
 
             const prevMove4 = ss.getPrevFrame(ply, 4).playedMove;
-            const prevPiece4 = @intFromEnum(ss.getPrevFrame(ply, 4).pieceMoved);
+            const prevPiece4 = @backingInt(ss.getPrevFrame(ply, 4).pieceMoved);
             const prevMove4To = prevMove4.getTo();
 
             for (0..nQuiets) |i| {
@@ -707,7 +707,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
                 const move = quiets[i];
                 const to = move.getTo();
                 const from = move.getFrom();
-                const piece: u8 = @intFromEnum(p_state.getPiece(from));
+                const piece: u8 = @backingInt(p_state.getPiece(from));
 
                 threadD.historyHeuristic[whiteIdx][from][to] = updateHistory(threadD.historyHeuristic[whiteIdx][from][to], malus);
 
@@ -719,7 +719,7 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
             }
             const bestTo = bestMove.getTo();
             const bestFrom = bestMove.getFrom();
-            const bestPiece = @intFromEnum(p_state.getPiece(bestFrom));
+            const bestPiece = @backingInt(p_state.getPiece(bestFrom));
 
             threadD.historyHeuristic[whiteIdx][bestFrom][bestTo] = updateHistory(threadD.historyHeuristic[whiteIdx][bestFrom][bestTo], historyBonus);
 
@@ -730,8 +730,8 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
         } else {
             const from = bestMove.getFrom();
             const to = bestMove.getTo();
-            const fPiece = @intFromEnum(p_state.getPiece(from));
-            const cPiece = @intFromEnum(p_state.getPiece(to));
+            const fPiece = @backingInt(p_state.getPiece(from));
+            const cPiece = @backingInt(p_state.getPiece(to));
             threadD.captureHistory[fPiece][cPiece][to] = updateHistory(threadD.captureHistory[fPiece][cPiece][to], historyBonus);
         }
 
@@ -739,16 +739,16 @@ pub fn searchLoop(p_state: *boardl.boardState, p_info: *threadInfo, depth: depth
             const move = captures[i];
             const from = move.getFrom();
             const to = move.getTo();
-            const fPiece = @intFromEnum(p_state.getPiece(from));
-            const cPiece = @intFromEnum(p_state.getPiece(to));
+            const fPiece = @backingInt(p_state.getPiece(from));
+            const cPiece = @backingInt(p_state.getPiece(to));
             threadD.captureHistory[fPiece][cPiece][to] = updateHistory(threadD.captureHistory[fPiece][cPiece][to], -historyBonus);
         }
     } else if (hashFlag == .ALL) {
         const bestTo = bestMove.getTo();
         const bestFrom = bestMove.getFrom();
-        const bestPiece = @intFromEnum(p_state.getPiece(bestFrom));
+        const bestPiece = @backingInt(p_state.getPiece(bestFrom));
         if (bestMove.isCapture()) {
-            const cPiece = @intFromEnum(p_state.getPiece(bestTo));
+            const cPiece = @backingInt(p_state.getPiece(bestTo));
             threadD.captureHistory[bestPiece][cPiece][bestTo] = updateHistory(threadD.captureHistory[bestPiece][cPiece][bestTo], historyBonus);
         } else {
             threadD.historyHeuristic[whiteIdx][bestFrom][bestTo] = updateHistory(threadD.historyHeuristic[whiteIdx][bestFrom][bestTo], historyBonus);
@@ -766,15 +766,15 @@ pub fn correct_eval(p_state: *const boardl.boardState, ss: *searchStack, eval: s
     const offset = chessl.whiteBoolToInt(p_state.whiteToMove());
 
     var corr: scoreType = d.pawnCorrHist[offset][historyl.pawnHashIndexToIdx(p_state.frame.pawnKey)];
-    corr += d.nonPawnCorrHist[offset][@intFromEnum(e_color.WHITE)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.WHITE)])];
-    corr += d.nonPawnCorrHist[offset][@intFromEnum(e_color.BLACK)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@intFromEnum(e_color.BLACK)])];
+    corr += d.nonPawnCorrHist[offset][@backingInt(e_color.WHITE)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@backingInt(e_color.WHITE)])];
+    corr += d.nonPawnCorrHist[offset][@backingInt(e_color.BLACK)][historyl.pawnHashIndexToIdx(p_state.frame.nonPawnKey[@backingInt(e_color.BLACK)])];
 
     const prev1 = ss.getPrevFrame(ply, 1);
     const prev2 = ss.getPrevFrame(ply, 2);
     if (prev1.playedMove.isValid() and prev2.playedMove.isValid()) {
         const p1 = prev1.playedMove.getTo();
         const p2 = prev2.playedMove.getTo();
-        corr += d.corrHist[@intFromEnum(prev2.pieceMoved)][p2][@intFromEnum(prev1.pieceMoved)][p1];
+        corr += d.corrHist[@backingInt(prev2.pieceMoved)][p2][@backingInt(prev1.pieceMoved)][p1];
     }
 
     return std.math.clamp(_eval + @divFloor(weightl.corrHistW * corr, 512), -weightl.simpleCheckMateThreshold + 1, weightl.simpleCheckMateThreshold - 1);

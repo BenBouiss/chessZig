@@ -1030,20 +1030,15 @@ pub fn engineInfoListener(engine: *engine_info, engineIndex: usize, output: *inp
             }
             break;
         };
-        //std.debug.print("[DEBUG] readingThread.gui (#{d}): found {d} raw bytes\n", .{ engineIndex, n });
 
         if (n == 0) {
             continue;
         }
         _ = reader.toss(1);
         const msg = buffer[0..n];
-
-        //std.debug.print("[DEBUG] readingThread.gui (#{d}): found {d} bytes, message: '{s}'\n", .{ engineIndex, n, msg });
         output.putCmd(msg);
     }
     engine.alive = false;
-
-    //std.debug.print("[DEBUG] readingThread.gui (#{d}): exiting \n", .{engineIndex});
 }
 const threadCtx = struct {
     pool: *poolCtx,
@@ -1350,8 +1345,6 @@ pub fn threadMainLoop(self: *threadCtx) !void {
     defer {
         self.engineInventory.free(self.alloc);
         self.listeningThreads.deinit(self.alloc);
-
-        self.pool.exit(self);
         // free engine inputs
         for (inputs.items) |inp| {
             inp.free(self.alloc);
@@ -1359,6 +1352,7 @@ pub fn threadMainLoop(self: *threadCtx) !void {
         }
         inputs.deinit(self.alloc);
         openingDb.free(self.alloc);
+        self.pool.exit(self);
     }
 
     try self.engineInventory.sendMsgAll("uci");

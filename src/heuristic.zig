@@ -167,9 +167,7 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
     const wPTb = ~p_whiteMoveBB.pawnAttacks;
     const bPTb = ~p_blackMoveBB.pawnAttacks;
 
-    const moveW: scoreType = (chess.popcount_t(p_whiteMoveBB.pawnMoves, scoreType) +
-        chess.popcount_t(p_whiteMoveBB.pawnAttacks, scoreType) +
-        chess.popcount_t(p_whiteMoveBB.promotionMoves, scoreType) +
+    const moveW: scoreType = (chess.popcount_t(p_whiteMoveBB.pawnMoves | p_whiteMoveBB.pawnAttacks | p_whiteMoveBB.promotionMoves, scoreType) +
         chess.popcount_t(p_whiteMoveBB.bishopMoves & bPTb, scoreType) +
         chess.popcount_t(p_whiteMoveBB.knightMoves & bPTb, scoreType) +
         chess.popcount_t(p_whiteMoveBB.rookMoves & bPTb, scoreType) +
@@ -177,9 +175,7 @@ pub fn evaluate_mobility(p_state: *const boardl.boardState, p_whiteMoveBB: *cons
         //chess.popcount_t(p_whiteMoveBB.kingMoves & (~p_blackMoveBB.getAttackedMask(chess.UNIVERSE)), scoreType));
         chess.popcount_t(p_whiteMoveBB.kingMoves, scoreType));
 
-    const moveB: scoreType = (chess.popcount_t(p_blackMoveBB.pawnMoves, scoreType) +
-        chess.popcount_t(p_blackMoveBB.pawnAttacks, scoreType) +
-        chess.popcount_t(p_blackMoveBB.promotionMoves, scoreType) +
+    const moveB: scoreType = (chess.popcount_t(p_blackMoveBB.pawnMoves | p_blackMoveBB.pawnAttacks | p_blackMoveBB.promotionMoves, scoreType) +
         chess.popcount_t(p_blackMoveBB.bishopMoves & wPTb, scoreType) +
         chess.popcount_t(p_blackMoveBB.knightMoves & wPTb, scoreType) +
         chess.popcount_t(p_blackMoveBB.rookMoves & wPTb, scoreType) +

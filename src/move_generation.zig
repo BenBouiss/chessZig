@@ -40,8 +40,7 @@ pub const diagonalsBB: [64]u64 = initDiagonal();
 
 pub fn generateLegalMoves(p_board: *const boardState) moveContainer {
     var bbMoves = moveGenBB(p_board);
-    var moves: moveContainer = undefined;
-    moves.len = 0;
+    var moves: moveContainer = .{};
     moveGenBBToMoveContainer(p_board, &bbMoves, &moves, .ALL);
     return moves;
 }
@@ -375,32 +374,31 @@ pub fn push_promotion_capture(from: u8, to: u8, p_out: *moveContainer) void {
     movel.build_move_in_v(from, to, @backingInt(e_moveFlags.KNIGHTPROMOCAPTURE), p_out);
 }
 
-pub fn moveGenPawnBB(p_board: *const boardState, comptime white: bool, emptyOrEnemy: u64, extra: e_moveGenFlag, p_out: *moveBBState) void {
-    p_out.pawnMoves = chess.EMPTY;
-    p_out.pawnAttacks = chess.EMPTY;
-    p_out.doubleMoves = chess.EMPTY;
-    p_out.enPassantMoves = chess.EMPTY;
-    const occ = if (extra == .ALL) chess.UNIVERSE else p_board.b.occupiedBB();
-
+pub fn moveGenPawnBB(p_board: *const boardState, comptime white: bool, emptyOrEnemy: u64, comptime extra: e_moveGenFlag, p_out: *moveBBState) void {
+    const occ = p_board.b.occupiedBB();
     const pBB = p_board.getPieceBB_t(.PAWN) & p_board.b.c_occupiedBB[chess.whiteBoolToInt(white)];
 
     const enPassantBB = chess.xToBitboard(p_board.frame.enPassantIdx);
     if (comptime white) {
-        p_out.pawnMoves |= (pBB << 8) & (~occ);
-        p_out.doubleMoves |= ((p_out.pawnMoves << 8) & (~occ)) & ((pBB & chess.whitePawnDoubleRank) << 16);
-        p_out.pawnAttacks |= chess.getPawnAttacksFromBB(pBB, white);
-        p_out.enPassantMoves |= p_out.pawnAttacks & enPassantBB & chess.whitePawnEnpassantRank;
-        p_out.pawnAttacks &= (emptyOrEnemy & occ);
-        p_out.promotionMoves |= ((p_out.pawnMoves | p_out.pawnAttacks) & chess.whitePawnPromoRank);
+        p_out.pawnMoves = (pBB << 8) & (~occ);
+        p_out.doubleMoves = ((p_out.pawnMoves << 8) & (~occ)) & ((pBB & chess.whitePawnDoubleRank) << 16);
+        p_out.pawnAttacks = chess.getPawnAttacksFromBB(pBB, white);
+        p_out.enPassantMoves = p_out.pawnAttacks & enPassantBB & chess.whitePawnEnpassantRank;
+        if (comptime extra != .ALL) {
+            p_out.pawnAttacks &= (emptyOrEnemy & occ);
+        }
+        p_out.promotionMoves = ((p_out.pawnMoves | p_out.pawnAttacks) & chess.whitePawnPromoRank);
         p_out.pawnAttacks &= ~chess.whitePawnPromoRank;
         p_out.pawnMoves &= ~chess.whitePawnPromoRank;
     } else {
-        p_out.pawnMoves |= (pBB >> 8) & (~occ);
-        p_out.doubleMoves |= ((p_out.pawnMoves >> 8) & (~occ)) & ((pBB & chess.blackPawnDoubleRank) >> 16);
-        p_out.pawnAttacks |= chess.getPawnAttacksFromBB(pBB, white);
-        p_out.enPassantMoves |= p_out.pawnAttacks & enPassantBB & chess.blackPawnEnpassantRank;
-        p_out.pawnAttacks &= (emptyOrEnemy & occ);
-        p_out.promotionMoves |= ((p_out.pawnMoves | p_out.pawnAttacks) & chess.blackPawnPromoRank);
+        p_out.pawnMoves = (pBB >> 8) & (~occ);
+        p_out.doubleMoves = ((p_out.pawnMoves >> 8) & (~occ)) & ((pBB & chess.blackPawnDoubleRank) >> 16);
+        p_out.pawnAttacks = chess.getPawnAttacksFromBB(pBB, white);
+        p_out.enPassantMoves = p_out.pawnAttacks & enPassantBB & chess.blackPawnEnpassantRank;
+        if (comptime extra != .ALL) {
+            p_out.pawnAttacks &= (emptyOrEnemy & occ);
+        }
+        p_out.promotionMoves = ((p_out.pawnMoves | p_out.pawnAttacks) & chess.blackPawnPromoRank);
         p_out.pawnAttacks &= ~chess.blackPawnPromoRank;
         p_out.pawnMoves &= ~chess.blackPawnPromoRank;
     }
@@ -433,22 +431,43 @@ pub fn cst_moveGenBB(p_board: *const boardState, comptime white: bool, p_out: *m
     const EmptyOrEnemy = if (comptime extra == .ALL) (chess.UNIVERSE) else ~occ;
     const slidingOcc = p_board.b.occupiedBB() ^ p_board.getPieceBB_t(.KING);
     moveGenPawnBB(p_board, white, EmptyOrEnemy, extra, p_out);
-
     p_out.knightMoves = (chess.knightAttacks(p_board.getPieceBB_t(.KNIGHT) & occ)) & EmptyOrEnemy;
-
     p_out.bishopMoves = chess._AllAttackBishopMask(p_board.getPieceBB_t(.BISHOP) & occ, slidingOcc) & EmptyOrEnemy;
-
     p_out.rookMoves = chess._AllAttackRookMask(p_board.getPieceBB_t(.ROOK) & occ, slidingOcc) & EmptyOrEnemy;
-
     p_out.queenMoves = chess._AllAttackQueenMask(p_board.getPieceBB_t(.QUEEN) & occ, slidingOcc) & EmptyOrEnemy;
-
     moveGenKingBB(p_board, white, EmptyOrEnemy, p_out);
 }
+
 pub inline fn _cst_moveGenBB_all(p_board: *const boardState, comptime white: bool) moveBBState {
     var ret: moveBBState = .{};
     cst_moveGenBB(p_board, white, &ret, .ALL);
     return ret;
 }
+//pub fn cst_getExtentedBBState(p_board: *const boardState, comptime white: bool) void {
+//    var ret: movel.moveBBState_ext = .{};
+//    const occ = if (comptime white) p_board.b.occupiedBB_col(.WHITE) else p_board.b.occupiedBB_col(.BLACK);
+//    const EmptyOrEnemy = chess.UNIVERSE;
+//    const slidingOcc = p_board.b.occupiedBB() ^ p_board.getPieceBB_t(.KING);
+//    moveGenPawnBB(p_board, white, EmptyOrEnemy, .ALL, p_out);
+//    p_out.knightMoves = (chess.knightAttacks(p_board.getPieceBB_t(.KNIGHT) & occ)) & EmptyOrEnemy;
+//    p_out.bishopMoves = chess._AllAttackBishopMask(p_board.getPieceBB_t(.BISHOP) & occ, slidingOcc) & EmptyOrEnemy;
+//    p_out.rookMoves = chess._AllAttackRookMask(p_board.getPieceBB_t(.ROOK) & occ, slidingOcc) & EmptyOrEnemy;
+//    p_out.queenMoves = chess._AllAttackQueenMask(p_board.getPieceBB_t(.QUEEN) & occ, slidingOcc) & EmptyOrEnemy;
+//    moveGenKingBB(p_board, white, EmptyOrEnemy, p_out);
+//}
+//pub fn extendedBBStatePieceGen(p_board: *const boardState, bb: u64, occ: u64, emptyOrEnemy: u64, comptime white: bool, comptime piece: e_pieceType, p_out: *movel.moveBBState_ext) void {
+//    if (comptime piece == .PAWN) {
+//        moveGenPawnBB(p_board, white, emptyOrEnemy, .ALL, &p_out.state);
+//        p_out.add(.{.t = .PAWN, .count = chess.popcount(p_out.state.pawnMoves)});
+//        return;
+//    }
+//    var _bb = bb;
+//    while (_bb != 0) {
+//        const sq = chess.bitscan(_bb);
+//        _bb &= bb - 1;
+//        if (comptime piece == .KNIGHT
+//    }
+//}
 
 pub const qbb = struct {
     bb: @Vector(4, u64),

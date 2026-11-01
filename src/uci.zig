@@ -139,6 +139,6 @@ pub inline fn launchUci(alloc: std.mem.Allocator) !void {
     try loop(alloc);
 }
 
-pub fn main(alloc: std.mem.Allocator) !void {
-    try launchUci(alloc);
+pub fn main(alloc: std.mem.Allocator) void {
+    launchUci(alloc) catch {};
 }

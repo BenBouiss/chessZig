@@ -63,8 +63,10 @@ pub const blackPawnPromoRank: u64 = 0xFF;
 pub const whitePawnDoubleRank: u64 = 0xFF00;
 pub const blackPawnDoubleRank: u64 = 0xFF000000000000;
 
-pub const whiteFirstRanks: u64 = whitePawnPromoRank | whitePawnDoubleRank;
-pub const blackFirstRanks: u64 = blackPawnPromoRank | blackPawnDoubleRank;
+//pub const whiteFirstRanks: u64 = whitePawnPromoRank | whitePawnDoubleRank;
+//pub const blackFirstRanks: u64 = blackPawnPromoRank | blackPawnDoubleRank;
+pub const whiteFirstRanks: u64 = whitePawnDoubleRank;
+pub const blackFirstRanks: u64 = blackPawnDoubleRank;
 
 pub const whitePawnEnpassantRank: u64 = 0xFF0000000000;
 pub const blackPawnEnpassantRank: u64 = 0xFF0000;
